@@ -59,22 +59,12 @@ async function getImageList(pid) {
 }
 
 // 파일 목록에서 특정 emotion의 suffix 목록 추출
-function getPersonaName(pid) {
-  if (typeof EMOTION_PROFILE_MAP !== 'undefined' && EMOTION_PROFILE_MAP[pid]) return EMOTION_PROFILE_MAP[pid];
-  // p_riley_abc → riley, p_mango → mango
-  return pid.replace(/^p_/, '').replace(/_[a-z0-9]{3,}$/, '');
-}
-
 function getSuffixesForEmotion(keys, pid, emotion) {
-  const name = getPersonaName(pid);
-  const prefix = `profile/${pid}/${name}_${emotion}_`;
-  const suffix_re = new RegExp(`profile/${pid}/${name}_${emotion}_([a-z])\.jpg$`);
-  // suffix 있는 파일
+  const suffix_re = new RegExp(`profile/${pid}/${pid}_${emotion}_([a-z])\.jpg$`);
   const suffixed = keys
     .map(k => { const m = k.match(suffix_re); return m ? m[1] : null; })
     .filter(Boolean);
-  // suffix 없는 기본 파일도 확인
-  const base = `profile/${pid}/${name}_${emotion}.jpg`;
+  const base = `profile/${pid}/${pid}_${emotion}.jpg`;
   const hasBase = keys.includes(base);
   return { suffixed, hasBase };
 }
@@ -125,12 +115,11 @@ async function getEmotionImageSuffixed(pid, emotion, letter) {
   try {
     const cached = await idbGet(idbKey);
     if (cached) return cached;
-    const name = getPersonaName(pid);
     const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
     if (!wUrl) return null;
     const url = letter
-      ? `${wUrl}/image/profile/${pid}/${name}_${emotion}_${letter}.jpg`
-      : `${wUrl}/image/profile/${pid}/${name}_${emotion}.jpg`;
+      ? `${wUrl}/image/profile/${pid}/${pid}_${emotion}_${letter}.jpg`
+      : `${wUrl}/image/profile/${pid}/${pid}_${emotion}.jpg`;
     const resp = await fetch(url);
     if (!resp.ok) return null;
     const blob = await resp.blob();
@@ -180,17 +169,16 @@ async function getEmotionImageHD(pid, emotion) {
   } catch(e) {}
   // IDB 없으면 R2에서 직접 fetch (HD 크기)
   try {
-    const name = getPersonaName(pid);
     const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
     if (!wUrl) return null;
     const keys = await getImageList(pid);
     const { suffixed, hasBase } = getSuffixesForEmotion(keys, pid, eid);
     let url = null;
     if (hasBase) {
-      url = `${wUrl}/image/profile/${pid}/${name}_${eid}.jpg`;
+      url = `${wUrl}/image/profile/${pid}/${pid}_${eid}.jpg`;
     } else if (suffixed.length > 0) {
       const letter = suffixed[Math.floor(Math.random() * suffixed.length)];
-      url = `${wUrl}/image/profile/${pid}/${name}_${eid}_${letter}.jpg`;
+      url = `${wUrl}/image/profile/${pid}/${pid}_${eid}_${letter}.jpg`;
     }
     if (!url) return null;
     const resp = await fetch(url);
@@ -300,7 +288,6 @@ async function preloadEmotionImages() {
 async function loadNeutralDirect(pid) {
   if (_neutralCache[pid]) return _neutralCache[pid];
   try {
-    const name = getPersonaName(pid);
     const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
     if (!wUrl) return null;
 
@@ -308,17 +295,17 @@ async function loadNeutralDirect(pid) {
     const keys = await getImageList(pid);
     const { suffixed, hasBase } = getSuffixesForEmotion(keys, pid, 'neutral');
     let candidates = [];
-    if (hasBase) candidates.push(`${wUrl}/image/profile/${pid}/${name}_neutral.jpg`);
+    if (hasBase) candidates.push(`${wUrl}/image/profile/${pid}/${pid}_neutral.jpg`);
     if (suffixed.length > 0) {
       const letter = suffixed[Math.floor(Math.random() * suffixed.length)];
-      candidates.push(`${wUrl}/image/profile/${pid}/${name}_neutral_${letter}.jpg`);
+      candidates.push(`${wUrl}/image/profile/${pid}/${pid}_neutral_${letter}.jpg`);
     }
 
-    // 2. 목록이 비어있으면 직접 URL 시도 (a~e 정도만)
+    // 2. 목록 비어있으면 직접 시도
     if (!candidates.length) {
       candidates = [
-        `${wUrl}/image/profile/${pid}/${name}_neutral.jpg`,
-        ...'abcde'.split('').map(l => `${wUrl}/image/profile/${pid}/${name}_neutral_${l}.jpg`)
+        `${wUrl}/image/profile/${pid}/${pid}_neutral.jpg`,
+        ...'abcde'.split('').map(l => `${wUrl}/image/profile/${pid}/${pid}_neutral_${l}.jpg`)
       ];
     }
 

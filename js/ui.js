@@ -501,8 +501,7 @@ async function handleMultiImageUpload(input) {
         // 파일명에서 emotion 파싱해서 IDB 캐싱
         // 예: riley_neutral_a.jpg → emotion=neutral, letter=a
         const fname = file.name.replace(/\.jpg$/i, '');
-        const name = (typeof getPersonaName !== 'undefined') ? getPersonaName(p.pid) : ((typeof EMOTION_PROFILE_MAP !== 'undefined' && EMOTION_PROFILE_MAP[p.pid]) || p.pid.replace(/^p_/, '').replace(/_[a-z0-9]{3,}$/, ''));
-        const namePrefix = name + '_';
+        const namePrefix = p.pid + '_';
         if (fname.startsWith(namePrefix)) {
           const rest = fname.slice(namePrefix.length); // neutral_a 또는 neutral
           const parts = rest.split('_');
@@ -564,7 +563,7 @@ async function savePersonaEdit() {
       const b64 = p._pendingImage.split(',')[1];
       const byteArr = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
       const blob = new Blob([byteArr], { type: 'image/jpeg' });
-      const fname = `${(EMOTION_PROFILE_MAP[p.pid] || p.pid)}_neutral.jpg`;
+      const fname = `${p.pid}_neutral.jpg`;
       const form = new FormData();
       form.append('file', blob, fname);
       form.append('folder', `profile/${p.pid}`);
@@ -1022,8 +1021,7 @@ async function sendMessage() {
         const sorted = [...keys].sort();
         for (const key of sorted) {
           const fname = key.split('/').pop().replace(/\.jpg$/i, '');
-          const name = getPersonaName(p.pid);
-          const rest = fname.startsWith(name + '_') ? fname.slice(name.length + 1) : fname;
+          const rest = fname.startsWith(p.pid + '_') ? fname.slice(p.pid.length + 1) : fname;
           const parts = rest.split('_');
           const emotion = parts[0];
           const letter = parts[1] || '';
