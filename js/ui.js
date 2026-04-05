@@ -882,12 +882,21 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}) {
     let baseImg = avatarHTML(p);
     let thumbSrc = p.image || '';
 	const suffix = suffixes[`${p.pid}:${seg.emotion}`] || '';
-	const dataUrl = suffix ? await getEmotionImageSuffixed(p.pid, seg.emotion, suffix) : await getEmotionImage(p.pid, seg.emotion);
-	if (dataUrl) { baseImg = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;object-position:top;">`; thumbSrc = dataUrl; }
-	const suffix = suffixes[`${p.pid}:${seg.emotion}`] || '';
+    const dataUrl = suffix ? await getEmotionImageSuffixed(p.pid, seg.emotion, suffix) : await getEmotionImage(p.pid, seg.emotion);
+    
+    if (dataUrl) { 
+      baseImg = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;object-position:top;">`; 
+      thumbSrc = dataUrl; 
+    }
+    
     const safePid = p.pid.replace(/'/g, "\\'");
     const safeEmotion = (seg.emotion||'neutral').replace(/'/g, "\\'");
     const safeSuffix = suffix.replace(/'/g, "\\'");
+    const safeThumb = thumbSrc.replace(/'/g, "\\'");
+    const celebStroke = p.type === 'celebrity' ? `box-shadow: inset 0 0 0 1.5px hsl(${h},70%,60%), 0 0 6px hsl(${h},60%,40%);` : '';
+    
+    html += `<div class="ai-msg" style="${opacity}">
+      <div class="msg-av" style="background:hsl(${h},20%,11%);border-color:hsl(${h},28%,22%);${celebStroke}" onclick="openProfilePopup('${safePid}','${safeEmotion}',${h},'${safeThumb}','${safeSuffix}')">${baseImg}</div>
     const safeThumb = thumbSrc.replace(/'/g, "\\'");
     const celebStroke = p.type === 'celebrity' ? `box-shadow: inset 0 0 0 1.5px hsl(${h},70%,60%), 0 0 6px hsl(${h},60%,40%);` : '';
     html += `<div class="ai-msg" style="${opacity}">
