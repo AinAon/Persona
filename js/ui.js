@@ -468,30 +468,18 @@ function handleEditImage(input) {
 
       const p = getPersona(editingPid); if (!p) return;
 
-      // 크롭 결과(PNG)에서 로딩 속도를 위한 화면 표시용 캐시(JPEG) 리사이즈
-      const [thumb, md, hd] = await Promise.all([
-        resizeImage(cropped, 100, 0.82),
-        resizeImage(cropped, 300, 0.85),
-        resizeImage(cropped, 1000, 0.9),
-      ]);
+      // 3단계 썸네일 생성 (full → square crop 2:3 → circle crop)
+      idbSet(`em_full_${p.pid}_neutral`, cropped).catch(() => {});
+      p._pendingImage = cropped;
+
+      const { sqMd, sqHd, circSm } = await generateThumbnailSet(cropped, p.pid, 'neutral');
 
       // 메모리
-      p.image = md;
-      p.neutral_md = md;
-      p.neutral_hd = hd;
-      p.neutral_thumb = thumb;
-      
-      // ★ 핵심 변경: GitHub에 올라갈 이미지는 깨진 hd(JPEG)가 아니라 cropped(PNG 원본)
-      p._pendingImage = cropped; 
-
-      // IDB (화면 렌더링용 가벼운 캐시 저장)
-      idbSet(`emotion_${p.pid}_neutral`, md).catch(() => {});
-      idbSet(`emotion_${p.pid}_neutral_hd`, hd).catch(() => {});
-      idbSet(`emotion_${p.pid}_neutral_thumb`, thumb).catch(() => {});
-      
-      // 이모션 매니저 호환용 원본 PNG 저장
-      idbSet(`em_full_${p.pid}_neutral`, cropped).catch(() => {});
-      _neutralCache[p.pid] = md;
+      p.image = sqMd;
+      p.neutral_md = sqMd;
+      p.neutral_hd = sqHd;
+      p.neutral_thumb = circSm;
+      _neutralCache[p.pid] = sqMd;
 
       showToast('이미지 선택됨 — 저장 버튼을 눌러줘');
     });
@@ -751,10 +739,10 @@ async function openChat(id) {
   document.getElementById('chatHeaderNames').textContent = s.roomName || pList.map(p=>p.name).join(', ');
 
   pList.forEach(async (p, i) => {
-    const neutral = await getNeutralImage(p.pid);
-    if (neutral) {
+    const img = await getNeutralImageCircle(p.pid);
+    if (img) {
       const avEl = avatarsEl.children[i];
-      if (avEl) avEl.innerHTML = `<img src="${neutral}">`;
+      if (avEl) avEl.innerHTML = `<img src="${img}">`;
     }
   });
 
@@ -1064,7 +1052,7 @@ async function renderDrawerBody(s) {
   const canInvite = pList.length < MAX_PARTICIPANTS;
 
   const personaCards = await Promise.all(pList.map(async p => {
-    const neutral = await getNeutralImage(p.pid);
+    const neutral = await getNeutralImageCircle(p.pid);
     const imgSrc = neutral || p.image;
     const imgHTML = imgSrc
       ? `<img src="${imgSrc}" style="width:100%;height:100%;object-fit:cover;object-position:top;display:block">`
