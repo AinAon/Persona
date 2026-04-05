@@ -1421,18 +1421,15 @@ async function compressChat() {
 // ══════════════════════════════
 //  PROFILE POPUP
 // ══════════════════════════════
-async function openProfilePopup(pid, emotion, hue, fallbackSrc) {
+async function openProfilePopup(pid, emotion, hue, fallbackSrc, suffix = '') {
   const popup = document.getElementById('profilePopup');
   const imgEl = document.getElementById('profilePopupImg');
-  imgEl.style.borderColor = `hsl(${hue},40%,35%)`;
-  imgEl.innerHTML = fallbackSrc ? `<img src="${fallbackSrc}">` : defaultAvatar(hue);
-  popup.classList.add('open');
-
+  // ...
   if (!pid) return;
   try {
     // 1. 감정 이미지 HD (celebrity/custom 감정 이미지)
 	{
-	const hdUrl = await getEmotionImageHD(pid, emotion);
+	const hdUrl = await getEmotionImageHD(pid, emotion, suffix);
       if (hdUrl && popup.classList.contains('open')) { imgEl.innerHTML = `<img src="${hdUrl}">`; return; }
     }
     // 2. em_full_ — 800×1200 PNG 원본 (이모션 매니저/앱 업로드)
