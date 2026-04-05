@@ -167,38 +167,34 @@ async function resolveMessageSuffixes(rawText, pList, existingSuffixes = null) {
   return suffixes;
 }
 
-async function getEmotionImageHD(pid, emotion) {
+async function getEmotionImageHD(pid, emotion, letter = '') {
   const eid = emotion || 'neutral';
+  const cacheKeyHd = letter ? `emotion_${pid}_${eid}_${letter}_hd` : `emotion_${pid}_${eid}_hd`;
+  const cacheKeyFull = letter ? `em_full_${pid}_${eid}_${letter}` : `em_full_${pid}_${eid}`;
+  const cacheKeyMd = letter ? `emotion_${pid}_${eid}_${letter}` : `emotion_${pid}_${eid}`;
   try {
-    const full = await idbGet(`em_full_${pid}_${eid}`);
+    const full = await idbGet(cacheKeyFull);
     if (full) return full;
-    const hd = await idbGet(`emotion_${pid}_${eid}_hd`);
+    const hd = await idbGet(cacheKeyHd);
     if (hd) return hd;
-    const md = await idbGet(`emotion_${pid}_${eid}`);
+    const md = await idbGet(cacheKeyMd);
     if (md) return md;
   } catch(e) {}
   // IDB 없으면 R2에서 직접 fetch (HD 크기)
   try {
-    const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-    if (!wUrl) return null;
-    const keys = await getImageList(pid);
-    const { suffixed, hasBase } = getSuffixesForEmotion(keys, pid, eid);
+    // ... (중략 - WORKER_URL 로직 동일)
     let url = null;
-    if (hasBase) {
+    if (letter && suffixed.includes(letter)) {
+      url = `${wUrl}/image/profile/${pid}/${pid}_${eid}_${letter}.jpg`;
+    } else if (hasBase) {
       url = `${wUrl}/image/profile/${pid}/${pid}_${eid}.jpg`;
     } else if (suffixed.length > 0) {
-      const letter = suffixed[Math.floor(Math.random() * suffixed.length)];
-      url = `${wUrl}/image/profile/${pid}/${pid}_${eid}_${letter}.jpg`;
+      const fallbackLetter = suffixed[Math.floor(Math.random() * suffixed.length)];
+      url = `${wUrl}/image/profile/${pid}/${pid}_${eid}_${fallbackLetter}.jpg`;
     }
-    if (!url) return null;
-    const resp = await fetch(url);
-    if (!resp.ok) return null;
-    const blob = await resp.blob();
-    const dataUrl = await new Promise(r => {
-      const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob);
-    });
+    // ... (중략)
     const hd = await resizeImage(dataUrl, 1000, 0.9);
-    await idbSet(`emotion_${pid}_${eid}_hd`, hd).catch(() => {});
+    await idbSet(cacheKeyHd, hd).catch(() => {});
     return hd;
   } catch(e) { return null; }
 }

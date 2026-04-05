@@ -879,14 +879,16 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}) {
     const opacity = p._ghost ? 'opacity:.35;' : '';
     let baseImg = avatarHTML(p);
     let thumbSrc = p.image || '';
-    const dataUrl = await getEmotionImage(p.pid, seg.emotion);
-    if (dataUrl) { baseImg = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;object-position:top;">`; thumbSrc = dataUrl; }
-    const safePid = p.pid.replace(/'/g, "\\'");
-    const safeEmotion = (seg.emotion||'neutral').replace(/'/g, "\\'");
-    const safeThumb = thumbSrc.replace(/'/g, "\\'");
-    const celebStroke = p.type === 'celebrity' ? `box-shadow: inset 0 0 0 1.5px hsl(${h},70%,60%), 0 0 6px hsl(${h},60%,40%);` : '';
-    html += `<div class="ai-msg" style="${opacity}">
-      <div class="msg-av" style="background:hsl(${h},20%,11%);border-color:hsl(${h},28%,22%);${celebStroke}" onclick="openProfilePopup('${safePid}','${safeEmotion}',${h},'${safeThumb}')">${baseImg}</div>
+	const suffix = suffixes[`${p.pid}:${seg.emotion}`] || '';
+	const dataUrl = suffix ? await getEmotionImageSuffixed(p.pid, seg.emotion, suffix) : await getEmotionImage(p.pid, seg.emotion);
+	if (dataUrl) { baseImg = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;object-position:top;">`; thumbSrc = dataUrl; }
+	const safePid = p.pid.replace(/'/g, "\\'");
+	const safeEmotion = (seg.emotion||'neutral').replace(/'/g, "\\'");
+	const safeSuffix = suffix.replace(/'/g, "\\'");
+	const safeThumb = thumbSrc.replace(/'/g, "\\'");
+	const celebStroke = p.type === 'celebrity' ? `box-shadow: inset 0 0 0 1.5px hsl(${h},70%,60%), 0 0 6px hsl(${h},60%,40%);` : '';
+	html += `<div class="ai-msg" style="${opacity}">
+	<div class="msg-av" style="background:hsl(${h},20%,11%);border-color:hsl(${h},28%,22%);${celebStroke}" onclick="openProfilePopup('${safePid}','${safeEmotion}',${h},'${safeThumb}','${safeSuffix}')">${baseImg}</div>
       <div class="bubble-col">
         <div class="msg-pname" style="color:hsl(${h},60%,68%)">${esc(p.name)}${p._ghost?`<span style="font-size:9px;opacity:.5">(삭제됨)</span>`:''}</div>
         <div class="ai-bubble" style="background:hsl(${h},22%,10%);border:1px solid hsl(${h},28%,20%);color:hsl(${h},50%,82%)">${fmt(seg.content)}</div>
