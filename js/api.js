@@ -85,7 +85,8 @@ async function getEmotionImageSuffixed(pid, emotion, letter) {
     if (cached) return cached;
     // 캐시 없으면 fetch
     const name = EMOTION_PROFILE_MAP[pid] || pid;
-    const url = `profile/${name}/${name}_${emotion}_${letter}.jpg`;
+    const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+    const url = wUrl ? `${wUrl}/image/profile/${name}/${name}_${emotion}_${letter}.jpg` : `profile/${name}/${name}_${emotion}_${letter}.jpg`;
     const resp = await fetch(url);
     if (!resp.ok) return null;
     const blob = await resp.blob();
@@ -226,10 +227,12 @@ async function loadNeutralDirect(pid) {
   if (_neutralCache[pid]) return _neutralCache[pid];
   try {
     const name = EMOTION_PROFILE_MAP[pid] || pid;
+    const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+    const base = wUrl ? `${wUrl}/image/profile/${name}` : `profile/${name}`;
     const candidates = [
-      `profile/${name}/${name}_neutral.jpg`,
+      `${base}/${name}_neutral.jpg`,
       ...Array.from({length: 26}, (_, i) =>
-        `profile/${name}/${name}_neutral_${String.fromCharCode(97+i)}.jpg`
+        `${base}/${name}_neutral_${String.fromCharCode(97+i)}.jpg`
       )
     ];
     for (const url of candidates) {
