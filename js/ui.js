@@ -323,11 +323,7 @@ function createNewPersona() {
 function renderEditFooter(isExisting) {
   const footer = document.getElementById('editFooter');
   const p = getPersona(editingPid);
-  if (p?.type === 'celebrity') {
-    footer.innerHTML = `
-      <button class="edit-cancel-btn" onclick="cancelPersonaEdit()">닫기</button>`;
-    return;
-  }
+  // celebrity 제한 제거 - 모든 페르소나 편집 가능
   if (isExisting) {
     footer.innerHTML = `
       <button class="edit-delete-btn" onclick="deletePersonaFromEdit()">삭제</button>
@@ -355,24 +351,7 @@ function deletePersonaFromEdit() {
 function renderEditBody(p, hdImage = null) {
   const body = document.getElementById('editBody');
   const neutral = hdImage || _neutralCache[p.pid] || p.image;
-  const isCelebrity = p.type === 'celebrity';
-  if (isCelebrity) {
-    body.innerHTML = `
-      <div style="display:flex;gap:14px;align-items:flex-start">
-        <div class="edit-avatar-wrap" style="cursor:default">
-          ${neutral ? `<img src="${neutral}" style="width:100%;height:100%;object-fit:cover;object-position:center;display:block">` : defaultAvatar(p.hue)}
-        </div>
-        <div style="flex:1;display:flex;flex-direction:column;gap:7px;min-width:0">
-          <div style="font-size:16px;font-weight:700;color:var(--text)">${esc(p.name)}</div>
-          <div style="font-size:10px;color:var(--premium);letter-spacing:.08em;text-transform:uppercase">★ Celebrity</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:4px">${esc(p.bio||'')}</div>
-        </div>
-      </div>
-      <div style="margin-top:16px;padding:12px;background:hsl(45,30%,8%);border:1px solid hsl(45,40%,20%);border-radius:8px;font-size:11px;color:hsl(45,60%,60%);line-height:1.6">
-        셀럽 페르소나는 <b>페르소나 매니저</b>에서만 수정할 수 있어.
-      </div>`;
-    return;
-  }
+  // celebrity 제한 제거
 
   body.innerHTML = `
     <!-- 큰 이미지 영역 -->
@@ -489,7 +468,7 @@ function handleEditImage(input) {
 
 async function savePersonaEdit() {
   const p = getPersona(editingPid); if (!p) return;
-  if (p.type === 'celebrity') { goMain(); return; }
+  // celebrity 저장 허용
   p.name = document.getElementById('editName').value.trim() || '페르소나';
   p.bio = document.getElementById('editBio').value.trim();
   const selSwatch = document.querySelector('#editBody .hue-swatch.on');
