@@ -540,9 +540,9 @@ body {
 
 /* 큰 이미지 편집 */
 .edit-big-img-wrap {
-  width: 100%;
+  width: calc(55dvh * 2/3);
   aspect-ratio: 2/3;
-  max-height: 55dvh;
+  max-width: 100%;
   border-radius: 16px;
   overflow: hidden;
   background: var(--card);
@@ -1006,6 +1006,30 @@ select.edit-input {
       
     </div>
   </div>
+
+  <!-- 하단 탭바 -->
+  <div class="bottom-tabbar">
+    <button class="bottom-tab active" id="btabPersona" onclick="switchTab('persona')">
+      <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="8" r="4"/>
+        <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+      </svg>
+      <span class="bottom-tab-label">Persona</span>
+    </button>
+    <button class="bottom-tab" id="btabChat" onclick="switchTab('chat')">
+      <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+      </svg>
+      <span class="bottom-tab-label">Chats</span>
+    </button>
+    <button class="bottom-tab" id="btabSettings" onclick="switchTab('settings')">
+      <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+      </svg>
+      <span class="bottom-tab-label">Settings</span>
+    </button>
+  </div>
 </div>
 
 <!-- ══════════ 페르소나 편집 화면 ══════════ -->
@@ -1053,29 +1077,7 @@ select.edit-input {
     </div>
     </div>
 
-  <!-- 하단 탭바 -->
-  <div class="bottom-tabbar">
-    <button class="bottom-tab active" id="btabPersona" onclick="switchTab('persona')">
-      <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="8" r="4"/>
-        <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
-      </svg>
-      <span class="bottom-tab-label">Persona</span>
-    </button>
-    <button class="bottom-tab" id="btabChat" onclick="switchTab('chat')">
-      <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
-      </svg>
-      <span class="bottom-tab-label">Chats</span>
-    </button>
-    <button class="bottom-tab" id="btabSettings" onclick="switchTab('settings')">
-      <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="3"/>
-        <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
-      </svg>
-      <span class="bottom-tab-label">Settings</span>
-    </button>
-  </div>
+
 </div>
 
 <!-- 새 채팅 모달 -->
