@@ -367,6 +367,9 @@ function renderEditBody(p, hdImage = null) {
     <div>
       <div class="edit-section-title">Identity Details</div>
 
+      <div class="edit-field-label">PID ${isNewPersona?'<span style="font-size:9px;color:var(--muted)">(변경 가능)</span>':'<span style="font-size:9px;color:var(--muted)">(읽기 전용)</span>'}</div>
+      <input class="edit-input" id="editPid" value="${esc(p.pid)}" placeholder="p_riley" ${isNewPersona?'':'readonly'} style="width:100%;font-family:monospace;font-size:12px;color:var(--muted);${isNewPersona?'':'opacity:.6;cursor:default'}">
+
       <div class="edit-field-label">NAME</div>
       <input class="edit-input" id="editName" value="${esc(p.name)}" placeholder="이름" style="width:100%">
 
@@ -469,6 +472,14 @@ function handleEditImage(input) {
 async function savePersonaEdit() {
   const p = getPersona(editingPid); if (!p) return;
   // celebrity 저장 허용
+  // PID: 신규 페르소나만 변경 가능
+  const newPid = document.getElementById('editPid')?.value.trim();
+  if (isNewPersona && newPid && newPid !== p.pid) {
+    personas = personas.filter(x => x.pid !== p.pid);
+    p.pid = newPid;
+    editingPid = newPid;
+    personas.push(p);
+  }
   p.name = document.getElementById('editName').value.trim() || '페르소나';
   p.bio = document.getElementById('editBio').value.trim();
   const selSwatch = document.querySelector('#editBody .hue-swatch.on');
