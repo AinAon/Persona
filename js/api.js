@@ -39,6 +39,40 @@ async function idbGet(key) {
 // ══════════════════════════════
 //  IMAGE FETCH & CACHE
 // ══════════════════════════════
+
+// ══════════════════════════════
+//  R2 파일 목록 캐시
+// ══════════════════════════════
+const _imageListCache = {}; // { pid: ['profile/p_riley/riley_neutral.jpg', ...] }
+
+async function getImageList(pid) {
+  if (_imageListCache[pid]) return _imageListCache[pid];
+  try {
+    const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+    if (!wUrl) return [];
+    const resp = await fetch(`${wUrl}/image-list/profile/${pid}`);
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    _imageListCache[pid] = data.keys || [];
+    return _imageListCache[pid];
+  } catch(e) { return []; }
+}
+
+// 파일 목록에서 특정 emotion의 suffix 목록 추출
+function getSuffixesForEmotion(keys, pid, emotion) {
+  const name = (typeof EMOTION_PROFILE_MAP !== 'undefined' && EMOTION_PROFILE_MAP[pid]) || pid;
+  const prefix = `profile/${pid}/${name}_${emotion}_`;
+  const suffix_re = new RegExp(`profile/${pid}/${name}_${emotion}_([a-z])\.jpg$`);
+  // suffix 있는 파일
+  const suffixed = keys
+    .map(k => { const m = k.match(suffix_re); return m ? m[1] : null; })
+    .filter(Boolean);
+  // suffix 없는 기본 파일도 확인
+  const base = `profile/${pid}/${name}_${emotion}.jpg`;
+  const hasBase = keys.includes(base);
+  return { suffixed, hasBase };
+}
+
 const _neutralCache = {};
 
 async function getNeutralImage(pid) {
@@ -83,12 +117,10 @@ async function getEmotionImageSuffixed(pid, emotion, letter) {
   try {
     const cached = await idbGet(idbKey);
     if (cached) return cached;
-    // 캐시 없으면 fetch
-    const name = EMOTION_PROFILE_MAP[pid] || pid;
+    const name = (typeof EMOTION_PROFILE_MAP !== 'undefined' && EMOTION_PROFILE_MAP[pid]) || pid;
     const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-    const url = wUrl
-      ? `${wUrl}/image/profile/${pid}/${name}_${emotion}_${letter}.jpg`
-      : `profile/${pid}/${name}_${emotion}_${letter}.jpg`;
+    if (!wUrl) return null;
+    const url = `${wUrl}/image/profile/${pid}/${name}_${emotion}_${letter}.jpg`;
     const resp = await fetch(url);
     if (!resp.ok) return null;
     const blob = await resp.blob();
@@ -105,7 +137,7 @@ async function getEmotionImageSuffixed(pid, emotion, letter) {
   } catch(e) { return null; }
 }
 
-// 메시지 렌더링 전 suffix 결정 (없으면 랜덤 선택 + 파일 존재 여부 확인)
+// 메시지 렌더링 전 suffix 결정 (파일 목록 기반 랜덤 선택)
 async function resolveMessageSuffixes(rawText, pList, existingSuffixes = null) {
   if (existingSuffixes) return existingSuffixes;
   const segments = parseResponse(rawText, pList);
@@ -115,9 +147,17 @@ async function resolveMessageSuffixes(rawText, pList, existingSuffixes = null) {
     if (!p) continue;
     const key = `${p.pid}:${seg.emotion}`;
     if (suffixes[key] !== undefined) continue;
-    const letter = pickRandomSuffix();
-    const img = await getEmotionImageSuffixed(p.pid, seg.emotion, letter);
-    suffixes[key] = img ? letter : null; // null = 파일 없음 → neutral fallback
+    // 파일 목록에서 해당 감정의 suffix 목록 추출
+    const keys = await getImageList(p.pid);
+    const { suffixed, hasBase } = getSuffixesForEmotion(keys, p.pid, seg.emotion);
+    if (suffixed.length > 0) {
+      // 랜덤 suffix 선택
+      suffixes[key] = suffixed[Math.floor(Math.random() * suffixed.length)];
+    } else if (hasBase) {
+      suffixes[key] = ''; // suffix 없는 기본 파일
+    } else {
+      suffixes[key] = null; // 없음 → neutral fallback
+    }
   }
   return suffixes;
 }
@@ -224,32 +264,33 @@ async function preloadEmotionImages() {
   }
 }
 
-// neutral 이미지를 URL에서 직접 fetch → 메모리(_neutralCache)에만 저장
+// neutral 이미지: 파일 목록 기반으로 존재하는 파일만 fetch
 async function loadNeutralDirect(pid) {
   if (_neutralCache[pid]) return _neutralCache[pid];
   try {
-    const name = EMOTION_PROFILE_MAP[pid] || pid;
+    const name = (typeof EMOTION_PROFILE_MAP !== 'undefined' && EMOTION_PROFILE_MAP[pid]) || pid;
     const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-    const base = wUrl ? `${wUrl}/image/profile/${pid}` : `profile/${pid}`;
-    const candidates = [
-      `${base}/${name}_neutral.jpg`,
-      ...Array.from({length: 26}, (_, i) =>
-        `${base}/${name}_neutral_${String.fromCharCode(97+i)}.jpg`
-      )
-    ];
-    for (const url of candidates) {
-      try {
-        const resp = await fetch(url);
-        if (!resp.ok) continue;
-        const blob = await resp.blob();
-        const dataUrl = await new Promise(r => {
-          const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob);
-        });
-        const resized = await resizeImage(dataUrl, 300, 0.85);
-        _neutralCache[pid] = resized;
-        return resized;
-      } catch(e) { continue; }
+    if (!wUrl) return null;
+    // 파일 목록에서 neutral 파일 찾기
+    const keys = await getImageList(pid);
+    const { suffixed, hasBase } = getSuffixesForEmotion(keys, pid, 'neutral');
+    let url = null;
+    if (hasBase) {
+      url = `${wUrl}/image/profile/${pid}/${name}_neutral.jpg`;
+    } else if (suffixed.length > 0) {
+      const letter = suffixed[Math.floor(Math.random() * suffixed.length)];
+      url = `${wUrl}/image/profile/${pid}/${name}_neutral_${letter}.jpg`;
     }
+    if (!url) return null;
+    const resp = await fetch(url);
+    if (!resp.ok) return null;
+    const blob = await resp.blob();
+    const dataUrl = await new Promise(r => {
+      const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob);
+    });
+    const resized = await resizeImage(dataUrl, 300, 0.85);
+    _neutralCache[pid] = resized;
+    return resized;
   } catch(e) {}
   return null;
 }
