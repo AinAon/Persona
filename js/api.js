@@ -112,15 +112,19 @@ function pickRandomSuffix() {
 }
 
 async function getEmotionImageSuffixed(pid, emotion, letter) {
-  if (!letter) return null;
-  const idbKey = `emotion_${pid}_${emotion}_${letter}`;
+  if (letter === null || letter === undefined) return null;
+  const idbKey = letter
+    ? `emotion_${pid}_${emotion}_${letter}`
+    : `emotion_${pid}_${emotion}`;
   try {
     const cached = await idbGet(idbKey);
     if (cached) return cached;
     const name = (typeof EMOTION_PROFILE_MAP !== 'undefined' && EMOTION_PROFILE_MAP[pid]) || pid;
     const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
     if (!wUrl) return null;
-    const url = `${wUrl}/image/profile/${pid}/${name}_${emotion}_${letter}.jpg`;
+    const url = letter
+      ? `${wUrl}/image/profile/${pid}/${name}_${emotion}_${letter}.jpg`
+      : `${wUrl}/image/profile/${pid}/${name}_${emotion}.jpg`;
     const resp = await fetch(url);
     if (!resp.ok) return null;
     const blob = await resp.blob();
