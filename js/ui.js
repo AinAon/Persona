@@ -481,19 +481,30 @@ async function savePersonaEdit() {
   p.mbti = document.getElementById('editMbti')?.value.trim() || '';
   isNewPersona = false;
 
-  // 이미지 업로드 대기 중인 경우 GitHub push
+  // 이미지 R2 업로드
   if (p._pendingImage) {
-	showToast('⏳ 이미지 저장 중...', 5000);
-	const base64 = p._pendingImage.split(',')[1];
-	const res = await gasCall({ action: 'pushGithub', pid: p.pid, emotionId: 'neutral', base64 });
-  
-  if (res?.result !== 'success') {
-    // 실패 시 경고창을 띄우고 저장을 중단하여 원인을 확인
-    alert('이미지 저장 실패: ' + (res?.error || '알 수 없는 오류'));
-    return; 
+    showToast('⏳ 이미지 저장 중...', 5000);
+    try {
+      const workerUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+      if (!workerUrl) throw new Error('Worker URL 없음');
+      // base64 → Blob
+      const b64 = p._pendingImage.split(',')[1];
+      const byteArr = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+      const blob = new Blob([byteArr], { type: 'image/jpeg' });
+      const fname = `${(EMOTION_PROFILE_MAP[p.pid] || p.pid)}_neutral.jpg`;
+      const form = new FormData();
+      form.append('file', blob, fname);
+      form.append('folder', `profile/${p.pid}`);
+      const res = await fetch(workerUrl + '/image', { method: 'POST', body: form });
+      const data = await res.json();
+      if (!data.url) throw new Error(data.error || '업로드 실패');
+      p.imageUrl = data.url;
+    } catch(e) {
+      alert('이미지 저장 실패: ' + e.message);
+      return;
+    }
+    delete p._pendingImage;
   }
-  delete p._pendingImage;
-}
 savePersonas(); renderPersonaGrid(); goMain();
 showToast('저장됨 ✓');
 }
