@@ -1274,10 +1274,20 @@ function kickPersona(pid) {
   
   const pList = s.participantPids.map(id => getPersona(id)).filter(Boolean);
   const avatarsEl = document.getElementById('chatHeaderAvatars');
-  if (avatarsEl) avatarsEl.innerHTML = pList.map(p => {
-    const img = p.image ? `<img src="${p.image}">` : defaultAvatar(p.hue);
-    return `<div class="chat-header-av" style="background:hsl(${p.hue},20%,11%);border-color:hsl(${p.hue},28%,22%)">${img}</div>`;
-  }).join('');
+  if (avatarsEl) {
+    avatarsEl.innerHTML = pList.map(p => {
+      const img = p.image ? `<img src="${p.image}" style="width:100%;height:100%;object-fit:cover;object-position:top;">` : defaultAvatar(p.hue);
+      return `<div class="chat-header-av" style="background:hsl(${p.hue},20%,11%);border-color:hsl(${p.hue},28%,22%);width:42px;height:42px;border-radius:50%;overflow:hidden;flex-shrink:0;">${img}</div>`;
+    }).join('');
+    
+    pList.forEach(async (p, i) => {
+      const img = await getNeutralImage(p.pid); // 사각 crop 소스 호출
+      if (img) {
+        const avEl = avatarsEl.children[i];
+        if (avEl) avEl.innerHTML = `<img src="${img}" style="width:100%;height:100%;object-fit:cover;object-position:top;">`;
+      }
+    });
+  }
   const namesEl = document.getElementById('chatHeaderNames');
   if (namesEl) namesEl.textContent = pList.map(p=>p.name).join(', ');
   showToast(`${p?.name || '페르소나'} 추방됨`);
