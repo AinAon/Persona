@@ -921,14 +921,19 @@ select.edit-input {
   <div class="crop-container" id="cropContainer">
     <img class="crop-img" id="cropImg" draggable="false">
     <svg class="crop-guide-mask" id="cropGuideMask" viewBox="0 0 200 300" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+      <!-- 좌우 17%(x=34,166), 상단 5%(y=15), 원 r=66 center(100,81), 사각형 하단 y=213 -->
       <defs>
         <mask id="holeMask">
           <rect width="200" height="300" fill="white"/>
-          <circle cx="100" cy="100" r="100" fill="black"/>
+          <circle cx="100" cy="81" r="66" fill="black"/>
         </mask>
       </defs>
       <rect width="200" height="300" fill="rgba(0,0,0,0.10)" mask="url(#holeMask)"/>
-      <circle cx="100" cy="100" r="100" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="2"/>
+      <circle cx="100" cy="81" r="66" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="1.5"/>
+      <line x1="34" y1="0" x2="34" y2="300" stroke="rgba(0,200,255,0.45)" stroke-width="0.7"/>
+      <line x1="166" y1="0" x2="166" y2="300" stroke="rgba(0,200,255,0.45)" stroke-width="0.7"/>
+      <line x1="0" y1="15" x2="200" y2="15" stroke="rgba(0,200,255,0.45)" stroke-width="0.7"/>
+      <line x1="0" y1="213" x2="200" y2="213" stroke="rgba(0,200,255,0.3)" stroke-width="0.7"/>
     </svg>
   </div>
   <div class="crop-hint">드래그로 이동 · 휠/핀치로 확대</div>
