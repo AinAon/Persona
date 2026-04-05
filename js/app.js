@@ -127,54 +127,35 @@ async function init() {
     waitForNeutral();
   }
 
-  // 백그라운드 작업 (이미지 캐싱 및 서버 동기화)
-    if (GAS_URL) {
-    loadIndex()
-      .then(() => preloadAllSessions())
-      .catch(()=>{});
-      
-    // celebrity (GitHub 직접 fetch) + custom (드라이브 GAS) 병합 로드
-    Promise.allSettled([
-      fetch('celebrity.json').then(r => r.ok ? r.json() : []).catch(() => []),
-      gasCall({ action: 'loadPersonas' })
-    ]).then(([celebResult, customResult]) => {
-      const celebs  = Array.isArray(celebResult.value) ? celebResult.value : [];
-      const customs = customResult.value?.result === 'success' ? (customResult.value.personas || []) : [];
 
-      // 중복 방지: 셀럽의 pid 목록(p_chloe, p_clara 등) 추출
-      const celebPids = celebs.map(p => p.pid);
+  // 백그라운드: Worker KV에서 페르소나 + 세션 동기화
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (wUrl) {
+    loadIndex().then(() => preloadAllSessions()).catch(()=>{});
 
-      // hidden 제외 + 커스텀 목록에 셀럽과 똑같은 pid가 있으면 무시하고 합치기
-      const EXCLUDED_PIDS = ['p_chloe', 'p_clara']; // p_riley 외 제거
-      const merged = [
-        ...celebs.filter(p => !p.hidden && !EXCLUDED_PIDS.includes(p.pid)).map(p => ({ ...p, type: 'celebrity' })),
-        ...customs.filter(p => !p.hidden && !celebPids.includes(p.pid) && !EXCLUDED_PIDS.includes(p.pid)).map(p => ({ ...p, type: 'custom' }))
-      ];
-
-      if (merged.length) {
-        // neutral 이미지 IDB 캐싱
-        for (const p of merged) {
-          // celebrity: neutral_md 필드
-          if (p.neutral_md && !_neutralCache[p.pid]) {
-            _neutralCache[p.pid] = p.neutral_md;
-            idbSet(`emotion_${p.pid}_neutral`, p.neutral_md).catch(()=>{});
-            if (p.neutral_hd) idbSet(`emotion_${p.pid}_neutral_hd`, p.neutral_hd).catch(()=>{});
-          }
-          // custom: image 필드 (기존 방식)
-          const neutralData = p.neutral_md || p.image || null;
-			if (neutralData && !_neutralCache[p.pid]) {
-				_neutralCache[p.pid] = neutralData;
-				idbSet(`emotion_${p.pid}_neutral`, neutralData).catch(()=>{});
-				if (p.neutral_hd) idbSet(`emotion_${p.pid}_neutral_hd`, p.neutral_hd).catch(()=>{});
-				if (p.neutral_thumb) idbSet(`emotion_${p.pid}_neutral_thumb`, p.neutral_thumb).catch(()=>{});
-		}
-          // 메모리/캐시에는 이미지 필드 제외
-          delete p.neutral_thumb; delete p.neutral_md; delete p.neutral_hd; delete p.image;
-        }
-		personas = merged;
-		try { localStorage.setItem(CACHE_PERSONAS_KEY, JSON.stringify(personas)); } catch(e) {}
-		renderPersonaGrid();
-		preloadEmotionImages(); // ← 여기로 이동
+    // KV에서 페르소나 로드 (celebrity.json + GAS 대체)
+    fetch(wUrl + '/personas').then(r => r.json()).then(data => {
+      const kvPersonas = data.personas || [];
+      if (kvPersonas.length) {
+        personas = kvPersonas;
+        try { localStorage.setItem(CACHE_PERSONAS_KEY, JSON.stringify(personas)); } catch(e) {}
+        renderPersonaGrid();
+        preloadEmotionImages();
+      } else {
+        // KV에 없으면 celebrity.json에서 초기 로드 (최초 1회)
+        fetch('celebrity.json').then(r => r.ok ? r.json() : []).catch(() => []).then(celebs => {
+          if (!celebs.length) return;
+          personas = celebs.map(p => ({ ...p, type: p.type || 'celebrity' }));
+          try { localStorage.setItem(CACHE_PERSONAS_KEY, JSON.stringify(personas)); } catch(e) {}
+          // KV에도 저장
+          fetch(wUrl + '/personas', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ personas })
+          }).catch(()=>{});
+          renderPersonaGrid();
+          preloadEmotionImages();
+        });
       }
     }).catch(() => {});
   }
