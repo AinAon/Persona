@@ -6,7 +6,7 @@ const GAS_SECRET = 'persona_chat_2025';
 const WORKER_URL = 'https://persona-worker.persona-worker.workers.dev/';
 const HUE_PRESETS = [158, 210, 260, 300, 330, 20, 45, 80];
 
-const EMOTIONS = ['angry','arousal','confusion','cry','disgust','ecstasy','happy','horror',
+const EMOTIONS = ['angry','arousal','confusion','contempt','cry','disgust','ecstasy','happy','horror',
   'laugh','neutral','orgasm','pain','playful','relief','sad','shy','subtlesmile','surprise','worry'];
 
 const EMOTION_PROFILE_MAP = { 'p_riley': 'riley' };
