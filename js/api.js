@@ -278,14 +278,21 @@ async function gasCall(body) {
 }
 
 function savePersonas() {
+  // 이미지 데이터 제외 후 저장 (용량 절약)
+  const toSave = personas.map(p => {
+    const { neutral_md, neutral_hd, neutral_thumb, image, ...rest } = p;
+    return rest;
+  });
   try { localStorage.setItem(CACHE_PERSONAS_KEY, JSON.stringify(personas)); } catch(e) {}
-  const customOnly = personas.filter(p => p.type !== 'celebrity').map(p => ({
-    ...p,
-    neutral_md:    p.neutral_md    || _neutralCache[p.pid] || null,
-    neutral_hd:    p.neutral_hd    || null,
-    neutral_thumb: p.neutral_thumb || null,
-  }));
-  gasCall({ action:'savePersonas', personas: customOnly });
+  // Worker KV에 저장
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (wUrl) {
+    fetch(wUrl + '/personas', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ personas: toSave })
+    }).catch(() => {});
+  }
 }
 
 function buildIndex() {
