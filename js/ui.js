@@ -484,7 +484,6 @@ async function handleMultiImageUpload(input) {
   let ok = 0, fail = 0;
   for (const file of files) {
     try {
-      // 리사이즈 (용량 최적화)
       const dataUrl = await new Promise(r => {
         const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(file);
       });
@@ -497,10 +496,36 @@ async function handleMultiImageUpload(input) {
       form.append('folder', `profile/${p.pid}`);
       const res = await fetch(wUrl + '/image', { method: 'POST', body: form });
       const data = await res.json();
-      if (data.url) ok++; else fail++;
+      if (data.url) {
+        ok++;
+        // 파일명에서 emotion 파싱해서 IDB 캐싱
+        // 예: riley_neutral_a.jpg → emotion=neutral, letter=a
+        const fname = file.name.replace(/\.jpg$/i, '');
+        const name = (typeof getPersonaName !== 'undefined') ? getPersonaName(p.pid) : ((typeof EMOTION_PROFILE_MAP !== 'undefined' && EMOTION_PROFILE_MAP[p.pid]) || p.pid.replace(/^p_/, '').replace(/_[a-z0-9]{3,}$/, ''));
+        const namePrefix = name + '_';
+        if (fname.startsWith(namePrefix)) {
+          const rest = fname.slice(namePrefix.length); // neutral_a 또는 neutral
+          const parts = rest.split('_');
+          const emotion = parts[0];
+          const letter = parts[1] || '';
+          // neutral이면 썸네일 생성 + _neutralCache 업데이트
+          if (emotion === 'neutral') {
+            const { sqMd } = await generateThumbnailSet(resized, p.pid, 'neutral').catch(() => ({ sqMd: null }));
+            if (sqMd) {
+              _neutralCache[p.pid] = sqMd;
+              renderPersonaGrid();
+            }
+          } else {
+            // 일반 감정 이미지 IDB 캐싱
+            const idbKey = letter ? `emotion_${p.pid}_${emotion}_${letter}` : `emotion_${p.pid}_${emotion}`;
+            const md = await resizeImage(resized, 300, 0.85).catch(() => null);
+            if (md) idbSet(idbKey, md).catch(() => {});
+          }
+        }
+      } else { fail++; }
     } catch(e) { fail++; }
   }
-  // 파일 목록 캐시 초기화 (새로 로드하도록)
+  // 파일 목록 캐시 초기화
   if (typeof _imageListCache !== 'undefined') delete _imageListCache[p.pid];
   showToast(`✓ ${ok}개 완료${fail ? ` / ${fail}개 실패` : ''}`);
   input.value = '';
