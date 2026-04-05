@@ -1022,8 +1022,10 @@ async function sendMessage() {
         for (const key of sorted) {
           const fname = key.split('/').pop().replace(/\.jpg$/i, '');
           const rest = fname.startsWith(p.pid + '_') ? fname.slice(p.pid.length + 1) : fname;
+          if (!rest) continue; // 폴더 키 스킵
           const parts = rest.split('_');
           const emotion = parts[0];
+          if (!emotion) continue; // 빈 emotion 스킵
           const letter = parts[1] || '';
           const idbKey = letter ? `emotion_${p.pid}_${emotion}_${letter}` : `emotion_${p.pid}_${emotion}`;
           let dataUrl = null;
