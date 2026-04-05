@@ -362,6 +362,11 @@ function renderEditBody(p, hdImage = null) {
       </div>
     </div>
     <input type="file" id="editImgInput" style="display:none" accept="image/*" onchange="handleEditImage(this)">
+    <!-- 다중 이미지 업로드 (감정 이미지 등) -->
+    <input type="file" id="editMultiImgInput" style="display:none" accept="image/*" multiple onchange="handleMultiImageUpload(this)">
+    <button onclick="document.getElementById('editMultiImgInput').click()" style="width:100%;padding:9px;border-radius:10px;border:1px solid var(--border2);background:transparent;color:var(--muted);font-family:'Pretendard',sans-serif;font-size:12px;cursor:pointer;margin-top:6px">
+      📁 감정 이미지 일괄 업로드 (파일명 그대로 저장)
+    </button>
 
     <!-- Identity Details 섹션 -->
     <div>
@@ -467,6 +472,38 @@ function handleEditImage(input) {
     });
   };
   reader.readAsDataURL(file);
+}
+
+async function handleMultiImageUpload(input) {
+  const p = getPersona(editingPid); if (!p) return;
+  const files = [...input.files]; if (!files.length) return;
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) { alert('Worker URL 없음'); return; }
+
+  showToast(`⏳ ${files.length}개 업로드 중...`, 10000);
+  let ok = 0, fail = 0;
+  for (const file of files) {
+    try {
+      // 리사이즈 (용량 최적화)
+      const dataUrl = await new Promise(r => {
+        const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(file);
+      });
+      const resized = await resizeImage(dataUrl, 1200, 0.93);
+      const b64 = resized.split(',')[1];
+      const byteArr = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+      const blob = new Blob([byteArr], { type: 'image/jpeg' });
+      const form = new FormData();
+      form.append('file', blob, file.name);
+      form.append('folder', `profile/${p.pid}`);
+      const res = await fetch(wUrl + '/image', { method: 'POST', body: form });
+      const data = await res.json();
+      if (data.url) ok++; else fail++;
+    } catch(e) { fail++; }
+  }
+  // 파일 목록 캐시 초기화 (새로 로드하도록)
+  if (typeof _imageListCache !== 'undefined') delete _imageListCache[p.pid];
+  showToast(`✓ ${ok}개 완료${fail ? ` / ${fail}개 실패` : ''}`);
+  input.value = '';
 }
 
 async function savePersonaEdit() {
