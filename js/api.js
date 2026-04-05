@@ -129,6 +129,74 @@ async function getEmotionImageHD(pid, emotion) {
   } catch(e) { return null; }
 }
 
+
+// ══════════════════════════════
+//  3단계 썸네일 생성 (full / square crop / circle crop)
+//  좌우 17%, 상단 5% crop, 2:3 유지
+// ══════════════════════════════
+function loadImageElement(dataUrl) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => res(img);
+    img.onerror = rej;
+    img.src = dataUrl;
+  });
+}
+
+async function generateThumbnailSet(fullDataUrl, pid, emotion = 'neutral') {
+  const img = await loadImageElement(fullDataUrl);
+  const W = img.naturalWidth, H = img.naturalHeight;
+
+  // 크롭 좌표
+  const cropX = Math.round(W * 0.17);
+  const cropY = Math.round(H * 0.05);
+  const cropW = W - cropX * 2;           // 66% of W
+  const cropH = Math.round(cropW * 1.5); // 2:3 유지
+
+  // ── 사각형 crop (2:3) ──
+  const sqCanvas = document.createElement('canvas');
+  sqCanvas.width = cropW; sqCanvas.height = cropH;
+  sqCanvas.getContext('2d').drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+  const sqJpg = sqCanvas.toDataURL('image/jpeg', 0.93);
+
+  // ── 원형 crop (정사각형 + 원 마스크 → PNG) ──
+  const circDiam = cropW;
+  const circCanvas = document.createElement('canvas');
+  circCanvas.width = circDiam; circCanvas.height = circDiam;
+  const cCtx = circCanvas.getContext('2d');
+  cCtx.drawImage(img, cropX, cropY, circDiam, circDiam, 0, 0, circDiam, circDiam);
+  cCtx.globalCompositeOperation = 'destination-in';
+  cCtx.beginPath();
+  cCtx.arc(circDiam / 2, circDiam / 2, circDiam / 2, 0, Math.PI * 2);
+  cCtx.fill();
+  const circPng = circCanvas.toDataURL('image/png');
+
+  // 리사이즈
+  const [sqMd, sqHd, circSm] = await Promise.all([
+    resizeImage(sqJpg, 300, 0.85),   // 사각형 MD → grid / bubble
+    resizeImage(sqJpg, 1000, 0.9),   // 사각형 HD → edit / popup
+    resizeImage(circPng, 200, 0.9),  // 원형 SM → avatars
+  ]);
+
+  // IDB 저장
+  await Promise.all([
+    idbSet(`emotion_${pid}_${emotion}`, sqMd),
+    idbSet(`emotion_${pid}_${emotion}_hd`, sqHd),
+    idbSet(`emotion_${pid}_${emotion}_circle`, circSm),
+  ]);
+
+  return { sqMd, sqHd, circSm };
+}
+
+// 원형 썸네일 불러오기 (없으면 square MD fallback)
+async function getNeutralImageCircle(pid) {
+  try {
+    const cached = await idbGet(`emotion_${pid}_neutral_circle`);
+    if (cached) return cached;
+  } catch(e) {}
+  return await getNeutralImage(pid);
+}
+
 async function resizeImage(dataUrl, maxPx, quality = 0.88) {
   return new Promise(r => {
     const img = new Image();
