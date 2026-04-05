@@ -59,8 +59,14 @@ async function getImageList(pid) {
 }
 
 // 파일 목록에서 특정 emotion의 suffix 목록 추출
+function getPersonaName(pid) {
+  if (typeof EMOTION_PROFILE_MAP !== 'undefined' && EMOTION_PROFILE_MAP[pid]) return EMOTION_PROFILE_MAP[pid];
+  // p_riley_abc → riley, p_mango → mango
+  return pid.replace(/^p_/, '').replace(/_[a-z0-9]{3,}$/, '');
+}
+
 function getSuffixesForEmotion(keys, pid, emotion) {
-  const name = (typeof EMOTION_PROFILE_MAP !== 'undefined' && EMOTION_PROFILE_MAP[pid]) || pid;
+  const name = getPersonaName(pid);
   const prefix = `profile/${pid}/${name}_${emotion}_`;
   const suffix_re = new RegExp(`profile/${pid}/${name}_${emotion}_([a-z])\.jpg$`);
   // suffix 있는 파일
@@ -119,7 +125,7 @@ async function getEmotionImageSuffixed(pid, emotion, letter) {
   try {
     const cached = await idbGet(idbKey);
     if (cached) return cached;
-    const name = (typeof EMOTION_PROFILE_MAP !== 'undefined' && EMOTION_PROFILE_MAP[pid]) || pid;
+    const name = getPersonaName(pid);
     const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
     if (!wUrl) return null;
     const url = letter
@@ -178,7 +184,7 @@ async function getEmotionImageHD(pid, emotion) {
   } catch(e) {}
   // IDB 없으면 R2에서 직접 fetch (HD 크기)
   try {
-    const name = (typeof EMOTION_PROFILE_MAP !== 'undefined' && EMOTION_PROFILE_MAP[pid]) || pid;
+    const name = getPersonaName(pid);
     const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
     if (!wUrl) return null;
     const keys = await getImageList(pid);
@@ -298,7 +304,7 @@ async function preloadEmotionImages() {
 async function loadNeutralDirect(pid) {
   if (_neutralCache[pid]) return _neutralCache[pid];
   try {
-    const name = (typeof EMOTION_PROFILE_MAP !== 'undefined' && EMOTION_PROFILE_MAP[pid]) || pid;
+    const name = getPersonaName(pid);
     const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
     if (!wUrl) return null;
     // 파일 목록에서 neutral 파일 찾기
