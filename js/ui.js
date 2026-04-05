@@ -875,10 +875,10 @@ function buildEmotionCard(p, emotion, letter, dataUrl) {
   
 const avStyle = userProfile.chatAvatarStyle || 'square';
   const avDisplay = avStyle === 'hidden' ? 'display:none;' : '';
-  const avRadius = avStyle === 'circle' ? 'border-radius:50%;' : '';
+  const avShape = avStyle === 'circle' ? 'border-radius:50%; aspect-ratio:1/1; height:auto;' : '';
 
   return `<div class="ai-msg" style="margin-bottom:4px">
-    <div class="msg-av" style="background:hsl(${h},20%,11%);border-color:hsl(${h},28%,22%);cursor:pointer;${avDisplay}${avRadius}" onclick="openProfilePopup('${safePid}','${safeEmotion}',${h},'','${safeLetter}')">${imgHtml}</div>
+    <div class="msg-av" style="background:hsl(${h},20%,11%);border-color:hsl(${h},28%,22%);cursor:pointer;${avDisplay}${avShape}" onclick="openProfilePopup('${safePid}','${safeEmotion}',${h},'','${safeLetter}')">${imgHtml}</div>
     <div class="bubble-col">
       <div class="msg-pname" style="color:hsl(${h},60%,68%);display:block">${esc(p.name)}</div>
       <div class="ai-bubble" style="background:hsl(${h},22%,10%);border:1px solid hsl(${h},28%,20%);color:hsl(${h},50%,82%);font-size:12px">${esc(label)}</div>
@@ -907,16 +907,17 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}) {
     const safePid = p.pid.replace(/'/g, "\\'");
     const safeEmotion = (seg.emotion||'neutral').replace(/'/g, "\\'");
     const safeSuffix = suffix.replace(/'/g, "\\'");
-const safeThumb = thumbSrc.replace(/'/g, "\\'");
+	const safeThumb = thumbSrc.replace(/'/g, "\\'");
     const celebStroke = p.type === 'celebrity' ? `box-shadow: inset 0 0 0 1.5px hsl(${h},70%,60%), 0 0 6px hsl(${h},60%,40%);` : '';
     
     // 설정에 따른 스타일 결정
-    const avStyle = userProfile.chatAvatarStyle || 'square';
+	const avStyle = userProfile.chatAvatarStyle || 'square';
     const avDisplay = avStyle === 'hidden' ? 'display:none;' : '';
-    const avRadius = avStyle === 'circle' ? 'border-radius:50%;' : '';
+    // 높이를 auto로 풀고 1:1 비율을 강제하여 완벽한 정원으로 만듭니다.
+    const avShape = avStyle === 'circle' ? 'border-radius:50%; aspect-ratio:1/1; height:auto;' : '';
     
     html += `<div class="ai-msg" style="${opacity}">
-      <div class="msg-av" style="background:hsl(${h},20%,11%);border-color:hsl(${h},28%,22%);${celebStroke};${avDisplay}${avRadius}" onclick="openProfilePopup('${safePid}','${safeEmotion}',${h},'${safeThumb}','${safeSuffix}')">${baseImg}</div>
+      <div class="msg-av" style="background:hsl(${h},20%,11%);border-color:hsl(${h},28%,22%);${celebStroke};${avDisplay}${avShape}" onclick="openProfilePopup('${safePid}','${safeEmotion}',${h},'${safeThumb}','${safeSuffix}')">${baseImg}</div>
       <div class="bubble-col">
         <div class="msg-pname" style="color:hsl(${h},60%,68%)">${esc(p.name)}${p._ghost?`<span style="font-size:9px;opacity:.5">(삭제됨)</span>`:''}</div>
         <div class="ai-bubble" style="background:hsl(${h},22%,10%);border:1px solid hsl(${h},28%,20%);color:hsl(${h},50%,82%)">${fmt(seg.content)}</div>
