@@ -73,13 +73,17 @@ function renderSettingsPane() {
   const bioEl = document.getElementById('settingsUserBio');
   if (nameEl) nameEl.value = userProfile.name || '';
   if (bioEl) bioEl.value = userProfile.bio || '';
+  
+  const tabEl = document.getElementById('settingsDefaultTab');
+  if (tabEl) tabEl.value = userProfile.defaultTab || 'persona';
 }
 
 function saveSettingsUserProfile() {
   userProfile.name = document.getElementById('settingsUserName')?.value.trim() || '';
   userProfile.bio = document.getElementById('settingsUserBio')?.value.trim() || '';
+  userProfile.defaultTab = document.getElementById('settingsDefaultTab')?.value || 'persona';
   saveUserProfile();
-  showToast('프로필 저장됨 ✓');
+  showToast('설정 저장됨 ✓');
 }
 
 function handleSettingsUserImage(input) {
