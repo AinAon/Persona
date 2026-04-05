@@ -173,7 +173,33 @@ async function getEmotionImageHD(pid, emotion) {
     if (full) return full;
     const hd = await idbGet(`emotion_${pid}_${eid}_hd`);
     if (hd) return hd;
-    return await idbGet(`emotion_${pid}_${eid}`) || null;
+    const md = await idbGet(`emotion_${pid}_${eid}`);
+    if (md) return md;
+  } catch(e) {}
+  // IDB 없으면 R2에서 직접 fetch (HD 크기)
+  try {
+    const name = (typeof EMOTION_PROFILE_MAP !== 'undefined' && EMOTION_PROFILE_MAP[pid]) || pid;
+    const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+    if (!wUrl) return null;
+    const keys = await getImageList(pid);
+    const { suffixed, hasBase } = getSuffixesForEmotion(keys, pid, eid);
+    let url = null;
+    if (hasBase) {
+      url = `${wUrl}/image/profile/${pid}/${name}_${eid}.jpg`;
+    } else if (suffixed.length > 0) {
+      const letter = suffixed[Math.floor(Math.random() * suffixed.length)];
+      url = `${wUrl}/image/profile/${pid}/${name}_${eid}_${letter}.jpg`;
+    }
+    if (!url) return null;
+    const resp = await fetch(url);
+    if (!resp.ok) return null;
+    const blob = await resp.blob();
+    const dataUrl = await new Promise(r => {
+      const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob);
+    });
+    const hd = await resizeImage(dataUrl, 1000, 0.9);
+    await idbSet(`emotion_${pid}_${eid}_hd`, hd).catch(() => {});
+    return hd;
   } catch(e) { return null; }
 }
 
