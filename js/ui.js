@@ -810,6 +810,11 @@ async function openChat(id) {
   });
 
   show('chatScreen');
+  // neutral 이미지 먼저 로드 (최대 2초 대기)
+  await Promise.race([
+    Promise.all(pList.map(p => getNeutralImage(p.pid))),
+    new Promise(r => setTimeout(r, 2000))
+  ]);
   renderChatArea();
   if (!s._loaded) loadSession(id);
 }
@@ -1035,9 +1040,10 @@ async function sendMessage() {
           .filter(m => m.role==='user'||m.role==='assistant')
           .map(m => ({ role:m.role, content: typeof m.content==='string' ? m.content : m.content.find?.(c=>c.type==='text')?.text||'' }))
       ];
-      const res = await fetch(GAS_URL, {
-        method:'POST', headers:{'Content-Type':'text/plain'},
-        body: JSON.stringify({ secretKey:GAS_SECRET, action:'chat', mode:currentMode, messages:apiMessages })
+      const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+      const res = await fetch(wUrl + '/chat', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ messages: apiMessages, model: 'grok-4-1-fast' })
       });
       const data = await res.json();
       if (data.result !== 'success') {

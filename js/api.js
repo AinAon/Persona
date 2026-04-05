@@ -300,33 +300,49 @@ async function preloadEmotionImages() {
   }
 }
 
-// neutral 이미지: 파일 목록 기반으로 존재하는 파일만 fetch
+// neutral 이미지: 파일 목록 기반 → 없으면 직접 URL 시도
 async function loadNeutralDirect(pid) {
   if (_neutralCache[pid]) return _neutralCache[pid];
   try {
     const name = getPersonaName(pid);
     const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
     if (!wUrl) return null;
-    // 파일 목록에서 neutral 파일 찾기
+
+    // 1. 파일 목록으로 찾기
     const keys = await getImageList(pid);
     const { suffixed, hasBase } = getSuffixesForEmotion(keys, pid, 'neutral');
-    let url = null;
-    if (hasBase) {
-      url = `${wUrl}/image/profile/${pid}/${name}_neutral.jpg`;
-    } else if (suffixed.length > 0) {
+    let candidates = [];
+    if (hasBase) candidates.push(`${wUrl}/image/profile/${pid}/${name}_neutral.jpg`);
+    if (suffixed.length > 0) {
       const letter = suffixed[Math.floor(Math.random() * suffixed.length)];
-      url = `${wUrl}/image/profile/${pid}/${name}_neutral_${letter}.jpg`;
+      candidates.push(`${wUrl}/image/profile/${pid}/${name}_neutral_${letter}.jpg`);
     }
-    if (!url) return null;
-    const resp = await fetch(url);
-    if (!resp.ok) return null;
-    const blob = await resp.blob();
-    const dataUrl = await new Promise(r => {
-      const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob);
-    });
-    const resized = await resizeImage(dataUrl, 300, 0.85);
-    _neutralCache[pid] = resized;
-    return resized;
+
+    // 2. 목록이 비어있으면 직접 URL 시도 (a~e 정도만)
+    if (!candidates.length) {
+      candidates = [
+        `${wUrl}/image/profile/${pid}/${name}_neutral.jpg`,
+        ...'abcde'.split('').map(l => `${wUrl}/image/profile/${pid}/${name}_neutral_${l}.jpg`)
+      ];
+    }
+
+    console.log('[neutral] trying candidates for', pid, candidates.slice(0,3));
+    for (const url of candidates) {
+      try {
+        const resp = await fetch(url);
+        console.log('[neutral]', url, resp.status);
+        if (!resp.ok) continue;
+        const blob = await resp.blob();
+        const dataUrl = await new Promise(r => {
+          const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob);
+        });
+        const resized = await resizeImage(dataUrl, 300, 0.85);
+        _neutralCache[pid] = resized;
+        // IDB에도 저장
+        idbSet(`emotion_${pid}_neutral`, resized).catch(() => {});
+        return resized;
+      } catch(e) { continue; }
+    }
   } catch(e) {}
   return null;
 }
@@ -460,18 +476,23 @@ async function loadSession(id) {
 }
 
 async function preloadAllSessions() {
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   for (const s of sessions) {
     if (s._loaded) continue;
     try {
       const cached = localStorage.getItem(CACHE_SESSION_PREFIX+s.id);
-      if (cached) { s.history = JSON.parse(cached); s._loaded = true; }
+      if (cached) { s.history = JSON.parse(cached); s._loaded = true; continue; }
     } catch(e) {}
-    const res = await gasCall({ action:'loadSession', sessionId:s.id });
-    if (res?.result==='success') {
-      s.history = res.history || [];
-      s._loaded = true;
-      try { localStorage.setItem(CACHE_SESSION_PREFIX+s.id, JSON.stringify(s.history)); } catch(e) {}
-    }
+    if (!wUrl) continue;
+    try {
+      const res = await fetch(wUrl + '/session/' + s.id);
+      const data = await res.json();
+      if (data.session?.history) {
+        s.history = data.session.history;
+        s._loaded = true;
+        try { localStorage.setItem(CACHE_SESSION_PREFIX+s.id, JSON.stringify(s.history)); } catch(e) {}
+      }
+    } catch(e) {}
   }
 }
 
