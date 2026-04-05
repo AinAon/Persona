@@ -68,6 +68,56 @@ async function getEmotionImage(pid, emotion) {
   } catch(e) { return null; }
 }
 
+
+// ══════════════════════════════
+//  EMOTION SUFFIX SYSTEM (_a ~ _z)
+// ══════════════════════════════
+function pickRandomSuffix() {
+  return String.fromCharCode(97 + Math.floor(Math.random() * 26)); // a-z
+}
+
+async function getEmotionImageSuffixed(pid, emotion, letter) {
+  if (!letter) return null;
+  const idbKey = `emotion_${pid}_${emotion}_${letter}`;
+  try {
+    const cached = await idbGet(idbKey);
+    if (cached) return cached;
+    // 캐시 없으면 fetch
+    const name = EMOTION_PROFILE_MAP[pid] || pid;
+    const url = `profile/${name}/${name}_${emotion}_${letter}.jpg`;
+    const resp = await fetch(url);
+    if (!resp.ok) return null;
+    const blob = await resp.blob();
+    const dataUrl = await new Promise(r => {
+      const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob);
+    });
+    const [md, hd] = await Promise.all([
+      resizeImage(dataUrl, 300, 0.85),
+      resizeImage(dataUrl, 1000, 0.9),
+    ]);
+    await idbSet(idbKey, md);
+    await idbSet(idbKey + '_hd', hd);
+    return md;
+  } catch(e) { return null; }
+}
+
+// 메시지 렌더링 전 suffix 결정 (없으면 랜덤 선택 + 파일 존재 여부 확인)
+async function resolveMessageSuffixes(rawText, pList, existingSuffixes = null) {
+  if (existingSuffixes) return existingSuffixes;
+  const segments = parseResponse(rawText, pList);
+  const suffixes = {};
+  for (const seg of segments) {
+    const p = pList[seg.idx];
+    if (!p) continue;
+    const key = `${p.pid}:${seg.emotion}`;
+    if (suffixes[key] !== undefined) continue;
+    const letter = pickRandomSuffix();
+    const img = await getEmotionImageSuffixed(p.pid, seg.emotion, letter);
+    suffixes[key] = img ? letter : null; // null = 파일 없음 → neutral fallback
+  }
+  return suffixes;
+}
+
 async function getEmotionImageHD(pid, emotion) {
   const eid = emotion || 'neutral';
   try {
