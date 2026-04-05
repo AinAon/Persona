@@ -256,8 +256,7 @@ async function clearImageCache() {
       req.onerror = () => rej(req.error);
     });
     const toDelete = keys.filter(k =>
-      (k.startsWith('emotion_') || k.startsWith('em_full_')) &&
-      !k.includes('_neutral')
+      k.startsWith('emotion_') || k.startsWith('em_full_')
     );
     const tx = db.transaction(IDB_STORE, 'readwrite');
     const store = tx.objectStore(IDB_STORE);
