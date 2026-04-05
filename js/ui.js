@@ -790,7 +790,7 @@ async function renderChatArea() {
       const renderPersonas = msg.personaSnapshot
         ? msg.personaSnapshot.map(snap => getPersona(snap.pid) || { pid:snap.pid, name:snap.name, image:null, hue:0, _ghost:true })
         : pList;
-      el.innerHTML = await renderAIResponseHTML(msg.content, renderPersonas);
+      el.innerHTML = await renderAIResponseHTML(msg.content, renderPersonas, msg._suffixes || {});
     }
     if (el.firstElementChild) fragment.appendChild(el.firstElementChild);
   }
@@ -945,13 +945,39 @@ async function sendMessage() {
   area.scrollTop = area.scrollHeight;
 
   let reply = '';
+  const pListAll = (session.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
+
+  // /감정 명령어: 모든 감정 순차 표시
+  if (text === '/감정') {
+    thinkEl.remove();
+    const parts = [];
+    for (const p of pListAll) {
+      for (const emotion of EMOTIONS) {
+        parts.push(`[${p.pid}][emotion:${emotion}](감정 테스트) ${emotion}[/${p.pid}]`);
+      }
+    }
+    reply = parts.join('\n\n');
+    const suffixes = await resolveMessageSuffixes(reply, pListAll);
+    const personaSnapshot = pListAll.map(p=>({pid:p.pid, name:p.name}));
+    session.history.push({ role:'assistant', content:reply, personaSnapshot, _suffixes: suffixes });
+    session.lastPreview = '(감정 테스트)'; session.updatedAt = Date.now();
+    const replyEl = document.createElement('div');
+    replyEl.innerHTML = await renderAIResponseHTML(reply, pListAll, suffixes);
+    if (replyEl.firstElementChild) area.appendChild(replyEl.firstElementChild);
+    area.scrollTop = area.scrollHeight;
+    isLoading = false;
+    document.getElementById('sendBtn').disabled = false;
+    input.focus();
+    if (!session._demo) { saveSession(session.id); saveIndex(); }
+    renderChatList();
+    return;
+  }
+
   if (session._demo) {
     await new Promise(r => setTimeout(r, 600));
-    // app.js에 정의된 getDemoReply 호출
     reply = window.getDemoReply ? window.getDemoReply(session) : '데모 응답 오류';
   } else {
     try {
-      const pList = (session.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
       const apiMessages = [
         { role:'system', content: buildSystemPrompt(session) },
         ...session.history
@@ -974,9 +1000,12 @@ async function sendMessage() {
   }
 
   thinkEl.remove();
-  const pList = (session.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
+  const pList = pListAll;
   const personaSnapshot = pList.map(p=>({pid:p.pid, name:p.name}));
-  session.history.push({ role:'assistant', content:reply, personaSnapshot });
+
+  // suffix 결정 → 메시지에 저장 (재진입 시 같은 이미지 유지)
+  const suffixes = await resolveMessageSuffixes(reply, pList);
+  session.history.push({ role:'assistant', content:reply, personaSnapshot, _suffixes: suffixes });
 
   const parsed = parseResponse(reply, pList);
   const firstContent = parsed[0]?.content || '';
@@ -984,7 +1013,7 @@ async function sendMessage() {
   session.updatedAt = Date.now();
 
   const replyEl = document.createElement('div');
-  replyEl.innerHTML = await renderAIResponseHTML(reply, pList);
+  replyEl.innerHTML = await renderAIResponseHTML(reply, pList, suffixes);
   if (replyEl.firstElementChild) area.appendChild(replyEl.firstElementChild);
   area.scrollTop = area.scrollHeight;
 
