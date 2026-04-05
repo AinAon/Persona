@@ -1003,7 +1003,11 @@ select.edit-input {
         </div>
         <button onclick="saveSettingsUserProfile()" style="width:100%;margin-top:12px;padding:12px;border-radius:11px;background:var(--text);color:var(--bg);border:none;font-family:'Pretendard',sans-serif;font-size:14px;font-weight:700;cursor:pointer">저장</button>
       </div>
-      
+      <div class="edit-field-label">시작 화면</div>
+		<select id="settingsDefaultTab" class="edit-input" style="width:100%; margin-bottom: 16px;">
+		<option value="persona">페르소나 목록</option>
+		<option value="chat">채팅 목록</option>
+		</select>
       <div style="padding-top:20px; border-top:1px solid var(--border);">
         <div class="field-label" style="margin-bottom:12px">앱 데이터 관리</div>
         <button onclick="clearImageCache()" style="width:100%;padding:12px;border-radius:11px;background:var(--card);color:var(--text);border:1px solid var(--border2);font-family:'Pretendard',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--muted)'" onmouseout="this.style.borderColor='var(--border2)'">🖼 이미지 캐시 초기화</button>
