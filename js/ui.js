@@ -857,11 +857,13 @@ async function renderChatArea() {
 function buildEmotionCard(p, emotion, letter, dataUrl) {
   const h = p.hue || 0;
   const label = letter ? `${emotion}_${letter}` : emotion;
-  const imgHtml = dataUrl
-    ? `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;object-position:top;">`
-    : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px">없음</div>`;
+  // ...
+  const safePid = p.pid.replace(/'/g, "\\'");
+  const safeEmotion = emotion.replace(/'/g, "\\'");
+  const safeLetter = (letter || '').replace(/'/g, "\\'");
+  
   return `<div class="ai-msg" style="margin-bottom:4px">
-    <div class="msg-av" style="background:hsl(${h},20%,11%);border-color:hsl(${h},28%,22%)">${imgHtml}</div>
+    <div class="msg-av" style="background:hsl(${h},20%,11%);border-color:hsl(${h},28%,22%);cursor:pointer" onclick="openProfilePopup('${safePid}','${safeEmotion}',${h},'','${safeLetter}')">${imgHtml}</div>
     <div class="bubble-col">
       <div class="msg-pname" style="color:hsl(${h},60%,68%);display:block">${esc(p.name)}</div>
       <div class="ai-bubble" style="background:hsl(${h},22%,10%);border:1px solid hsl(${h},28%,20%);color:hsl(${h},50%,82%);font-size:12px">${esc(label)}</div>
