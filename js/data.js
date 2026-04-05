@@ -8,7 +8,7 @@ const HUE_PRESETS = [158, 210, 260, 300, 330, 20, 45, 80];
 const EMOTIONS = ['angry','arousal','confusion','cry','disgust','ecstasy','happy','horror',
   'laugh','neutral','orgasm','pain','playful','relief','sad','shy','subtlesmile','surprise','worry'];
 
-const EMOTION_PROFILE_MAP = { 'p_chloe': 'chloe', 'p_clara': 'clara' };
+const EMOTION_PROFILE_MAP = { 'p_riley': 'riley' };
 const MAX_PARTICIPANTS = 4;
 
 const PID_POOL = [
