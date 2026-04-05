@@ -132,9 +132,10 @@ async function init() {
       const celebPids = celebs.map(p => p.pid);
 
       // hidden 제외 + 커스텀 목록에 셀럽과 똑같은 pid가 있으면 무시하고 합치기
+      const EXCLUDED_PIDS = ['p_clara']; // 임시 제거 목록
       const merged = [
-        ...celebs.filter(p => !p.hidden).map(p => ({ ...p, type: 'celebrity' })),
-        ...customs.filter(p => !p.hidden && !celebPids.includes(p.pid)).map(p => ({ ...p, type: 'custom' }))
+        ...celebs.filter(p => !p.hidden && !EXCLUDED_PIDS.includes(p.pid)).map(p => ({ ...p, type: 'celebrity' })),
+        ...customs.filter(p => !p.hidden && !celebPids.includes(p.pid) && !EXCLUDED_PIDS.includes(p.pid)).map(p => ({ ...p, type: 'custom' }))
       ];
 
       if (merged.length) {
