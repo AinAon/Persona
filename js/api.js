@@ -391,60 +391,72 @@ function buildIndex() {
 }
 
 async function saveIndex() {
-  try { localStorage.setItem(CACHE_INDEX_KEY, JSON.stringify(buildIndex())); } catch(e) {}
-  gasCall({ action:'saveIndex', index:buildIndex() });
+  const idx = buildIndex();
+  try { localStorage.setItem(CACHE_INDEX_KEY, JSON.stringify(idx)); } catch(e) {}
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) return;
+  // 인덱스 저장
+  fetch(wUrl + '/sessions', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessions: idx })
+  }).catch(() => {});
 }
 
 async function saveSession(id) {
   const s = sessions.find(x=>x.id===id); if (!s) return;
   const history = s.history.map(({_rendered,...rest})=>rest);
   try { localStorage.setItem(CACHE_SESSION_PREFIX+id, JSON.stringify(history)); } catch(e) {}
-  const res = await gasCall({ action:'saveSession', sessionId:id, history });
-  if (res?.result==='success') showToast('💾 저장됨');
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) return;
+  const session = { ...buildIndex().find(x=>x.id===id), history };
+  fetch(wUrl + '/session/' + id, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session })
+  }).catch(() => {});
 }
 
 async function loadIndex() {
-  const res = await gasCall({ action:'loadIndex' });
-  if (!res || res.result!=='success') return;
-  const index = res.index || [];
-  
-  // 1. 서버 데이터로 기존 방 업데이트
-  const updatedSessions = index.map(item => {
-    const exist = sessions.find(s => s.id === item.id);
-    return exist ? { ...exist, ...item } : { ...item, history: [], _loaded: false };
-  });
-
-  // 2. 서버에는 없지만 현재 로컬 메모리에 띄워져 있는 방 (데모방 등 1회용 방) 메모리 유지
-  const localOnly = sessions.filter(s => !index.find(item => item.id === s.id));
-  
-  // 3. 서버 목록과 로컬 1회용 방을 병합하여 화면 메모리에 적용
-  sessions = [...updatedSessions, ...localOnly];
-
-  // 로컬 저장소에는 서버에서 가져온 진짜 목록(index)만 저장 (데모방 제외)
-  try { localStorage.setItem(CACHE_INDEX_KEY, JSON.stringify(index)); } catch(e) {}
-  renderChatList();
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) return;
+  try {
+    const res = await fetch(wUrl + '/sessions');
+    const data = await res.json();
+    const index = data.sessions || [];
+    const updatedSessions = index.map(item => {
+      const exist = sessions.find(s => s.id === item.id);
+      return exist ? { ...exist, ...item } : { ...item, history: [], _loaded: false };
+    });
+    const localOnly = sessions.filter(s => !index.find(item => item.id === s.id));
+    sessions = [...updatedSessions, ...localOnly];
+    try { localStorage.setItem(CACHE_INDEX_KEY, JSON.stringify(index)); } catch(e) {}
+    renderChatList();
+  } catch(e) {}
 }
 
 async function loadSession(id) {
   const s = sessions.find(x=>x.id===id); if (!s) return;
+  // 로컬 캐시 먼저
   if (!s._loaded) {
     try {
       const cached = localStorage.getItem(CACHE_SESSION_PREFIX+id);
       if (cached) { s.history = JSON.parse(cached); s._loaded = true; renderChatArea(); }
     } catch(e) {}
   }
-  const lastIndex = s.history ? s.history.length : 0;
-  const res = await gasCall({ action:'loadSession', sessionId:id, lastIndex });
-  if (res?.result==='success') {
-    const fetched = res.newMessages || res.history || [];
-    const newMsgs = res.newMessages ? res.newMessages : fetched.slice(lastIndex);
-    if (newMsgs.length > 0) {
-      s.history = [...(s.history||[]), ...newMsgs];
+  // KV에서 로드
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) return;
+  try {
+    const res = await fetch(wUrl + '/session/' + id);
+    const data = await res.json();
+    if (data.session?.history?.length) {
+      s.history = data.session.history;
       s._loaded = true;
       try { localStorage.setItem(CACHE_SESSION_PREFIX+id, JSON.stringify(s.history)); } catch(e) {}
       renderChatArea();
     } else { s._loaded = true; }
-  }
+  } catch(e) {}
 }
 
 async function preloadAllSessions() {
