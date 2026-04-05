@@ -47,7 +47,7 @@ function confirmCrop() {
   ctx.drawImage(img, sx, sy, sw, sh, 0, 0, 800, 1200);
   
   // 압축 없는 무손실 PNG 포맷으로 추출 (진짜 원본)
-  const result = canvas.toDataURL('image/png'); 
+  const result = canvas.toDataURL('image/jpeg', 0.93); 
   
   closeCropEditor(); 
   if (_cropState.onConfirm) _cropState.onConfirm(result);

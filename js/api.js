@@ -51,6 +51,14 @@ async function getNeutralImage(pid) {
   return null;
 }
 
+async function getNeutralImageThumb(pid) {
+  try {
+    const cached = await idbGet(`emotion_${pid}_neutral_thumb`);
+    if (cached) return cached;
+  } catch(e) {}
+  return await getNeutralImage(pid); // fallback to MD
+}
+
 async function getEmotionImage(pid, emotion) {
   const key = `emotion_${pid}_${emotion || 'neutral'}`;
   try {
@@ -98,7 +106,7 @@ async function preloadEmotionImages() {
           if (emotion === 'neutral') _neutralCache[pid] = cached;
           continue;
         }
-        const url = `profile/${pid}/${pid}_${emotion}.png`;
+        const url = `profile/${pid}/${pid}_${emotion}.jpg`;
         const resp = await fetch(url);
         if (!resp.ok) continue;
         const blob = await resp.blob();
@@ -112,7 +120,7 @@ async function preloadEmotionImages() {
           if (emotion === 'neutral') _neutralCache[pid] = cached;
         }
         if (!cachedHD) {
-          const hd = await resizeImage(dataUrl, 800, 0.9);
+          const hd = await resizeImage(dataUrl, 1000, 0.9);
           await idbSet(keyHD, hd);
         }
       } catch(e) {}

@@ -111,7 +111,7 @@ async function renderPersonaGrid() {
     card.dataset.pid = p.pid;
     card.draggable = true;
 
-    const neutral = await getNeutralImage(p.pid);
+    const neutral = await getEmotionImageHD(p.pid, 'neutral') || await getNeutralImage(p.pid);
     const imgSrc = neutral || p.image;
     const nametagBg = `hsl(${p.hue},40%,18%)`;
     const isCeleb = p.type === 'celebrity';
@@ -301,11 +301,12 @@ function setupTouchDrag(grid) {
 // ══════════════════════════════
 let isNewPersona = false;
 
-function openPersonaEdit(pid) {
+async function openPersonaEdit(pid) {
   editingPid = pid; isNewPersona = false;
   const p = getPersona(pid);
   document.getElementById('editTitle').textContent = p ? p.name || '페르소나 편집' : '새 페르소나';
-  renderEditBody(p || { pid, name:'', bio:'', tags:[], hue:200, image:null });
+  const hdImage = p ? await getEmotionImageHD(p.pid, 'neutral') : null;
+  renderEditBody(p || { pid, name:'', bio:'', tags:[], hue:200, image:null }, hdImage);
   renderEditFooter(!!p);
   show('editScreen');
 }
@@ -315,7 +316,7 @@ function createNewPersona() {
   isNewPersona = true; editingPid = p.pid;
   personas.push(p);
   document.getElementById('editTitle').textContent = '새 페르소나';
-  renderEditBody(p); renderEditFooter(false);
+  renderEditBody(p, null); renderEditFooter(false);
   show('editScreen');
 }
 
@@ -351,9 +352,9 @@ function deletePersonaFromEdit() {
   savePersonas(); renderPersonaGrid(); goMain();
 }
 
-function renderEditBody(p) {
+function renderEditBody(p, hdImage = null) {
   const body = document.getElementById('editBody');
-  const neutral = _neutralCache[p.pid] || p.image;
+  const neutral = hdImage || _neutralCache[p.pid] || p.image;
   const isCelebrity = p.type === 'celebrity';
   if (isCelebrity) {
     body.innerHTML = `
@@ -471,7 +472,7 @@ function handleEditImage(input) {
       const [thumb, md, hd] = await Promise.all([
         resizeImage(cropped, 100, 0.82),
         resizeImage(cropped, 300, 0.85),
-        resizeImage(cropped, 800, 0.9),
+        resizeImage(cropped, 1000, 0.9),
       ]);
 
       // 메모리
@@ -566,7 +567,7 @@ async function renderChatList() {
     item.onclick = () => openChat(s.id);
 
     const avEls = await Promise.all(pList.map(async p => {
-      const neutral = await getNeutralImage(p.pid);
+      const neutral = await getNeutralImageThumb(p.pid);
       const imgSrc = neutral || p.image;
       const imgHTML = imgSrc ? `<img src="${imgSrc}">` : defaultAvatar(p.hue);
       return `<div class="chat-av-item" style="background:hsl(${p.hue},20%,11%);border-color:hsl(${p.hue},28%,22%)">${imgHTML}</div>`;

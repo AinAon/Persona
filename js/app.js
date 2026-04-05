@@ -93,13 +93,13 @@ async function init() {
     await Promise.allSettled(missing.map(async ([pid]) => {
       try {
         // 통일된 pid를 경로와 파일명에 그대로 사용
-        const url = `profile/${pid}/${pid}_neutral.png`;
+        const url = `profile/${pid}/${pid}_neutral.jpg`;
         const resp = await fetch(url);
         if (!resp.ok) return;
         const blob = await resp.blob();
         const dataUrl = await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob); });
         const resized = await resizeImage(dataUrl, 300, 0.85);
-        const hd = await resizeImage(dataUrl, 600, 0.9);
+        const hd = await resizeImage(dataUrl, 1000, 0.9);
         _neutralCache[pid] = resized;
         await idbSet(`emotion_${pid}_neutral`, resized);
         await idbSet(`emotion_${pid}_neutral_hd`, hd);
