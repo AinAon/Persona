@@ -88,21 +88,30 @@ async function init() {
   }
 
   // neutral 이미지 없으면 직접 fetch (최초 1회)
+  // neutral.jpg 없으면 neutral_a~z 순서로 시도
   const missing = Object.entries(EMOTION_PROFILE_MAP).filter(([pid]) => !_neutralCache[pid]);
   if (missing.length) {
     await Promise.allSettled(missing.map(async ([pid]) => {
       try {
-        // 통일된 pid를 경로와 파일명에 그대로 사용
-        const url = `profile/${pid}/${pid}_neutral.jpg`;
-        const resp = await fetch(url);
-        if (!resp.ok) return;
-        const blob = await resp.blob();
-        const dataUrl = await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob); });
-        const resized = await resizeImage(dataUrl, 300, 0.85);
-        const hd = await resizeImage(dataUrl, 1000, 0.9);
-        _neutralCache[pid] = resized;
-        await idbSet(`emotion_${pid}_neutral`, resized);
-        await idbSet(`emotion_${pid}_neutral_hd`, hd);
+        const name = EMOTION_PROFILE_MAP[pid] || pid;
+        // 1. neutral.jpg 먼저 시도
+        const candidates = [
+          `profile/${name}/${name}_neutral.jpg`,
+          ...Array.from({length: 26}, (_, i) =>
+            `profile/${name}/${name}_neutral_${String.fromCharCode(97+i)}.jpg`
+          )
+        ];
+        let dataUrl = null;
+        for (const url of candidates) {
+          const resp = await fetch(url);
+          if (!resp.ok) continue;
+          const blob = await resp.blob();
+          dataUrl = await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob); });
+          break;
+        }
+        if (!dataUrl) return;
+        const { sqMd, sqHd } = await generateThumbnailSet(dataUrl, pid, 'neutral');
+        _neutralCache[pid] = sqMd;
       } catch(e) {}
     }));
   }
