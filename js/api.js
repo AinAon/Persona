@@ -60,12 +60,15 @@ async function getImageList(pid) {
 
 // 파일 목록에서 특정 emotion의 suffix 목록 추출
 function getSuffixesForEmotion(keys, pid, emotion) {
+  if (!emotion) return { suffixed: [], hasBase: false };
+  // 폴더 키(슬래시로 끝나거나 파일명 없는 것) 제외
+  const validKeys = keys.filter(k => k.match(/\.jpg$/i));
   const suffix_re = new RegExp(`profile/${pid}/${pid}_${emotion}_([a-z])\.jpg$`);
-  const suffixed = keys
+  const suffixed = validKeys
     .map(k => { const m = k.match(suffix_re); return m ? m[1] : null; })
     .filter(Boolean);
   const base = `profile/${pid}/${pid}_${emotion}.jpg`;
-  const hasBase = keys.includes(base);
+  const hasBase = validKeys.includes(base);
   return { suffixed, hasBase };
 }
 
