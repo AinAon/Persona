@@ -805,10 +805,10 @@ async function openChat(id) {
   document.getElementById('chatHeaderNames').textContent = s.roomName || pList.map(p=>p.name).join(', ');
 
   pList.forEach(async (p, i) => {
-    const img = await getNeutralImageCircle(p.pid);
+    const img = await getNeutralImage(p.pid); // 사각 crop 소스 호출
     if (img) {
       const avEl = avatarsEl.children[i];
-      if (avEl) avEl.innerHTML = `<img src="${img}">`;
+      if (avEl) avEl.innerHTML = `<img src="${img}" style="width:100%;height:100%;object-fit:cover;object-position:top;">`;
     }
   });
 
