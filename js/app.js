@@ -107,12 +107,25 @@ async function init() {
     }));
   }
 
-  // 페르소나 그리드 + 채팅 목록 렌더링 후 로컬 화면 우선 렌더링
+  // 페르소나 그리드 + 채팅 목록 렌더링
   renderPersonaGrid();
   renderChatList();
-  
-  // 로컬 우선 로드: 0.2초 후 무조건 로딩 화면 제거
-  setTimeout(() => { setLoading(false); }, 200);
+
+  // neutral 이미지 있으면 즉시, 없으면 fetch 후 로딩 종료
+  const hasSomeNeutral = Object.values(_neutralCache).some(Boolean);
+  if (hasSomeNeutral) {
+    setLoading(false);
+  } else {
+    // 최대 3초 기다리다가 없으면 그냥 종료
+    const waitForNeutral = async () => {
+      for (let i = 0; i < 30; i++) {
+        await new Promise(r => setTimeout(r, 100));
+        if (Object.values(_neutralCache).some(Boolean)) break;
+      }
+      setLoading(false);
+    };
+    waitForNeutral();
+  }
 
   // 백그라운드 작업 (이미지 캐싱 및 서버 동기화)
     if (GAS_URL) {
