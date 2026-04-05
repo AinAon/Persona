@@ -56,7 +56,15 @@ function loadPersonasFromCache() {
     const cached = localStorage.getItem(CACHE_PERSONAS_KEY);
     if (cached) {
       const parsed = JSON.parse(cached);
-      if (parsed && parsed.length) { personas = parsed; return true; }
+      if (parsed && parsed.length) {
+        // pid 중복 제거
+        const seen = new Set();
+        personas = parsed.filter(p => {
+          if (seen.has(p.pid)) return false;
+          seen.add(p.pid); return true;
+        });
+        return true;
+      }
     }
   } catch(e) {}
   return false;
@@ -123,7 +131,12 @@ async function init() {
     fetch(wUrl + '/personas').then(r => r.json()).then(data => {
       const kvPersonas = data.personas || [];
       if (kvPersonas.length) {
-        personas = kvPersonas;
+        // pid 기준 중복 제거
+        const seen = new Set();
+        personas = kvPersonas.filter(p => {
+          if (seen.has(p.pid)) return false;
+          seen.add(p.pid); return true;
+        });
         try { localStorage.setItem(CACHE_PERSONAS_KEY, JSON.stringify(personas)); } catch(e) {}
         renderPersonaGrid();
         preloadEmotionImages();
