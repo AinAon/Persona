@@ -3,7 +3,7 @@
 // ══════════════════════════════
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbwc2pNBmXpeDLHqc7tGff4kVByDbcG1ijLRzxNTiKjSklSo4dcm61R5XNOAghaAGozz/exec';
 const GAS_SECRET = 'persona_chat_2025';
-const WORKER_URL = 'https://persona-worker.workers.dev';
+const WORKER_URL = 'https://persona-worker.persona-worker.workers.dev/';
 const HUE_PRESETS = [158, 210, 260, 300, 330, 20, 45, 80];
 
 const EMOTIONS = ['angry','arousal','confusion','cry','disgust','ecstasy','happy','horror',
