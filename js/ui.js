@@ -1174,7 +1174,7 @@ async function renderDrawerBody(s) {
   const canInvite = pList.length < MAX_PARTICIPANTS;
 
   const personaCards = await Promise.all(pList.map(async p => {
-    const neutral = await getNeutralImageCircle(p.pid);
+    const neutral = await getNeutralImage(p.pid); // 사각 crop 소스 호출
     const imgSrc = neutral || p.image;
     const imgHTML = imgSrc
       ? `<img src="${imgSrc}" style="width:100%;height:100%;object-fit:cover;object-position:top;display:block">`
