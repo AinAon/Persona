@@ -1003,24 +1003,48 @@ async function sendMessage() {
   let reply = '';
   const pListAll = (session.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
 
-  // /감정 명령어: 모든 감정 순차 표시
+  // /감정 명령어: R2 파일 목록 기반으로 모든 변형 표시
   if (text === '/감정') {
     thinkEl.remove();
-    const parts = [];
+    const personaSnapshot = pListAll.map(p=>({pid:p.pid, name:p.name}));
+    let html = '<div class="msg-group ai-msgs">';
+
     for (const p of pListAll) {
-      for (const emotion of EMOTIONS) {
-        parts.push(`[${p.pid}][emotion:${emotion}](감정 테스트) ${emotion}[/${p.pid}]`);
+      const keys = await getImageList(p.pid);
+      if (!keys.length) {
+        // 파일 없으면 EMOTIONS 기본 목록으로
+        for (const emotion of EMOTIONS) {
+          const dataUrl = await getEmotionImageSuffixed(p.pid, emotion, '') || await getNeutralImage(p.pid);
+          html += buildEmotionCard(p, emotion, '', dataUrl);
+        }
+      } else {
+        // 파일 목록 정렬 후 전부 표시
+        const sorted = [...keys].sort();
+        for (const key of sorted) {
+          const fname = key.split('/').pop().replace(/\.jpg$/i, '');
+          const name = getPersonaName(p.pid);
+          const rest = fname.startsWith(name + '_') ? fname.slice(name.length + 1) : fname;
+          const parts = rest.split('_');
+          const emotion = parts[0];
+          const letter = parts[1] || '';
+          const idbKey = letter ? `emotion_${p.pid}_${emotion}_${letter}` : `emotion_${p.pid}_${emotion}`;
+          let dataUrl = null;
+          try { dataUrl = await idbGet(idbKey); } catch(e) {}
+          if (!dataUrl) dataUrl = await getEmotionImageSuffixed(p.pid, emotion, letter);
+          html += buildEmotionCard(p, emotion, letter, dataUrl);
+        }
       }
     }
-    reply = parts.join('\n\n');
-    const suffixes = await resolveMessageSuffixes(reply, pListAll);
-    const personaSnapshot = pListAll.map(p=>({pid:p.pid, name:p.name}));
-    session.history.push({ role:'assistant', content:reply, personaSnapshot, _suffixes: suffixes });
-    session.lastPreview = '(감정 테스트)'; session.updatedAt = Date.now();
+    html += '</div>';
+
     const replyEl = document.createElement('div');
-    replyEl.innerHTML = await renderAIResponseHTML(reply, pListAll, suffixes);
+    replyEl.innerHTML = html;
     if (replyEl.firstElementChild) area.appendChild(replyEl.firstElementChild);
     area.scrollTop = area.scrollHeight;
+
+    // 히스토리에는 파일명 목록으로 저장
+    session.history.push({ role:'assistant', content:'(감정 테스트)', personaSnapshot, _suffixes: {} });
+    session.lastPreview = '(감정 테스트)'; session.updatedAt = Date.now();
     isLoading = false;
     document.getElementById('sendBtn').disabled = false;
     input.focus();

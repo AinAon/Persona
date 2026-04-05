@@ -137,13 +137,9 @@ async function getEmotionImageSuffixed(pid, emotion, letter) {
     const dataUrl = await new Promise(r => {
       const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob);
     });
-    const [md, hd] = await Promise.all([
-      resizeImage(dataUrl, 300, 0.85),
-      resizeImage(dataUrl, 1000, 0.9),
-    ]);
-    await idbSet(idbKey, md);
-    await idbSet(idbKey + '_hd', hd);
-    return md;
+    // square crop 적용 후 IDB 저장 (generateThumbnailSet이 처리)
+    const { sqMd } = await generateThumbnailSet(dataUrl, pid, idbKey.replace(`emotion_${pid}_`, ''));
+    return sqMd;
   } catch(e) { return null; }
 }
 
@@ -336,11 +332,10 @@ async function loadNeutralDirect(pid) {
         const dataUrl = await new Promise(r => {
           const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob);
         });
-        const resized = await resizeImage(dataUrl, 300, 0.85);
-        _neutralCache[pid] = resized;
-        // IDB에도 저장
-        idbSet(`emotion_${pid}_neutral`, resized).catch(() => {});
-        return resized;
+        // square crop + circle crop 생성 후 IDB 저장
+        const { sqMd } = await generateThumbnailSet(dataUrl, pid, 'neutral');
+        _neutralCache[pid] = sqMd;
+        return sqMd;
       } catch(e) { continue; }
     }
   } catch(e) {}
