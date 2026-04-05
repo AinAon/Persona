@@ -87,33 +87,10 @@ async function init() {
     } catch(e) {}
   }
 
-  // neutral 이미지 없으면 직접 fetch (최초 1회)
-  // neutral.jpg 없으면 neutral_a~z 순서로 시도
+  // neutral 이미지: loadNeutralDirect로 통일 (IDB 우선, 없으면 URL fetch)
   const missing = Object.entries(EMOTION_PROFILE_MAP).filter(([pid]) => !_neutralCache[pid]);
   if (missing.length) {
-    await Promise.allSettled(missing.map(async ([pid]) => {
-      try {
-        const name = EMOTION_PROFILE_MAP[pid] || pid;
-        // 1. neutral.jpg 먼저 시도
-        const candidates = [
-          `profile/${name}/${name}_neutral.jpg`,
-          ...Array.from({length: 26}, (_, i) =>
-            `profile/${name}/${name}_neutral_${String.fromCharCode(97+i)}.jpg`
-          )
-        ];
-        let dataUrl = null;
-        for (const url of candidates) {
-          const resp = await fetch(url);
-          if (!resp.ok) continue;
-          const blob = await resp.blob();
-          dataUrl = await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob); });
-          break;
-        }
-        if (!dataUrl) return;
-        const { sqMd, sqHd } = await generateThumbnailSet(dataUrl, pid, 'neutral');
-        _neutralCache[pid] = sqMd;
-      } catch(e) {}
-    }));
+    await Promise.allSettled(missing.map(([pid]) => loadNeutralDirect(pid)));
   }
 
   // 페르소나 그리드 + 채팅 목록 렌더링

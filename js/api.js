@@ -43,12 +43,13 @@ const _neutralCache = {};
 
 async function getNeutralImage(pid) {
   if (_neutralCache[pid]) return _neutralCache[pid];
-  const key = `emotion_${pid}_neutral`;
+  // IDB 시도
   try {
-    const cached = await idbGet(key);
+    const cached = await idbGet(`emotion_${pid}_neutral`);
     if (cached) { _neutralCache[pid] = cached; return cached; }
   } catch(e) {}
-  return null;
+  // IDB 없으면 직접 fetch
+  return await loadNeutralDirect(pid);
 }
 
 async function getNeutralImageThumb(pid) {
@@ -212,38 +213,40 @@ async function resizeImage(dataUrl, maxPx, quality = 0.88) {
 }
 
 async function preloadEmotionImages() {
-  const celebPids = personas.filter(p => p.type === 'celebrity').map(p => p.pid);
-  for (const pid of celebPids) {
-    for (const emotion of EMOTIONS) {
-      const key = `emotion_${pid}_${emotion}`;
-      const keyHD = `emotion_${pid}_${emotion}_hd`;
+  // 감정 이미지는 on-demand 로드 (suffix 시스템)
+  // neutral만 메모리 캐싱 (IDB 생략 → 모바일 호환성)
+  for (const p of personas) {
+    if (_neutralCache[p.pid]) continue;
+    await loadNeutralDirect(p.pid);
+  }
+}
+
+// neutral 이미지를 URL에서 직접 fetch → 메모리(_neutralCache)에만 저장
+async function loadNeutralDirect(pid) {
+  if (_neutralCache[pid]) return _neutralCache[pid];
+  try {
+    const name = EMOTION_PROFILE_MAP[pid] || pid;
+    const candidates = [
+      `profile/${name}/${name}_neutral.jpg`,
+      ...Array.from({length: 26}, (_, i) =>
+        `profile/${name}/${name}_neutral_${String.fromCharCode(97+i)}.jpg`
+      )
+    ];
+    for (const url of candidates) {
       try {
-        const cached = await idbGet(key);
-        const cachedHD = await idbGet(keyHD);
-        if (cached && cachedHD) {
-          if (emotion === 'neutral') _neutralCache[pid] = cached;
-          continue;
-        }
-        const url = `profile/${pid}/${pid}_${emotion}.jpg`;
         const resp = await fetch(url);
         if (!resp.ok) continue;
         const blob = await resp.blob();
-        const dataUrl = await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob); });
-
-        if (!cached) {
-          const resized = await resizeImage(dataUrl, 300, 0.85);
-          await idbSet(key, resized);
-          if (emotion === 'neutral') _neutralCache[pid] = resized;
-        } else {
-          if (emotion === 'neutral') _neutralCache[pid] = cached;
-        }
-        if (!cachedHD) {
-          const hd = await resizeImage(dataUrl, 1000, 0.9);
-          await idbSet(keyHD, hd);
-        }
-      } catch(e) {}
+        const dataUrl = await new Promise(r => {
+          const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob);
+        });
+        const resized = await resizeImage(dataUrl, 300, 0.85);
+        _neutralCache[pid] = resized;
+        return resized;
+      } catch(e) { continue; }
     }
-  }
+  } catch(e) {}
+  return null;
 }
 
 async function clearImageCache() {
