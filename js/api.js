@@ -124,15 +124,22 @@ async function getEmotionImageSuffixed(pid, emotion, letter) {
       ? `${wUrl}/image/profile/${pid}/${pid}_${emotion}_${letter}.jpg`
       : `${wUrl}/image/profile/${pid}/${pid}_${emotion}.jpg`;
     const resp = await fetch(url);
-    if (!resp.ok) return null;
+    if (!resp.ok) {
+      console.warn(`[emotion] 404: ${url}`);
+      return null;
+    }
     const blob = await resp.blob();
     const dataUrl = await new Promise(r => {
       const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob);
     });
-    // square crop 적용 후 IDB 저장 (generateThumbnailSet이 처리)
-    const { sqMd } = await generateThumbnailSet(dataUrl, pid, idbKey.replace(`emotion_${pid}_`, ''));
+    const emotionKey = idbKey.replace(`emotion_${pid}_`, '');
+    const { sqMd } = await generateThumbnailSet(dataUrl, pid, emotionKey);
+    console.log(`[emotion] cached: ${idbKey}`);
     return sqMd;
-  } catch(e) { return null; }
+  } catch(e) {
+    console.error(`[emotion] error pid=${pid} emotion=${emotion} letter=${letter}:`, e);
+    return null;
+  }
 }
 
 // 메시지 렌더링 전 suffix 결정 (파일 목록 기반 랜덤 선택)
@@ -214,19 +221,27 @@ async function generateThumbnailSet(fullDataUrl, pid, emotion = 'neutral') {
   const img = await loadImageElement(fullDataUrl);
   const W = img.naturalWidth, H = img.naturalHeight;
 
-  // 크롭 좌표
+  // 크롭 좌표 (사각형 crop용)
   const cropX = Math.round(W * 0.17);
   const cropY = Math.round(H * 0.05);
   const cropW = W - cropX * 2;           // 66% of W
   const cropH = Math.round(cropW * 1.5); // 2:3 유지
 
-  // ── 사각형 crop (2:3) ──
+  // ── 사각형 crop MD (채팅 말풍선용) ──
   const sqCanvas = document.createElement('canvas');
   sqCanvas.width = cropW; sqCanvas.height = cropH;
   sqCanvas.getContext('2d').drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
   const sqJpg = sqCanvas.toDataURL('image/jpeg', 0.93);
 
-  // ── 원형 crop (정사각형 + 원 마스크 → PNG) ──
+  // ── FULL 리사이즈 HD (그리드, 편집, 팝업용 - crop 없음) ──
+  const fullCanvas = document.createElement('canvas');
+  const maxW = 1000, scale = Math.min(1, maxW / W);
+  fullCanvas.width = Math.round(W * scale);
+  fullCanvas.height = Math.round(H * scale);
+  fullCanvas.getContext('2d').drawImage(img, 0, 0, fullCanvas.width, fullCanvas.height);
+  const fullJpg = fullCanvas.toDataURL('image/jpeg', 0.9);
+
+  // ── 원형 crop (아바타용) ──
   const circDiam = cropW;
   const circCanvas = document.createElement('canvas');
   circCanvas.width = circDiam; circCanvas.height = circDiam;
@@ -239,20 +254,19 @@ async function generateThumbnailSet(fullDataUrl, pid, emotion = 'neutral') {
   const circPng = circCanvas.toDataURL('image/png');
 
   // 리사이즈
-  const [sqMd, sqHd, circSm] = await Promise.all([
-    resizeImage(sqJpg, 300, 0.85),   // 사각형 MD → grid / bubble
-    resizeImage(sqJpg, 1000, 0.9),   // 사각형 HD → edit / popup
-    resizeImage(circPng, 200, 0.9),  // 원형 SM → avatars
+  const [sqMd, circSm] = await Promise.all([
+    resizeImage(sqJpg, 300, 0.85),   // 사각형 MD → 채팅 말풍선
+    resizeImage(circPng, 200, 0.9),  // 원형 SM → 아바타
   ]);
 
   // IDB 저장
   await Promise.all([
-    idbSet(`emotion_${pid}_${emotion}`, sqMd),
-    idbSet(`emotion_${pid}_${emotion}_hd`, sqHd),
-    idbSet(`emotion_${pid}_${emotion}_circle`, circSm),
+    idbSet(`emotion_${pid}_${emotion}`, sqMd),        // 말풍선용 square crop
+    idbSet(`emotion_${pid}_${emotion}_hd`, fullJpg),  // 그리드/팝업용 FULL HD
+    idbSet(`emotion_${pid}_${emotion}_circle`, circSm), // 아바타용 circle
   ]);
 
-  return { sqMd, sqHd, circSm };
+  return { sqMd, fullHd: fullJpg, circSm };
 }
 
 // 원형 썸네일 불러오기 (없으면 square MD fallback)
