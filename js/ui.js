@@ -74,14 +74,21 @@ function renderSettingsPane() {
   if (nameEl) nameEl.value = userProfile.name || '';
   if (bioEl) bioEl.value = userProfile.bio || '';
   
+  // 시작 화면 설정
   const tabEl = document.getElementById('settingsDefaultTab');
   if (tabEl) tabEl.value = userProfile.defaultTab || 'persona';
+
+  // 썸네일 스타일 설정 추가
+  const avStyleEl = document.getElementById('settingsAvatarStyle');
+  if (avStyleEl) avStyleEl.value = userProfile.chatAvatarStyle || 'square';
 }
 
 function saveSettingsUserProfile() {
   userProfile.name = document.getElementById('settingsUserName')?.value.trim() || '';
   userProfile.bio = document.getElementById('settingsUserBio')?.value.trim() || '';
   userProfile.defaultTab = document.getElementById('settingsDefaultTab')?.value || 'persona';
+  // 설정값 저장
+  userProfile.chatAvatarStyle = document.getElementById('settingsAvatarStyle')?.value || 'square';
   saveUserProfile();
   showToast('설정 저장됨 ✓');
 }
@@ -866,8 +873,12 @@ function buildEmotionCard(p, emotion, letter, dataUrl) {
   const safeEmotion = emotion.replace(/'/g, "\\'");
   const safeLetter = (letter || '').replace(/'/g, "\\'");
   
+const avStyle = userProfile.chatAvatarStyle || 'square';
+  const avDisplay = avStyle === 'hidden' ? 'display:none;' : '';
+  const avRadius = avStyle === 'circle' ? 'border-radius:50%;' : '';
+
   return `<div class="ai-msg" style="margin-bottom:4px">
-    <div class="msg-av" style="background:hsl(${h},20%,11%);border-color:hsl(${h},28%,22%);cursor:pointer" onclick="openProfilePopup('${safePid}','${safeEmotion}',${h},'','${safeLetter}')">${imgHtml}</div>
+    <div class="msg-av" style="background:hsl(${h},20%,11%);border-color:hsl(${h},28%,22%);cursor:pointer;${avDisplay}${avRadius}" onclick="openProfilePopup('${safePid}','${safeEmotion}',${h},'','${safeLetter}')">${imgHtml}</div>
     <div class="bubble-col">
       <div class="msg-pname" style="color:hsl(${h},60%,68%);display:block">${esc(p.name)}</div>
       <div class="ai-bubble" style="background:hsl(${h},22%,10%);border:1px solid hsl(${h},28%,20%);color:hsl(${h},50%,82%);font-size:12px">${esc(label)}</div>
@@ -896,11 +907,16 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}) {
     const safePid = p.pid.replace(/'/g, "\\'");
     const safeEmotion = (seg.emotion||'neutral').replace(/'/g, "\\'");
     const safeSuffix = suffix.replace(/'/g, "\\'");
-    const safeThumb = thumbSrc.replace(/'/g, "\\'");
+const safeThumb = thumbSrc.replace(/'/g, "\\'");
     const celebStroke = p.type === 'celebrity' ? `box-shadow: inset 0 0 0 1.5px hsl(${h},70%,60%), 0 0 6px hsl(${h},60%,40%);` : '';
     
+    // 설정에 따른 스타일 결정
+    const avStyle = userProfile.chatAvatarStyle || 'square';
+    const avDisplay = avStyle === 'hidden' ? 'display:none;' : '';
+    const avRadius = avStyle === 'circle' ? 'border-radius:50%;' : '';
+    
     html += `<div class="ai-msg" style="${opacity}">
-      <div class="msg-av" style="background:hsl(${h},20%,11%);border-color:hsl(${h},28%,22%);${celebStroke}" onclick="openProfilePopup('${safePid}','${safeEmotion}',${h},'${safeThumb}','${safeSuffix}')">${baseImg}</div>
+      <div class="msg-av" style="background:hsl(${h},20%,11%);border-color:hsl(${h},28%,22%);${celebStroke};${avDisplay}${avRadius}" onclick="openProfilePopup('${safePid}','${safeEmotion}',${h},'${safeThumb}','${safeSuffix}')">${baseImg}</div>
       <div class="bubble-col">
         <div class="msg-pname" style="color:hsl(${h},60%,68%)">${esc(p.name)}${p._ghost?`<span style="font-size:9px;opacity:.5">(삭제됨)</span>`:''}</div>
         <div class="ai-bubble" style="background:hsl(${h},22%,10%);border:1px solid hsl(${h},28%,20%);color:hsl(${h},50%,82%)">${fmt(seg.content)}</div>

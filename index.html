@@ -1008,6 +1008,12 @@ select.edit-input {
 		<option value="persona">페르소나 목록</option>
 		<option value="chat">채팅 목록</option>
 		</select>
+	  <div class="edit-field-label">채팅방 썸네일 스타일</div>
+		<select id="settingsAvatarStyle" class="edit-input" style="width:100%; margin-bottom: 16px;">
+		<option value="square">사각 (기본)</option>
+		<option value="circle">원형</option>
+		<option value="hidden">숨김</option>
+		</select>
       <div style="padding-top:20px; border-top:1px solid var(--border);">
         <div class="field-label" style="margin-bottom:12px">앱 데이터 관리</div>
         <button onclick="clearImageCache()" style="width:100%;padding:12px;border-radius:11px;background:var(--card);color:var(--text);border:1px solid var(--border2);font-family:'Pretendard',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--muted)'" onmouseout="this.style.borderColor='var(--border2)'">🖼 이미지 캐시 초기화</button>
