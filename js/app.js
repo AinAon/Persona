@@ -82,6 +82,7 @@ function loadSessionsFromCache() {
 
 async function init() {
   loadUserProfile();
+  switchTab(userProfile.defaultTab || 'persona');
   // 캐시에서 즉시 로드 (로딩 중 표시)
   if (!loadPersonasFromCache()) personas = DEFAULT_PERSONAS.map(p=>({...p, tags:[...p.tags]}));
   loadSessionsFromCache();
