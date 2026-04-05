@@ -884,13 +884,14 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}) {
 	const suffix = suffixes[`${p.pid}:${seg.emotion}`] || '';
 	const dataUrl = suffix ? await getEmotionImageSuffixed(p.pid, seg.emotion, suffix) : await getEmotionImage(p.pid, seg.emotion);
 	if (dataUrl) { baseImg = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;object-position:top;">`; thumbSrc = dataUrl; }
-	const safePid = p.pid.replace(/'/g, "\\'");
-	const safeEmotion = (seg.emotion||'neutral').replace(/'/g, "\\'");
-	const safeSuffix = suffix.replace(/'/g, "\\'");
-	const safeThumb = thumbSrc.replace(/'/g, "\\'");
-	const celebStroke = p.type === 'celebrity' ? `box-shadow: inset 0 0 0 1.5px hsl(${h},70%,60%), 0 0 6px hsl(${h},60%,40%);` : '';
-	html += `<div class="ai-msg" style="${opacity}">
-	<div class="msg-av" style="background:hsl(${h},20%,11%);border-color:hsl(${h},28%,22%);${celebStroke}" onclick="openProfilePopup('${safePid}','${safeEmotion}',${h},'${safeThumb}','${safeSuffix}')">${baseImg}</div>
+	const suffix = suffixes[`${p.pid}:${seg.emotion}`] || '';
+    const safePid = p.pid.replace(/'/g, "\\'");
+    const safeEmotion = (seg.emotion||'neutral').replace(/'/g, "\\'");
+    const safeSuffix = suffix.replace(/'/g, "\\'");
+    const safeThumb = thumbSrc.replace(/'/g, "\\'");
+    const celebStroke = p.type === 'celebrity' ? `box-shadow: inset 0 0 0 1.5px hsl(${h},70%,60%), 0 0 6px hsl(${h},60%,40%);` : '';
+    html += `<div class="ai-msg" style="${opacity}">
+      <div class="msg-av" style="background:hsl(${h},20%,11%);border-color:hsl(${h},28%,22%);${celebStroke}" onclick="openProfilePopup('${safePid}','${safeEmotion}',${h},'${safeThumb}','${safeSuffix}')">${baseImg}</div>
       <div class="bubble-col">
         <div class="msg-pname" style="color:hsl(${h},60%,68%)">${esc(p.name)}${p._ghost?`<span style="font-size:9px;opacity:.5">(삭제됨)</span>`:''}</div>
         <div class="ai-bubble" style="background:hsl(${h},22%,10%);border:1px solid hsl(${h},28%,20%);color:hsl(${h},50%,82%)">${fmt(seg.content)}</div>
@@ -1426,17 +1427,40 @@ async function compressChat() {
 async function openProfilePopup(pid, emotion, hue, fallbackSrc, suffix = '') {
   const popup = document.getElementById('profilePopup');
   const imgEl = document.getElementById('profilePopupImg');
-  // ...
+  imgEl.style.borderColor = `hsl(${hue},40%,35%)`;
+  imgEl.innerHTML = fallbackSrc ? `<img src="${fallbackSrc}">` : defaultAvatar(hue);
+  popup.classList.add('open');
+
   if (!pid) return;
+  const eid = emotion || 'neutral';
+  const target = suffix ? `${eid}_${suffix}` : eid;
+
   try {
-    // 1. 감정 이미지 HD (celebrity/custom 감정 이미지)
-	{
-	const hdUrl = await getEmotionImageHD(pid, emotion, suffix);
-      if (hdUrl && popup.classList.contains('open')) { imgEl.innerHTML = `<img src="${hdUrl}">`; return; }
+    // 1. 해당 감정의 HD 이미지 (접미사 포함)
+    const hdUrl = await getEmotionImageHD(pid, eid, suffix);
+    if (hdUrl && popup.classList.contains('open')) {
+      imgEl.innerHTML = `<img src="${hdUrl}">`;
+      return;
     }
-    // 2. em_full_ — 800×1200 PNG 원본 (이모션 매니저/앱 업로드)
-    const full = await idbGet(`em_full_${pid}_neutral`);
-    if (full && popup.classList.contains('open')) { imgEl.innerHTML = `<img src="${full}">`; return; }
+
+    // 2. 해당 감정의 원본 전체 이미지 (em_full_)
+    const full = await idbGet(`em_full_${pid}_${target}`);
+    if (full && popup.classList.contains('open')) {
+      imgEl.innerHTML = `<img src="${full}">`;
+      return;
+    }
+
+    // 3. 마지막 수단: 무표정 원본
+    if (eid !== 'neutral') {
+      const neutralFull = await idbGet(`em_full_${pid}_neutral`);
+      if (neutralFull && popup.classList.contains('open')) {
+        imgEl.innerHTML = `<img src="${neutralFull}">`;
+      }
+    }
+  } catch(e) {
+    console.error('Popup image load error:', e);
+  }
+}
     // 3. emotion_pid_neutral_hd — 800px JPEG
     const hd = await idbGet(`emotion_${pid}_neutral_hd`);
     if (hd && popup.classList.contains('open')) { imgEl.innerHTML = `<img src="${hd}">`; return; }

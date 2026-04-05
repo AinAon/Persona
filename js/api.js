@@ -169,32 +169,42 @@ async function resolveMessageSuffixes(rawText, pList, existingSuffixes = null) {
 
 async function getEmotionImageHD(pid, emotion, letter = '') {
   const eid = emotion || 'neutral';
-  const cacheKeyHd = letter ? `emotion_${pid}_${eid}_${letter}_hd` : `emotion_${pid}_${eid}_hd`;
-  const cacheKeyFull = letter ? `em_full_${pid}_${eid}_${letter}` : `em_full_${pid}_${eid}`;
-  const cacheKeyMd = letter ? `emotion_${pid}_${eid}_${letter}` : `emotion_${pid}_${eid}`;
+  const target = letter ? `${eid}_${letter}` : eid;
   try {
-    const full = await idbGet(cacheKeyFull);
+    const full = await idbGet(`em_full_${pid}_${target}`);
     if (full) return full;
-    const hd = await idbGet(cacheKeyHd);
+    const hd = await idbGet(`emotion_${pid}_${target}_hd`);
     if (hd) return hd;
-    const md = await idbGet(cacheKeyMd);
+    const md = await idbGet(`emotion_${pid}_${target}`);
     if (md) return md;
   } catch(e) {}
-  // IDB 없으면 R2에서 직접 fetch (HD 크기)
+  
   try {
-    // ... (중략 - WORKER_URL 로직 동일)
+    const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+    if (!wUrl) return null;
+    const keys = await getImageList(pid);
+    const { suffixed, hasBase } = getSuffixesForEmotion(keys, pid, eid);
     let url = null;
+    
+    // 명시된 letter가 있으면 우선 사용
     if (letter && suffixed.includes(letter)) {
       url = `${wUrl}/image/profile/${pid}/${pid}_${eid}_${letter}.jpg`;
-    } else if (hasBase) {
+    } else if (hasBase && !letter) {
       url = `${wUrl}/image/profile/${pid}/${pid}_${eid}.jpg`;
     } else if (suffixed.length > 0) {
-      const fallbackLetter = suffixed[Math.floor(Math.random() * suffixed.length)];
-      url = `${wUrl}/image/profile/${pid}/${pid}_${eid}_${fallbackLetter}.jpg`;
+      const randomLetter = suffixed[Math.floor(Math.random() * suffixed.length)];
+      url = `${wUrl}/image/profile/${pid}/${pid}_${eid}_${randomLetter}.jpg`;
     }
-    // ... (중략)
+    
+    if (!url) return null;
+    const resp = await fetch(url);
+    if (!resp.ok) return null;
+    const blob = await resp.blob();
+    const dataUrl = await new Promise(r => {
+      const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob);
+    });
     const hd = await resizeImage(dataUrl, 1000, 0.9);
-    await idbSet(cacheKeyHd, hd).catch(() => {});
+    await idbSet(`emotion_${pid}_${target}_hd`, hd).catch(() => {});
     return hd;
   } catch(e) { return null; }
 }
