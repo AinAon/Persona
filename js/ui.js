@@ -1455,7 +1455,7 @@ async function openProfilePopup(pid, emotion, hue, fallbackSrc, suffix = '') {
       return;
     }
 
-    // 3. 마지막 수단: 무표정 원본
+// 3. 마지막 수단: 무표정 원본
     if (eid !== 'neutral') {
       const neutralFull = await idbGet(`em_full_${pid}_neutral`);
       if (neutralFull && popup.classList.contains('open')) {
@@ -1466,12 +1466,5 @@ async function openProfilePopup(pid, emotion, hue, fallbackSrc, suffix = '') {
     console.error('Popup image load error:', e);
   }
 }
-    // 3. emotion_pid_neutral_hd — 800px JPEG
-    const hd = await idbGet(`emotion_${pid}_neutral_hd`);
-    if (hd && popup.classList.contains('open')) { imgEl.innerHTML = `<img src="${hd}">`; return; }
-    // 4. 구버전 키 fallback
-    const legacy = await idbGet(`persona_img_${pid}_hd`);
-    if (legacy && popup.classList.contains('open')) imgEl.innerHTML = `<img src="${legacy}">`;
-  } catch(e) {}
-}
+
 function closeProfilePopup() { document.getElementById('profilePopup').classList.remove('open'); }
