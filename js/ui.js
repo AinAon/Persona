@@ -1119,8 +1119,8 @@ function parseResponse(text, pList) {
 // ══════════════════════════════
 function setMode(m) {
   currentMode = m;
-  document.getElementById('modefast').classList.toggle('active', m==='fast');
-  document.getElementById('modethink').classList.toggle('active', m==='think');
+  const selectEl = document.getElementById('chatModeSelect');
+  if (selectEl && selectEl.value !== m) selectEl.value = m;
 }
 
 // ══════════════════════════════
@@ -1143,14 +1143,7 @@ function switchInputTab(tab) {
       : tab === 'context' ? '질문하거나 분석을 요청해봐...'
       : '메시지를 입력해봐...';
   }
-  // 영역 전환
-  ['chatArea','imageArea','contextArea'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = 'none';
-  });
-  const activeId = tab === 'chat' ? 'chatArea' : tab === 'image' ? 'imageArea' : 'contextArea';
-  const activeEl = document.getElementById(activeId);
-  if (activeEl) activeEl.style.display = '';
+  // 영역 분리 제거: 탭과 무관하게 항상 단일 chatArea 유지
 }
 
 function addContextUrl() {
@@ -1326,7 +1319,7 @@ async function sendMessage() {
       const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
       const res = await fetch(wUrl + '/chat', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ messages: apiMessages, model: 'grok-4-1-fast-non-reasoning' })
+        body: JSON.stringify({ messages: apiMessages, model: 'grok-4.2' })
       });
       const data = await res.json();
       if (data.result !== 'success') {

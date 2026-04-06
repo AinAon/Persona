@@ -677,17 +677,13 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
     <div style="width:100%;color:var(--muted);font-size:13px;text-align:center;padding:40px 0">이미지 탭에서 프롬프트를 입력하고 전송하면 생성돼</div>
   </div>
   <!-- 컨텍스트 영역 -->
-  <div class="chat-area" id="contextArea" style="display:none">
-    <div style="color:var(--muted);font-size:13px;text-align:center;padding:40px 0">파일이나 URL을 추가하면 대화에서 참고자료로 활용돼</div>
-  </div>
-  <div class="chat-area" id="chatArea">
+<div class="chat-area" id="chatArea">
     <div class="chat-empty" id="chatEmpty2">
       <div class="empty-text" id="emptyText">뭐든 던져봐</div>
     </div>
   </div>
 
   <div class="chat-input-bar">
-    <!-- 입력 탭바 (입력창 위에) -->
     <div class="input-tabbar">
       <button class="input-tab active" id="itab-chat" onclick="switchInputTab('chat')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
@@ -702,10 +698,11 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
         <span>컨텍스트</span>
       </button>
 
-      <!-- 탭별 옵션 (오른쪽) -->
       <div class="input-tab-options" id="itab-opts-chat">
-        <button class="mode-pill active" id="modefast" onclick="setMode('fast')">⚡</button>
-        <button class="mode-pill" id="modethink" onclick="setMode('think')">🧠</button>
+        <select class="input-tab-select" id="chatModeSelect" onchange="setMode(this.value)">
+          <option value="fast">⚡ Fast</option>
+          <option value="think">🧠 Think</option>
+        </select>
         <button class="attach-btn" onclick="document.getElementById('fileInput').click()" title="파일 첨부">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
         </button>
@@ -717,8 +714,11 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
           <option value="9:16">9:16</option>
           <option value="4:3">4:3</option>
         </select>
-        <label class="model-chip"><input type="checkbox" value="dall-e-3"> DALL-E</label>
-        <label class="model-chip"><input type="checkbox" value="imagen-3"> Imagen</label>
+        <select class="input-tab-select" id="imageModelSelect">
+          <option value="gemini-3.1-flash-image-preview">Gemini 3.1 Flash</option>
+          <option value="grok-imagine-image-pro">Grok Imagine Pro</option>
+          <option value="gpt-image-1.5">GPT Image 1.5</option>
+        </select>
       </div>
       <div class="input-tab-options hidden" id="itab-opts-context">
         <button class="attach-btn" onclick="document.getElementById('ctxFileInput').click()" title="파일 추가">+ 파일</button>
