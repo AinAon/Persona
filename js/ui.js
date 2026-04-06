@@ -1332,23 +1332,6 @@ if (session._demo) {
           
 // 1. sendMessage 함수 내 모델 결정 로직 수정 (약 700번째 줄)
 let targetModel = document.getElementById('chatModeSelect').value;
-
-// 2. 파일 맨 하단에 비율 모달 제어 함수 추가
-let _selectedRatio = '1:1';
-
-function openRatioModal() {
-  document.getElementById('ratioModal').classList.add('open');
-}
-
-function closeRatioModal() {
-  document.getElementById('ratioModal').classList.remove('open');
-}
-
-function selectRatio(ratio) {
-  _selectedRatio = ratio;
-  document.getElementById('imgRatioBtn').textContent = ratio;
-  closeRatioModal();
-}
   
   if (_inputTab === 'image') {
     const imgSelect = document.getElementById('imageModelSelect');
@@ -1768,12 +1751,9 @@ function closeProfilePopup() { document.getElementById('profilePopup').classList
 // ══════════════════════════════
 let _selectedRatio = '1:1';
 
-function openRatioModal() {
-  document.getElementById('ratioModal').classList.add('open');
-}
-
-function closeRatioModal() {
-  document.getElementById('ratioModal').classList.remove('open');
+function toggleRatioPopup() {
+  const popup = document.getElementById('ratioPopup');
+  popup.classList.toggle('hidden');
 }
 
 function selectRatio(ratio) {
@@ -1781,12 +1761,21 @@ function selectRatio(ratio) {
   const btn = document.getElementById('imgRatioBtn');
   if (btn) btn.textContent = ratio;
   
-  const items = document.querySelectorAll('#ratioModal .ratio-item');
-  items.forEach(el => {
-    el.classList.remove('active');
-    if (el.querySelector('.ratio-label').textContent === ratio) {
-      el.classList.add('active');
-    }
+  // 활성화 스타일 적용
+  document.querySelectorAll('#ratioPopup .ratio-item').forEach(el => {
+    el.classList.toggle('active', el.textContent === ratio);
   });
+  
+  document.getElementById('ratioPopup').classList.add('hidden');
+}
+
+// 팝업 외부 클릭 시 닫기
+document.addEventListener('click', (e) => {
+  const popup = document.getElementById('ratioPopup');
+  const btn = document.getElementById('imgRatioBtn');
+  if (popup && !popup.contains(e.target) && e.target !== btn) {
+    popup.classList.add('hidden');
+  }
+});
   closeRatioModal();
 }
