@@ -1043,7 +1043,7 @@ function buildSystemPrompt(session) {
 
   const formatEx = pList.map(p => `[${p.pid}][emotion:감정]내용[/${p.pid}]`).join('\n');
 
-  return `${worldPart}${userPart}${personaPart}\n\n형식:\n${formatEx}\nemotion: ${EMOTIONS.join('/')}${modeInstr ? '\n'+modeInstr : ''}\n호칭은 자연스러운 맥락에서만 가끔 사용. 매 발화 시작에 붙이지 말 것.`;
+  return `${worldPart}${userPart}${personaPart}\n\n형식:\n${formatEx}\nemotion: ${EMOTIONS.join('/')}${modeInstr ? '\n'+modeInstr : ''}\n호칭은 자연스러운 맥락에서만 가끔 사용. 매 발화 시작에 붙이지 말 것.\n필요시 태그 내용에 마크다운(표, 코드블록, 목록 등) 사용 가능.`;
 }
 
 function renderUserBubbleHTML(text, atts) {
@@ -1147,7 +1147,7 @@ async function sendMessage() {
       const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
       const res = await fetch(wUrl + '/chat', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ messages: apiMessages, model: 'grok-4-1-fast' })
+        body: JSON.stringify({ messages: apiMessages, model: 'grok-4-1' })
       });
       const data = await res.json();
       if (data.result !== 'success') {
