@@ -1255,7 +1255,9 @@ async function sendMessage() {
   document.getElementById('sendBtn').disabled = true;
   input.value = ''; input.style.height = 'auto';
 
-  const userHTML = renderUserBubbleHTML(text, attachments);
+  // 이미지 탭 참조 이미지는 채팅에 표시 안 함 — 텍스트 프롬프트만 보여줌
+  const isImageReq = (_inputTab === 'image');
+  const userHTML = renderUserBubbleHTML(text, isImageReq ? [] : attachments);
   
   let msgContent = text || '(파일)';
   if (attachments.length > 0) {
@@ -1288,16 +1290,20 @@ async function sendMessage() {
   userEl.innerHTML = userMsg._rendered;
   if (userEl.firstElementChild) area.appendChild(userEl.firstElementChild);
 
-  const isImageReq = (_inputTab === 'image');
-
-  // 이미지 생성 중: 애니메이션 플레이스홀더
+  // 로딩 플레이스홀더
   const thinkEl = document.createElement('div');
   thinkEl.className = 'thinking-bubble';
   if (isImageReq) {
     thinkEl.innerHTML = `<div class="img-gen-placeholder">
       <div class="img-gen-shimmer"></div>
       <div class="img-gen-body">
-        <span class="img-gen-icon">🎨</span>
+        <svg class="img-gen-svg" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="8" y="18" width="64" height="46" rx="6" stroke="currentColor" stroke-width="2.5"/>
+          <circle cx="40" cy="41" r="13" stroke="currentColor" stroke-width="2.5"/>
+          <circle cx="40" cy="41" r="6" stroke="currentColor" stroke-width="2"/>
+          <rect x="28" y="11" width="24" height="10" rx="3" stroke="currentColor" stroke-width="2"/>
+          <circle cx="62" cy="27" r="3" fill="currentColor" opacity=".6"/>
+        </svg>
         <span class="img-gen-label">이미지 생성 중</span>
         <div class="img-gen-dots"><span></span><span></span><span></span></div>
       </div>
