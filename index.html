@@ -520,9 +520,26 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
   font-size: 11px; font-weight: 700; color: var(--muted); cursor: pointer;
 }
 .ratio-item.active { border-color: #38bdf8; color: #38bdf8; background: rgba(56, 189, 248, 0.1); }
+
+/* 이미지 포함 시 말풍선을 더 넓게 (브라우저 가로폭 맞춤) */
+.msg-group:has(.bubble-img-container) .user-msg,
+.msg-group:has(.bubble-img-container) .ai-bubble {
+  max-width: 100%;
+  width: 100%;
+}
+
+/* 이미지 컨테이너 및 버튼 스타일 */
+.bubble-img-container { width: 100%; margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+.bubble-img { width: 100%; height: auto; border-radius: 12px; cursor: pointer; display: block; background: var(--surface); }
+.img-download-btn { align-self: flex-start; padding: 6px 14px; font-size: 11px; background: rgba(255,255,255,0.08); border: 1px solid var(--border2); border-radius: 8px; color: var(--muted); text-decoration: none; cursor: pointer; transition: all .15s; }
+.img-download-btn:hover { background: rgba(255,255,255,0.15); color: var(--text); }
+
+/* 이미지 팝업 전용 모달 */
+.image-popup-overlay { position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,0.92); display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
+.image-popup-overlay.active { display: flex; }
+.image-popup-img { max-width: 100%; max-height: 80vh; object-fit: contain; border-radius: 8px; box-shadow: 0 0 30px rgba(0,0,0,0.5); }
 </style>
 
-</style>
 </head>
 <body>
 
@@ -947,6 +964,14 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
         </div>
       </div>
     </div>
+  </div>
+</div>
+
+<div class="image-popup-overlay" id="imagePopup" onclick="closeImagePopup()">
+  <img class="image-popup-img" id="popupImg">
+  <div style="margin-top: 24px; display: flex; gap: 12px;" onclick="event.stopPropagation()">
+    <button class="start-btn" id="popupDownloadBtn" style="width:auto; padding: 10px 28px;">다운로드</button>
+    <button class="start-btn" onclick="closeImagePopup()" style="width:auto; padding: 10px 28px; background: var(--muted);">닫기</button>
   </div>
 </div>
 
