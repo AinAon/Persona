@@ -956,6 +956,7 @@ async function openChat(id) {
   });
 
   show('chatScreen');
+  switchInputTab('chat'); // chatArea 표시 보장
   await Promise.race([
     Promise.all(pList.map(p => getNeutralImage(p.pid))),
     new Promise(r => setTimeout(r, 2000))
