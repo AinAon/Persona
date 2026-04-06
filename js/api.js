@@ -504,7 +504,6 @@ async function preloadAllSessions() {
 // R2에 이미지 업로드 유틸리티 (데이터 URL을 서버 URL로 변환)
 async function uploadToR2(dataUrl, folder, fname) {
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-  // 이미 외부 URL이거나 유효하지 않은 데이터면 그대로 반환
   if (!wUrl || !dataUrl.startsWith('data:')) return dataUrl;
 
   try {
@@ -524,6 +523,21 @@ async function uploadToR2(dataUrl, folder, fname) {
   }
 }
 
+// 파일명 생성: prefix_YYYYMMDDhhmm_xxxxx
+function makeImageFilename(prefix) {
+  const n = new Date();
+  const dt = n.getFullYear().toString()
+    + String(n.getMonth()+1).padStart(2,'0')
+    + String(n.getDate()).padStart(2,'0')
+    + String(n.getHours()).padStart(2,'0')
+    + String(n.getMinutes()).padStart(2,'0');
+  const rand = Math.random().toString(36).slice(2,7);
+  return `${prefix}_${dt}_${rand}`;
+}
+
+// ── 기기별 로컬 전용 키 (KV 동기화 제외) ──
+const LOCAL_ONLY_PROFILE_KEYS = ['defaultTab', 'chatAvatarStyle'];
+
 function saveUserProfile() {
   try { localStorage.setItem(CACHE_USER_KEY, JSON.stringify(userProfile)); } catch(e) {}
 }
@@ -532,5 +546,47 @@ function loadUserProfile() {
   try {
     const cached = localStorage.getItem(CACHE_USER_KEY);
     if (cached) userProfile = JSON.parse(cached);
+  } catch(e) {}
+}
+
+// KV에 name/bio/image 저장 (기기별 설정 제외)
+async function saveUserProfileKV() {
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) return;
+  try {
+    const kvProfile = {};
+    for (const [k, v] of Object.entries(userProfile)) {
+      if (!LOCAL_ONLY_PROFILE_KEYS.includes(k)) kvProfile[k] = v;
+    }
+    // 프로필 이미지가 data URL이면 R2에 먼저 업로드
+    if (kvProfile.image && kvProfile.image.startsWith('data:')) {
+      const fname = makeImageFilename('profile') + '.jpg';
+      const r2Url = await uploadToR2(kvProfile.image, 'img_profile', fname);
+      kvProfile.image = r2Url;
+      userProfile.image = r2Url; // 로컬도 R2 URL로 교체
+      saveUserProfile();
+    }
+    await fetch(wUrl + '/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profile: JSON.stringify(kvProfile) })
+    });
+  } catch(e) { console.warn('KV profile save failed:', e); }
+}
+
+// KV에서 name/bio/image 로드 → 기기별 설정은 유지
+async function loadUserProfileKV() {
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) return;
+  try {
+    const res = await fetch(wUrl + '/profile');
+    const data = await res.json();
+    if (!data.profile) return;
+    const kvProfile = JSON.parse(data.profile);
+    // 로컬 기기별 설정 보존, KV 데이터 병합
+    const localOnly = {};
+    LOCAL_ONLY_PROFILE_KEYS.forEach(k => { if (userProfile[k] !== undefined) localOnly[k] = userProfile[k]; });
+    userProfile = { ...userProfile, ...kvProfile, ...localOnly };
+    saveUserProfile();
   } catch(e) {}
 }
