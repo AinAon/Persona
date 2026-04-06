@@ -1,8 +1,6 @@
 // ══════════════════════════════
 //  CONSTANTS & DATA
 // ══════════════════════════════
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwc2pNBmXpeDLHqc7tGff4kVByDbcG1ijLRzxNTiKjSklSo4dcm61R5XNOAghaAGozz/exec';
-const GAS_SECRET = 'persona_chat_2025';
 const WORKER_URL = 'https://persona-worker.persona-worker.workers.dev';
 const HUE_PRESETS = [
   0, 20, 35, 50, 70, 90,

@@ -234,7 +234,7 @@ async function renderPersonaGrid() {
 
     const neutral = await getEmotionImageHD(p.pid, 'neutral') || await getNeutralImage(p.pid);
     const imgSrc = neutral || p.image;
-    const nametagBg = `hsl(${p.hue},40%,18%)`;
+    const nametagBg = `hsl(${p.hue},45%,22%)`;
     const isCeleb = p.type === 'celebrity';
     const celebStroke = isCeleb ? `box-shadow: inset 0 0 0 1.5px hsl(${p.hue},70%,60%), 0 0 8px hsl(${p.hue},60%,40%);` : '';
     card.innerHTML = `
@@ -536,7 +536,7 @@ function renderEditBody(p, hdImage = null) {
 
       <div class="edit-field-label" style="margin-top:14px">COLOR</div>
       <div class="hue-swatches">
-        ${HUE_PRESETS.map(h => `<div class="hue-swatch ${h===p.hue?'on':''}" style="background:hsl(${h},55%,55%)" onclick="selectEditHue(${h},this)"></div>`).join('')}
+        ${HUE_PRESETS.map(h => `<div class="hue-swatch ${h===p.hue?'on':''}" style="background:hsl(${h},60%,62%)" onclick="selectEditHue(${h},this)"></div>`).join('')}
       </div>
     </div>
 
@@ -715,7 +715,6 @@ let _isDemoMode = false;
 function openMarkdownDemo() {
   _demoSlideIdx = 0;
   _isDemoMode = true;
-  // 기존 데모 세션 재사용 또는 새로 생성
   let s = sessions.find(x => x._markdownDemo);
   if (!s) {
     s = {
@@ -730,12 +729,15 @@ function openMarkdownDemo() {
     };
     sessions.unshift(s);
   }
-  // history 초기화
   s.history = [];
   s._loaded = true;
   activeChatId = s.id;
+  // 메인화면 → 채팅 탭 활성화 후 chatScreen으로
   show('chatScreen');
-  // 헤더 직접 설정
+  // 탭바 active 상태 갱신
+  ['Persona','Chat','Settings'].forEach(t =>
+    document.getElementById('btab'+t)?.classList.toggle('active', false)
+  );
   document.getElementById('chatHeaderNames').textContent = '렌더링 데모';
   document.getElementById('chatHeaderAvatars').innerHTML =
     '<div class="chat-header-av" style="background:hsl(220,20%,14%);border-color:hsl(220,28%,22%);font-size:18px;display:flex;align-items:center;justify-content:center">✦</div>';
@@ -1886,16 +1888,32 @@ async function compressChat() {
   if (!confirm('대화를 요약 압축할까?')) return;
   const histText = s.history.map(m=>`${m.role==='user'?'사용자':'AI'}: ${typeof m.content==='string'?m.content:'(메시지)'}`).join('\n');
   try {
-    const res = await gasCall({ action:'chat', messages:[
-      {role:'system',content:'대화를 핵심만 남겨 간결하게 요약해줘. 한국어로.'},
-      {role:'user',content:`아래 대화를 요약해줘.\n\n${histText}`}
-    ]});
-    if (res?.result==='success') {
-      s.history = [{role:'assistant',content:`[이전 대화 요약]\n${res.reply}`,personaSnapshot:(s.participantPids||[]).map(pid=>({pid,name:getPersona(pid)?.name||pid}))}];
+    const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+    if (!wUrl) { alert('Worker URL 없음'); return; }
+    const pList = (s.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
+    const compressModel = s.overrideModel
+      || pList.find(p=>p.defaultModel)?.defaultModel
+      || document.getElementById('chatModeSelect')?.value
+      || 'grok-4.20-non-reasoning-latest';
+    const res = await fetch(wUrl + '/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: compressModel,
+        messages: [
+          { role:'system', content:'대화를 핵심만 남겨 간결하게 요약해줘. 한국어로.' },
+          { role:'user',   content:`아래 대화를 요약해줘.\n\n${histText}` }
+        ]
+      })
+    });
+    const data = await res.json();
+    if (data?.result === 'success') {
+      s.history = [{ role:'assistant', content:`[이전 대화 요약]\n${data.reply}`,
+        personaSnapshot:(s.participantPids||[]).map(pid=>({pid,name:getPersona(pid)?.name||pid})) }];
       s.updatedAt = Date.now(); s.lastPreview = '[압축됨]';
       closeDrawer(); renderChatArea(); saveSession(s.id); saveIndex();
-    }
-  } catch(e) { alert('압축 실패'); }
+    } else { alert('압축 실패: ' + (data?.error || '알 수 없는 오류')); }
+  } catch(e) { alert('압축 실패: ' + e.message); }
 }
 
 // ══════════════════════════════

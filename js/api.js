@@ -374,15 +374,8 @@ async function clearImageCache() {
 }
 
 // ══════════════════════════════
-//  GAS / STORAGE API
+//  STORAGE API (Worker KV / LocalStorage)
 // ══════════════════════════════
-async function gasCall(body) {
-  try {
-    const res = await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain'}, body:JSON.stringify({secretKey:GAS_SECRET,...body}) });
-    return await res.json();
-  } catch(e) { return null; }
-}
-
 function savePersonas() {
   // 이미지 데이터 제외 후 저장 (용량 절약)
   const toSave = personas.map(p => {
