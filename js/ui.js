@@ -150,9 +150,9 @@ function saveSettingsUserProfile() {
   userProfile.name = document.getElementById('settingsUserName')?.value.trim() || '';
   userProfile.bio = document.getElementById('settingsUserBio')?.value.trim() || '';
   userProfile.defaultTab = document.getElementById('settingsDefaultTab')?.value || 'persona';
-  // 설정값 저장
   userProfile.chatAvatarStyle = document.getElementById('settingsAvatarStyle')?.value || 'square';
   saveUserProfile();
+  saveUserProfileKV(); // name/bio/image → KV (기기별 설정 제외)
   showToast('설정 저장됨 ✓');
 }
 
@@ -1439,6 +1439,18 @@ async function sendMessage() {
     const currentSession = sessions.find(s => s.id === session.id);
     if (!currentSession) return;
 
+    // 생성된 이미지가 data URL이면 R2에 업로드 후 교체
+    if (isImageReq && reply.includes('data:image')) {
+      const dataUrlRe = /!\[.*?\]\((data:image\/[^)]+)\)/g;
+      let m;
+      while ((m = dataUrlRe.exec(reply)) !== null) {
+        const dataUrl = m[1];
+        const fname = makeImageFilename('generated') + '.jpg';
+        const r2Url = await uploadToR2(dataUrl, 'img_generated', fname).catch(() => dataUrl);
+        reply = reply.replace(dataUrl, r2Url);
+      }
+    }
+
     const pList = pListAll;
     const personaSnapshot = pList.map(p=>({pid:p.pid, name:p.name}));
     const suffixes = await resolveMessageSuffixes(reply, pList);
@@ -1479,8 +1491,16 @@ async function sendMessage() {
 function handleFileSelect(input) {
   [...input.files].forEach(file => {
     const reader = new FileReader();
-    reader.onload = e => {
-      attachments.push({ type:file.type.startsWith('image/')?'image':'file', name:file.name, dataUrl:e.target.result });
+    reader.onload = async e => {
+      const dataUrl = e.target.result;
+      const isImg = file.type.startsWith('image/');
+      let finalUrl = dataUrl;
+      // 이미지는 즉시 R2에 업로드
+      if (isImg) {
+        const fname = makeImageFilename('uploaded') + '.jpg';
+        finalUrl = await uploadToR2(dataUrl, 'img_uploaded', fname).catch(() => dataUrl);
+      }
+      attachments.push({ type: isImg ? 'image' : 'file', name: file.name, dataUrl: finalUrl });
       renderAttachmentPreviews();
     };
     reader.readAsDataURL(file);
