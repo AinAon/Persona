@@ -1330,19 +1330,18 @@ if (session._demo) {
           ];
           const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
           
-          // 현재 탭 확인 후 요청 모델 분기
-          let targetModel = 'grok-4.1 Fast-Reasoning';
+const chatModelEl = document.getElementById('chatModeSelect');
+          let targetModel = chatModelEl ? chatModelEl.value : 'grok-4.20-non-reasoning';
           if (typeof _inputTab !== 'undefined' && _inputTab === 'image') {
             const imgSelect = document.getElementById('imageModelSelect');
             if (imgSelect) targetModel = imgSelect.value;
           }
 
-          // 이미지 탭일 경우 선택된 비율 가져오기
-			const ratioEl = document.getElementById('imgRatio');
-			const ratio = ratioEl ? ratioEl.value : "1:1";
+          // 전역 변수로 저장된 선택된 비율 가져오기
+			const ratio = typeof _selectedRatio !== 'undefined' ? _selectedRatio : "1:1";
 
 			const res = await fetch(wUrl + '/chat', {
-			  method:'POST', headers:{'Content-Type':'application/json'},
+			  method:'POST', headers:{'Content-Type':'application/json'},a
 			  body: JSON.stringify({ 
 			  messages: apiMessages, 
 			  model: targetModel,
@@ -1740,3 +1739,31 @@ async function openProfilePopup(pid, emotion, hue, fallbackSrc, suffix = '') {
 }
 
 function closeProfilePopup() { document.getElementById('profilePopup').classList.remove('open'); }
+
+// ══════════════════════════════
+//  RATIO MODAL (UI)
+// ══════════════════════════════
+let _selectedRatio = '1:1';
+
+function openRatioModal() {
+  document.getElementById('ratioModal').classList.add('open');
+}
+
+function closeRatioModal() {
+  document.getElementById('ratioModal').classList.remove('open');
+}
+
+function selectRatio(ratio) {
+  _selectedRatio = ratio;
+  const btn = document.getElementById('imgRatioBtn');
+  if (btn) btn.textContent = ratio;
+  
+  const items = document.querySelectorAll('#ratioModal .ratio-item');
+  items.forEach(el => {
+    el.classList.remove('active');
+    if (el.querySelector('.ratio-label').textContent === ratio) {
+      el.classList.add('active');
+    }
+  });
+  closeRatioModal();
+}
