@@ -1331,7 +1331,7 @@ if (session._demo) {
           const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
           
 const chatModelEl = document.getElementById('chatModeSelect');
-          let targetModel = chatModelEl ? chatModelEl.value : 'grok-4.20-non-reasoning';
+          let targetModel = chatModelEl ? chatModelEl.value : 'grok-4-1-fast-reasoning-latest';
           if (typeof _inputTab !== 'undefined' && _inputTab === 'image') {
             const imgSelect = document.getElementById('imageModelSelect');
             if (imgSelect) targetModel = imgSelect.value;
@@ -1347,7 +1347,7 @@ const chatModelEl = document.getElementById('chatModeSelect');
 			  model: targetModel,
 			  aspect_ratio: ratio // 비율 정보 추가 전달
 			})
-		  });
+		  }); 
           const data = await res.json();
       if (data.result !== 'success') {
         const pid0 = session.participantPids?.[0] || 'p';
