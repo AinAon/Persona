@@ -122,22 +122,20 @@ body {
 .fab:active { transform: scale(.92); opacity: .85; }
 .fab svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2.5; stroke-linecap: round; }
 
-/* 플로팅 버튼 (설정 저장 - 디자인 통일) */
+/* 플로팅 저장 버튼 - fab와 동일 디자인 */
 .fab-save {
-  position: absolute; 
-  bottom: 20px; right: 16px; 
+  position: absolute;
+  bottom: 20px; right: 16px;
   width: 52px; height: 52px;
-  border-radius: 50%; 
-  background-color: var(--card); /* 새 채팅과 대비되는 흰색/카드 배경 */
-  color: hsl(210, 80%, 55%); /* 포인트 컬러 아이콘 */
-  border: none;
-  box-shadow: 0 4px 20px rgba(0,0,0,.5);
+  border-radius: 50%; background: var(--text); color: var(--bg);
+  border: none; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  cursor: pointer; z-index: 1000;
+  box-shadow: 0 4px 20px rgba(0,0,0,.5); z-index: 10;
   transition: transform .15s, opacity .15s;
   -webkit-tap-highlight-color: transparent;
 }
 .fab-save:active { transform: scale(0.92); opacity: 0.85; }
+.fab-save svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2.5; stroke-linecap: round; }
 
 /* 드로어 아이콘 버튼 */
 .drawer-action-icon-btn {

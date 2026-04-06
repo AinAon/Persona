@@ -639,6 +639,68 @@ async function savePersonaEdit() {
 // ══════════════════════════════
 //  CHAT LIST & SWIPE DELETE
 // ══════════════════════════════
+
+
+// ══════════════════════════════
+//  마크다운 렌더링 데모
+// ══════════════════════════════
+const _DEMO_SLIDES = [
+  { label: "표 (Table)", text: "| 항목 | 금액 | 비고 |\n|---|---:|---|\n| 매출 | 12,500,000 | 1분기 |\n| 매입 | 8,200,000 | 원자재 |\n| **영업이익** | **4,300,000** | 34.4% |" },
+  { label: "코드 블록", text: "```python\ndef greet(name):\n    return '안녕, ' + name\n\nprint(greet('Riley'))\n```" },
+  { label: "목록 & 인용", text: "**오늘 할 일**\n\n1. 기획서 작성\n2. 디자인 리뷰\n3. 배포 확인\n\n> 완벽한 코드보다 동작하는 코드가 낫다" },
+  { label: "Mermaid", text: "```mermaid\nflowchart LR\n  A[사용자] --> B{파싱}\n  B --> C[페르소나]\n  B --> D[마크다운]\n  C --> E[감정이미지]\n  D --> F[렌더링]\n```" },
+  { label: "모델 비교", text: "| 모델 | 속도 | 비전 | 이미지생성 |\n|---|:---:|:---:|:---:|\n| grok-4-1 | ⚡⚡⚡ | ✓ | ✗ |\n| grok-3-mini | ⚡⚡ | ✗ | ✗ |\n| claude-sonnet | ⚡⚡ | ✓ | ✗ |\n| gemini-2.5-pro | ⚡ | ✓ | ✓ |\n| gpt-4o | ⚡⚡ | ✓ | ✓ |" }
+];
+
+let _demoSlideIdx = 0;
+
+function openMarkdownDemo() {
+  _demoSlideIdx = 0;
+  // 데모용 임시 세션 없이 별도 화면 열기
+  const area = document.getElementById('chatArea');
+  const input = document.getElementById('userInput');
+  show('chatScreen');
+  document.getElementById('chatHeaderNames').textContent = '렌더링 데모';
+  document.getElementById('chatHeaderAvatars').innerHTML = `<div class="chat-header-av" style="background:hsl(220,20%,14%);border-color:hsl(220,28%,22%);font-size:18px;display:flex;align-items:center;justify-content:center">✦</div>`;
+  area.innerHTML = '';
+  activeChatId = null;
+
+  // 첫 슬라이드 표시
+  _showDemoSlide(area);
+
+  // 입력창을 "다음" 버튼처럼
+  if (input) {
+    input.placeholder = 'Enter → 다음 슬라이드';
+    input.value = '';
+    input.focus();
+  }
+}
+
+function _showDemoSlide(area) {
+  if (_demoSlideIdx >= _DEMO_SLIDES.length) {
+    const el = document.createElement('div');
+    el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--muted);font-size:13px">— 데모 끝 —<br><br><span style="font-size:11px;opacity:.6">진짜 채팅을 시작해봐</span></div>`;
+    area.appendChild(el);
+    area.scrollTop = area.scrollHeight;
+    document.getElementById('userInput').placeholder = '메시지를 입력하세요';
+    return;
+  }
+  const slide = _DEMO_SLIDES[_demoSlideIdx];
+  const el = document.createElement('div');
+  el.className = 'msg-group ai-msgs';
+  el.innerHTML = `<div class="ai-msg">
+    <div class="msg-av" style="background:hsl(220,20%,14%);border-color:hsl(220,28%,22%);font-size:16px;display:flex;align-items:center;justify-content:center">✦</div>
+    <div class="bubble-col">
+      <div class="msg-pname" style="color:hsl(220,60%,68%)">${slide.label}</div>
+      <div class="ai-bubble md-content" style="background:hsl(220,22%,10%);border:1px solid hsl(220,28%,20%);color:hsl(220,50%,88%)">${mdRender(slide.text)}</div>
+    </div>
+  </div>`;
+  area.appendChild(el);
+  renderMermaidBlocks(area);
+  area.scrollTop = area.scrollHeight;
+  _demoSlideIdx++;
+}
+
 async function renderChatList() {
   const list = document.getElementById('chatList');
   const empty = document.getElementById('chatEmpty');
@@ -653,6 +715,21 @@ async function renderChatList() {
       return name.includes(_chatSearchQuery) || preview.includes(_chatSearchQuery);
     });
   }
+
+  // 마크다운 데모 카드 (항상 맨 위 고정)
+  const demoCard = document.createElement('div');
+  demoCard.className = 'chat-list-item';
+  demoCard.style.cssText = 'border:1px dashed rgba(255,255,255,0.12);opacity:.7;';
+  demoCard.innerHTML = `
+    <div class="chat-avatars-row" style="width:52px;flex-shrink:0">
+      <div class="chat-av-item" style="background:hsl(220,20%,14%);border-color:hsl(220,28%,22%);font-size:20px;display:flex;align-items:center;justify-content:center">✦</div>
+    </div>
+    <div class="chat-list-info">
+      <div class="chat-list-names" style="font-size:12px;opacity:.8">렌더링 데모</div>
+      <div class="chat-list-preview">표 · 코드 · Mermaid · 목록</div>
+    </div>`;
+  demoCard.onclick = openMarkdownDemo;
+  list.appendChild(demoCard);
 
   for (const s of sorted) {
     const pList = (s.participantPids || []).map(pid => getPersona(pid)).filter(Boolean);
@@ -1007,7 +1084,19 @@ function setMode(m) {
   document.getElementById('modefast').classList.toggle('active', m==='fast');
   document.getElementById('modethink').classList.toggle('active', m==='think');
 }
-function handleKey(e) { if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    if (activeChatId === null && _demoSlideIdx > 0) {
+      // 데모 모드
+      const input = document.getElementById('userInput');
+      if (input) input.value = '';
+      _showDemoSlide(document.getElementById('chatArea'));
+    } else {
+      sendMessage();
+    }
+  }
+}
 function autoResize(el) { el.style.height='auto'; el.style.height = Math.min(el.scrollHeight, 120) + 'px'; }
 
 function buildSystemPrompt(session) {
