@@ -1305,23 +1305,31 @@ async function sendMessage() {
     return;
   }
 
-  if (session._demo) {
-    await new Promise(r => setTimeout(r, 600));
-    reply = window.getDemoReply ? window.getDemoReply(session) : '데모 응답 오류';
-  } else {
-    try {
-      const apiMessages = [
-        { role:'system', content: buildSystemPrompt(session) },
-        ...session.history
-          .filter(m => m.role==='user'||m.role==='assistant')
-          .map(m => ({ role:m.role, content: typeof m.content==='string' ? m.content : m.content.find?.(c=>c.type==='text')?.text||'' }))
-      ];
-      const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-      const res = await fetch(wUrl + '/chat', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ messages: apiMessages, model: 'grok-4.2' })
-      });
-      const data = await res.json();
+if (session._demo) {
+        await new Promise(r => setTimeout(r, 600));
+        reply = window.getDemoReply ? window.getDemoReply(session) : '데모 응답 오류';
+      } else {
+        try {
+          const apiMessages = [
+            { role:'system', content: buildSystemPrompt(session) },
+            ...session.history
+              .filter(m => m.role==='user'||m.role==='assistant')
+              .map(m => ({ role:m.role, content: typeof m.content==='string' ? m.content : m.content.find?.(c=>c.type==='text')?.text||'' }))
+          ];
+          const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+          
+          // 현재 탭 확인 후 요청 모델 분기
+          let targetModel = 'grok-4.2';
+          if (typeof _inputTab !== 'undefined' && _inputTab === 'image') {
+            const imgSelect = document.getElementById('imageModelSelect');
+            if (imgSelect) targetModel = imgSelect.value;
+          }
+
+          const res = await fetch(wUrl + '/chat', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ messages: apiMessages, model: targetModel })
+          });
+          const data = await res.json();
       if (data.result !== 'success') {
         const pid0 = session.participantPids?.[0] || 'p';
         reply = `[${pid0}]${data.error||'오류 발생'}[/${pid0}]`;
