@@ -1,3 +1,30 @@
+// ── 채팅 모델 목록 (페르소나 편집 + 드로어에서 공유) ──
+const CHAT_MODELS = [
+  { value: '', label: '기본 (채팅방 설정 따름)' },
+  { group: 'Google' },
+  { value: 'gemini-2.5-flash',          label: 'Gemini 2.5 Flash' },
+  { value: 'gemini-3.1-pro-preview',    label: 'Gemini 3.1 Pro' },
+  { value: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Lite' },
+  { group: 'OpenAI' },
+  { value: 'gpt-5.4-nano',  label: 'GPT-5.4 Nano' },
+  { value: 'gpt-5.4-mini',  label: 'GPT-5.4 Mini' },
+  { value: 'gpt-5.4',       label: 'GPT-5.4' },
+  { group: 'xAI' },
+  { value: 'grok-4-1-fast-reasoning-latest',     label: 'Grok-4.1 Reason' },
+  { value: 'grok-4-1-fast-non-reasoning-latest', label: 'Grok-4.1 Non' },
+  { value: 'grok-4.20-reasoning-latest',         label: 'Grok-4.20 Reason' },
+  { value: 'grok-4.20-non-reasoning-latest',     label: 'Grok-4.20 Non' },
+];
+
+function buildModelSelect(id, selectedValue, style = '') {
+  const opts = CHAT_MODELS.map(m => {
+    if (m.group) return `<optgroup label="${m.group}">`;
+    const sel = m.value === (selectedValue || '') ? 'selected' : '';
+    return `<option value="${m.value}" ${sel}>${m.label}</option>`;
+  }).join('');
+  return `<select class="edit-input" id="${id}" style="width:100%;${style}">${opts}</select>`;
+}
+
 // ══════════════════════════════
 //  UTILS (UI)
 // ══════════════════════════════
@@ -517,6 +544,12 @@ function renderEditBody(p, hdImage = null) {
       <div class="edit-section-title">Description</div>
       <div class="edit-field-label">ROLE / INTRODUCTION</div>
       <textarea class="edit-textarea" id="editBio" placeholder="어떤 역할인지 짧게 적어줘" style="height:90px">${esc(p.bio)}</textarea>
+    </div>
+
+    <div>
+      <div class="edit-section-title">Model</div>
+      <div class="edit-field-label">기본 응답 모델 (이 페르소나가 참여한 채팅의 기본값)</div>
+      ${buildModelSelect('editDefaultModel', p.defaultModel || '')}
     </div>`;
 }
 
@@ -631,6 +664,7 @@ async function savePersonaEdit() {
   p.age = document.getElementById('editAge')?.value.trim() || '';
   p.gender = document.getElementById('editGender')?.value || '';
   p.mbti = document.getElementById('editMbti')?.value.trim() || '';
+  p.defaultModel = document.getElementById('editDefaultModel')?.value || '';
   isNewPersona = false;
 
   if (p._pendingImage) {
@@ -959,7 +993,17 @@ async function openChat(id) {
   });
 
   show('chatScreen');
-  switchInputTab('chat'); // chatArea 표시 보장
+  switchInputTab('chat');
+
+  // 페르소나 defaultModel 적용 (overrideModel 우선, 없으면 첫 번째 페르소나 기본값)
+  const modelEl = document.getElementById('chatModeSelect');
+  if (modelEl) {
+    const effectiveModel = s.overrideModel
+      || pList.find(p => p.defaultModel)?.defaultModel
+      || '';
+    if (effectiveModel) modelEl.value = effectiveModel;
+  }
+
   await Promise.race([
     Promise.all(pList.map(p => getNeutralImage(p.pid))),
     new Promise(r => setTimeout(r, 2000))
@@ -1399,11 +1443,20 @@ async function sendMessage() {
             .map(m => ({ role:m.role, content: m.content }))
         ];
         const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-        
-        let targetModel = document.getElementById('chatModeSelect')?.value || 'grok-4.20-non-reasoning';
+
+        let targetModel;
         if (isImageReq) {
-          const imgSelect = document.getElementById('imageModelSelect');
-          if (imgSelect) targetModel = imgSelect.value;
+          targetModel = document.getElementById('imageModelSelect')?.value || 'grok-imagine-image-pro';
+        } else {
+          // 우선순위: 채팅방 override → 페르소나 기본 모델 → select 현재값
+          const pListForModel = (session.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
+          targetModel = session.overrideModel
+            || pListForModel.find(p => p.defaultModel)?.defaultModel
+            || document.getElementById('chatModeSelect')?.value
+            || 'grok-4.20-non-reasoning-latest';
+          // select UI도 동기화
+          const sel = document.getElementById('chatModeSelect');
+          if (sel && sel.value !== targetModel) sel.value = targetModel;
         }
 
         const ratio = typeof _selectedRatio !== 'undefined' ? _selectedRatio : "1:1";
@@ -1595,6 +1648,14 @@ async function renderDrawerBody(s) {
       </div>
     </div>
     <div>
+      <div class="field-label" style="margin-bottom:6px">이 채팅방 응답 모델</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        ${buildModelSelect('drawerModelSelect', s.overrideModel || '', 'font-size:12px;padding:7px 10px;')}
+        <button onclick="applyDrawerModel()" style="padding:7px 12px;border-radius:9px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-family:'Pretendard',sans-serif;font-size:11px;cursor:pointer;white-space:nowrap;flex-shrink:0">적용</button>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px">비워두면 페르소나 기본 모델 사용</div>
+    </div>
+    <div>
       <div class="field-label" style="margin-bottom:8px">내 프로필</div>
       <div class="mode-btns" style="margin-bottom:${showCustom?'10px':'0'}">
         <button class="mode-btn ${uMode==='default'?'on':''}" onclick="setUserProfileMode('default')">기본 프로필</button>
@@ -1773,6 +1834,21 @@ function confirmInvite() {
   s.participantPids = [...(s.participantPids||[]), ...selectedPids];
   s.updatedAt = Date.now();
   saveIndex(); closeInviteModal(); closeDrawer(); openChat(s.id); showToast(`${selectedPids.length}명 초대됨`);
+}
+
+function applyDrawerModel() {
+  const s = getActiveSession(); if (!s) return;
+  const val = document.getElementById('drawerModelSelect')?.value || '';
+  s.overrideModel = val || null;
+  // chatModeSelect 즉시 동기화
+  const sel = document.getElementById('chatModeSelect');
+  if (sel) {
+    const pList = (s.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
+    const effective = val || pList.find(p=>p.defaultModel)?.defaultModel || '';
+    if (effective) sel.value = effective;
+  }
+  saveIndex();
+  showToast(val ? `모델 변경: ${val}` : '페르소나 기본 모델로 되돌림');
 }
 
 function setDrawerMode(m) {

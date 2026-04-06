@@ -407,7 +407,8 @@ function buildIndex() {
     participantPids:s.participantPids, roomName:s.roomName||'',
     responseMode:s.responseMode, worldContext:s.worldContext,
     userOverride: s.userOverride || null,
-    userProfileMode: s.userProfileMode || 'default'
+    userProfileMode: s.userProfileMode || 'default',
+    overrideModel: s.overrideModel || null
   }));
 }
 
@@ -506,10 +507,10 @@ async function uploadToR2(dataUrl, folder, fname) {
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl || !dataUrl.startsWith('data:')) return dataUrl;
 
-try {
-    const resBlob = await fetch(dataUrl);
-    const blob = await resBlob.blob();
-    
+  try {
+    const b64 = dataUrl.split(',')[1];
+    const byteArr = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    const blob = new Blob([byteArr], { type: 'image/jpeg' });
     const form = new FormData();
     form.append('file', blob, fname);
     form.append('folder', folder);
@@ -536,7 +537,7 @@ function makeImageFilename(prefix) {
 }
 
 // ── 기기별 로컬 전용 키 (KV 동기화 제외) ──
-const LOCAL_ONLY_PROFILE_KEYS = ['defaultTab', 'chatAvatarStyle'];
+const LOCAL_ONLY_PROFILE_KEYS = ['defaultTab', 'chatAvatarStyle', 'fontSize'];
 
 function saveUserProfile() {
   try { localStorage.setItem(CACHE_USER_KEY, JSON.stringify(userProfile)); } catch(e) {}
