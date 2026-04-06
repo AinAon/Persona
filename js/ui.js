@@ -1271,6 +1271,12 @@ async function sendMessage() {
   const userMsg = { role:'user', content: msgContent, _rendered:`<div class="msg-group"><div class="user-msg">${userHTML}</div></div>` };
   session.history.push(userMsg);
   session.updatedAt = Date.now();
+
+  // 이미지 편집용 참조 이미지: attachments 클리어 전에 미리 캡처
+  const refImages = Array.isArray(msgContent)
+    ? msgContent.filter(c => c.type === 'image_url').map(c => c.image_url.url)
+    : [];
+
   attachments = [];
   renderAttachmentPreviews();
 
@@ -1379,15 +1385,40 @@ async function sendMessage() {
 
         const ratio = typeof _selectedRatio !== 'undefined' ? _selectedRatio : "1:1";
 
+        // 모델별 파라미터 분기
+        const RATIO_TO_OPENAI_SIZE = {
+          '1:1':'1024x1024', '16:9':'1536x1024', '9:16':'1024x1536',
+          '4:3':'1536x1152', '3:4':'1152x1536', '3:2':'1536x1024',
+          '2:3':'1024x1536', '21:9':'1536x1024', '9:21':'1024x1536'
+        };
+        const isGptImg = targetModel.startsWith('gpt-image');
+
+        let reqBody;
+        if (isImageReq) {
+          // 이미지 생성/편집: API는 messages 배열이 아닌 prompt 문자열 기대
+          const promptText = text || '(image)';
+          reqBody = {
+            model: targetModel,
+            prompt: promptText,
+            ...(isGptImg
+              ? { size: RATIO_TO_OPENAI_SIZE[ratio] || '1024x1024' }
+              : { aspect_ratio: ratio }
+            ),
+            ...(refImages.length > 0 ? { images: refImages } : {})
+          };
+        } else {
+          // 채팅: 기존 messages 배열
+          reqBody = {
+            messages: apiMessages,
+            model: targetModel
+          };
+        }
+
         // 브라우저 타임아웃 없음 (Worker 30s 한계 주의)
         const res = await fetch(wUrl + '/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            messages: apiMessages, 
-            model: targetModel,
-            aspect_ratio: ratio
-          })
+          body: JSON.stringify(reqBody)
         });
         const data = await res.json();
         if (data.result !== 'success') {
