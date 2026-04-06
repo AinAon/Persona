@@ -344,8 +344,9 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 
 /* 프로필 이미지: 설정에 따라 변화 */
 .msg-av {
-  width: 25vw; aspect-ratio: 2/3; border-radius: 12px; overflow: hidden; flex-shrink: 0;
+  width: min(25vw, 200px); aspect-ratio: 2/3; border-radius: 12px; overflow: hidden; flex-shrink: 0;
   border: 1.5px solid; cursor: pointer; transition: opacity .15s; position: relative;
+  max-height: 300px;
 }
 .msg-av:hover { opacity: .85; }
 .msg-av img { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
@@ -353,6 +354,11 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 
 .bubble-col { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
 .bubble-wrap { position: relative; display: inline-block; max-width: 100%; }
+.bubble-wrap.has-img { display: block; width: 100%; }
+/* AI 생성 이미지 */
+.ai-bubble img { width: 100%; height: auto; border-radius: 8px; display: block; margin-top: 4px; cursor: pointer; }
+.ai-bubble.has-img { width: 100%; padding: 8px 10px 10px; }
+.ai-img-actions { display: flex; gap: 8px; margin-top: 8px; }
 .copy-btn {
   position: absolute; bottom: 5px; right: 7px;
   background: none; border: none; cursor: pointer;
@@ -938,7 +944,7 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 <div class="image-popup-overlay" id="imagePopup" onclick="closeImagePopup()">
   <img class="image-popup-img" id="popupImg">
   <div style="margin-top: 24px; display: flex; gap: 12px;" onclick="event.stopPropagation()">
-    <button class="start-btn" id="popupDownloadBtn" style="width:auto; padding: 10px 28px;">다운로드</button>
+    <button class="start-btn" id="popupDownloadBtn" onclick="downloadImage(_popupImgUrl,'generated.jpg')" style="width:auto; padding: 10px 28px;">다운로드</button>
     <button class="start-btn" onclick="closeImagePopup()" style="width:auto; padding: 10px 28px; background: var(--muted);">닫기</button>
   </div>
 </div>
