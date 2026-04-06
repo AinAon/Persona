@@ -501,6 +501,29 @@ async function preloadAllSessions() {
   }
 }
 
+// R2에 이미지 업로드 유틸리티 (데이터 URL을 서버 URL로 변환)
+async function uploadToR2(dataUrl, folder, fname) {
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  // 이미 외부 URL이거나 유효하지 않은 데이터면 그대로 반환
+  if (!wUrl || !dataUrl.startsWith('data:')) return dataUrl;
+
+  try {
+    const b64 = dataUrl.split(',')[1];
+    const byteArr = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    const blob = new Blob([byteArr], { type: 'image/jpeg' });
+    const form = new FormData();
+    form.append('file', blob, fname);
+    form.append('folder', folder);
+
+    const res = await fetch(wUrl + '/image', { method: 'POST', body: form });
+    const data = await res.json();
+    return data.url || dataUrl;
+  } catch(e) {
+    console.error('R2 Upload failed:', e);
+    return dataUrl;
+  }
+}
+
 function saveUserProfile() {
   try { localStorage.setItem(CACHE_USER_KEY, JSON.stringify(userProfile)); } catch(e) {}
 }
