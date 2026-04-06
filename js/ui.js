@@ -661,24 +661,35 @@ let _isDemoMode = false;
 function openMarkdownDemo() {
   _demoSlideIdx = 0;
   _isDemoMode = true;
-  // 데모용 임시 세션 없이 별도 화면 열기
-  const area = document.getElementById('chatArea');
-  const input = document.getElementById('userInput');
-  show('chatScreen');
-  document.getElementById('chatHeaderNames').textContent = '렌더링 데모';
-  document.getElementById('chatHeaderAvatars').innerHTML = `<div class="chat-header-av" style="background:hsl(220,20%,14%);border-color:hsl(220,28%,22%);font-size:18px;display:flex;align-items:center;justify-content:center">✦</div>`;
-  area.innerHTML = '';
-  activeChatId = null;
-
-  // 첫 슬라이드 표시
-  _showDemoSlide(area);
-
-  // 입력창을 "다음" 버튼처럼
-  if (input) {
-    input.placeholder = 'Enter → 다음 슬라이드';
-    input.value = '';
-    input.focus();
+  // 기존 데모 세션 재사용 또는 새로 생성
+  let s = sessions.find(x => x._markdownDemo);
+  if (!s) {
+    s = {
+      id: 'demo-markdown',
+      _demo: true,
+      _markdownDemo: true,
+      participantPids: [],
+      history: [],
+      roomName: '렌더링 데모',
+      updatedAt: Date.now(),
+      lastPreview: '표 · 코드 · Mermaid'
+    };
+    sessions.unshift(s);
   }
+  // history 초기화
+  s.history = [];
+  s._loaded = true;
+  activeChatId = s.id;
+  show('chatScreen');
+  // 헤더 직접 설정
+  document.getElementById('chatHeaderNames').textContent = '렌더링 데모';
+  document.getElementById('chatHeaderAvatars').innerHTML =
+    '<div class="chat-header-av" style="background:hsl(220,20%,14%);border-color:hsl(220,28%,22%);font-size:18px;display:flex;align-items:center;justify-content:center">✦</div>';
+  const area = document.getElementById('chatArea');
+  area.innerHTML = '';
+  _showDemoSlide(area);
+  const input = document.getElementById('userInput');
+  if (input) { input.placeholder = 'Enter → 다음 슬라이드'; input.value = ''; input.focus(); }
 }
 
 function _showDemoSlide(area) {
@@ -953,10 +964,18 @@ async function openChat(id) {
   if (!s._loaded) loadSession(id);
 }
 
-function goMain() { _isDemoMode = false; show('mainScreen'); renderChatList(); }
+function goMain() {
+  _isDemoMode = false;
+  activeChatId = null;
+  const input = document.getElementById('userInput');
+  if (input) input.placeholder = '메시지를 입력하세요';
+  show('mainScreen');
+  renderChatList();
+}
 
 async function renderChatArea() {
   const session = getActiveSession(); if (!session) return;
+  if (session._markdownDemo) return; // 데모는 직접 관리
   const area = document.getElementById('chatArea');
   const empty = document.getElementById('chatEmpty2');
 
