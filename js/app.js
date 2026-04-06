@@ -87,6 +87,9 @@ async function init() {
   if (!loadPersonasFromCache()) personas = DEFAULT_PERSONAS.map(p=>({...p, tags:[...p.tags]}));
   loadSessionsFromCache();
 
+  // KV에서 프로필 동기화 (name/bio/image — 기기별 설정은 로컬 유지)
+  loadUserProfileKV().then(() => renderSettingsPane()).catch(()=>{});
+
   // neutral 이미지 IDB에서 로드
   for (const [pid] of Object.entries(EMOTION_PROFILE_MAP)) {
     const key = `emotion_${pid}_neutral`;
