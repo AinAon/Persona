@@ -811,7 +811,7 @@ async function renderChatList() {
       const imgHTML = imgSrc ? `<img src="${imgSrc}">` : defaultAvatar(p.hue);
       return `<div class="chat-av-item" style="background:hsl(${p.hue},22%,14%);border-color:hsl(${p.hue},30%,26%)">${imgHTML}</div>`;
     }));
-    const avWidth = pList.length > 0 ? (56 + (pList.length - 1) * 42) : 56;
+    const avWidth = pList.length > 0 ? (80 + (pList.length - 1) * 52) : 80;
 
     item.innerHTML = `
       <div class="chat-avatars-row" style="width:${avWidth}px;flex-shrink:0">${avEls.join('')}</div>
