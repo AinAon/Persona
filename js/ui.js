@@ -141,9 +141,27 @@ function renderSettingsPane() {
   const tabEl = document.getElementById('settingsDefaultTab');
   if (tabEl) tabEl.value = userProfile.defaultTab || 'persona';
 
+  // 글씨 크기 슬라이더
+  const fs = userProfile.fontSize || 15;
+  const fsEl = document.getElementById('settingsFontSize');
+  const fsLabel = document.getElementById('settingsFontSizeLabel');
+  if (fsEl) fsEl.value = fs;
+  if (fsLabel) fsLabel.textContent = fs + 'px';
+
   // 썸네일 스타일 설정 추가
   const avStyleEl = document.getElementById('settingsAvatarStyle');
   if (avStyleEl) avStyleEl.value = userProfile.chatAvatarStyle || 'square';
+}
+
+function previewFontSize(val) {
+  const v = parseInt(val);
+  const label = document.getElementById('settingsFontSizeLabel');
+  if (label) label.textContent = v + 'px';
+  applyFontSize(v);
+}
+
+function applyFontSize(size) {
+  document.documentElement.style.setProperty('--chat-font-size', (size || 15) + 'px');
 }
 
 function saveSettingsUserProfile() {
@@ -151,8 +169,10 @@ function saveSettingsUserProfile() {
   userProfile.bio = document.getElementById('settingsUserBio')?.value.trim() || '';
   userProfile.defaultTab = document.getElementById('settingsDefaultTab')?.value || 'persona';
   userProfile.chatAvatarStyle = document.getElementById('settingsAvatarStyle')?.value || 'square';
+  userProfile.fontSize = parseInt(document.getElementById('settingsFontSize')?.value || 15);
+  applyFontSize(userProfile.fontSize);
   saveUserProfile();
-  saveUserProfileKV(); // name/bio/image → KV (기기별 설정 제외)
+  saveUserProfileKV();
   showToast('설정 저장됨 ✓');
 }
 
@@ -732,21 +752,6 @@ async function renderChatList() {
     });
   }
 
-  // 마크다운 데모 카드 (항상 맨 위 고정)
-  const demoCard = document.createElement('div');
-  demoCard.className = 'chat-list-item';
-  demoCard.style.cssText = 'border:1px dashed rgba(255,255,255,0.12);opacity:.7;';
-  demoCard.innerHTML = `
-    <div class="chat-avatars-row" style="width:52px;flex-shrink:0">
-      <div class="chat-av-item" style="background:hsl(220,20%,14%);border-color:hsl(220,28%,22%);font-size:20px;display:flex;align-items:center;justify-content:center">✦</div>
-    </div>
-    <div class="chat-list-info">
-      <div class="chat-list-names" style="font-size:12px;opacity:.8">렌더링 데모</div>
-      <div class="chat-list-preview">표 · 코드 · Mermaid · 목록</div>
-    </div>`;
-  demoCard.onclick = openMarkdownDemo;
-  list.appendChild(demoCard);
-
   for (const s of sorted) {
     const pList = (s.participantPids || []).map(pid => getPersona(pid)).filter(Boolean);
     const roomName = s.roomName || pList.map(p=>p.name).join(', ') || '채팅';
@@ -768,9 +773,9 @@ async function renderChatList() {
       const neutral = await getNeutralImageThumb(p.pid);
       const imgSrc = neutral || p.image;
       const imgHTML = imgSrc ? `<img src="${imgSrc}">` : defaultAvatar(p.hue);
-      return `<div class="chat-av-item" style="background:hsl(${p.hue},20%,11%);border-color:hsl(${p.hue},28%,22%)">${imgHTML}</div>`;
+      return `<div class="chat-av-item" style="background:hsl(${p.hue},22%,14%);border-color:hsl(${p.hue},30%,26%)">${imgHTML}</div>`;
     }));
-    const avWidth = pList.length > 0 ? (66 + (pList.length - 1) * 48) : 66;
+    const avWidth = pList.length > 0 ? (56 + (pList.length - 1) * 42) : 56;
 
     item.innerHTML = `
       <div class="chat-avatars-row" style="width:${avWidth}px;flex-shrink:0">${avEls.join('')}</div>
@@ -941,7 +946,7 @@ async function openChat(id) {
   const avatarsEl = document.getElementById('chatHeaderAvatars');
   avatarsEl.innerHTML = pList.map(p => {
     const img = p.image ? `<img src="${p.image}" style="width:100%;height:100%;object-fit:cover;object-position:top;">` : defaultAvatar(p.hue);
-    return `<div class="chat-header-av" style="background:hsl(${p.hue},20%,11%);border-color:hsl(${p.hue},28%,22%);width:42px;height:42px;border-radius:50%;overflow:hidden;flex-shrink:0;">${img}</div>`;
+    return `<div class="chat-header-av" style="background:hsl(${p.hue},22%,14%);border-color:hsl(${p.hue},30%,26%);width:42px;height:42px;border-radius:50%;overflow:hidden;flex-shrink:0;">${img}</div>`;
   }).join('');
   document.getElementById('chatHeaderNames').textContent = s.roomName || pList.map(p=>p.name).join(', ');
 
@@ -1019,24 +1024,36 @@ function buildEmotionCard(p, emotion, letter, dataUrl) {
   
   const avStyle = userProfile.chatAvatarStyle || 'square';
   const avDisplay = avStyle === 'hidden' ? 'display:none;' : '';
-  const avShape = avStyle === 'circle' ? 'border-radius:50%; aspect-ratio:1/1; height:auto;' : '';
+  const avShape = avStyle === 'circle' ? 'border-radius:50%; width:min(25vw,80px); height:min(25vw,80px); aspect-ratio:1/1; max-height:80px;' : '';
 
   return `<div class="ai-msg" style="margin-bottom:4px">
     <div class="msg-av" style="background:hsl(${h},20%,11%);border-color:hsl(${h},28%,22%);cursor:pointer;${avDisplay}${avShape}" onclick="openProfilePopup('${safePid}','${safeEmotion}',${h},'','${safeLetter}')">${imgHtml}</div>
     <div class="bubble-col">
-      <div class="msg-pname" style="color:hsl(${h},60%,68%);display:block">${esc(p.name)}</div>
-      <div class="ai-bubble" style="background:hsl(${h},22%,10%);border:1px solid hsl(${h},28%,20%);color:hsl(${h},50%,82%);font-size:12px">${esc(label)}</div>
+      <div class="msg-pname" style="color:hsl(${h},65%,72%);display:block">${esc(p.name)}</div>
+      <div class="ai-bubble" style="background:hsl(${h},25%,13%);border:1px solid hsl(${h},32%,26%);color:hsl(${h},55%,85%);font-size:12px">${esc(label)}</div>
     </div>
   </div>`;
 }
 
 
 function copyBubble(btn, text) {
-  navigator.clipboard.writeText(text).then(() => {
+  const doFallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    try { document.execCommand('copy'); } catch(e) {}
+    ta.remove();
+  };
+  const markDone = () => {
     btn.classList.add('copied');
-    btn.textContent = '✓';
-    setTimeout(() => { btn.classList.remove('copied'); btn.textContent = '⎘'; }, 1500);
-  }).catch(() => {});
+    btn.querySelector('svg')?.style && (btn.querySelector('svg').style.display = 'none');
+    btn.dataset.orig = btn.innerHTML;
+    btn.innerHTML = '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 9 7 13 15 5"/></svg>';
+    setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = btn.dataset.orig; }, 1500);
+  };
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).then(markDone).catch(() => { doFallback(); markDone(); });
+  } else { doFallback(); markDone(); }
 }
 
 async function renderAIResponseHTML(rawText, pList, suffixes = {}) {
@@ -1066,7 +1083,7 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}) {
     // 설정에 따른 스타일 결정
     const avStyle = userProfile.chatAvatarStyle || 'square';
     const avDisplay = avStyle === 'hidden' ? 'display:none;' : '';
-    const avShape = avStyle === 'circle' ? 'border-radius:50%; aspect-ratio:1/1; height:auto;' : '';
+    const avShape = avStyle === 'circle' ? 'border-radius:50%; width:min(25vw,80px); height:min(25vw,80px); aspect-ratio:1/1; max-height:80px;' : '';
     
     const fmtContent = fmt(seg.content);
 
@@ -1095,10 +1112,14 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}) {
     html += `<div class="ai-msg" style="${opacity}">
       <div class="msg-av" style="background:hsl(${h},20%,11%);border-color:hsl(${h},28%,22%);${celebStroke};${avDisplay}${avShape}" onclick="openProfilePopup('${safePid}','${safeEmotion}',${h},'${safeThumb}','${safeSuffix}')">${baseImg}</div>
       <div class="bubble-col">
-        <div class="msg-pname" style="color:hsl(${h},60%,68%)">${esc(p.name)}${p._ghost?`<span style="font-size:9px;opacity:.5">(삭제됨)</span>`:''}</div>
+        <div class="msg-pname" style="color:hsl(${h},65%,72%)">
+          <span class="msg-pname-text">${esc(p.name)}${p._ghost?`<span style="font-size:9px;opacity:.5">(삭제됨)</span>`:''}</span>
+          ${hasImg ? '' : `<button class="copy-btn" onclick="copyBubble(this,${JSON.stringify(seg.content)})" title="복사">
+            <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="10" height="11" rx="2"/><path d="M13 5V3.5A1.5 1.5 0 0 0 11.5 2h-7A1.5 1.5 0 0 0 3 3.5v10A1.5 1.5 0 0 0 4.5 15H5"/></svg>
+          </button>`}
+        </div>
         <div class="${bubbleWrapClass}">
-          <div class="${bubbleClass}" style="background:hsl(${h},22%,10%);border:1px solid hsl(${h},28%,20%);color:hsl(${h},50%,82%);${hasImg?'':'padding-bottom:20px'}">${renderedContent}${dlBtn}</div>
-          ${hasImg ? '' : `<button class="copy-btn" onclick="copyBubble(this,${JSON.stringify(seg.content)})" title="복사">⎘</button>`}
+          <div class="${bubbleClass}" style="background:hsl(${h},25%,13%);border:1px solid hsl(${h},32%,26%);color:hsl(${h},55%,85%)">${renderedContent}${dlBtn}</div>
         </div>
       </div>
     </div>`;
@@ -1638,7 +1659,7 @@ function kickPersona(pid) {
   if (avatarsEl) {
     avatarsEl.innerHTML = pList.map(p => {
       const img = p.image ? `<img src="${p.image}" style="width:100%;height:100%;object-fit:cover;object-position:top;">` : defaultAvatar(p.hue);
-      return `<div class="chat-header-av" style="background:hsl(${p.hue},20%,11%);border-color:hsl(${p.hue},28%,22%);width:42px;height:42px;border-radius:50%;overflow:hidden;flex-shrink:0;">${img}</div>`;
+      return `<div class="chat-header-av" style="background:hsl(${p.hue},22%,14%);border-color:hsl(${p.hue},30%,26%);width:42px;height:42px;border-radius:50%;overflow:hidden;flex-shrink:0;">${img}</div>`;
     }).join('');
     
     pList.forEach(async (p, i) => {
