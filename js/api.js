@@ -506,10 +506,10 @@ async function uploadToR2(dataUrl, folder, fname) {
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl || !dataUrl.startsWith('data:')) return dataUrl;
 
-  try {
-    const b64 = dataUrl.split(',')[1];
-    const byteArr = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-    const blob = new Blob([byteArr], { type: 'image/jpeg' });
+try {
+    const resBlob = await fetch(dataUrl);
+    const blob = await resBlob.blob();
+    
     const form = new FormData();
     form.append('file', blob, fname);
     form.append('folder', folder);
