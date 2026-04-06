@@ -2,7 +2,67 @@
 //  UTILS (UI)
 // ══════════════════════════════
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function fmt(s) { return esc(s).replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>'); }
+
+// 마크다운 렌더러 초기화
+function initMarked() {
+  if (typeof marked === 'undefined') return;
+  marked.setOptions({
+    breaks: true,       // 줄바꿈 → <br>
+    gfm: true,          // GitHub Flavored Markdown
+    highlight: (code, lang) => {
+      if (typeof hljs !== 'undefined' && lang && hljs.getLanguage(lang)) {
+        return hljs.highlight(code, { language: lang }).value;
+      }
+      return typeof hljs !== 'undefined' ? hljs.highlightAuto(code).value : code;
+    }
+  });
+}
+
+// mermaid 초기화
+function initMermaid() {
+  if (typeof mermaid !== 'undefined') {
+    mermaid.initialize({ startOnLoad: false, theme: 'dark', darkMode: true });
+  }
+}
+
+// 마크다운 → HTML 변환 (mermaid 블록 포함)
+function mdRender(text) {
+  if (typeof marked === 'undefined') {
+    // fallback: 기존 fmt
+    return esc(text).replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>');
+  }
+  // mermaid 블록 임시 치환
+  const mermaidBlocks = [];
+  const replaced = text.replace(/```mermaid\n([\s\S]*?)```/g, (_, code) => {
+    const id = `mermaid-${Date.now()}-${mermaidBlocks.length}`;
+    mermaidBlocks.push({ id, code: code.trim() });
+    return `<div class="mermaid-placeholder" data-id="${id}"></div>`;
+  });
+  const html = marked.parse(replaced);
+  return html;
+}
+
+// mermaid 블록 실제 렌더링 (DOM 삽입 후 호출)
+async function renderMermaidBlocks(container) {
+  if (typeof mermaid === 'undefined') return;
+  const placeholders = container.querySelectorAll('.mermaid-placeholder');
+  for (const ph of placeholders) {
+    const code = ph.dataset.code;
+    if (!code) continue;
+    try {
+      const id = `mermaid-${Date.now()}`;
+      const { svg } = await mermaid.render(id, code);
+      ph.innerHTML = svg;
+    } catch(e) {
+      ph.innerHTML = `<pre style="color:var(--muted);font-size:11px">${esc(code)}</pre>`;
+    }
+  }
+}
+
+function fmt(s) { return mdRender(s); }
+
+// 라이브러리 초기화 (스크립트 로드 후)
+window.addEventListener('load', () => { initMarked(); initMermaid(); });
 function show(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
@@ -843,6 +903,7 @@ async function renderChatArea() {
   }
   [...area.children].forEach(c => { if (c.id !== 'chatEmpty2') c.remove(); });
   area.appendChild(fragment);
+  renderMermaidBlocks(area);
   requestAnimationFrame(() => { area.scrollTop = area.scrollHeight; });
 }
 
@@ -901,7 +962,7 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}) {
       <div class="msg-av" style="background:hsl(${h},20%,11%);border-color:hsl(${h},28%,22%);${celebStroke};${avDisplay}${avShape}" onclick="openProfilePopup('${safePid}','${safeEmotion}',${h},'${safeThumb}','${safeSuffix}')">${baseImg}</div>
       <div class="bubble-col">
         <div class="msg-pname" style="color:hsl(${h},60%,68%)">${esc(p.name)}${p._ghost?`<span style="font-size:9px;opacity:.5">(삭제됨)</span>`:''}</div>
-        <div class="ai-bubble" style="background:hsl(${h},22%,10%);border:1px solid hsl(${h},28%,20%);color:hsl(${h},50%,82%)">${fmt(seg.content)}</div>
+        <div class="ai-bubble md-content" style="background:hsl(${h},22%,10%);border:1px solid hsl(${h},28%,20%);color:hsl(${h},50%,82%)">${fmt(seg.content)}</div>
       </div>
     </div>`;
   }
@@ -1113,7 +1174,10 @@ async function sendMessage() {
 
   const replyEl = document.createElement('div');
   replyEl.innerHTML = await renderAIResponseHTML(reply, pList, suffixes);
-  if (replyEl.firstElementChild) area.appendChild(replyEl.firstElementChild);
+  if (replyEl.firstElementChild) {
+    area.appendChild(replyEl.firstElementChild);
+    renderMermaidBlocks(area);
+  }
   area.scrollTop = area.scrollHeight;
 
   isLoading = false;
