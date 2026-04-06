@@ -1330,8 +1330,25 @@ if (session._demo) {
           ];
           const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
           
-// 1. 현재 활성화된 탭에 따라 모델 결정
-  let targetModel = 'grok-4-1-fast-reasoning-latest'; // 기본값
+// 1. sendMessage 함수 내 모델 결정 로직 수정 (약 700번째 줄)
+let targetModel = document.getElementById('chatModeSelect').value;
+
+// 2. 파일 맨 하단에 비율 모달 제어 함수 추가
+let _selectedRatio = '1:1';
+
+function openRatioModal() {
+  document.getElementById('ratioModal').classList.add('open');
+}
+
+function closeRatioModal() {
+  document.getElementById('ratioModal').classList.remove('open');
+}
+
+function selectRatio(ratio) {
+  _selectedRatio = ratio;
+  document.getElementById('imgRatioBtn').textContent = ratio;
+  closeRatioModal();
+}
   
   if (_inputTab === 'image') {
     const imgSelect = document.getElementById('imageModelSelect');
