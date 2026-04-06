@@ -1341,7 +1341,7 @@ const chatModelEl = document.getElementById('chatModeSelect');
 			const ratio = typeof _selectedRatio !== 'undefined' ? _selectedRatio : "1:1";
 
 			const res = await fetch(wUrl + '/chat', {
-			  method:'POST', headers:{'Content-Type':'application/json'},a
+			  method:'POST', headers:{'Content-Type':'application/json'},
 			  body: JSON.stringify({ 
 			  messages: apiMessages, 
 			  model: targetModel,
