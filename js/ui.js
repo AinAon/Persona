@@ -526,12 +526,12 @@ function handleEditImage(input) {
       idbSet(`em_full_${p.pid}_neutral`, cropped).catch(() => {});
       p._pendingImage = cropped;
 
-      const { sqMd, sqHd, circSm } = await generateThumbnailSet(cropped, p.pid, 'neutral');
+      const { sqMd, fullHd, circSm } = await generateThumbnailSet(cropped, p.pid, 'neutral');
 
       // 메모리
       p.image = sqMd;
       p.neutral_md = sqMd;
-      p.neutral_hd = sqHd;
+      p.neutral_hd = fullHd;
       p.neutral_thumb = circSm;
       _neutralCache[p.pid] = sqMd;
 
@@ -862,7 +862,6 @@ function deleteChatFromDrawer() {
   const id = activeChatId;
   sessions = sessions.filter(s => s.id !== id);
   try { localStorage.removeItem(CACHE_SESSION_PREFIX + id); } catch(e) {}
-  gasCall({ action: 'deleteSession', sessionId: id });
   saveIndex(); closeDrawer(); activeChatId = null; goMain(); switchTab('chat');
 }
 
@@ -870,7 +869,6 @@ function deleteChat(id) {
   if (!confirm('이 채팅을 삭제할까?')) return;
   sessions = sessions.filter(s => s.id !== id);
   try { localStorage.removeItem(CACHE_SESSION_PREFIX + id); } catch(e) {}
-  gasCall({ action: 'deleteSession', sessionId: id });
   renderChatList(); saveIndex();
 }
 
@@ -1252,8 +1250,8 @@ async function sendMessage() {
   attachments = [];
   renderAttachmentPreviews();
 
-  // 현재 활성화된 탭에 따라 렌더링 대상 영역 지정
-  const activeAreaId = _inputTab === 'image' ? 'imageArea' : _inputTab === 'context' ? 'contextArea' : 'chatArea';
+  // 현재 활성화된 탭에 따라 렌더링 대상 영역 지정 (contextArea는 없으므로 chatArea 공유)
+  const activeAreaId = _inputTab === 'image' ? 'imageArea' : 'chatArea';
   const area = document.getElementById(activeAreaId);
   
   if (_inputTab === 'chat') {
@@ -1400,8 +1398,8 @@ async function sendMessage() {
       const replyEl = document.createElement('div');
       replyEl.innerHTML = await renderAIResponseHTML(reply, pList, suffixes);
       if (replyEl.firstElementChild) {
-        // 기존 탭 영역 감지 후 삽입
-        const activeAreaId = _inputTab === 'image' ? 'imageArea' : _inputTab === 'context' ? 'contextArea' : 'chatArea';
+        // 기존 탭 영역 감지 후 삽입 (contextArea 없으므로 chatArea 공유)
+        const activeAreaId = _inputTab === 'image' ? 'imageArea' : 'chatArea';
         const tgtArea = document.getElementById(activeAreaId) || document.getElementById('chatArea');
         tgtArea.appendChild(replyEl.firstElementChild);
         renderMermaidBlocks(tgtArea);
@@ -1432,89 +1430,6 @@ async function sendMessage() {
     await processApiAndRender();
   }
 }
-    return;
-
-
-if (session._demo) {
-        await new Promise(r => setTimeout(r, 600));
-        reply = window.getDemoReply ? window.getDemoReply(session) : '데모 응답 오류';
-} else {
-        try {
-          const apiMessages = [
-            { role:'system', content: buildSystemPrompt(session) },
-            ...session.history
-              .filter(m => m.role==='user'||m.role==='assistant')
-              .map(m => ({ role:m.role, content: m.content }))
-          ];
-          const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-          
-// 1. sendMessage 함수 내 모델 결정 로직 수정 (약 700번째 줄)
-let targetModel = document.getElementById('chatModeSelect').value;
-  
-  if (_inputTab === 'image') {
-    const imgSelect = document.getElementById('imageModelSelect');
-    if (imgSelect) targetModel = imgSelect.value;
-  } else {
-    const chatSelect = document.getElementById('chatModeSelect');
-    if (chatSelect) targetModel = chatSelect.value;
-  }
-
-  // 2. 이미지 비율 가져오기
-  const ratio = typeof _selectedRatio !== 'undefined' ? _selectedRatio : "1:1";
-
-  // 3. API 요청 (headers 뒤의 'a' 오타 제거 확인)
-  const res = await fetch(wUrl + '/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ 
-      messages: apiMessages, 
-      model: targetModel,
-      aspect_ratio: ratio
-    })
-  });
-          const data = await res.json();
-      if (data.result !== 'success') {
-        const pid0 = session.participantPids?.[0] || 'p';
-        reply = `[${pid0}]${data.error||'오류 발생'}[/${pid0}]`;
-      } else { reply = data.reply || ''; }
-    } catch(e) {
-      const pid0 = session.participantPids?.[0] || 'p';
-      reply = `[${pid0}]연결 실패: ${e.message}[/${pid0}]`;
-    }
-  }
-
-  thinkEl.remove();
-  const pList = pListAll;
-  const personaSnapshot = pList.map(p=>({pid:p.pid, name:p.name}));
-
-  const suffixes = await resolveMessageSuffixes(reply, pList);
-  session.history.push({ role:'assistant', content:reply, personaSnapshot, _suffixes: suffixes });
-
-  const parsed = parseResponse(reply, pList);
-  const firstContent = parsed[0]?.content || '';
-  session.lastPreview = firstContent.replace(/\n/g, ' ').slice(0, 120);
-  session.updatedAt = Date.now();
-
-  const replyEl = document.createElement('div');
-  replyEl.innerHTML = await renderAIResponseHTML(reply, pList, suffixes);
-  if (replyEl.firstElementChild) {
-    area.appendChild(replyEl.firstElementChild);
-    renderMermaidBlocks(area);
-  }
-  area.scrollTop = area.scrollHeight;
-
-    isLoading = false;
-  document.getElementById('sendBtn').disabled = false;
-  
-  // 모바일에서 키보드를 강제로 유지하기 위해 지연 포커스 적용
-  setTimeout(() => {
-    input.focus();
-  }, 10);
-
-  if (!session._demo) { saveSession(session.id); saveIndex(); }
-  renderChatList();
-}
-
 
 function handleFileSelect(input) {
   [...input.files].forEach(file => {
@@ -1869,6 +1784,9 @@ function closeProfilePopup() { document.getElementById('profilePopup').classList
 // ══════════════════════════════
 let _selectedRatio = '1:1';
 
+function openRatioModal() { document.getElementById('ratioModal')?.classList.add('open'); }
+function closeRatioModal() { document.getElementById('ratioModal')?.classList.remove('open'); }
+
 function toggleRatioPopup() {
   const popup = document.getElementById('ratioPopup');
   popup.classList.toggle('hidden');
@@ -1895,4 +1813,3 @@ document.addEventListener('click', (e) => {
     popup.classList.add('hidden');
   }
 });
-`
