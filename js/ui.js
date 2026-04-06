@@ -1280,31 +1280,27 @@ async function sendMessage() {
   attachments = [];
   renderAttachmentPreviews();
 
-  // 현재 활성화된 탭에 따라 렌더링 대상 영역 지정 (contextArea는 없으므로 chatArea 공유)
-  const activeAreaId = _inputTab === 'image' ? 'imageArea' : 'chatArea';
-  const area = document.getElementById(activeAreaId);
-  
-  if (_inputTab === 'chat') {
-    document.getElementById('chatEmpty2').style.display = 'none';
-  } else {
-    // 이미지/컨텍스트 탭의 기본 안내 텍스트 숨김
-    const guideText = area.querySelector('div[style*="padding:40px"]');
-    if (guideText) guideText.style.display = 'none';
-  }
+  // imageArea는 display:none — 탭 무관하게 항상 chatArea 사용
+  const area = document.getElementById('chatArea');
+  document.getElementById('chatEmpty2').style.display = 'none';
 
   const userEl = document.createElement('div');
   userEl.innerHTML = userMsg._rendered;
   if (userEl.firstElementChild) area.appendChild(userEl.firstElementChild);
 
-  const isImageReq = (_inputTab === 'image'); // 이미지 생성 요청 여부 확인
+  const isImageReq = (_inputTab === 'image');
 
-  // 시각적 로딩/대기열 피드백 추가
+  // 이미지 생성 중: 애니메이션 플레이스홀더
   const thinkEl = document.createElement('div');
   thinkEl.className = 'thinking-bubble';
   if (isImageReq) {
-    thinkEl.innerHTML = `<div style="color:var(--muted); font-size:12px; display:flex; align-items:center; gap:8px;">
-      <div class="loading-spinner" style="width:14px; height:14px; border-width:2px; border-top-color:var(--muted);"></div>
-      이미지 생성 중... (잠시만 기다려줘)
+    thinkEl.innerHTML = `<div class="img-gen-placeholder">
+      <div class="img-gen-shimmer"></div>
+      <div class="img-gen-body">
+        <span class="img-gen-icon">🎨</span>
+        <span class="img-gen-label">이미지 생성 중</span>
+        <div class="img-gen-dots"><span></span><span></span><span></span></div>
+      </div>
     </div>`;
   } else {
     thinkEl.innerHTML = `<div class="thinking-dots"><span></span><span></span><span></span></div>`;
@@ -1453,9 +1449,8 @@ async function sendMessage() {
       const replyEl = document.createElement('div');
       replyEl.innerHTML = await renderAIResponseHTML(reply, pList, suffixes);
       if (replyEl.firstElementChild) {
-        // 기존 탭 영역 감지 후 삽입 (contextArea 없으므로 chatArea 공유)
-        const activeAreaId = _inputTab === 'image' ? 'imageArea' : 'chatArea';
-        const tgtArea = document.getElementById(activeAreaId) || document.getElementById('chatArea');
+        // chatArea로 통일
+        const tgtArea = document.getElementById('chatArea');
         tgtArea.appendChild(replyEl.firstElementChild);
         renderMermaidBlocks(tgtArea);
         tgtArea.scrollTop = tgtArea.scrollHeight;
