@@ -1261,13 +1261,22 @@ async function sendMessage() {
   userEl.innerHTML = userMsg._rendered;
   if (userEl.firstElementChild) area.appendChild(userEl.firstElementChild);
 
+  const isImageReq = (_inputTab === 'image'); // 이미지 생성 요청 여부 확인
+
+  // 시각적 로딩/대기열 피드백 추가
   const thinkEl = document.createElement('div');
   thinkEl.className = 'thinking-bubble';
-  thinkEl.innerHTML = `<div class="thinking-dots"><span></span><span></span><span></span></div>`;
+  if (isImageReq) {
+    thinkEl.innerHTML = `<div style="color:var(--muted); font-size:12px; display:flex; align-items:center; gap:8px;">
+      <div class="loading-spinner" style="width:14px; height:14px; border-width:2px; border-top-color:var(--muted);"></div>
+      이미지 생성 중... (다른 작업을 해도 됩니다)
+    </div>`;
+  } else {
+    thinkEl.innerHTML = `<div class="thinking-dots"><span></span><span></span><span></span></div>`;
+  }
   area.appendChild(thinkEl);
   area.scrollTop = area.scrollHeight;
 
-  let reply = '';
   const pListAll = (session.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
 
   if (text === '/감정') {
@@ -1316,6 +1325,106 @@ async function sendMessage() {
     renderChatList();
     return;
   }
+
+  // 백그라운드 처리를 위한 분리된 비동기 함수
+  const processApiAndRender = async () => {
+    let reply = '';
+    if (session._demo) {
+      await new Promise(r => setTimeout(r, 600));
+      reply = window.getDemoReply ? window.getDemoReply(session) : '데모 응답 오류';
+    } else {
+      try {
+        const apiMessages = [
+          { role:'system', content: buildSystemPrompt(session) },
+          ...session.history
+            .filter(m => m.role==='user'||m.role==='assistant')
+            .map(m => ({ role:m.role, content: m.content }))
+        ];
+        const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+        
+        let targetModel = document.getElementById('chatModeSelect')?.value || 'grok-4.20-non-reasoning';
+        if (isImageReq) {
+          const imgSelect = document.getElementById('imageModelSelect');
+          if (imgSelect) targetModel = imgSelect.value;
+        }
+
+        const ratio = typeof _selectedRatio !== 'undefined' ? _selectedRatio : "1:1";
+
+        // 브라우저 타임아웃 없음 (Worker 30s 한계 주의)
+        const res = await fetch(wUrl + '/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            messages: apiMessages, 
+            model: targetModel,
+            aspect_ratio: ratio
+          })
+        });
+        const data = await res.json();
+        if (data.result !== 'success') {
+          const pid0 = session.participantPids?.[0] || 'p';
+          reply = `[${pid0}]생성 오류: ${data.error||'알 수 없는 오류'}[/${pid0}]`;
+        } else { reply = data.reply || ''; }
+      } catch(e) {
+        const pid0 = session.participantPids?.[0] || 'p';
+        reply = `[${pid0}]연결 실패: ${e.message}[/${pid0}]`;
+      }
+    }
+
+    if (thinkEl.parentNode) thinkEl.remove();
+    
+    // 백그라운드 처리 중 세션이 유지되었는지 체크
+    const currentSession = sessions.find(s => s.id === session.id);
+    if (!currentSession) return;
+
+    const pList = pListAll;
+    const personaSnapshot = pList.map(p=>({pid:p.pid, name:p.name}));
+    const suffixes = await resolveMessageSuffixes(reply, pList);
+
+    currentSession.history.push({ role:'assistant', content:reply, personaSnapshot, _suffixes: suffixes });
+
+    const parsed = parseResponse(reply, pList);
+    const firstContent = parsed[0]?.content || '';
+    currentSession.lastPreview = firstContent.replace(/\n/g, ' ').slice(0, 120);
+    currentSession.updatedAt = Date.now();
+
+    // 사용자가 해당 채팅방을 그대로 보고 있다면 화면에 즉시 렌더링
+    if (activeChatId === currentSession.id) {
+      const replyEl = document.createElement('div');
+      replyEl.innerHTML = await renderAIResponseHTML(reply, pList, suffixes);
+      if (replyEl.firstElementChild) {
+        // 기존 탭 영역 감지 후 삽입
+        const activeAreaId = _inputTab === 'image' ? 'imageArea' : _inputTab === 'context' ? 'contextArea' : 'chatArea';
+        const tgtArea = document.getElementById(activeAreaId) || document.getElementById('chatArea');
+        tgtArea.appendChild(replyEl.firstElementChild);
+        renderMermaidBlocks(tgtArea);
+        tgtArea.scrollTop = tgtArea.scrollHeight;
+      }
+    }
+
+    if (!currentSession._demo) { saveSession(currentSession.id); saveIndex(); }
+    renderChatList();
+    
+    // 텍스트 모드였다면 처리 완료 후 락 해제
+    if (!isImageReq) {
+      isLoading = false;
+      document.getElementById('sendBtn').disabled = false;
+      setTimeout(() => input.focus(), 10);
+    }
+  };
+
+  // 실행 흐름 분기
+  if (isImageReq) {
+    // 이미지 탭: await 없이 호출하여 백그라운드로 넘기고 즉시 입력창 락 해제
+    processApiAndRender(); 
+    isLoading = false;
+    document.getElementById('sendBtn').disabled = false;
+    setTimeout(() => input.focus(), 10);
+  } else {
+    // 채팅/컨텍스트 탭: 순차적으로 답변을 기다림 (일반 채팅 동작)
+    await processApiAndRender();
+  }
+}
 
 if (session._demo) {
         await new Promise(r => setTimeout(r, 600));
@@ -1777,3 +1886,4 @@ document.addEventListener('click', (e) => {
     popup.classList.add('hidden');
   }
 });
+`
