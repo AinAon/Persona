@@ -1240,8 +1240,18 @@ async function sendMessage() {
   attachments = [];
   renderAttachmentPreviews();
 
-  const area = document.getElementById('chatArea');
-  document.getElementById('chatEmpty2').style.display = 'none';
+  // 현재 활성화된 탭에 따라 렌더링 대상 영역 지정
+  const activeAreaId = _inputTab === 'image' ? 'imageArea' : _inputTab === 'context' ? 'contextArea' : 'chatArea';
+  const area = document.getElementById(activeAreaId);
+  
+  if (_inputTab === 'chat') {
+    document.getElementById('chatEmpty2').style.display = 'none';
+  } else {
+    // 이미지/컨텍스트 탭의 기본 안내 텍스트 숨김
+    const guideText = area.querySelector('div[style*="padding:40px"]');
+    if (guideText) guideText.style.display = 'none';
+  }
+
   const userEl = document.createElement('div');
   userEl.innerHTML = userMsg._rendered;
   if (userEl.firstElementChild) area.appendChild(userEl.firstElementChild);
