@@ -652,7 +652,7 @@ const _DEMO_SLIDES = [
   { label: "코드 블록", text: "```python\ndef greet(name):\n    return '안녕, ' + name\n\nprint(greet('Riley'))\n```" },
   { label: "목록 & 인용", text: "**오늘 할 일**\n\n1. 기획서 작성\n2. 디자인 리뷰\n3. 배포 확인\n\n> 완벽한 코드보다 동작하는 코드가 낫다" },
   { label: "Mermaid", text: "```mermaid\nflowchart LR\n  A[사용자] --> B{파싱}\n  B --> C[페르소나]\n  B --> D[마크다운]\n  C --> E[감정이미지]\n  D --> F[렌더링]\n```" },
-  { label: "모델 비교", text: "| 모델 | 속도 | 비전 | 이미지생성 |\n|---|:---:|:---:|:---:|\n| grok-4-1 | ⚡⚡⚡ | ✓ | ✗ |\n| grok-3-mini | ⚡⚡ | ✗ | ✗ |\n| claude-sonnet | ⚡⚡ | ✓ | ✗ |\n| gemini-2.5-pro | ⚡ | ✓ | ✓ |\n| gpt-4o | ⚡⚡ | ✓ | ✓ |" }
+  { label: "모델 비교", text: "| 모델 | 속도 | 비전 | 이미지생성 |\n|---|:---:|:---:|:---:|\n| grok-4-1-fast-non-reasoning | ⚡⚡⚡ | ✓ | ✗ |\n| grok-3-mini | ⚡⚡ | ✗ | ✗ |\n| claude-sonnet | ⚡⚡ | ✓ | ✗ |\n| gemini-2.5-pro | ⚡ | ✓ | ✓ |\n| gpt-4o | ⚡⚡ | ✓ | ✓ |" }
 ];
 
 let _demoSlideIdx = 0;
@@ -1326,7 +1326,7 @@ async function sendMessage() {
       const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
       const res = await fetch(wUrl + '/chat', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ messages: apiMessages, model: 'grok-4-1' })
+        body: JSON.stringify({ messages: apiMessages, model: 'grok-4-1-fast-non-reasoning' })
       });
       const data = await res.json();
       if (data.result !== 'success') {
