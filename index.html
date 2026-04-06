@@ -419,7 +419,36 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 @keyframes blink { 0%,80%,100%{opacity:.15} 40%{opacity:.8} }
 
 /* 입력창 */
-.chat-input-bar { background: var(--surface); border-top: 1px solid var(--border); padding: 8px 10px; flex-shrink: 0; }
+.chat-input-bar { background: var(--surface); border-top: 1px solid var(--border); padding: 8px 10px 4px; flex-shrink: 0; }
+
+/* 입력 탭바 */
+.input-tabbar { display: flex; align-items: center; gap: 2px; margin-top: 6px; }
+.input-tab {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 5px 10px; border: none; background: none; cursor: pointer;
+  color: var(--muted); font-size: 9px; font-family: 'Pretendard',sans-serif;
+  border-radius: 8px; transition: color .15s, background .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.input-tab svg { width: 15px; height: 15px; stroke: currentColor; }
+.input-tab.active { color: var(--text); background: var(--card); }
+.input-tab-options {
+  display: flex; align-items: center; gap: 5px;
+  margin-left: auto; flex-shrink: 0;
+}
+.input-tab-options.hidden { display: none; }
+.input-tab-select {
+  background: var(--card); border: 1px solid var(--border2); color: var(--text);
+  border-radius: 7px; padding: 4px 7px; font-size: 11px; font-family: 'Pretendard',sans-serif;
+  cursor: pointer;
+}
+.model-chip {
+  display: flex; align-items: center; gap: 4px;
+  background: var(--card); border: 1px solid var(--border2);
+  border-radius: 7px; padding: 4px 8px; font-size: 11px; color: var(--muted);
+  cursor: pointer; font-family: 'Pretendard',sans-serif;
+}
+.model-chip input { width: 12px; height: 12px; cursor: pointer; accent-color: var(--text); }
 .mode-row { display: flex; gap: 6px; padding: 0 2px 8px; }
 .mode-pill { padding: 4px 12px; border-radius: 100px; border: 1px solid var(--border2); background: transparent; color: var(--muted); font-family: 'Pretendard', sans-serif; font-size: 11px; cursor: pointer; transition: all .15s; }
 .mode-pill.active { background: var(--card); border-color: var(--muted2); color: var(--text); }
@@ -643,6 +672,14 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
     <button class="chat-settings-btn" onclick="openDrawer()">⚙</button>
   </div>
 
+  <!-- 이미지 생성 영역 -->
+  <div class="chat-area" id="imageArea" style="display:none;flex-direction:row;flex-wrap:wrap;align-content:flex-start;gap:12px">
+    <div style="width:100%;color:var(--muted);font-size:13px;text-align:center;padding:40px 0">이미지 탭에서 프롬프트를 입력하고 전송하면 생성돼</div>
+  </div>
+  <!-- 컨텍스트 영역 -->
+  <div class="chat-area" id="contextArea" style="display:none">
+    <div style="color:var(--muted);font-size:13px;text-align:center;padding:40px 0">파일이나 URL을 추가하면 대화에서 참고자료로 활용돼</div>
+  </div>
   <div class="chat-area" id="chatArea">
     <div class="chat-empty" id="chatEmpty2">
       <div class="empty-text" id="emptyText">뭐든 던져봐</div>
@@ -650,21 +687,57 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
   </div>
 
   <div class="chat-input-bar">
-    <div class="mode-row">
-      <button class="mode-pill active" id="modefast" onclick="setMode('fast')">⚡ 빠름</button>
-      <button class="mode-pill" id="modethink" onclick="setMode('think')">🧠 고민</button>
-    </div>
+    <!-- 첨부파일 미리보기 -->
     <div class="attachments-row" id="attachmentsRow"></div>
+
+    <!-- 입력창 (탭 위에) -->
     <div class="input-row">
-      <button class="attach-btn" onclick="document.getElementById('fileInput').click()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
-      </button>
-      <input type="file" id="fileInput" style="display:none" accept="image/*" multiple onchange="handleFileSelect(this)">
       <textarea id="userInput" rows="1" placeholder="메시지를 입력해봐..." onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
       <button class="send-btn" id="sendBtn" onclick="sendMessage()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
       </button>
     </div>
+
+    <!-- 입력 탭바 -->
+    <div class="input-tabbar">
+      <button class="input-tab active" id="itab-chat" onclick="switchInputTab('chat')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        <span>채팅</span>
+      </button>
+      <button class="input-tab" id="itab-image" onclick="switchInputTab('image')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        <span>이미지</span>
+      </button>
+      <button class="input-tab" id="itab-context" onclick="switchInputTab('context')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <span>컨텍스트</span>
+      </button>
+
+      <!-- 탭별 옵션 (오른쪽) -->
+      <div class="input-tab-options" id="itab-opts-chat">
+        <button class="mode-pill active" id="modefast" onclick="setMode('fast')">⚡</button>
+        <button class="mode-pill" id="modethink" onclick="setMode('think')">🧠</button>
+        <button class="attach-btn" onclick="document.getElementById('fileInput').click()" title="파일 첨부">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+        </button>
+      </div>
+      <div class="input-tab-options hidden" id="itab-opts-image">
+        <select class="input-tab-select" id="imgRatio">
+          <option value="1:1">1:1</option>
+          <option value="16:9">16:9</option>
+          <option value="9:16">9:16</option>
+          <option value="4:3">4:3</option>
+        </select>
+        <label class="model-chip"><input type="checkbox" value="dall-e-3"> DALL-E</label>
+        <label class="model-chip"><input type="checkbox" value="imagen-3"> Imagen</label>
+      </div>
+      <div class="input-tab-options hidden" id="itab-opts-context">
+        <button class="attach-btn" onclick="document.getElementById('ctxFileInput').click()" title="파일 추가">+ 파일</button>
+        <button class="attach-btn" onclick="addContextUrl()" title="URL 추가">+ URL</button>
+      </div>
+    </div>
+    <input type="file" id="fileInput" style="display:none" accept="image/*,application/pdf,.txt,.md" multiple onchange="handleFileSelect(this)">
+    <input type="file" id="ctxFileInput" style="display:none" accept="application/pdf,.txt,.md,.docx" multiple onchange="handleContextFile(this)">
   </div>
 </div>
 
