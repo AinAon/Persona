@@ -1319,7 +1319,7 @@ if (session._demo) {
           const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
           
           // 현재 탭 확인 후 요청 모델 분기
-          let targetModel = 'grok-4.2';
+          let targetModel = 'grok-4.20-non-reasoning';
           if (typeof _inputTab !== 'undefined' && _inputTab === 'image') {
             const imgSelect = document.getElementById('imageModelSelect');
             if (imgSelect) targetModel = imgSelect.value;
