@@ -1121,6 +1121,48 @@ function setMode(m) {
   document.getElementById('modefast').classList.toggle('active', m==='fast');
   document.getElementById('modethink').classList.toggle('active', m==='think');
 }
+
+// ══════════════════════════════
+//  입력 탭 (채팅 / 이미지 / 컨텍스트)
+// ══════════════════════════════
+let _inputTab = 'chat'; // 현재 입력 탭
+
+function switchInputTab(tab) {
+  _inputTab = tab;
+  ['chat','image','context'].forEach(t => {
+    document.getElementById('itab-' + t)?.classList.toggle('active', t === tab);
+    const opts = document.getElementById('itab-opts-' + t);
+    if (opts) opts.classList.toggle('hidden', t !== tab);
+  });
+  // placeholder 변경
+  const input = document.getElementById('userInput');
+  if (!input) return;
+  const placeholders = {
+    chat: '메시지를 입력해봐...',
+    image: '이미지 생성 프롬프트...',
+    context: '질문하거나 분석을 요청해봐...'
+  };
+  input.placeholder = placeholders[tab] || '입력...';
+  // 채팅 영역 전환
+  const chatArea = document.getElementById('chatArea');
+  const imageArea = document.getElementById('imageArea');
+  const contextArea = document.getElementById('contextArea');
+  if (chatArea) chatArea.style.display = tab === 'chat' ? '' : 'none';
+  if (imageArea) imageArea.style.display = tab === 'image' ? '' : 'none';
+  if (contextArea) contextArea.style.display = tab === 'context' ? '' : 'none';
+}
+
+function addContextUrl() {
+  const url = prompt('URL을 입력해줘:');
+  if (!url) return;
+  showToast('URL 추가됨 (기능 준비중)');
+}
+
+function handleContextFile(input) {
+  const files = [...input.files]; if (!files.length) return;
+  showToast(`${files.length}개 파일 추가됨 (기능 준비중)`);
+  input.value = '';
+}
 function handleKey(e) {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
