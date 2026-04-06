@@ -422,7 +422,7 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .chat-input-bar { background: var(--surface); border-top: 1px solid var(--border); padding: 8px 10px 4px; flex-shrink: 0; }
 
 /* 입력 탭바 */
-.input-tabbar { display: flex; align-items: center; gap: 2px; margin-top: 6px; }
+.input-tabbar { display: flex; align-items: center; gap: 2px; margin-bottom: 6px; }
 .input-tab {
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   padding: 5px 10px; border: none; background: none; cursor: pointer;
@@ -687,18 +687,7 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
   </div>
 
   <div class="chat-input-bar">
-    <!-- 첨부파일 미리보기 -->
-    <div class="attachments-row" id="attachmentsRow"></div>
-
-    <!-- 입력창 (탭 위에) -->
-    <div class="input-row">
-      <textarea id="userInput" rows="1" placeholder="메시지를 입력해봐..." onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
-      <button class="send-btn" id="sendBtn" onclick="sendMessage()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-      </button>
-    </div>
-
-    <!-- 입력 탭바 -->
+    <!-- 입력 탭바 (입력창 위에) -->
     <div class="input-tabbar">
       <button class="input-tab active" id="itab-chat" onclick="switchInputTab('chat')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
@@ -735,6 +724,17 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
         <button class="attach-btn" onclick="document.getElementById('ctxFileInput').click()" title="파일 추가">+ 파일</button>
         <button class="attach-btn" onclick="addContextUrl()" title="URL 추가">+ URL</button>
       </div>
+    </div>
+
+    <!-- 첨부파일 미리보기 -->
+    <div class="attachments-row" id="attachmentsRow"></div>
+
+    <!-- 입력창 (탭 아래에) -->
+    <div class="input-row">
+      <textarea id="userInput" rows="1" placeholder="메시지를 입력해봐..." onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+      <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
     </div>
     <input type="file" id="fileInput" style="display:none" accept="image/*,application/pdf,.txt,.md" multiple onchange="handleFileSelect(this)">
     <input type="file" id="ctxFileInput" style="display:none" accept="application/pdf,.txt,.md,.docx" multiple onchange="handleContextFile(this)">

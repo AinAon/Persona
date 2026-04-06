@@ -1129,27 +1129,27 @@ let _inputTab = 'chat'; // 현재 입력 탭
 
 function switchInputTab(tab) {
   _inputTab = tab;
+  // 탭 버튼 active 토글
   ['chat','image','context'].forEach(t => {
     document.getElementById('itab-' + t)?.classList.toggle('active', t === tab);
     const opts = document.getElementById('itab-opts-' + t);
     if (opts) opts.classList.toggle('hidden', t !== tab);
   });
-  // placeholder 변경
+  // placeholder
   const input = document.getElementById('userInput');
-  if (!input) return;
-  const placeholders = {
-    chat: '메시지를 입력해봐...',
-    image: '이미지 생성 프롬프트...',
-    context: '질문하거나 분석을 요청해봐...'
-  };
-  input.placeholder = placeholders[tab] || '입력...';
-  // 채팅 영역 전환
-  const chatArea = document.getElementById('chatArea');
-  const imageArea = document.getElementById('imageArea');
-  const contextArea = document.getElementById('contextArea');
-  if (chatArea) chatArea.style.display = tab === 'chat' ? '' : 'none';
-  if (imageArea) imageArea.style.display = tab === 'image' ? '' : 'none';
-  if (contextArea) contextArea.style.display = tab === 'context' ? '' : 'none';
+  if (input) {
+    input.placeholder = tab === 'image' ? '이미지 생성 프롬프트...'
+      : tab === 'context' ? '질문하거나 분석을 요청해봐...'
+      : '메시지를 입력해봐...';
+  }
+  // 영역 전환 (flex → display 주의)
+  const areas = { chat: 'chatArea', image: 'imageArea', context: 'contextArea' };
+  Object.entries(areas).forEach(([t, id]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.style.display = t === tab ? 'flex' : 'none';
+    el.style.flexDirection = 'column';
+  });
 }
 
 function addContextUrl() {
