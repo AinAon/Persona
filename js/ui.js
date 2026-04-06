@@ -1232,11 +1232,6 @@ async function sendMessage() {
   session.updatedAt = Date.now();
   attachments = [];
   renderAttachmentPreviews();
-  const body = {
-  messages: apiMessages,
-  model: targetModel,
-  aspect_ratio: document.getElementById('imgRatio')?.value || "1:1" // 이 부분 확인
-};
 
   // 현재 활성화된 탭에 따라 렌더링 대상 영역 지정
   const activeAreaId = _inputTab === 'image' ? 'imageArea' : _inputTab === 'context' ? 'contextArea' : 'chatArea';
