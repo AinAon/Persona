@@ -1777,5 +1777,3 @@ document.addEventListener('click', (e) => {
     popup.classList.add('hidden');
   }
 });
-  closeRatioModal();
-}
