@@ -1330,24 +1330,30 @@ if (session._demo) {
           ];
           const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
           
-const chatModelEl = document.getElementById('chatModeSelect');
-          let targetModel = chatModelEl ? chatModelEl.value : 'grok-4-1-fast-reasoning-latest';
-          if (typeof _inputTab !== 'undefined' && _inputTab === 'image') {
-            const imgSelect = document.getElementById('imageModelSelect');
-            if (imgSelect) targetModel = imgSelect.value;
-          }
+// 1. 현재 활성화된 탭에 따라 모델 결정
+  let targetModel = 'grok-4.20-non-reasoning'; // 기본값
+  
+  if (_inputTab === 'image') {
+    const imgSelect = document.getElementById('imageModelSelect');
+    if (imgSelect) targetModel = imgSelect.value;
+  } else {
+    const chatSelect = document.getElementById('chatModeSelect');
+    if (chatSelect) targetModel = chatSelect.value;
+  }
 
-          // 전역 변수로 저장된 선택된 비율 가져오기
-			const ratio = typeof _selectedRatio !== 'undefined' ? _selectedRatio : "1:1";
+  // 2. 이미지 비율 가져오기
+  const ratio = typeof _selectedRatio !== 'undefined' ? _selectedRatio : "1:1";
 
-			const res = await fetch(wUrl + '/chat', {
-			  method:'POST', headers:{'Content-Type':'application/json'},
-			  body: JSON.stringify({ 
-			  messages: apiMessages, 
-			  model: targetModel,
-			  aspect_ratio: ratio // 비율 정보 추가 전달
-			})
-		  }); 
+  // 3. API 요청 (headers 뒤의 'a' 오타 제거 확인)
+  const res = await fetch(wUrl + '/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 
+      messages: apiMessages, 
+      model: targetModel,
+      aspect_ratio: ratio
+    })
+  });
           const data = await res.json();
       if (data.result !== 'success') {
         const pid0 = session.participantPids?.[0] || 'p';
