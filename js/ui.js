@@ -1232,6 +1232,11 @@ async function sendMessage() {
   session.updatedAt = Date.now();
   attachments = [];
   renderAttachmentPreviews();
+  const body = {
+  messages: apiMessages,
+  model: targetModel,
+  aspect_ratio: document.getElementById('imgRatio')?.value || "1:1" // 이 부분 확인
+};
 
   // 현재 활성화된 탭에 따라 렌더링 대상 영역 지정
   const activeAreaId = _inputTab === 'image' ? 'imageArea' : _inputTab === 'context' ? 'contextArea' : 'chatArea';
@@ -1325,10 +1330,18 @@ if (session._demo) {
             if (imgSelect) targetModel = imgSelect.value;
           }
 
-          const res = await fetch(wUrl + '/chat', {
-            method:'POST', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({ messages: apiMessages, model: targetModel })
-          });
+          // 이미지 탭일 경우 선택된 비율 가져오기
+			const ratioEl = document.getElementById('imgRatio');
+			const ratio = ratioEl ? ratioEl.value : "1:1";
+
+			const res = await fetch(wUrl + '/chat', {
+			  method:'POST', headers:{'Content-Type':'application/json'},
+			  body: JSON.stringify({ 
+			  messages: apiMessages, 
+			  model: targetModel,
+			  aspect_ratio: ratio // 비율 정보 추가 전달
+			})
+		  });
           const data = await res.json();
       if (data.result !== 'success') {
         const pid0 = session.participantPids?.[0] || 'p';
