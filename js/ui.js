@@ -1068,13 +1068,37 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}) {
     const avDisplay = avStyle === 'hidden' ? 'display:none;' : '';
     const avShape = avStyle === 'circle' ? 'border-radius:50%; aspect-ratio:1/1; height:auto;' : '';
     
+    const fmtContent = fmt(seg.content);
+
+    // AI 생성 이미지 감지 (마크다운 ![](url) 또는 plain URL)
+    const imgUrlRe = /https?:\/\/[^\s"')]+\.(?:jpg|jpeg|png|gif|webp)(?:[?#][^\s"')]*)?/gi;
+    const imageUrls = [...(seg.content.matchAll(imgUrlRe))].map(m => m[0]);
+    const hasImg = imageUrls.length > 0 || /<img/i.test(fmtContent);
+    const bubbleWrapClass = hasImg ? 'bubble-wrap has-img' : 'bubble-wrap';
+    const bubbleClass = hasImg ? 'ai-bubble md-content has-img' : 'ai-bubble md-content';
+
+    // 클릭 → 팝업 연결 (이미지에 onclick 주입)
+    let renderedContent = fmtContent;
+    if (hasImg && imageUrls.length > 0) {
+      renderedContent = fmtContent.replace(
+        /<img([^>]*?)src="([^"]+)"([^>]*?)>/gi,
+        (_, pre, src, post) =>
+          `<img${pre}src="${src}"${post} onclick="openImagePopup('${src.replace(/'/g,"\\'")}')" style="cursor:pointer">`
+      );
+    }
+
+    // 저장 버튼
+    const dlBtn = hasImg && imageUrls.length > 0
+      ? `<div class="ai-img-actions">${imageUrls.map(u=>`<button class="img-download-btn" onclick="downloadImage('${u.replace(/'/g,"\\'")}','generated.jpg')">⬇ 저장</button>`).join('')}</div>`
+      : '';
+
     html += `<div class="ai-msg" style="${opacity}">
       <div class="msg-av" style="background:hsl(${h},20%,11%);border-color:hsl(${h},28%,22%);${celebStroke};${avDisplay}${avShape}" onclick="openProfilePopup('${safePid}','${safeEmotion}',${h},'${safeThumb}','${safeSuffix}')">${baseImg}</div>
       <div class="bubble-col">
         <div class="msg-pname" style="color:hsl(${h},60%,68%)">${esc(p.name)}${p._ghost?`<span style="font-size:9px;opacity:.5">(삭제됨)</span>`:''}</div>
-        <div class="bubble-wrap">
-          <div class="ai-bubble md-content" style="background:hsl(${h},22%,10%);border:1px solid hsl(${h},28%,20%);color:hsl(${h},50%,82%);padding-bottom:20px">${fmt(seg.content)}</div>
-          <button class="copy-btn" onclick="copyBubble(this,${JSON.stringify(seg.content)})" title="복사">⎘</button>
+        <div class="${bubbleWrapClass}">
+          <div class="${bubbleClass}" style="background:hsl(${h},22%,10%);border:1px solid hsl(${h},28%,20%);color:hsl(${h},50%,82%);${hasImg?'':'padding-bottom:20px'}">${renderedContent}${dlBtn}</div>
+          ${hasImg ? '' : `<button class="copy-btn" onclick="copyBubble(this,${JSON.stringify(seg.content)})" title="복사">⎘</button>`}
         </div>
       </div>
     </div>`;
@@ -1274,7 +1298,7 @@ async function sendMessage() {
   if (isImageReq) {
     thinkEl.innerHTML = `<div style="color:var(--muted); font-size:12px; display:flex; align-items:center; gap:8px;">
       <div class="loading-spinner" style="width:14px; height:14px; border-width:2px; border-top-color:var(--muted);"></div>
-      이미지 생성 중... (다른 작업을 해도 됩니다)
+      이미지 생성 중... (잠시만 기다려줘)
     </div>`;
   } else {
     thinkEl.innerHTML = `<div class="thinking-dots"><span></span><span></span><span></span></div>`;
@@ -1410,25 +1434,14 @@ async function sendMessage() {
     if (!currentSession._demo) { saveSession(currentSession.id); saveIndex(); }
     renderChatList();
     
-    // 텍스트 모드였다면 처리 완료 후 락 해제
-    if (!isImageReq) {
-      isLoading = false;
-      document.getElementById('sendBtn').disabled = false;
-      setTimeout(() => input.focus(), 10);
-    }
-  };
-
-  // 실행 흐름 분기
-  if (isImageReq) {
-    // 이미지 탭: await 없이 호출하여 백그라운드로 넘기고 즉시 입력창 락 해제
-    processApiAndRender(); 
+    // 완료 후 항상 락 해제 (이미지/채팅 공통)
     isLoading = false;
     document.getElementById('sendBtn').disabled = false;
     setTimeout(() => input.focus(), 10);
-  } else {
-    // 채팅/컨텍스트 탭: 순차적으로 답변을 기다림 (일반 채팅 동작)
-    await processApiAndRender();
-  }
+  };
+
+  // 이미지/채팅 모두 await — 이미지 생성 중 추가 전송 차단
+  await processApiAndRender();
 }
 
 function handleFileSelect(input) {
@@ -1778,6 +1791,41 @@ async function openProfilePopup(pid, emotion, hue, fallbackSrc, suffix = '') {
 }
 
 function closeProfilePopup() { document.getElementById('profilePopup').classList.remove('open'); }
+
+// ══════════════════════════════
+//  IMAGE POPUP & DOWNLOAD
+// ══════════════════════════════
+let _popupImgUrl = '';
+
+function openImagePopup(url) {
+  _popupImgUrl = url;
+  const overlay = document.getElementById('imagePopup');
+  const img = document.getElementById('popupImg');
+  if (!overlay || !img) return;
+  img.src = url;
+  overlay.classList.add('active');
+}
+
+function closeImagePopup() {
+  document.getElementById('imagePopup')?.classList.remove('active');
+  _popupImgUrl = '';
+}
+
+async function downloadImage(url, filename = 'generated.jpg') {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  } catch(e) {
+    // fetch 실패(CORS 등)면 새 탭으로 열기
+    window.open(url, '_blank');
+  }
+}
 
 // ══════════════════════════════
 //  RATIO MODAL (UI)
