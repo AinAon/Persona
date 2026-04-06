@@ -352,6 +352,16 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .msg-av svg { width: 100%; height: 100%; }
 
 .bubble-col { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.bubble-wrap { position: relative; display: inline-block; max-width: 100%; }
+.copy-btn {
+  position: absolute; bottom: 5px; right: 7px;
+  background: none; border: none; cursor: pointer;
+  color: rgba(255,255,255,0.18); font-size: 11px; padding: 2px 4px;
+  border-radius: 4px; line-height: 1; transition: color .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.copy-btn:hover { color: rgba(255,255,255,0.45); }
+.copy-btn.copied { color: rgba(120,220,120,0.6); }
 .msg-pname { display: block; font-size: 11px; margin-bottom: -2px; }
 .ai-bubble { padding: 11px 14px; border-radius: 2px 14px 14px 14px; font-size: 15px; line-height: 1.75; }
 
@@ -383,8 +393,7 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .profile-popup.open { opacity: 1; pointer-events: all; }
 .profile-popup-img { width: min(100vw, 67vh); aspect-ratio: 2/3; border-radius: 0; overflow: hidden; border: none; }
 .profile-popup-img img, .profile-popup-img svg { width: 100%; height: 100%; object-fit: cover; display: block; }
-.profile-popup-close { position: absolute; bottom: 48px; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,.18); backdrop-filter: blur(8px); border: none; color: #fff; width: 48px; height: 48px; border-radius: 50%; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background .15s; }
-.profile-popup-close:hover { background: rgba(255,255,255,.28); }
+
 
 /* 크롭 에디터 */
 .crop-overlay { position: fixed; inset: 0; z-index: 400; background: rgba(0,0,0,.92); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; opacity: 0; pointer-events: none; transition: opacity .2s; }
@@ -496,7 +505,6 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 
 <div class="profile-popup" id="profilePopup" onclick="closeProfilePopup()">
   <div class="profile-popup-img" id="profilePopupImg"></div>
-  <button class="profile-popup-close" onclick="closeProfilePopup()">×</button>
 </div>
 
 <div class="screen active" id="mainScreen">

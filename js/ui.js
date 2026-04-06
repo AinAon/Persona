@@ -1031,6 +1031,15 @@ function buildEmotionCard(p, emotion, letter, dataUrl) {
   </div>`;
 }
 
+
+function copyBubble(btn, text) {
+  navigator.clipboard.writeText(text).then(() => {
+    btn.classList.add('copied');
+    btn.textContent = '✓';
+    setTimeout(() => { btn.classList.remove('copied'); btn.textContent = '⎘'; }, 1500);
+  }).catch(() => {});
+}
+
 async function renderAIResponseHTML(rawText, pList, suffixes = {}) {
   const segments = parseResponse(rawText, pList);
   let html = '';
@@ -1064,7 +1073,10 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}) {
       <div class="msg-av" style="background:hsl(${h},20%,11%);border-color:hsl(${h},28%,22%);${celebStroke};${avDisplay}${avShape}" onclick="openProfilePopup('${safePid}','${safeEmotion}',${h},'${safeThumb}','${safeSuffix}')">${baseImg}</div>
       <div class="bubble-col">
         <div class="msg-pname" style="color:hsl(${h},60%,68%)">${esc(p.name)}${p._ghost?`<span style="font-size:9px;opacity:.5">(삭제됨)</span>`:''}</div>
-        <div class="ai-bubble md-content" style="background:hsl(${h},22%,10%);border:1px solid hsl(${h},28%,20%);color:hsl(${h},50%,82%)">${fmt(seg.content)}</div>
+        <div class="bubble-wrap">
+          <div class="ai-bubble md-content" style="background:hsl(${h},22%,10%);border:1px solid hsl(${h},28%,20%);color:hsl(${h},50%,82%);padding-bottom:20px">${fmt(seg.content)}</div>
+          <button class="copy-btn" onclick="copyBubble(this,${JSON.stringify(seg.content)})" title="복사">⎘</button>
+        </div>
       </div>
     </div>`;
   }
