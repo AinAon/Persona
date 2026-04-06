@@ -1210,7 +1210,14 @@ function buildSystemPrompt(session) {
 
 function renderUserBubbleHTML(text, atts) {
   let html = '';
-  atts.forEach(a => { html += a.type==='image' ? `<img class="user-msg-img" src="${a.dataUrl}" alt="${esc(a.name)}">` : `<div class="user-msg-file">📄 ${esc(a.name)}</div>`; });
+  atts.forEach(a => {
+    const url = a.dataUrl;
+    html += `
+    <div class="bubble-img-container">
+      <img class="bubble-img" src="${url}" onclick="openImagePopup('${url}')">
+      <button class="img-download-btn" onclick="downloadImage('${url}', '${esc(a.name)}')">저장</button>
+    </div>`;
+  });
   if (text) html += fmt(text);
   return html;
 }
@@ -1425,6 +1432,8 @@ async function sendMessage() {
     await processApiAndRender();
   }
 }
+    return;
+
 
 if (session._demo) {
         await new Promise(r => setTimeout(r, 600));
