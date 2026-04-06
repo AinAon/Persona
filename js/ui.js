@@ -1331,7 +1331,7 @@ if (session._demo) {
           const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
           
 // 1. 현재 활성화된 탭에 따라 모델 결정
-  let targetModel = 'grok-4.20-non-reasoning'; // 기본값
+  let targetModel = 'grok-4-1-fast-reasoning-latest'; // 기본값
   
   if (_inputTab === 'image') {
     const imgSelect = document.getElementById('imageModelSelect');
