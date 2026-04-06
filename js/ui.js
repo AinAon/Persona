@@ -656,9 +656,11 @@ const _DEMO_SLIDES = [
 ];
 
 let _demoSlideIdx = 0;
+let _isDemoMode = false;
 
 function openMarkdownDemo() {
   _demoSlideIdx = 0;
+  _isDemoMode = true;
   // 데모용 임시 세션 없이 별도 화면 열기
   const area = document.getElementById('chatArea');
   const input = document.getElementById('userInput');
@@ -922,6 +924,7 @@ function startNewChat() {
 //  CHAT AREA & MESSAGES
 // ══════════════════════════════
 async function openChat(id) {
+  _isDemoMode = false;
   activeChatId = id;
   const s = getActiveSession(); if (!s) return;
   const pList = (s.participantPids || []).map(pid => getPersona(pid)).filter(Boolean);
@@ -950,7 +953,7 @@ async function openChat(id) {
   if (!s._loaded) loadSession(id);
 }
 
-function goMain() { show('mainScreen'); renderChatList(); }
+function goMain() { _isDemoMode = false; show('mainScreen'); renderChatList(); }
 
 async function renderChatArea() {
   const session = getActiveSession(); if (!session) return;
@@ -1090,7 +1093,7 @@ function setMode(m) {
 function handleKey(e) {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
-    if (activeChatId === null && _demoSlideIdx > 0) {
+    if (_isDemoMode) {
       // 데모 모드
       const input = document.getElementById('userInput');
       if (input) input.value = '';
