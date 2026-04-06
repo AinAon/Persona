@@ -34,9 +34,9 @@ function mdRender(text) {
   // mermaid 블록 임시 치환
   const mermaidBlocks = [];
   const replaced = text.replace(/```mermaid\n([\s\S]*?)```/g, (_, code) => {
-    const id = `mermaid-${Date.now()}-${mermaidBlocks.length}`;
-    mermaidBlocks.push({ id, code: code.trim() });
-    return `<div class="mermaid-placeholder" data-id="${id}"></div>`;
+    const idx = mermaidBlocks.length;
+    mermaidBlocks.push(code.trim());
+    return `<div class="mermaid-placeholder" data-idx="${idx}" data-code="${encodeURIComponent(code.trim())}"></div>`;
   });
   const html = marked.parse(replaced);
   return html;
@@ -47,14 +47,17 @@ async function renderMermaidBlocks(container) {
   if (typeof mermaid === 'undefined') return;
   const placeholders = container.querySelectorAll('.mermaid-placeholder');
   for (const ph of placeholders) {
-    const code = ph.dataset.code;
+    if (ph.dataset.rendered) continue;
+    const code = ph.dataset.code ? decodeURIComponent(ph.dataset.code) : null;
     if (!code) continue;
     try {
-      const id = `mermaid-${Date.now()}`;
+      const id = 'mermaid-' + Math.random().toString(36).slice(2);
       const { svg } = await mermaid.render(id, code);
       ph.innerHTML = svg;
+      ph.dataset.rendered = '1';
     } catch(e) {
-      ph.innerHTML = `<pre style="color:var(--muted);font-size:11px">${esc(code)}</pre>`;
+      ph.innerHTML = `<pre style="color:var(--muted);font-size:11px;white-space:pre-wrap">${esc(code)}</pre>`;
+      ph.dataset.rendered = '1';
     }
   }
 }
