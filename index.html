@@ -442,16 +442,6 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
   border-radius: 7px; padding: 4px 7px; font-size: 11px; font-family: 'Pretendard',sans-serif;
   cursor: pointer;
 }
-.model-chip {
-  display: flex; align-items: center; gap: 4px;
-  background: var(--card); border: 1px solid var(--border2);
-  border-radius: 7px; padding: 4px 8px; font-size: 11px; color: var(--muted);
-  cursor: pointer; font-family: 'Pretendard',sans-serif;
-}
-.model-chip input { width: 12px; height: 12px; cursor: pointer; accent-color: var(--text); }
-.mode-row { display: flex; gap: 6px; padding: 0 2px 8px; }
-.mode-pill { padding: 6px 14px; min-height: 32px; border-radius: 100px; border: 1px solid var(--border2); background: transparent; color: var(--muted); font-family: 'Pretendard', sans-serif; font-size: 11px; cursor: pointer; transition: all .15s; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
-.mode-pill.active { background: var(--card); border-color: var(--muted2); color: var(--text); }
 .input-row { display: flex; align-items: flex-end; gap: 8px; }
 .attach-btn { background: none; border: none; color: var(--muted); cursor: pointer; padding: 8px; flex-shrink: 0; }
 .attach-btn svg { width: 20px; height: 20px; display: block; }
@@ -477,9 +467,6 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .drawer-close { background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; }
 .drawer-body { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; -webkit-overflow-scrolling: touch; }
 .drawer-actions { display: flex; gap: 7px; padding: 10px 14px 16px; border-top: 1px solid var(--border); flex-shrink: 0; }
-.drawer-action-btn { flex: 1; padding: 9px 6px; border-radius: 10px; border: 1px solid var(--border2); background: var(--card); color: var(--muted); font-family: 'Pretendard', sans-serif; font-size: 11px; cursor: pointer; transition: all .15s; }
-.drawer-action-btn:hover { color: var(--text); border-color: var(--muted2); }
-.drawer-action-btn.danger { border-color: hsl(0,30%,22%); color: hsl(0,60%,60%); background: hsl(0,20%,10%); }
 .drawer-world-wrap { padding: 0; }
 
 /* ── 로딩 오버레이 ── */
@@ -793,25 +780,6 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
         </div>
       </div>
 
-<div class="modal-overlay" id="ratioModal" onclick="closeRatioModal()">
-  <div class="modal-sheet" onclick="event.stopPropagation()">
-    <div class="modal-handle"></div>
-    <div class="modal-header">
-      <span class="modal-title">이미지 비율 선택</span>
-      <button class="modal-close" onclick="closeRatioModal()">×</button>
-    </div>
-    <div class="modal-body">
-      <div class="ratio-grid" style="display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; padding:10px;">
-        <div class="ratio-item" onclick="selectRatio('1:1')" style="border:1px solid var(--border); border-radius:8px; aspect-ratio:1; display:flex; align-items:center; justify-content:center; cursor:pointer;">1:1</div>
-        <div class="ratio-item" onclick="selectRatio('4:3')" style="border:1px solid var(--border); border-radius:8px; aspect-ratio:1; display:flex; align-items:center; justify-content:center; cursor:pointer;">4:3</div>
-        <div class="ratio-item" onclick="selectRatio('3:4')" style="border:1px solid var(--border); border-radius:8px; aspect-ratio:1; display:flex; align-items:center; justify-content:center; cursor:pointer;">3:4</div>
-        <div class="ratio-item" onclick="selectRatio('16:9')" style="border:1px solid var(--border); border-radius:8px; aspect-ratio:1; display:flex; align-items:center; justify-content:center; cursor:pointer;">16:9</div>
-        <div class="ratio-item" onclick="selectRatio('9:16')" style="border:1px solid var(--border); border-radius:8px; aspect-ratio:1; display:flex; align-items:center; justify-content:center; cursor:pointer;">9:16</div>
-        <div class="ratio-item" onclick="selectRatio('21:9')" style="border:1px solid var(--border); border-radius:8px; aspect-ratio:1; display:flex; align-items:center; justify-content:center; cursor:pointer;">21:9</div>
-      </div>
-    </div>
-  </div>
-</div>
       <div class="input-tab-options hidden" id="itab-opts-context">
         <button class="attach-btn" onclick="document.getElementById('ctxFileInput').click()" title="파일 추가">+ 파일</button>
         <button class="attach-btn" onclick="addContextUrl()" title="URL 추가">+ URL</button>
