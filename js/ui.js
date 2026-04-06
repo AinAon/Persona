@@ -1142,14 +1142,14 @@ function switchInputTab(tab) {
       : tab === 'context' ? '질문하거나 분석을 요청해봐...'
       : '메시지를 입력해봐...';
   }
-  // 영역 전환 (flex → display 주의)
-  const areas = { chat: 'chatArea', image: 'imageArea', context: 'contextArea' };
-  Object.entries(areas).forEach(([t, id]) => {
+  // 영역 전환
+  ['chatArea','imageArea','contextArea'].forEach(id => {
     const el = document.getElementById(id);
-    if (!el) return;
-    el.style.display = t === tab ? 'flex' : 'none';
-    el.style.flexDirection = 'column';
+    if (el) el.style.display = 'none';
   });
+  const activeId = tab === 'chat' ? 'chatArea' : tab === 'image' ? 'imageArea' : 'contextArea';
+  const activeEl = document.getElementById(activeId);
+  if (activeEl) activeEl.style.display = '';
 }
 
 function addContextUrl() {

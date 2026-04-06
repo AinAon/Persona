@@ -425,10 +425,10 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .input-tabbar { display: flex; align-items: center; gap: 2px; margin-bottom: 6px; }
 .input-tab {
   display: flex; flex-direction: column; align-items: center; gap: 2px;
-  padding: 5px 10px; border: none; background: none; cursor: pointer;
-  color: var(--muted); font-size: 9px; font-family: 'Pretendard',sans-serif;
+  padding: 7px 14px; min-width: 52px; border: none; background: none; cursor: pointer;
+  color: var(--muted); font-size: 10px; font-family: 'Pretendard',sans-serif;
   border-radius: 8px; transition: color .15s, background .15s;
-  -webkit-tap-highlight-color: transparent;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
 }
 .input-tab svg { width: 15px; height: 15px; stroke: currentColor; }
 .input-tab.active { color: var(--text); background: var(--card); }
@@ -450,7 +450,7 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 }
 .model-chip input { width: 12px; height: 12px; cursor: pointer; accent-color: var(--text); }
 .mode-row { display: flex; gap: 6px; padding: 0 2px 8px; }
-.mode-pill { padding: 4px 12px; border-radius: 100px; border: 1px solid var(--border2); background: transparent; color: var(--muted); font-family: 'Pretendard', sans-serif; font-size: 11px; cursor: pointer; transition: all .15s; }
+.mode-pill { padding: 6px 14px; min-height: 32px; border-radius: 100px; border: 1px solid var(--border2); background: transparent; color: var(--muted); font-family: 'Pretendard', sans-serif; font-size: 11px; cursor: pointer; transition: all .15s; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 .mode-pill.active { background: var(--card); border-color: var(--muted2); color: var(--text); }
 .input-row { display: flex; align-items: flex-end; gap: 8px; }
 .attach-btn { background: none; border: none; color: var(--muted); cursor: pointer; padding: 8px; flex-shrink: 0; }
