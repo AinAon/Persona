@@ -732,7 +732,7 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
     <!-- 입력창 (탭 아래에) -->
 	<div class="input-row">
       <textarea id="userInput" rows="1" placeholder="메시지를 입력해봐..." onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
-      <button class="send-btn" id="sendBtn" onmousedown="event.preventDefault()" ontouchstart="event.preventDefault()" onclick="sendMessage()">
+      <button class="send-btn" id="sendBtn" onmousedown="event.preventDefault()" onclick="sendMessage()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
       </button>
     </div>
