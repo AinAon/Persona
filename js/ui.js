@@ -1360,13 +1360,18 @@ if (session._demo) {
   }
   area.scrollTop = area.scrollHeight;
 
-  isLoading = false;
+    isLoading = false;
   document.getElementById('sendBtn').disabled = false;
-  input.focus();
+  
+  // 모바일에서 키보드를 강제로 유지하기 위해 지연 포커스 적용
+  setTimeout(() => {
+    input.focus();
+  }, 10);
 
   if (!session._demo) { saveSession(session.id); saveIndex(); }
   renderChatList();
 }
+
 
 function handleFileSelect(input) {
   [...input.files].forEach(file => {
