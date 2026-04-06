@@ -14,12 +14,12 @@ const MAX_PARTICIPANTS = 4;
 
 const PID_POOL = [
   'mango','kiwi','peach','plum','lime','fig','pear','cherry','grape','melon',
-  'lemon','guava','lychee','papaya','mango','apricot','berry','coconut','date','olive',
+  'lemon','guava','lychee','papaya','apricot','berry','coconut','date','olive',
   'paris','tokyo','berlin','milan','cairo','oslo','dubai','lima','seoul','prague',
   'vienna','zurich','lisbon','sydney','bangkok','nairobi','bogota','athens','delhi','kyoto',
   'venice','dublin','bruges','riga','tbilisi','baku','tashkent','almaty','yangon','hanoi',
-  'porto','seville','valencia','bologna','florence','bologna','genova','trieste','brest','ghent',
-  'bruges','antwerp','liege','namur','arlon','dinant','spa','liege','leuven','hasselt',
+  'porto','seville','valencia','bologna','florence','genova','trieste','brest','ghent',
+  'antwerp','liege','namur','arlon','dinant','spa','leuven','hasselt',
   'cork','galway','limerick','tralee','kilkenny','sligo','athlone','drogheda','dundalk','wexford',
   'olomouc','plzen','ostrava','brno','liberec','zlin','opava','havirov','prostejov','prerov'
 ];
