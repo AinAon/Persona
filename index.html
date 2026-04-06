@@ -903,6 +903,22 @@ select.edit-input {
   white-space: nowrap;
 }
 .toast.show { opacity: 1; }
+
+/* 1. 설정 화면 저장 버튼을 맨 아래에 고정 */
+button[onclick="saveSettingsUserProfile()"] {
+  position: sticky;
+  bottom: 20px; /* 화면 맨 아래에서의 간격 */
+  z-index: 100;
+  /* 스크롤될 때 버튼 뒤 배경이 투명해서 글자가 겹쳐 보인다면 아래 속성 추가 */
+  /* background-color: var(--card-bg, #1e1e1e); */
+}
+
+/* 2. 채팅방 상단 뒤로가기 버튼 2배 확대 (클래스명은 실제 환경에 맞게 조정 필요) */
+.chat-header button[onclick="goMain()"] svg,
+.back-btn svg {
+  width: 48px !important;
+  height: 48px !important;
+}
 </style>
 </head>
 <body>
