@@ -97,61 +97,52 @@ body {
 }
 .search-input:focus { border-color: var(--muted); }
 .search-input::placeholder { color: var(--muted); }
-.search-wrap-inner {
-  position: relative;
-}
+.search-wrap-inner { position: relative; }
 .search-icon {
-  position: absolute;
-  left: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--muted);
-  pointer-events: none;
+  position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+  color: var(--muted); pointer-events: none;
 }
 
-/* 플로팅 버튼 */
+/* 플로팅 버튼 (새 채팅) */
 .fab {
   position: absolute;
-  bottom: 20px;
-  right: 16px;
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  background: var(--text);
-  color: var(--bg);
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 20px rgba(0,0,0,.5);
-  z-index: 10;
+  bottom: 20px; right: 16px;
+  width: 52px; height: 52px;
+  border-radius: 50%; background: var(--text); color: var(--bg);
+  border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 20px rgba(0,0,0,.5); z-index: 10;
   transition: transform .15s, opacity .15s;
   -webkit-tap-highlight-color: transparent;
 }
 .fab:active { transform: scale(.92); opacity: .85; }
 .fab svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2.5; stroke-linecap: round; }
 
+/* 플로팅 버튼 (설정 저장 - 디자인 통일) */
+.fab-save {
+  position: absolute; 
+  bottom: 20px; right: 16px; 
+  width: 52px; height: 52px;
+  border-radius: 50%; 
+  background-color: var(--card); /* 새 채팅과 대비되는 흰색/카드 배경 */
+  color: hsl(210, 80%, 55%); /* 포인트 컬러 아이콘 */
+  border: none;
+  box-shadow: 0 4px 20px rgba(0,0,0,.5);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; z-index: 1000;
+  transition: transform .15s, opacity .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.fab-save:active { transform: scale(0.92); opacity: 0.85; }
+
 /* 드로어 아이콘 버튼 */
 .drawer-action-icon-btn {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  padding: 10px 6px;
-  border-radius: 12px;
-  border: 1px solid var(--border2);
-  background: var(--card);
-  color: var(--muted);
-  cursor: pointer;
-  font-family: 'Pretendard', sans-serif;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  transition: all .15s;
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 5px; padding: 10px 6px; border-radius: 12px;
+  border: 1px solid var(--border2); background: var(--card);
+  color: var(--muted); cursor: pointer;
+  font-family: 'Pretendard', sans-serif; font-size: 9px; font-weight: 700;
+  letter-spacing: .06em; text-transform: uppercase; transition: all .15s;
   -webkit-tap-highlight-color: transparent;
 }
 .drawer-action-icon-btn:hover { color: var(--text); border-color: var(--muted2); }
@@ -160,252 +151,90 @@ body {
 
 /* 페르소나 선택 → 채팅 시작 버튼 */
 .persona-start-chat-bar {
-  position: absolute;
-  bottom: 0; left: 0; right: 0;
-  padding: 12px 16px;
-  background: linear-gradient(to top, var(--bg) 60%, transparent);
-  z-index: 5;
+  position: absolute; bottom: 0; left: 0; right: 0;
+  padding: 12px 16px; background: linear-gradient(to top, var(--bg) 60%, transparent); z-index: 5;
 }
 .persona-start-chat-btn {
-  width: 100%;
-  padding: 13px;
-  border-radius: 12px;
-  background: var(--text);
-  color: var(--bg);
-  border: none;
-  font-family: 'Pretendard', sans-serif;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: opacity .15s;
-  display: none;
+  width: 100%; padding: 13px; border-radius: 12px; background: var(--text); color: var(--bg);
+  border: none; font-family: 'Pretendard', sans-serif; font-size: 14px; font-weight: 700;
+  cursor: pointer; transition: opacity .15s; display: none;
 }
 .persona-start-chat-btn.visible { display: block; }
 
 /* ── 공통 헤더 ── */
 .pane-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 18px 12px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 18px 12px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0;
 }
-.pane-title {
-  font-size: 18px;
-  font-weight: 300;
-  font-style: italic;
-  color: var(--text);
-}
+.pane-title { font-size: 18px; font-weight: 300; font-style: italic; color: var(--text); }
 .header-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  background: var(--text);
-  color: var(--bg);
-  border: none;
-  border-radius: 100px;
-  font-family: 'Pretendard', sans-serif;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: opacity .2s;
+  display: flex; align-items: center; gap: 6px; padding: 7px 14px;
+  background: var(--text); color: var(--bg); border: none; border-radius: 100px;
+  font-family: 'Pretendard', sans-serif; font-size: 12px; font-weight: 700; cursor: pointer; transition: opacity .2s;
 }
 .header-btn:hover { opacity: .85; }
-.header-btn.ghost {
-  background: transparent;
-  color: var(--muted);
-  border: 1px solid var(--border2);
-}
+.header-btn.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border2); }
 
 /* ── 페르소나 그리드 ── */
-.persona-pane {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px;
-}
-.persona-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-}
-.persona-card.dragging {
-  opacity: .4;
-  transform: scale(.95);
-}
-.persona-card.drag-over {
-  border-color: var(--text);
-  transform: scale(1.03);
-}
+.persona-pane { flex: 1; overflow-y: auto; padding: 16px; }
+.persona-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.persona-card.dragging { opacity: .4; transform: scale(.95); }
+.persona-card.drag-over { border-color: var(--text); transform: scale(1.03); }
 
 .persona-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  overflow: hidden;
-  cursor: pointer;
-  transition: border-color .15s, transform .1s;
-  display: flex;
-  flex-direction: column;
-  position: relative;
+  background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden;
+  cursor: pointer; transition: border-color .15s, transform .1s; display: flex; flex-direction: column; position: relative;
 }
 .persona-card:active { transform: scale(.97); }
 .persona-card:hover { border-color: var(--border2); }
 
 .persona-card-img {
-  aspect-ratio: 2/3;
-  background: var(--surface);
-  overflow: hidden;
-  position: relative;
-  flex-shrink: 0;
+  aspect-ratio: 2/3; background: var(--surface); overflow: hidden; position: relative; flex-shrink: 0;
 }
-.persona-card-img img {
-  width: 100%; height: 100%;
-  object-fit: cover; object-position: center;
-  display: block;
-}
+.persona-card-img img { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
 .persona-card-name {
-  padding: 8px 8px;
-  font-size: 12px;
-  font-weight: 700;
-  text-align: center;
-  color: #fff;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex-shrink: 0;
+  padding: 8px 8px; font-size: 12px; font-weight: 700; text-align: center; color: #fff;
+  letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0;
 }
 
 /* 추가 버튼 카드 */
-.persona-card.add-card {
-  border: 1.5px dashed var(--border2);
-  background: transparent;
-  align-items: center;
-  justify-content: center;
-  min-height: 120px;
-  aspect-ratio: 2/3.1;
-  cursor: pointer;
-}
+.persona-card.add-card { border: 1.5px dashed var(--border2); background: transparent; align-items: center; justify-content: center; min-height: 120px; aspect-ratio: 2/3.1; cursor: pointer; }
 .persona-card.add-card:hover { border-color: var(--muted); }
-.add-card-icon {
-  width: 40px; height: 40px;
-  border-radius: 50%;
-  border: 1.5px solid var(--border2);
-  display: flex; align-items: center; justify-content: center;
-}
+.add-card-icon { width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--border2); display: flex; align-items: center; justify-content: center; }
 .add-card-icon svg { width: 18px; height: 18px; color: var(--muted); }
 
 /* ── 채팅 리스트 ── */
-.chat-pane {
-  flex: 1;
-  overflow-y: auto;
-}
-.chat-list-item {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 16px 18px;
-  min-height: 100px;
-  border-bottom: 1px solid var(--border);
-  cursor: pointer;
-  transition: background .15s;
-}
+.chat-pane { flex: 1; overflow-y: auto; }
+.chat-list-item { display: flex; align-items: center; gap: 14px; padding: 16px 18px; min-height: 100px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .15s; }
 .chat-list-item:hover { background: var(--surface); }
 .chat-list-item:active { background: var(--card); }
 
 /* 가로 아바타 나열 */
-.chat-avatars-row {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  flex-shrink: 0;
-  position: relative;
-}
-.chat-av-item {
-  width: 66px; height: 66px;
-  border-radius: 50%;
-  overflow: hidden;
-  border: 2.5px solid var(--bg);
-  background: var(--card);
-  flex-shrink: 0;
-  margin-left: -18px;
-  position: relative;
-}
+.chat-avatars-row { display: flex; flex-direction: row; align-items: center; flex-shrink: 0; position: relative; }
+.chat-av-item { width: 66px; height: 66px; border-radius: 50%; overflow: hidden; border: 2.5px solid var(--bg); background: var(--card); flex-shrink: 0; margin-left: -18px; position: relative; }
 .chat-av-item:first-child { margin-left: 0; }
 .chat-av-item img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
 .chat-av-item svg { width: 100%; height: 100%; }
 
 .chat-list-info { flex: 1; min-width: 0; }
 .chat-list-names { font-size: 15px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
-.chat-list-preview {
-  font-size: 13px; color: var(--muted);
-  overflow: hidden; text-overflow: ellipsis;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-  line-height: 1.5;
-}
+.chat-list-preview { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.5; }
 .chat-list-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; flex-shrink: 0; }
 .chat-list-time { font-size: 11px; color: var(--muted2); }
-.chat-list-delete {
-  width: 18px; height: 18px; border-radius: 50%;
-  background: transparent; border: 1px solid var(--border2);
-  color: var(--muted2); font-size: 11px; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  opacity: 0; transition: opacity .15s;
-}
-.chat-list-item:hover .chat-list-delete { opacity: 1; }
-.chat-list-delete:hover { background: #2a1010; color: #f87171; }
 
 /* 스와이프 삭제 */
-.chat-list-wrap {
-  position: relative;
-  overflow: hidden;
-}
-.chat-list-item {
-  transition: transform .25s cubic-bezier(.25,.8,.25,1);
-  background: var(--bg);
-  position: relative;
-  z-index: 1;
-}
-.chat-delete-reveal {
-  position: absolute; right: 0; top: 0; bottom: 0;
-  width: 72px;
-  background: hsl(0,55%,38%);
-  display: flex; align-items: center; justify-content: center;
-  color: #fff; font-size: 22px; cursor: pointer;
-  z-index: 0;
-}
+.chat-list-wrap { position: relative; overflow: hidden; }
+.chat-list-item { transition: transform .25s cubic-bezier(.25,.8,.25,1); background: var(--bg); position: relative; z-index: 1; }
+.chat-delete-reveal { position: absolute; right: 0; top: 0; bottom: 0; width: 72px; background: hsl(0,55%,38%); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 22px; cursor: pointer; z-index: 0; }
 
-.pane-empty {
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  height: 60vh; gap: 10px; color: var(--muted2);
-}
+.pane-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh; gap: 10px; color: var(--muted2); }
 .pane-empty-icon { font-size: 32px; opacity: .3; }
 .pane-empty-text { font-size: 13px; font-style: italic; font-weight: 300; }
 
 /* ── 새 채팅 모달 (페르소나 선택) ── */
-.modal-overlay {
-  position: fixed; inset: 0; z-index: 100;
-  background: rgba(0,0,0,.6);
-  display: flex; align-items: flex-end;
-  opacity: 0; pointer-events: none;
-  transition: opacity .2s;
-}
+.modal-overlay { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.6); display: flex; align-items: flex-end; opacity: 0; pointer-events: none; transition: opacity .2s; }
 .modal-overlay.open { opacity: 1; pointer-events: all; }
-.modal-sheet {
-  width: 100%;
-  background: var(--surface);
-  border-radius: 20px 20px 0 0;
-  border-top: 1px solid var(--border);
-  max-height: 85dvh;
-  display: flex; flex-direction: column;
-  transform: translateY(100%);
-  transition: transform .25s cubic-bezier(.32,.72,0,1);
-}
+.modal-sheet { width: 100%; background: var(--surface); border-radius: 20px 20px 0 0; border-top: 1px solid var(--border); max-height: 85dvh; display: flex; flex-direction: column; transform: translateY(100%); transition: transform .25s cubic-bezier(.32,.72,0,1); }
 .modal-overlay.open .modal-sheet { transform: translateY(0); }
 .modal-handle { width: 36px; height: 4px; background: var(--border2); border-radius: 2px; margin: 12px auto 4px; flex-shrink: 0; }
 .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px 12px; flex-shrink: 0; }
@@ -414,22 +243,8 @@ body {
 .modal-body { flex: 1; overflow-y: auto; padding: 12px 16px 24px; }
 
 /* 새 채팅 모달 안 페르소나 선택 그리드 */
-.select-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  margin-bottom: 16px;
-}
-.select-card {
-  background: var(--card);
-  border: 1.5px solid var(--border);
-  border-radius: 12px;
-  overflow: hidden;
-  cursor: pointer;
-  transition: border-color .15s;
-  display: flex; flex-direction: column;
-  aspect-ratio: 2/3;
-}
+.select-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+.select-card { background: var(--card); border: 1.5px solid var(--border); border-radius: 12px; overflow: hidden; cursor: pointer; transition: border-color .15s; display: flex; flex-direction: column; aspect-ratio: 2/3; }
 .select-card.selected { border-color: var(--text); }
 .select-card-img { flex: 1; background: var(--surface); overflow: hidden; }
 .select-card-img img { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
@@ -440,176 +255,54 @@ body {
 .modal-options { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
 .field-label { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 6px; }
 .mode-btns { display: flex; gap: 6px; }
-.mode-btn {
-  flex: 1; padding: 8px 6px;
-  border-radius: 9px; border: 1px solid var(--border2);
-  background: transparent; color: var(--muted);
-  font-family: 'Pretendard', sans-serif; font-size: 11px;
-  cursor: pointer; transition: all .15s; text-align: center;
-}
+.mode-btn { flex: 1; padding: 8px 6px; border-radius: 9px; border: 1px solid var(--border2); background: transparent; color: var(--muted); font-family: 'Pretendard', sans-serif; font-size: 11px; cursor: pointer; transition: all .15s; text-align: center; }
 .mode-btn.on { background: var(--card); border-color: var(--muted2); color: var(--text); }
-.world-input {
-  width: 100%; background: var(--card); border: 1px solid var(--border2);
-  border-radius: 10px; padding: 9px 12px; color: var(--text);
-  font-family: 'Pretendard', sans-serif; font-size: 12px;
-  resize: none; outline: none; line-height: 1.65; height: 160px;
-}
+.world-input { width: 100%; background: var(--card); border: 1px solid var(--border2); border-radius: 10px; padding: 9px 12px; color: var(--text); font-family: 'Pretendard', sans-serif; font-size: 12px; resize: none; outline: none; line-height: 1.65; height: 160px; }
 .world-input:focus { border-color: var(--muted); }
 .world-input::placeholder { color: var(--muted); }
 
-.start-btn {
-  width: 100%; padding: 14px;
-  background: var(--text); color: var(--bg);
-  border: none; border-radius: 12px;
-  font-family: 'Pretendard', sans-serif;
-  font-size: 15px; font-weight: 700;
-  cursor: pointer; transition: opacity .2s;
-}
+.start-btn { width: 100%; padding: 14px; background: var(--text); color: var(--bg); border: none; border-radius: 12px; font-family: 'Pretendard', sans-serif; font-size: 15px; font-weight: 700; cursor: pointer; transition: opacity .2s; }
 .start-btn:hover { opacity: .85; }
 .start-btn:disabled { opacity: .3; cursor: not-allowed; }
 
 /* ── 페르소나 상세/편집 화면 ── */
-.persona-edit-header {
-  display: flex; align-items: center; gap: 12px;
-  padding: 14px 16px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
+.persona-edit-header { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .back-btn { background: none; border: none; color: var(--muted); font-size: 22px; cursor: pointer; line-height: 1; }
 .persona-edit-title { font-size: 15px; font-weight: 600; flex: 1; }
-.save-btn {
-  padding: 7px 16px; border-radius: 100px;
-  background: var(--text); color: var(--bg);
-  border: none; font-family: 'Pretendard', sans-serif;
-  font-size: 12px; font-weight: 700; cursor: pointer;
-}
+.save-btn { padding: 7px 16px; border-radius: 100px; background: var(--text); color: var(--bg); border: none; font-family: 'Pretendard', sans-serif; font-size: 12px; font-weight: 700; cursor: pointer; }
 
 .persona-edit-body { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
-.persona-edit-footer {
-  padding: 12px 16px 24px;
-  border-top: 1px solid var(--border);
-  display: flex; gap: 8px;
-  flex-shrink: 0;
-  background: var(--surface);
-}
-.edit-save-btn {
-  flex: 2; padding: 13px;
-  background: var(--text); color: var(--bg);
-  border: none; border-radius: 12px;
-  font-family: 'Pretendard', sans-serif;
-  font-size: 14px; font-weight: 700; cursor: pointer;
-  transition: opacity .2s;
-}
+.persona-edit-footer { padding: 12px 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 8px; flex-shrink: 0; background: var(--surface); }
+.edit-save-btn { flex: 2; padding: 13px; background: var(--text); color: var(--bg); border: none; border-radius: 12px; font-family: 'Pretendard', sans-serif; font-size: 14px; font-weight: 700; cursor: pointer; transition: opacity .2s; }
 .edit-save-btn:hover { opacity: .85; }
-.edit-cancel-btn {
-  flex: 1; padding: 13px;
-  background: transparent; color: var(--muted);
-  border: 1px solid var(--border2); border-radius: 12px;
-  font-family: 'Pretendard', sans-serif;
-  font-size: 14px; cursor: pointer; transition: all .15s;
-}
+.edit-cancel-btn { flex: 1; padding: 13px; background: transparent; color: var(--muted); border: 1px solid var(--border2); border-radius: 12px; font-family: 'Pretendard', sans-serif; font-size: 14px; cursor: pointer; transition: all .15s; }
 .edit-cancel-btn:hover { color: var(--text); border-color: var(--muted2); }
-.edit-delete-btn {
-  flex: 1; padding: 13px;
-  background: hsl(0,20%,10%); color: hsl(0,60%,60%);
-  border: 1px solid hsl(0,30%,22%); border-radius: 12px;
-  font-family: 'Pretendard', sans-serif;
-  font-size: 14px; cursor: pointer; transition: all .15s;
-}
+.edit-delete-btn { flex: 1; padding: 13px; background: hsl(0,20%,10%); color: hsl(0,60%,60%); border: 1px solid hsl(0,30%,22%); border-radius: 12px; font-family: 'Pretendard', sans-serif; font-size: 14px; cursor: pointer; transition: all .15s; }
 .edit-delete-btn:hover { background: hsl(0,25%,14%); }
 
 /* 에디터 아바타 */
-.edit-avatar-wrap {
-  width: 90px;
-  aspect-ratio: 2/3;
-  border-radius: 12px; overflow: hidden;
-  background: var(--card); border: 1px solid var(--border2);
-  cursor: pointer; position: relative;
-  flex-shrink: 0;
-}
+.edit-avatar-wrap { width: 90px; aspect-ratio: 2/3; border-radius: 12px; overflow: hidden; background: var(--card); border: 1px solid var(--border2); cursor: pointer; position: relative; flex-shrink: 0; }
 .edit-avatar-wrap img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
-.edit-avatar-overlay {
-  position: absolute; inset: 0;
-  background: rgba(0,0,0,.4);
-  display: flex; align-items: center; justify-content: center;
-  opacity: 0; transition: opacity .15s;
-  font-size: 18px;
-}
+.edit-avatar-overlay { position: absolute; inset: 0; background: rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity .15s; font-size: 18px; }
 .edit-avatar-wrap:hover .edit-avatar-overlay { opacity: 1; }
 
 /* 큰 이미지 편집 */
-.edit-big-img-wrap {
-  width: calc(55dvh * 2/3);
-  aspect-ratio: 2/3;
-  max-width: 100%;
-  border-radius: 16px;
-  overflow: hidden;
-  background: var(--card);
-  border: 1px solid var(--border2);
-  cursor: pointer;
-  position: relative;
-  flex-shrink: 0;
-  align-self: center;
-}
+.edit-big-img-wrap { width: calc(55dvh * 2/3); aspect-ratio: 2/3; max-width: 100%; border-radius: 16px; overflow: hidden; background: var(--card); border: 1px solid var(--border2); cursor: pointer; position: relative; flex-shrink: 0; align-self: center; }
 .edit-big-img-wrap img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
-.edit-big-img-overlay {
-  position: absolute;
-  bottom: 14px; right: 14px;
-  width: 44px; height: 44px;
-  border-radius: 50%;
-  background: rgba(255,255,255,.18);
-  backdrop-filter: blur(8px);
-  display: flex; align-items: center; justify-content: center;
-  transition: background .15s;
-}
+.edit-big-img-overlay { position: absolute; bottom: 14px; right: 14px; width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,.18); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; transition: background .15s; }
 .edit-big-img-wrap:hover .edit-big-img-overlay { background: rgba(255,255,255,.28); }
 .edit-big-img-overlay svg { width: 20px; height: 20px; stroke: #fff; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
-.edit-section-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: #7B6EF6;
-  margin-bottom: 14px;
-  margin-top: 4px;
-}
-.edit-field-label {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: .1em;
-  color: var(--muted);
-  margin-bottom: 5px;
-  margin-top: 10px;
-}
-.edit-field-row {
-  display: flex;
-  gap: 10px;
-}
+.edit-section-title { font-size: 18px; font-weight: 700; color: #7B6EF6; margin-bottom: 14px; margin-top: 4px; }
+.edit-field-label { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 5px; margin-top: 10px; }
+.edit-field-row { display: flex; gap: 10px; }
 .edit-field-row > div { flex: 1; }
-select.edit-input {
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%235a5a6e' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center;
-  padding-right: 32px;
-}
+select.edit-input { appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%235a5a6e' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
 
 .edit-field { display: flex; flex-direction: column; gap: 6px; }
-.edit-input {
-  background: var(--card); border: 1px solid var(--border2);
-  border-radius: 10px; padding: 10px 12px;
-  color: var(--text); font-family: 'Pretendard', sans-serif;
-  font-size: 14px; outline: none; transition: border-color .2s;
-}
+.edit-input { background: var(--card); border: 1px solid var(--border2); border-radius: 10px; padding: 10px 12px; color: var(--text); font-family: 'Pretendard', sans-serif; font-size: 14px; outline: none; transition: border-color .2s; }
 .edit-input:focus { border-color: var(--muted); }
-.edit-textarea {
-  background: var(--card); border: 1px solid var(--border2);
-  border-radius: 10px; padding: 10px 12px;
-  color: var(--text); font-family: 'Pretendard', sans-serif;
-  font-size: 13px; outline: none; resize: none;
-  line-height: 1.65; height: 80px; transition: border-color .2s;
-}
+.edit-textarea { background: var(--card); border: 1px solid var(--border2); border-radius: 10px; padding: 10px 12px; color: var(--text); font-family: 'Pretendard', sans-serif; font-size: 13px; outline: none; resize: none; line-height: 1.65; height: 80px; transition: border-color .2s; }
 .edit-textarea:focus { border-color: var(--muted); }
 .edit-textarea::placeholder, .edit-input::placeholder { color: var(--muted); }
 
@@ -618,59 +311,26 @@ select.edit-input {
 .hue-swatch.on { border-color: var(--text); transform: scale(1.15); }
 
 .tags-wrap { display: flex; flex-wrap: wrap; gap: 6px; }
-.tag {
-  padding: 6px 13px; border-radius: 100px;
-  border: 1px solid var(--border2);
-  background: transparent; color: var(--muted);
-  font-size: 14px; cursor: pointer; transition: all .15s;
-  user-select: none;
-}
+.tag { padding: 6px 13px; border-radius: 100px; border: 1px solid var(--border2); background: transparent; color: var(--muted); font-size: 14px; cursor: pointer; transition: all .15s; user-select: none; }
 .tag.on { background: var(--card); border-color: var(--muted2); color: var(--text); }
 
 /* ── 채팅 화면 ── */
-.chat-header {
-  display: flex; align-items: center; gap: 10px;
-  padding: 11px 14px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-.chat-back-btn { background: none; border: none; color: var(--muted); font-size: 22px; cursor: pointer; padding: 10px 14px 10px 4px; margin-left: -4px; }
+.chat-header { display: flex; align-items: center; gap: 10px; padding: 11px 14px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .chat-header-avatars { display: flex; gap: 5px; align-items: center; }
-.chat-header-av {
-  width: 30px; height: 30px;
-  border-radius: 50%;
-  overflow: hidden;
-  border: 1.5px solid var(--border2);
-  background: var(--card);
-  flex-shrink: 0;
-}
+.chat-header-av { width: 42px; height: 42px; border-radius: 50%; overflow: hidden; border: 1.5px solid var(--border2); background: var(--card); flex-shrink: 0; }
 .chat-header-av img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
 .chat-header-av svg { width: 100%; height: 100%; }
-.chat-header-info { flex: 1; min-width: 0; }
-.chat-header-names { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-header-info { flex: 1; min-width: 0; margin-left: 4px; }
+.chat-header-names { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chat-settings-btn { background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; padding: 4px; }
 
-.chat-area {
-  flex: 1; overflow-y: auto;
-  padding: 12px 12px 8px;
-  display: flex; flex-direction: column; gap: 12px;
-}
+.chat-area { flex: 1; overflow-y: auto; padding: 12px 12px 8px; display: flex; flex-direction: column; gap: 12px; }
 .chat-area::-webkit-scrollbar { width: 3px; }
 .chat-area::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
 
-.chat-empty {
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  flex: 1; gap: 12px;
-}
+.chat-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 12px; }
 .empty-avatars { display: flex; gap: 8px; align-items: center; }
-.empty-av {
-  width: 52px; height: 52px;
-  border-radius: 50%;
-  overflow: hidden;
-  border: 1.5px solid var(--border2);
-}
+.empty-av { width: 52px; height: 52px; border-radius: 50%; overflow: hidden; border: 1.5px solid var(--border2); }
 .empty-av img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
 .empty-av svg { width: 100%; height: 100%; }
 .empty-text { font-size: 13px; color: var(--muted); font-style: italic; }
@@ -680,157 +340,61 @@ select.edit-input {
 .ai-msgs { align-items: flex-start; }
 .ai-msg { display: flex; align-items: flex-start; gap: 10px; }
 
-/* 프로필 이미지: 둥근 네모, 2:3 비율, 왼쪽 25% */
+/* 프로필 이미지: 설정에 따라 변화 */
 .msg-av {
-  width: 25vw;
-  aspect-ratio: 2/3;
-  border-radius: 12px;
-  overflow: hidden;
-  flex-shrink: 0;
-  border: 1.5px solid;
-  cursor: pointer;
-  transition: opacity .15s;
-  position: relative;
+  width: 25vw; aspect-ratio: 2/3; border-radius: 12px; overflow: hidden; flex-shrink: 0;
+  border: 1.5px solid; cursor: pointer; transition: opacity .15s; position: relative;
 }
 .msg-av:hover { opacity: .85; }
 .msg-av img { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
 .msg-av svg { width: 100%; height: 100%; }
 
-.bubble-col {
-  display: flex; flex-direction: column; gap: 3px;
-  flex: 1; min-width: 0;
-}
-.msg-pname { display: none; }
+.bubble-col { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.msg-pname { display: block; font-size: 11px; margin-bottom: -2px; }
 .ai-bubble { padding: 11px 14px; border-radius: 2px 14px 14px 14px; font-size: 15px; line-height: 1.75; }
 
 /* 프로필 이미지 팝업 */
-.profile-popup {
-  position: fixed; inset: 0; z-index: 300;
-  background: rgba(0,0,0,.85);
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  opacity: 0; pointer-events: none;
-  transition: opacity .2s;
-}
+.profile-popup { position: fixed; inset: 0; z-index: 300; background: rgba(0,0,0,.85); display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity .2s; }
 .profile-popup.open { opacity: 1; pointer-events: all; }
-.profile-popup-img {
-  width: min(100vw, 67vh);
-  aspect-ratio: 2/3;
-  border-radius: 0;
-  overflow: hidden;
-  border: none;
-}
+.profile-popup-img { width: min(100vw, 67vh); aspect-ratio: 2/3; border-radius: 0; overflow: hidden; border: none; }
 .profile-popup-img img, .profile-popup-img svg { width: 100%; height: 100%; object-fit: cover; display: block; }
-.profile-popup-close {
-  position: absolute; bottom: 48px;
-  left: 50%; transform: translateX(-50%);
-  background: rgba(255,255,255,.18);
-  backdrop-filter: blur(8px);
-  border: none; color: #fff;
-  width: 48px; height: 48px; border-radius: 50%;
-  font-size: 20px; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  transition: background .15s;
-}
+.profile-popup-close { position: absolute; bottom: 48px; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,.18); backdrop-filter: blur(8px); border: none; color: #fff; width: 48px; height: 48px; border-radius: 50%; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background .15s; }
 .profile-popup-close:hover { background: rgba(255,255,255,.28); }
 
 /* 크롭 에디터 */
-.crop-overlay {
-  position: fixed; inset: 0; z-index: 400;
-  background: rgba(0,0,0,.92);
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  gap: 16px;
-  opacity: 0; pointer-events: none; transition: opacity .2s;
-}
+.crop-overlay { position: fixed; inset: 0; z-index: 400; background: rgba(0,0,0,.92); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; opacity: 0; pointer-events: none; transition: opacity .2s; }
 .crop-overlay.open { opacity: 1; pointer-events: all; }
 .crop-title { color: #fff; font-size: 14px; font-weight: 600; }
-.crop-container {
-  position: relative;
-  width: min(80vw, 53vh);
-  aspect-ratio: 2/3;
-  overflow: hidden;
-  border: 2px solid rgba(255,255,255,.3);
-  border-radius: 14px;
-  cursor: grab;
-  touch-action: none;
-}
+.crop-container { position: relative; width: min(80vw, 53vh); aspect-ratio: 2/3; overflow: hidden; border: 2px solid rgba(255,255,255,.3); border-radius: 14px; cursor: grab; touch-action: none; }
 .crop-container.grabbing { cursor: grabbing; }
-.crop-img {
-  position: absolute;
-  transform-origin: 0 0;
-  user-select: none;
-  pointer-events: none;
-}
-/* 가이드 마스크 - 상단 원형 제외 반투명 영역 */
-.crop-guide-mask {
-  position: absolute; inset: 0; pointer-events: none; z-index: 2;
-}
+.crop-img { position: absolute; transform-origin: 0 0; user-select: none; pointer-events: none; }
+.crop-guide-mask { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
 .crop-actions { display: flex; gap: 10px; }
-.crop-btn {
-  padding: 10px 24px; border-radius: 100px;
-  font-family: 'Pretendard', sans-serif; font-size: 13px;
-  font-weight: 600; cursor: pointer; border: none;
-}
+.crop-btn { padding: 10px 24px; border-radius: 100px; font-family: 'Pretendard', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; border: none; }
 .crop-btn.confirm { background: #fff; color: #000; }
 .crop-btn.cancel { background: rgba(255,255,255,.15); color: #fff; }
 .crop-hint { color: rgba(255,255,255,.45); font-size: 11px; }
-.user-msg {
-  align-self: flex-end; max-width: 78%;
-  background: #1c1c24; border: 1px solid var(--border2);
-  border-radius: 18px 18px 4px 18px;
-  padding: 11px 15px; font-size: 15px; line-height: 1.7;
-}
+
+.user-msg { align-self: flex-end; max-width: 78%; background: #1c1c24; border: 1px solid var(--border2); border-radius: 18px 18px 4px 18px; padding: 11px 15px; font-size: 15px; line-height: 1.7; }
 .user-msg-img { max-width: 100%; max-height: 180px; border-radius: 8px; display: block; margin-bottom: 6px; }
 .user-msg-file { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
-.thinking-bubble {
-  display: flex;
-  justify-content: center;
-  padding: 10px 0;
-}
-.thinking-dots span {
-  display: inline-block;
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  background: var(--muted);
-  margin: 0 4px;
-  animation: blink 1.2s infinite;
-}
+.thinking-bubble { display: flex; justify-content: center; padding: 10px 0; }
+.thinking-dots span { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); margin: 0 4px; animation: blink 1.2s infinite; }
 .thinking-dots span:nth-child(2) { animation-delay: .2s; }
 .thinking-dots span:nth-child(3) { animation-delay: .4s; }
 @keyframes blink { 0%,80%,100%{opacity:.15} 40%{opacity:.8} }
 
 /* 입력창 */
-.chat-input-bar {
-  background: var(--surface); border-top: 1px solid var(--border);
-  padding: 8px 10px; flex-shrink: 0;
-}
+.chat-input-bar { background: var(--surface); border-top: 1px solid var(--border); padding: 8px 10px; flex-shrink: 0; }
 .mode-row { display: flex; gap: 6px; padding: 0 2px 8px; }
-.mode-pill {
-  padding: 4px 12px; border-radius: 100px;
-  border: 1px solid var(--border2); background: transparent;
-  color: var(--muted); font-family: 'Pretendard', sans-serif;
-  font-size: 11px; cursor: pointer; transition: all .15s;
-}
+.mode-pill { padding: 4px 12px; border-radius: 100px; border: 1px solid var(--border2); background: transparent; color: var(--muted); font-family: 'Pretendard', sans-serif; font-size: 11px; cursor: pointer; transition: all .15s; }
 .mode-pill.active { background: var(--card); border-color: var(--muted2); color: var(--text); }
 .input-row { display: flex; align-items: flex-end; gap: 8px; }
 .attach-btn { background: none; border: none; color: var(--muted); cursor: pointer; padding: 8px; flex-shrink: 0; }
 .attach-btn svg { width: 20px; height: 20px; display: block; }
-#userInput {
-  flex: 1; background: var(--card); border: 1px solid var(--border2);
-  border-radius: 18px; padding: 9px 14px;
-  color: var(--text); font-family: 'Pretendard', sans-serif;
-  font-size: 15px; outline: none; resize: none;
-  line-height: 1.5; max-height: 120px; overflow-y: auto;
-}
+#userInput { flex: 1; background: var(--card); border: 1px solid var(--border2); border-radius: 18px; padding: 9px 14px; color: var(--text); font-family: 'Pretendard', sans-serif; font-size: 15px; outline: none; resize: none; line-height: 1.5; max-height: 120px; overflow-y: auto; }
 #userInput::placeholder { color: var(--muted); }
-.send-btn {
-  width: 36px; height: 36px; border-radius: 50%;
-  background: var(--text); color: var(--bg);
-  border: none; cursor: pointer; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
-  transition: opacity .2s;
-}
+.send-btn { width: 36px; height: 36px; border-radius: 50%; background: var(--text); color: var(--bg); border: none; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: opacity .2s; }
 .send-btn:disabled { opacity: .3; cursor: not-allowed; }
 .send-btn svg { width: 15px; height: 15px; }
 .attachments-row { display: flex; gap: 6px; flex-wrap: wrap; padding-bottom: 6px; }
@@ -839,21 +403,10 @@ select.edit-input {
 .attachment-thumb .remove-btn { position: absolute; top: -4px; right: -4px; width: 16px; height: 16px; background: #333; border-radius: 50%; border: none; color: #aaa; font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 
 /* ── 설정 드로어 ── */
-.drawer-overlay {
-  position: fixed; inset: 0; z-index: 50;
-  display: flex; align-items: flex-end;
-  pointer-events: none;
-}
+.drawer-overlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-end; pointer-events: none; }
 .drawer-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.5); opacity: 0; transition: opacity .3s; }
 .drawer-overlay.open .drawer-backdrop { opacity: 1; pointer-events: all; }
-.drawer-sheet {
-  position: relative; width: 100%;
-  background: var(--surface); border-radius: 20px 20px 0 0;
-  border-top: 1px solid var(--border);
-  max-height: 90dvh; display: flex; flex-direction: column;
-  transform: translateY(100%);
-  transition: transform .3s cubic-bezier(.32,.72,0,1);
-}
+.drawer-sheet { position: relative; width: 100%; background: var(--surface); border-radius: 20px 20px 0 0; border-top: 1px solid var(--border); max-height: 90dvh; display: flex; flex-direction: column; transform: translateY(100%); transition: transform .3s cubic-bezier(.32,.72,0,1); }
 .drawer-overlay.open .drawer-sheet { transform: translateY(0); pointer-events: all; }
 .drawer-handle { width: 36px; height: 4px; background: var(--border2); border-radius: 2px; margin: 12px auto 4px; flex-shrink: 0; }
 .drawer-header { display: flex; align-items: center; justify-content: space-between; padding: 4px 16px 10px; flex-shrink: 0; border-bottom: 1px solid var(--border); }
@@ -861,93 +414,28 @@ select.edit-input {
 .drawer-close { background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; }
 .drawer-body { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; -webkit-overflow-scrolling: touch; }
 .drawer-actions { display: flex; gap: 7px; padding: 10px 14px 16px; border-top: 1px solid var(--border); flex-shrink: 0; }
-.drawer-action-btn {
-  flex: 1; padding: 9px 6px; border-radius: 10px;
-  border: 1px solid var(--border2); background: var(--card);
-  color: var(--muted); font-family: 'Pretendard', sans-serif;
-  font-size: 11px; cursor: pointer; transition: all .15s;
-}
+.drawer-action-btn { flex: 1; padding: 9px 6px; border-radius: 10px; border: 1px solid var(--border2); background: var(--card); color: var(--muted); font-family: 'Pretendard', sans-serif; font-size: 11px; cursor: pointer; transition: all .15s; }
 .drawer-action-btn:hover { color: var(--text); border-color: var(--muted2); }
 .drawer-action-btn.danger { border-color: hsl(0,30%,22%); color: hsl(0,60%,60%); background: hsl(0,20%,10%); }
 .drawer-world-wrap { padding: 0; }
 
 /* ── 로딩 오버레이 ── */
-.loading-overlay {
-  position: fixed; inset: 0; z-index: 999;
-  background: #0a0a0c;
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  gap: 24px; transition: opacity .4s;
-}
+.loading-overlay { position: fixed; inset: 0; z-index: 999; background: #0a0a0c; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; transition: opacity .4s; }
 .loading-overlay.hidden { opacity: 0; pointer-events: none; }
 .loading-icon { width: 88px; height: 88px; }
 .loading-icon img { width: 100%; height: 100%; object-fit: contain; }
-.loading-spinner {
-  width: 26px; height: 26px;
-  border: 2px solid rgba(255,255,255,.15);
-  border-top-color: rgba(255,255,255,.7);
-  border-radius: 50%;
-  animation: spin .8s linear infinite;
-}
+.loading-spinner { width: 26px; height: 26px; border: 2px solid rgba(255,255,255,.15); border-top-color: rgba(255,255,255,.7); border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .loading-text { font-size: 11px; color: rgba(255,255,255,.4); letter-spacing: .06em; }
 
 /* ── 토스트 ── */
-.toast {
-  position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
-  background: var(--card); border: 1px solid var(--border2);
-  padding: 6px 14px; border-radius: 100px;
-  font-size: 11px; color: var(--muted);
-  z-index: 500; pointer-events: none;
-  opacity: 0; transition: opacity .2s;
-  white-space: nowrap;
-}
+.toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: var(--card); border: 1px solid var(--border2); padding: 6px 14px; border-radius: 100px; font-size: 11px; color: var(--muted); z-index: 500; pointer-events: none; opacity: 0; transition: opacity .2s; white-space: nowrap; }
 .toast.show { opacity: 1; }
 
-/* 1. 설정 화면 저장 버튼을 맨 아래에 고정 */
-button[onclick="saveSettingsUserProfile()"] {
-  position: sticky;
-  bottom: 20px; /* 화면 맨 아래에서의 간격 */
-  z-index: 100;
-  /* 스크롤될 때 버튼 뒤 배경이 투명해서 글자가 겹쳐 보인다면 아래 속성 추가 */
-  /* background-color: var(--card-bg, #1e1e1e); */
-}
-
-/* 2. 채팅방 상단 뒤로가기 버튼 2배 확대 (클래스명은 실제 환경에 맞게 조정 필요) */
-.chat-header button[onclick="goMain()"] svg,
-.back-btn svg {
-  width: 48px !important;
-  height: 48px !important;
-}
-/* 플로팅 저장 버튼 디자인 */
-.fab-save {
-  position: absolute; /* settingsPane을 기준으로 위치 고정 */
-  bottom: 24px;       /* 하단 여백 (하단 탭바가 있다면 탭바 위로 올라오도록 수치 조절) */
-  right: 20px;        /* 우측 여백 */
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background-color: hsl(210, 80%, 55%); /* 앱 테마에 맞는 컬러로 변경하세요 (예: var(--primary)) */
-  color: white;
-  border: none;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 1000;
-  transition: transform 0.2s ease, background-color 0.2s ease;
-}
-
-/* 터치/클릭 시 살짝 눌리는 애니메이션 */
-.fab-save:active {
-  transform: scale(0.92);
-}
 </style>
 </head>
 <body>
 
-<!-- 로딩 오버레이 -->
 <div class="loading-overlay" id="loadingOverlay">
   <div class="loading-icon"><img src="icon.png" alt=""></div>
   <div class="loading-spinner"></div>
@@ -955,13 +443,11 @@ button[onclick="saveSettingsUserProfile()"] {
 </div>
 <div class="toast" id="toast"></div>
 
-<!-- 크롭 에디터 -->
 <div class="crop-overlay" id="cropOverlay">
   <div class="crop-title">이미지 영역 조정 (2:3)</div>
   <div class="crop-container" id="cropContainer">
     <img class="crop-img" id="cropImg" draggable="false">
     <svg class="crop-guide-mask" id="cropGuideMask" viewBox="0 0 200 300" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
-      <!-- 좌우 17%(x=34,166), 상단 5%(y=15), 원 r=66 center(100,81), 사각형 하단 y=213 -->
       <defs>
         <mask id="holeMask">
           <rect width="200" height="300" fill="white"/>
@@ -983,22 +469,18 @@ button[onclick="saveSettingsUserProfile()"] {
   </div>
 </div>
 
-<!-- 프로필 팝업 -->
 <div class="profile-popup" id="profilePopup" onclick="closeProfilePopup()">
   <div class="profile-popup-img" id="profilePopupImg"></div>
   <button class="profile-popup-close" onclick="closeProfilePopup()">×</button>
 </div>
 
-<!-- ══════════ 메인 화면 ══════════ -->
 <div class="screen active" id="mainScreen">
 
-  <!-- 페르소나 패널 -->
   <div id="personaPane" style="display:flex;flex-direction:column;flex:1;overflow:hidden;position:relative;">
     <div class="main-titlebar">Persona</div>
     <div class="persona-pane" id="personaPane_body">
       <div class="persona-grid" id="personaGrid"></div>
     </div>
-    <!-- 채팅 시작 플로팅 바 -->
     <div class="persona-start-chat-bar" id="personaStartBar">
       <button class="persona-start-chat-btn" id="personaStartBtn" onclick="startChatFromPersona()">
         채팅 시작하기 →
@@ -1006,7 +488,6 @@ button[onclick="saveSettingsUserProfile()"] {
     </div>
   </div>
 
-  <!-- 채팅 패널 -->
   <div id="chatPane" style="display:none;flex-direction:column;flex:1;overflow:hidden;position:relative;">
     <div class="main-titlebar">Chat</div>
     <div class="search-wrap">
@@ -1021,14 +502,12 @@ button[onclick="saveSettingsUserProfile()"] {
         <div class="pane-empty-text">아직 채팅이 없어</div>
       </div>
     </div>
-    <!-- 새 채팅 플로팅 버튼 -->
     <button class="fab" onclick="openNewChatModal()" title="새 채팅">
       <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
     </button>
   </div>
 
-  <!-- 설정 패널 -->
-<div id="settingsPane" style="display:none;position:relative;flex-direction:column;flex:1;overflow:hidden;height:100%;">
+  <div id="settingsPane" style="display:none;position:relative;flex-direction:column;flex:1;overflow:hidden;height:100%;">
     <div class="chat-header" style="flex-shrink:0;">
       <div style="font-size:16px; font-weight:700; padding:16px;">설정</div>
     </div>
@@ -1079,7 +558,6 @@ button[onclick="saveSettingsUserProfile()"] {
     </button>
   </div>
 
-  <!-- 하단 탭바 -->
   <div class="bottom-tabbar">
     <button class="bottom-tab active" id="btabPersona" onclick="switchTab('persona')">
       <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1104,20 +582,27 @@ button[onclick="saveSettingsUserProfile()"] {
   </div>
 </div>
 
-<!-- ══════════ 페르소나 편집 화면 ══════════ -->
 <div class="screen" id="editScreen">
   <div class="persona-edit-header">
-    <button class="back-btn" onclick="cancelPersonaEdit()">‹</button>
+    <button class="back-btn" onclick="cancelPersonaEdit()">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline>
+      </svg>
+    </button>
     <span class="persona-edit-title" id="editTitle">페르소나 편집</span>
   </div>
   <div class="persona-edit-body" id="editBody"></div>
   <div class="persona-edit-footer" id="editFooter"></div>
 </div>
 
-<!-- ══════════ 채팅 화면 ══════════ -->
 <div class="screen" id="chatScreen">
   <div class="chat-header">
-    <button class="chat-back-btn" onclick="goMain()">‹</button>
+    <button onclick="goMain()" style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; background: none; border: none; padding: 0; color: inherit; cursor: pointer; margin-left: -8px;">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="19" y1="12" x2="5" y2="12"></line>
+        <polyline points="12 19 5 12 12 5"></polyline>
+      </svg>
+    </button>
     <div class="chat-header-avatars" id="chatHeaderAvatars"></div>
     <div class="chat-header-info">
       <div class="chat-header-names" id="chatHeaderNames"></div>
@@ -1147,12 +632,9 @@ button[onclick="saveSettingsUserProfile()"] {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
       </button>
     </div>
-    </div>
-
-
+  </div>
 </div>
 
-<!-- 새 채팅 모달 -->
 <div class="modal-overlay" id="newChatModal">
   <div class="modal-sheet">
     <div class="modal-handle"></div>
@@ -1186,7 +668,6 @@ button[onclick="saveSettingsUserProfile()"] {
   </div>
 </div>
 
-<!-- 채팅 설정 드로어 -->
 <div class="drawer-overlay" id="chatDrawer">
   <div class="drawer-backdrop" onclick="closeDrawer()"></div>
   <div class="drawer-sheet">
@@ -1196,7 +677,7 @@ button[onclick="saveSettingsUserProfile()"] {
       <button class="drawer-close" onclick="closeDrawer()">×</button>
     </div>
     <div class="drawer-body" id="drawerBody"></div>
-<div class="drawer-actions">
+    <div class="drawer-actions">
       <button class="drawer-action-icon-btn" onclick="refreshChat()">
         <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
         Refresh
@@ -1221,7 +702,6 @@ button[onclick="saveSettingsUserProfile()"] {
   </div>
 </div>
 
-<!-- 채팅방 초대 모달 -->
 <div class="modal-overlay" id="inviteModal">
   <div class="modal-sheet">
     <div class="modal-handle"></div>
@@ -1236,7 +716,6 @@ button[onclick="saveSettingsUserProfile()"] {
   </div>
 </div>
 
-<!-- 프롬프트 모달 -->
 <div class="modal-overlay" id="promptModal" onclick="closePromptModal()">
   <div class="modal-sheet" onclick="e=>e.stopPropagation()" style="max-height:75dvh">
     <div class="modal-handle"></div>

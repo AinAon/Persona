@@ -334,7 +334,6 @@ function createNewPersona() {
 function renderEditFooter(isExisting) {
   const footer = document.getElementById('editFooter');
   const p = getPersona(editingPid);
-  // celebrity 제한 제거 - 모든 페르소나 편집 가능
   if (isExisting) {
     footer.innerHTML = `
       <button class="edit-delete-btn" onclick="deletePersonaFromEdit()">삭제</button>
@@ -362,10 +361,8 @@ function deletePersonaFromEdit() {
 function renderEditBody(p, hdImage = null) {
   const body = document.getElementById('editBody');
   const neutral = hdImage || _neutralCache[p.pid] || p.image;
-  // celebrity 제한 제거
 
   body.innerHTML = `
-    <!-- 큰 이미지 영역 -->
     <div class="edit-big-img-wrap" onclick="document.getElementById('editImgInput').click()">
       ${neutral ? `<img src="${neutral}" style="width:100%;height:100%;object-fit:cover;object-position:top;display:block">` : defaultAvatar(p.hue)}
       <div class="edit-big-img-overlay">
@@ -373,13 +370,11 @@ function renderEditBody(p, hdImage = null) {
       </div>
     </div>
     <input type="file" id="editImgInput" style="display:none" accept="image/*" onchange="handleEditImage(this)">
-    <!-- 다중 이미지 업로드 (감정 이미지 등) -->
     <input type="file" id="editMultiImgInput" style="display:none" accept="image/*" multiple onchange="handleMultiImageUpload(this)">
     <button onclick="document.getElementById('editMultiImgInput').click()" style="width:100%;padding:9px;border-radius:10px;border:1px solid var(--border2);background:transparent;color:var(--muted);font-family:'Pretendard',sans-serif;font-size:12px;cursor:pointer;margin-top:6px">
       📁 감정 이미지 일괄 업로드 (파일명 그대로 저장)
     </button>
 
-    <!-- Identity Details 섹션 -->
     <div>
       <div class="edit-section-title">Identity Details</div>
 
@@ -421,7 +416,6 @@ function renderEditBody(p, hdImage = null) {
       </div>
     </div>
 
-    <!-- Personality 섹션 -->
     <div>
       <div class="edit-section-title">Personality</div>
 
@@ -436,7 +430,6 @@ function renderEditBody(p, hdImage = null) {
       </div>
     </div>
 
-    <!-- Description 섹션 -->
     <div>
       <div class="edit-section-title">Description</div>
       <div class="edit-field-label">ROLE / INTRODUCTION</div>
@@ -460,13 +453,13 @@ function handleEditImage(input) {
   reader.onload = e => {
     const originalDataUrl = e.target.result;
     openCropEditor(originalDataUrl, async (cropped) => {
-      // 화면 즉시 반영 (cropped는 이제 화질 손실 없는 800x1200 PNG)
+      // 화면 즉시 반영
       const av = document.querySelector('#editBody .edit-big-img-wrap');
       if (av) av.innerHTML = `<img src="${cropped}" style="width:100%;height:100%;object-fit:cover;object-position:top;display:block"><div class="edit-big-img-overlay"><svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg></div>`;
 
       const p = getPersona(editingPid); if (!p) return;
 
-      // 3단계 썸네일 생성 (full → square crop 2:3 → circle crop)
+      // 3단계 썸네일 생성
       idbSet(`em_full_${p.pid}_neutral`, cropped).catch(() => {});
       p._pendingImage = cropped;
 
@@ -509,16 +502,13 @@ async function handleMultiImageUpload(input) {
       const data = await res.json();
       if (data.url) {
         ok++;
-        // 파일명에서 emotion 파싱해서 IDB 캐싱
-        // 예: riley_neutral_a.jpg → emotion=neutral, letter=a
         const fname = file.name.replace(/\.jpg$/i, '');
         const namePrefix = p.pid + '_';
         if (fname.startsWith(namePrefix)) {
-          const rest = fname.slice(namePrefix.length); // neutral_a 또는 neutral
+          const rest = fname.slice(namePrefix.length);
           const parts = rest.split('_');
           const emotion = parts[0];
           const letter = parts[1] || '';
-          // neutral이면 썸네일 생성 + _neutralCache 업데이트
           if (emotion === 'neutral') {
             const { sqMd } = await generateThumbnailSet(resized, p.pid, 'neutral').catch(() => ({ sqMd: null }));
             if (sqMd) {
@@ -526,7 +516,6 @@ async function handleMultiImageUpload(input) {
               renderPersonaGrid();
             }
           } else {
-            // 일반 감정 이미지 IDB 캐싱
             const idbKey = letter ? `emotion_${p.pid}_${emotion}_${letter}` : `emotion_${p.pid}_${emotion}`;
             const md = await resizeImage(resized, 300, 0.85).catch(() => null);
             if (md) idbSet(idbKey, md).catch(() => {});
@@ -535,7 +524,6 @@ async function handleMultiImageUpload(input) {
       } else { fail++; }
     } catch(e) { fail++; }
   }
-  // 파일 목록 캐시 초기화
   if (typeof _imageListCache !== 'undefined') delete _imageListCache[p.pid];
   showToast(`✓ ${ok}개 완료${fail ? ` / ${fail}개 실패` : ''}`);
   input.value = '';
@@ -543,8 +531,6 @@ async function handleMultiImageUpload(input) {
 
 async function savePersonaEdit() {
   const p = getPersona(editingPid); if (!p) return;
-  // celebrity 저장 허용
-  // PID: 신규 페르소나만 변경 가능
   const newPid = document.getElementById('editPid')?.value.trim();
   if (isNewPersona && newPid && newPid !== p.pid) {
     personas = personas.filter(x => x.pid !== p.pid);
@@ -564,13 +550,11 @@ async function savePersonaEdit() {
   p.mbti = document.getElementById('editMbti')?.value.trim() || '';
   isNewPersona = false;
 
-  // 이미지 R2 업로드
   if (p._pendingImage) {
     showToast('⏳ 이미지 저장 중...', 5000);
     try {
       const workerUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
       if (!workerUrl) throw new Error('Worker URL 없음');
-      // base64 → Blob
       const b64 = p._pendingImage.split(',')[1];
       const byteArr = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
       const blob = new Blob([byteArr], { type: 'image/jpeg' });
@@ -588,8 +572,8 @@ async function savePersonaEdit() {
     }
     delete p._pendingImage;
   }
-savePersonas(); renderPersonaGrid(); goMain();
-showToast('저장됨 ✓');
+  savePersonas(); renderPersonaGrid(); goMain();
+  showToast('저장됨 ✓');
 }
 
 // ══════════════════════════════
@@ -657,7 +641,6 @@ function filterChatList(q) {
   renderChatList();
 }
 
-// 선택된 페르소나 (페르소나 탭 → 채팅 시작)
 let _selectedPersonaPid = null;
 function selectPersonaForChat(pid) {
   _selectedPersonaPid = pid;
@@ -665,7 +648,6 @@ function selectPersonaForChat(pid) {
   const bar = document.getElementById('personaStartBar');
   if (btn && bar) {
     btn.classList.add('visible');
-    // 선택 강조
     document.querySelectorAll('.persona-card[data-pid]').forEach(c => {
       c.style.opacity = c.dataset.pid === pid ? '1' : '0.5';
     });
@@ -804,10 +786,10 @@ async function openChat(id) {
   const s = getActiveSession(); if (!s) return;
   const pList = (s.participantPids || []).map(pid => getPersona(pid)).filter(Boolean);
 
-const avatarsEl = document.getElementById('chatHeaderAvatars');
+  const avatarsEl = document.getElementById('chatHeaderAvatars');
   avatarsEl.innerHTML = pList.map(p => {
     const img = p.image ? `<img src="${p.image}" style="width:100%;height:100%;object-fit:cover;object-position:top;">` : defaultAvatar(p.hue);
-    return `<div class="chat-header-av" style="background:hsl(${p.hue},20%,11%);border-color:hsl(${p.hue},28%,22%);width:80px;height:80px;border-radius:50%;overflow:hidden;flex-shrink:0;">${img}</div>`;
+    return `<div class="chat-header-av" style="background:hsl(${p.hue},20%,11%);border-color:hsl(${p.hue},28%,22%);width:42px;height:42px;border-radius:50%;overflow:hidden;flex-shrink:0;">${img}</div>`;
   }).join('');
   document.getElementById('chatHeaderNames').textContent = s.roomName || pList.map(p=>p.name).join(', ');
 
@@ -820,7 +802,6 @@ const avatarsEl = document.getElementById('chatHeaderAvatars');
   });
 
   show('chatScreen');
-  // neutral 이미지 먼저 로드 (최대 2초 대기)
   await Promise.race([
     Promise.all(pList.map(p => getNeutralImage(p.pid))),
     new Promise(r => setTimeout(r, 2000))
@@ -868,12 +849,13 @@ async function renderChatArea() {
 function buildEmotionCard(p, emotion, letter, dataUrl) {
   const h = p.hue || 0;
   const label = letter ? `${emotion}_${letter}` : emotion;
-  // ...
+  const imgHtml = dataUrl ? `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;object-position:top;">` : defaultAvatar(h);
+  
   const safePid = p.pid.replace(/'/g, "\\'");
   const safeEmotion = emotion.replace(/'/g, "\\'");
   const safeLetter = (letter || '').replace(/'/g, "\\'");
   
-const avStyle = userProfile.chatAvatarStyle || 'square';
+  const avStyle = userProfile.chatAvatarStyle || 'square';
   const avDisplay = avStyle === 'hidden' ? 'display:none;' : '';
   const avShape = avStyle === 'circle' ? 'border-radius:50%; aspect-ratio:1/1; height:auto;' : '';
 
@@ -907,13 +889,12 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}) {
     const safePid = p.pid.replace(/'/g, "\\'");
     const safeEmotion = (seg.emotion||'neutral').replace(/'/g, "\\'");
     const safeSuffix = suffix.replace(/'/g, "\\'");
-	const safeThumb = thumbSrc.replace(/'/g, "\\'");
+    const safeThumb = thumbSrc.replace(/'/g, "\\'");
     const celebStroke = p.type === 'celebrity' ? `box-shadow: inset 0 0 0 1.5px hsl(${h},70%,60%), 0 0 6px hsl(${h},60%,40%);` : '';
     
     // 설정에 따른 스타일 결정
-	const avStyle = userProfile.chatAvatarStyle || 'square';
+    const avStyle = userProfile.chatAvatarStyle || 'square';
     const avDisplay = avStyle === 'hidden' ? 'display:none;' : '';
-    // 높이를 auto로 풀고 1:1 비율을 강제하여 완벽한 정원으로 만듭니다.
     const avShape = avStyle === 'circle' ? 'border-radius:50%; aspect-ratio:1/1; height:auto;' : '';
     
     html += `<div class="ai-msg" style="${opacity}">
@@ -932,13 +913,11 @@ function parseResponse(text, pList) {
   if (!tagPattern) return [{ idx:0, content:text.trim(), emotion:'neutral' }];
   const cleaned = text.replace(/\([^)]+\)\s*(?=\[)/g, '');
   
-  // 변경 1: 태그 사이의 공백, 콜론 뒤의 공백, 대소문자를 모두 허용하도록 정규식 수정
   const segRegex = new RegExp(`\\[(${tagPattern})\\]\\s*(?:\\[emotion:\\s*([a-zA-Z]+)\\s*\\])?([\\s\\S]*?)(?=\\[\\/?(?:${tagPattern})\\]|$)`, 'g');
   const parts = [];
   let m;
   while ((m = segRegex.exec(cleaned)) !== null) {
     const pid = m[1];
-    // 변경 2: 추출된 감정 문자열을 소문자로 변환하여 EMOTIONS 배열과 비교
     const parsedEmotion = m[2] ? m[2].toLowerCase() : 'neutral';
     const emotion = EMOTIONS.includes(parsedEmotion) ? parsedEmotion : 'neutral';
     
@@ -953,7 +932,6 @@ function parseResponse(text, pList) {
   }
   if (!parts.length) {
     let fallback = text.replace(new RegExp(`\\[\\/?(?:${tagPattern})\\]`, 'g'), '');
-    // 변경 3: fallback 처리 시에도 공백과 대소문자를 무시하고 태그를 삭제하도록 정규식 수정
     fallback = fallback.replace(/\[emotion:\s*[a-zA-Z]+\s*\]/ig, '').trim();
     parts.push({ idx: 0, content: fallback || text.trim(), emotion: 'neutral' });
   }
@@ -992,7 +970,6 @@ function buildSystemPrompt(session) {
     session.responseMode === 'random' ? '한 명만 응답.' :
     '한 명: 사실질문/단순확인. 전원: 의사결정/비교/논쟁/열린질문.';
 
-  // 누락되었던 변수 생성 로직 추가
   const personaPart = pList.map(p => {
     let desc = `[${p.pid}] 이름:${p.name}`;
     if (p.age) desc += `, 나이/생년:${p.age}`;
@@ -1048,7 +1025,6 @@ async function sendMessage() {
   let reply = '';
   const pListAll = (session.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
 
-  // /감정 명령어: R2 파일 목록 기반으로 모든 변형 표시
   if (text === '/감정') {
     thinkEl.remove();
     const personaSnapshot = pListAll.map(p=>({pid:p.pid, name:p.name}));
@@ -1057,21 +1033,19 @@ async function sendMessage() {
     for (const p of pListAll) {
       const keys = await getImageList(p.pid);
       if (!keys.length) {
-        // 파일 없으면 EMOTIONS 기본 목록으로
         for (const emotion of EMOTIONS) {
           const dataUrl = await getEmotionImageSuffixed(p.pid, emotion, '') || await getNeutralImage(p.pid);
           html += buildEmotionCard(p, emotion, '', dataUrl);
         }
       } else {
-        // 파일 목록 정렬 후 전부 표시
         const sorted = [...keys].sort();
         for (const key of sorted) {
           const fname = key.split('/').pop().replace(/\.jpg$/i, '');
           const rest = fname.startsWith(p.pid + '_') ? fname.slice(p.pid.length + 1) : fname;
-          if (!rest) continue; // 폴더 키 스킵
+          if (!rest) continue;
           const parts = rest.split('_');
           const emotion = parts[0];
-          if (!emotion) continue; // 빈 emotion 스킵
+          if (!emotion) continue;
           const letter = parts[1] || '';
           const idbKey = letter ? `emotion_${p.pid}_${emotion}_${letter}` : `emotion_${p.pid}_${emotion}`;
           let dataUrl = null;
@@ -1088,7 +1062,6 @@ async function sendMessage() {
     if (replyEl.firstElementChild) area.appendChild(replyEl.firstElementChild);
     area.scrollTop = area.scrollHeight;
 
-    // 히스토리에는 파일명 목록으로 저장
     session.history.push({ role:'assistant', content:'(감정 테스트)', personaSnapshot, _suffixes: {} });
     session.lastPreview = '(감정 테스트)'; session.updatedAt = Date.now();
     isLoading = false;
@@ -1130,7 +1103,6 @@ async function sendMessage() {
   const pList = pListAll;
   const personaSnapshot = pList.map(p=>({pid:p.pid, name:p.name}));
 
-  // suffix 결정 → 메시지에 저장 (재진입 시 같은 이미지 유지)
   const suffixes = await resolveMessageSuffixes(reply, pList);
   session.history.push({ role:'assistant', content:reply, personaSnapshot, _suffixes: suffixes });
 
@@ -1290,11 +1262,11 @@ function kickPersona(pid) {
   saveIndex(); renderDrawerBody(s);
   
   const pList = s.participantPids.map(id => getPersona(id)).filter(Boolean);
-const avatarsEl = document.getElementById('chatHeaderAvatars');
+  const avatarsEl = document.getElementById('chatHeaderAvatars');
   if (avatarsEl) {
     avatarsEl.innerHTML = pList.map(p => {
       const img = p.image ? `<img src="${p.image}" style="width:100%;height:100%;object-fit:cover;object-position:top;">` : defaultAvatar(p.hue);
-      return `<div class="chat-header-av" style="background:hsl(${p.hue},20%,11%);border-color:hsl(${p.hue},28%,22%);width:80px;height:80px;border-radius:50%;overflow:hidden;flex-shrink:0;">${img}</div>`;
+      return `<div class="chat-header-av" style="background:hsl(${p.hue},20%,11%);border-color:hsl(${p.hue},28%,22%);width:42px;height:42px;border-radius:50%;overflow:hidden;flex-shrink:0;">${img}</div>`;
     }).join('');
     
     pList.forEach(async (p, i) => {
@@ -1486,7 +1458,7 @@ async function openProfilePopup(pid, emotion, hue, fallbackSrc, suffix = '') {
       return;
     }
 
-// 3. 마지막 수단: 무표정 원본
+    // 3. 마지막 수단: 무표정 원본
     if (eid !== 'neutral') {
       const neutralFull = await idbGet(`em_full_${pid}_neutral`);
       if (neutralFull && popup.classList.contains('open')) {
