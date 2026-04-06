@@ -804,10 +804,10 @@ async function openChat(id) {
   const s = getActiveSession(); if (!s) return;
   const pList = (s.participantPids || []).map(pid => getPersona(pid)).filter(Boolean);
 
-  const avatarsEl = document.getElementById('chatHeaderAvatars');
+const avatarsEl = document.getElementById('chatHeaderAvatars');
   avatarsEl.innerHTML = pList.map(p => {
-    const img = p.image ? `<img src="${p.image}">` : defaultAvatar(p.hue);
-    return `<div class="chat-header-av" style="background:hsl(${p.hue},20%,11%);border-color:hsl(${p.hue},28%,22%)">${img}</div>`;
+    const img = p.image ? `<img src="${p.image}" style="width:100%;height:100%;object-fit:cover;object-position:top;">` : defaultAvatar(p.hue);
+    return `<div class="chat-header-av" style="background:hsl(${p.hue},20%,11%);border-color:hsl(${p.hue},28%,22%);width:80px;height:80px;border-radius:50%;overflow:hidden;flex-shrink:0;">${img}</div>`;
   }).join('');
   document.getElementById('chatHeaderNames').textContent = s.roomName || pList.map(p=>p.name).join(', ');
 
@@ -1290,11 +1290,11 @@ function kickPersona(pid) {
   saveIndex(); renderDrawerBody(s);
   
   const pList = s.participantPids.map(id => getPersona(id)).filter(Boolean);
-  const avatarsEl = document.getElementById('chatHeaderAvatars');
+const avatarsEl = document.getElementById('chatHeaderAvatars');
   if (avatarsEl) {
     avatarsEl.innerHTML = pList.map(p => {
       const img = p.image ? `<img src="${p.image}" style="width:100%;height:100%;object-fit:cover;object-position:top;">` : defaultAvatar(p.hue);
-      return `<div class="chat-header-av" style="background:hsl(${p.hue},20%,11%);border-color:hsl(${p.hue},28%,22%);width:42px;height:42px;border-radius:50%;overflow:hidden;flex-shrink:0;">${img}</div>`;
+      return `<div class="chat-header-av" style="background:hsl(${p.hue},20%,11%);border-color:hsl(${p.hue},28%,22%);width:80px;height:80px;border-radius:50%;overflow:hidden;flex-shrink:0;">${img}</div>`;
     }).join('');
     
     pList.forEach(async (p, i) => {
