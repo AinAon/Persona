@@ -389,7 +389,7 @@ function savePersonas() {
     const { neutral_md, neutral_hd, neutral_thumb, image, ...rest } = p;
     return rest;
   });
-  try { localStorage.setItem(CACHE_PERSONAS_KEY, JSON.stringify(personas)); } catch(e) {}
+  try { localStorage.setItem(CACHE_PERSONAS_KEY, JSON.stringify(toSave)); } catch(e) {}
   // Worker KV에 저장
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (wUrl) {
