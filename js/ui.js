@@ -1227,7 +1227,19 @@ async function sendMessage() {
   input.value = ''; input.style.height = 'auto';
 
   const userHTML = renderUserBubbleHTML(text, attachments);
-  const userMsg = { role:'user', content: text||'(파일)', _rendered:`<div class="msg-group"><div class="user-msg">${userHTML}</div></div>` };
+  
+  let msgContent = text || '(파일)';
+  if (attachments.length > 0) {
+    msgContent = [];
+    if (text) msgContent.push({ type: 'text', text: text });
+    attachments.forEach(a => {
+      if (a.type === 'image') {
+        msgContent.push({ type: 'image_url', image_url: { url: a.dataUrl } });
+      }
+    });
+  }
+
+  const userMsg = { role:'user', content: msgContent, _rendered:`<div class="msg-group"><div class="user-msg">${userHTML}</div></div>` };
   session.history.push(userMsg);
   session.updatedAt = Date.now();
   attachments = [];
@@ -1308,13 +1320,13 @@ async function sendMessage() {
 if (session._demo) {
         await new Promise(r => setTimeout(r, 600));
         reply = window.getDemoReply ? window.getDemoReply(session) : '데모 응답 오류';
-      } else {
+} else {
         try {
           const apiMessages = [
             { role:'system', content: buildSystemPrompt(session) },
             ...session.history
               .filter(m => m.role==='user'||m.role==='assistant')
-              .map(m => ({ role:m.role, content: typeof m.content==='string' ? m.content : m.content.find?.(c=>c.type==='text')?.text||'' }))
+              .map(m => ({ role:m.role, content: m.content }))
           ];
           const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
           
