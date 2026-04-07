@@ -2,9 +2,9 @@
 const CHAT_MODELS = [
   { value: '', label: '기본 (채팅방 설정 따름)' },
   { group: 'Google' },
-  { value: 'gemini-2.5-flash',          label: 'Gemini 2.5 Flash' },
-  { value: 'gemini-3.1-pro-preview',    label: 'Gemini 3.1 Pro' },
   { value: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Lite' },
+  { value: 'gemini-3.1-pro-preview',    label: 'Gemini 3.1 Pro' },
+  { value: 'gemini-2.5-flash',          label: 'Gemini 2.5 Flash' },  
   { group: 'OpenAI' },
   { value: 'gpt-5.4-nano',  label: 'GPT-5.4 Nano' },
   { value: 'gpt-5.4-mini',  label: 'GPT-5.4 Mini' },
