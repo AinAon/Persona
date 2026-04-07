@@ -72,6 +72,13 @@ function getSuffixesForEmotion(keys, pid, emotion) {
   return { suffixed, hasBase };
 }
 
+// 브라우저 HTTP 캐시 버스팅 (clearImageCache 후 재로드 시 강제 재요청)
+function cacheBustUrl(url) {
+  const t = localStorage.getItem('img_cache_bust');
+  if (!t) return url;
+  return url + (url.includes('?') ? '&' : '?') + 't=' + t;
+}
+
 const _neutralCache = {};
 
 async function getNeutralImage(pid) {
@@ -123,7 +130,7 @@ async function getEmotionImageSuffixed(pid, emotion, letter) {
     const url = letter
       ? `${wUrl}/image/profile/${pid}/${pid}_${emotion}_${letter}.jpg`
       : `${wUrl}/image/profile/${pid}/${pid}_${emotion}.jpg`;
-    const resp = await fetch(url);
+    const resp = await fetch(cacheBustUrl(url));
     if (!resp.ok) {
       console.warn(`[emotion] 404: ${url}`);
       return null;
@@ -197,7 +204,7 @@ async function getEmotionImageHD(pid, emotion, letter = '') {
     }
     
     if (!url) return null;
-    const resp = await fetch(url);
+    const resp = await fetch(cacheBustUrl(url));
     if (!resp.ok) return null;
     const blob = await resp.blob();
     const dataUrl = await new Promise(r => {
@@ -335,7 +342,7 @@ async function loadNeutralDirect(pid) {
     console.log('[neutral] trying candidates for', pid, candidates.slice(0,3));
     for (const url of candidates) {
       try {
-        const resp = await fetch(url);
+        const resp = await fetch(cacheBustUrl(url));
         console.log('[neutral]', url, resp.status);
         if (!resp.ok) continue;
         const blob = await resp.blob();
@@ -353,23 +360,27 @@ async function loadNeutralDirect(pid) {
 }
 
 async function clearImageCache() {
-  if (!confirm('감정 이미지 캐시를 삭제하고 다시 로드할까?\n(커스텀 페르소나 이미지는 유지돼)')) return;
+  if (!confirm('이미지 캐시를 전부 삭제하고 R2에서 다시 받을까요?')) return;
   try {
+    // IDB 전체 삭제 (모든 캐시 키)
     const db = await openIDB();
-    const keys = await new Promise((res, rej) => {
-      const req = db.transaction(IDB_STORE).objectStore(IDB_STORE).getAllKeys();
-      req.onsuccess = () => res(req.result);
-      req.onerror = () => rej(req.error);
+    await new Promise((res, rej) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).clear();
+      tx.oncomplete = res;
+      tx.onerror = () => rej(tx.error);
     });
-    const toDelete = keys.filter(k =>
-      k.startsWith('emotion_') || k.startsWith('em_full_')
-    );
-    const tx = db.transaction(IDB_STORE, 'readwrite');
-    const store = tx.objectStore(IDB_STORE);
-    for (const k of toDelete) store.delete(k);
-    await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
-    showToast(`캐시 ${toDelete.length}개 삭제됨. 재시작할게요...`);
-    setTimeout(() => location.reload(), 1000);
+
+    // 메모리 캐시 즉시 비우기
+    Object.keys(_neutralCache).forEach(k => delete _neutralCache[k]);
+    Object.keys(_imageListCache).forEach(k => delete _imageListCache[k]);
+
+    // 브라우저 HTTP 캐시 버스트용 타임스탬프 저장
+    // → 다음 로드 시 R2 URL에 ?t= 붙여서 강제 재요청
+    localStorage.setItem('img_cache_bust', Date.now().toString());
+
+    showToast('캐시 삭제 완료. 재시작할게요...');
+    setTimeout(() => location.reload(), 800);
   } catch(e) { showToast('캐시 삭제 실패: ' + e.message); }
 }
 
