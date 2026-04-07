@@ -220,10 +220,14 @@ function handleSettingsUserImage(input) {
 // ══════════════════════════════
 //  PERSONA GRID
 // ══════════════════════════════
+let _personaGridRenderVersion = 0;
+
 async function renderPersonaGrid() {
   const COLS = 3;
   const grid = document.getElementById('personaGrid');
   grid.innerHTML = '';
+
+  const myVersion = ++_personaGridRenderVersion;
 
   for (let i = 0; i < personas.length; i++) {
     const p = personas[i];
@@ -233,6 +237,10 @@ async function renderPersonaGrid() {
     card.draggable = true;
 
     const neutral = await getEmotionImageHD(p.pid, 'neutral') || await getNeutralImage(p.pid);
+
+    // 새 render 호출이 이미 시작됐으면 이 루프 중단
+    if (myVersion !== _personaGridRenderVersion) return;
+
     const imgSrc = neutral || p.image;
     const nametagBg = `hsl(${p.hue},45%,22%)`;
     const isCeleb = p.type === 'celebrity';
@@ -312,6 +320,8 @@ async function renderPersonaGrid() {
 
     grid.appendChild(card);
   }
+
+  if (myVersion !== _personaGridRenderVersion) return;
 
   const addCard = document.createElement('div');
   addCard.className = 'persona-card add-card';
@@ -1011,7 +1021,26 @@ async function openChat(id) {
     new Promise(r => setTimeout(r, 2000))
   ]);
   renderChatArea();
-  if (!s._loaded) loadSession(id);
+
+  // _loaded 안 됐으면 무조건 로드
+  if (!s._loaded) {
+    loadSession(id);
+    return;
+  }
+
+  // KV updatedAt 비교 → 로컬보다 최신이면 강제 리프레시
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (wUrl && !s._demo) {
+    fetch(wUrl + '/session/' + id)
+      .then(r => r.json())
+      .then(data => {
+        const kvUpdatedAt = data.session?.updatedAt;
+        if (kvUpdatedAt && kvUpdatedAt > (s.updatedAt || 0)) {
+          loadSession(id); // 최신 내용으로 교체
+        }
+      })
+      .catch(() => {});
+  }
 }
 
 function goMain() {
