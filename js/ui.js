@@ -1202,6 +1202,22 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}) {
   return `<div class="msg-group ai-msgs">${html}</div>`;
 }
 
+// 콘텐츠에서 모델이 잘못 추가한 태그 제거
+// [worry]...[/worry], [emotion:worry], [p_xxx]...[/p_xxx] 등
+function cleanContent(text) {
+  const emotionPat = EMOTIONS.join('|');
+  return text
+    // [emotionName]...[/emotionName] 감싸기 → 내용만 남김
+    .replace(new RegExp(`\\[(${emotionPat})\\]([\\s\\S]*?)\\[\\/(${emotionPat})\\]`, 'gi'), '$2')
+    // 단독 [emotionName] 또는 [/emotionName]
+    .replace(new RegExp(`\\[\\/?(?:${emotionPat})\\]`, 'gi'), '')
+    // [emotion:xxx] 태그
+    .replace(/\[emotion:\s*\w+\s*\]/gi, '')
+    // 이름: 으로 시작하는 접두어 (pid 태그 없이 이름만 붙는 경우)
+    .replace(/^\s*\w+\s*:\s*/, '')
+    .trim();
+}
+
 function parseResponse(text, pList) {
   const tagPattern = pList.map(p => p.pid).join('|');
   if (!tagPattern) return [{ idx:0, content:text.trim(), emotion:'neutral' }];
@@ -1221,12 +1237,14 @@ function parseResponse(text, pList) {
     if (idx !== -1) {
       const namePrefix = new RegExp(`^${pList[idx].name}\\s*:\\s*`, 'i');
       content = content.replace(namePrefix, '').trim();
+      content = cleanContent(content); // 잔여 감정태그 제거
       if (content) parts.push({ idx, content, emotion });
     }
   }
   if (!parts.length) {
     let fallback = text.replace(new RegExp(`\\[\\/?(?:${tagPattern})\\]`, 'g'), '');
     fallback = fallback.replace(/\[emotion:\s*[a-zA-Z]+\s*\]/ig, '').trim();
+    fallback = cleanContent(fallback);
     parts.push({ idx: 0, content: fallback || text.trim(), emotion: 'neutral' });
   }
   return parts;
@@ -1323,7 +1341,7 @@ function buildSystemPrompt(session) {
 
   const formatEx = pList.map(p => `[${p.pid}][emotion:감정]내용[/${p.pid}]`).join('\n');
 
-  return `${worldPart}${userPart}${personaPart}\n\n형식:\n${formatEx}\nemotion: ${EMOTIONS.join('/')}${modeInstr ? '\n'+modeInstr : ''}\n호칭은 자연스러운 맥락에서만 가끔 사용. 매 발화 시작에 붙이지 말 것.\n필요시 태그 내용에 마크다운(표, 코드블록, 목록 등) 사용 가능.`;
+  return `${worldPart}${userPart}${personaPart}\n\n형식:\n${formatEx}\nemotion: ${EMOTIONS.join('/')}\n규칙: emotion 태그는 반드시 pid 태그 바로 뒤에 한 번만. 내용 안에 [감정명] 태그 절대 금지. 이름: 접두어 금지.${modeInstr ? '\n'+modeInstr : ''}\n호칭은 자연스러운 맥락에서만 가끔 사용. 매 발화 시작에 붙이지 말 것.\n필요시 태그 내용에 마크다운(표, 코드블록, 목록 등) 사용 가능.`;
 }
 
 function renderUserBubbleHTML(text, atts) {
