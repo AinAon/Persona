@@ -157,8 +157,11 @@ function switchTab(tab) {
 function renderSettingsPane() {
   const av = document.getElementById('settingsUserAv');
   if (av) av.innerHTML = userProfile.image
-    ? `<img src="${userProfile.image}" style="width:100%;height:100%;object-fit:cover;object-position:top">`
+    ? `<img src="${userProfile.image}" style="width:100%;height:100%;object-fit:cover;">`
     : `<svg viewBox="0 0 36 36" style="width:100%;height:100%"><circle cx="18" cy="14" r="7" fill="hsl(220,30%,35%)"/><ellipse cx="18" cy="30" rx="11" ry="7" fill="hsl(220,30%,28%)"/></svg>`;
+  // 삭제 버튼 표시/숨김
+  const delBtn = document.getElementById('settingsDelAvBtn');
+  if (delBtn) delBtn.style.display = userProfile.image ? 'block' : 'none';
   const nameEl = document.getElementById('settingsUserName');
   const bioEl = document.getElementById('settingsUserBio');
   if (nameEl) nameEl.value = userProfile.name || '';
@@ -207,7 +210,7 @@ function handleSettingsUserImage(input) {
   const file = input.files[0]; if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
-    openCropEditor(e.target.result, (cropped) => {
+    openAvatarCropEditor(e.target.result, async (cropped) => {
       userProfile.image = cropped;
       saveUserProfile();
       renderSettingsPane();
@@ -215,6 +218,15 @@ function handleSettingsUserImage(input) {
     });
   };
   reader.readAsDataURL(file);
+  input.value = '';
+}
+
+function deleteSettingsUserImage() {
+  if (!confirm('프로필 이미지를 삭제할까요?')) return;
+  userProfile.image = null;
+  saveUserProfile();
+  renderSettingsPane();
+  idbSet('user_profile_hd', null).catch(()=>{});
 }
 
 // ══════════════════════════════
