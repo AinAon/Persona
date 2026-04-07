@@ -635,6 +635,29 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
   </div>
 </div>
 
+<!-- 프로필 아바타 전용 1:1 크롭 에디터 -->
+<div class="crop-overlay" id="cropOverlayAvatar">
+  <div class="crop-title">프로필 사진 조정</div>
+  <div class="crop-container" id="cropContainerAvatar" style="aspect-ratio:1/1; width:min(76vw,76vh); border-radius:50%;">
+    <img class="crop-img" id="cropImgAvatar" draggable="false">
+    <svg class="crop-guide-mask" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" style="position:absolute;inset:0;pointer-events:none;z-index:2">
+      <defs>
+        <mask id="avatarHoleMask">
+          <rect width="200" height="200" fill="white"/>
+          <circle cx="100" cy="100" r="99" fill="black"/>
+        </mask>
+      </defs>
+      <rect width="200" height="200" fill="rgba(0,0,0,0.35)" mask="url(#avatarHoleMask)"/>
+      <circle cx="100" cy="100" r="99" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="1.5"/>
+    </svg>
+  </div>
+  <div class="crop-hint">드래그로 이동 · 휠/핀치로 확대</div>
+  <div class="crop-actions">
+    <button class="crop-btn cancel" onclick="closeAvatarCropEditor()">취소</button>
+    <button class="crop-btn confirm" onclick="confirmAvatarCrop()">적용</button>
+  </div>
+</div>
+
 <div class="profile-popup" id="profilePopup" onclick="closeProfilePopup()">
   <div class="profile-popup-img" id="profilePopupImg"></div>
 </div>
@@ -673,15 +696,16 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
   </div>
 
   <div id="settingsPane" style="display:none;position:relative;flex-direction:column;flex:1;overflow:hidden;height:100%;">
-    <div class="chat-header" style="flex-shrink:0;">
-      <div style="font-size:16px; font-weight:700; padding:16px;">설정</div>
-    </div>
+    <div class="main-titlebar">Settings</div>
 
     <div style="flex:1;overflow-y:auto;padding:20px 18px 100px 18px;display:flex;flex-direction:column;gap:20px">
       <div>
         <div class="field-label" style="margin-bottom:12px">내 프로필</div>
         <div style="display:flex;gap:14px;align-items:flex-start">
-          <div id="settingsUserAv" style="width:72px;height:72px;border-radius:50%;overflow:hidden;border:1.5px solid var(--border2);flex-shrink:0;cursor:pointer;background:var(--card)" onclick="document.getElementById('settingsUserImgInput').click()">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0">
+            <div id="settingsUserAv" style="width:72px;height:72px;border-radius:50%;overflow:hidden;border:1.5px solid var(--border2);cursor:pointer;background:var(--card)" onclick="document.getElementById('settingsUserImgInput').click()">
+            </div>
+            <button id="settingsDelAvBtn" onclick="deleteSettingsUserImage()" style="display:none;background:none;border:none;color:var(--muted);font-size:10px;cursor:pointer;padding:0;font-family:'Pretendard',sans-serif;letter-spacing:.03em">삭제</button>
           </div>
           <input type="file" id="settingsUserImgInput" style="display:none" accept="image/*" onchange="handleSettingsUserImage(this)">
           <div style="flex:1;display:flex;flex-direction:column;gap:8px">
