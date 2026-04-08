@@ -1083,9 +1083,24 @@ async function renderChatArea() {
   for (const msg of session.history) {
     const el = document.createElement('div');
     if (msg.role === 'user') {
-      let text = typeof msg.content === 'string' ? msg.content : (Array.isArray(msg.content) ? msg.content.find(c=>c.type==='text')?.text||'(메시지)' : '(메시지)');
-      el.innerHTML = msg._rendered || `<div class="msg-group"><div class="user-msg">${fmt(text)}</div></div>`;
-    } else {
+  let bubbleHTML = "";
+  if (typeof msg.content === 'string') {
+    bubbleHTML = fmt(msg.content);
+  } else if (Array.isArray(msg.content)) {
+    // 텍스트와 이미지를 모두 순회하며 HTML 생성
+    msg.content.forEach(c => {
+      if (c.type === 'text') {
+        bubbleHTML += fmt(c.text);
+      } else if (c.type === 'image_url') {
+        bubbleHTML += `
+          <div class="bubble-img-container">
+            <img class="bubble-img" src="${c.image_url.url}" onclick="openImagePopup('${c.image_url.url}')">
+          </div>`;
+      }
+    });
+  }
+  el.innerHTML = `<div class="msg-group"><div class="user-msg">${bubbleHTML}</div></div>`;
+} else {
       const pList = (session.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
       const renderPersonas = msg.personaSnapshot
         ? msg.personaSnapshot.map(snap => getPersona(snap.pid) || { pid:snap.pid, name:snap.name, image:null, hue:0, _ghost:true })
