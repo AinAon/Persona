@@ -283,8 +283,10 @@ function pickRespondingPersonas(session, pList) {
 }
 
 function wrapPersonaReply(pid, reply) {
-  const cleaned = cleanContent(String(reply || '').trim()) || '...';
-  return `[${pid}]${cleaned}[/${pid}]`;
+  const text = String(reply || '').trim() || '...';
+  const alreadyWrapped = new RegExp(`^\\[${pid}\\][\\s\\S]*\\[\\/${pid}\\]$`, 'i').test(text);
+  if (alreadyWrapped) return text;
+  return `[${pid}]${text}[/${pid}]`;
 }
 
 async function buildAttachmentRecord(file) {
@@ -1570,6 +1572,12 @@ function parseResponse(text, pList) {
     const emotion = EMOTIONS.includes(parsedEmotion) ? parsedEmotion : 'neutral';
     
     let content = m[3].trim();
+    const pidWrapRe = new RegExp(`^\\[${pid}\\]([\\s\\S]*?)\\[\\/${pid}\\]$`, 'i');
+    let unwrapMatch = content.match(pidWrapRe);
+    while (unwrapMatch) {
+      content = (unwrapMatch[1] || '').trim();
+      unwrapMatch = content.match(pidWrapRe);
+    }
     if (!content) continue;
     const idx = pList.findIndex(p => p.pid === pid);
     if (idx !== -1) {
