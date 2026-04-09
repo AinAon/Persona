@@ -843,6 +843,7 @@ function setupTouchDrag(grid) {
     getCards().forEach(c => {
       c.style.transition = '';
       c.style.opacity = '';
+      c.style.visibility = '';
       delete c.dataset.dragging;
     });
     if (ghost?.parentNode) ghost.parentNode.removeChild(ghost);
@@ -911,7 +912,8 @@ function setupTouchDrag(grid) {
       dragEl = card;
       dragPid = card.dataset.pid;
       card.dataset.dragging = '1';
-      card.style.opacity = '0.12';
+      card.style.opacity = '0';
+      card.style.visibility = 'hidden';
       ensureSlot();
       grid.insertBefore(slotEl, card.nextSibling);
 
