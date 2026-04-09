@@ -225,8 +225,33 @@ export default {
                 ? "data:image/png;base64," + d.data[0].b64_json : "");
             }
 
-          // ── Gemini / Imagen ──────────────────────
-          } else if (model.startsWith("gemini") || model.startsWith("imagen")) {
+          // ── Gemini Image ─────────────────────────
+          } else if (model.startsWith("gemini")) {
+            const ratioHint = ratio !== "1:1" ? `\n\nAspect ratio: ${ratio}` : "";
+            const r = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/${apiModel}:generateContent?key=${apiKeys.gemini}`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  contents: [{ role: "user", parts: [{ text: userPrompt + ratioHint }] }],
+                  generationConfig: {
+                    responseModalities: ["IMAGE"],
+                    candidateCount: 1
+                  }
+                })
+              }
+            );
+            const text = await r.text();
+            if (!r.ok) throw new Error(`Gemini Image Error: ${text}`);
+            const d = JSON.parse(text);
+            const parts = d.candidates?.[0]?.content?.parts || [];
+            const inlinePart = parts.find(p => p?.inlineData?.data || p?.inline_data?.data);
+            const b64 = inlinePart?.inlineData?.data || inlinePart?.inline_data?.data;
+            if (b64) imageUrl = "data:image/png;base64," + b64;
+
+          // ── Imagen ───────────────────────────────
+          } else if (model.startsWith("imagen")) {
             const r = await fetch(
               `https://generativelanguage.googleapis.com/v1beta/models/${apiModel}:predict?key=${apiKeys.gemini}`,
               {
@@ -234,12 +259,12 @@ export default {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                   instances: [{ prompt: userPrompt }],
-                  parameters: { sampleCount: 1, aspectRatio: ratio.replace(":", "x") }
+                  parameters: { sampleCount: 1, aspectRatio: ratio }
                 })
               }
             );
             const text = await r.text();
-            if (!r.ok) throw new Error(`Gemini Image Error: ${text}`);
+            if (!r.ok) throw new Error(`Imagen Error: ${text}`);
             const d = JSON.parse(text);
             const pred = d.predictions?.[0];
             if (pred?.bytesBase64Encoded) {
