@@ -571,7 +571,7 @@ async function renderPersonaGrid() {
     card.dataset.pid = p.pid;
     card.draggable = true;
 
-    const neutral = await getEmotionImageHD(p.pid, 'neutral') || await getNeutralImage(p.pid);
+    const neutral = await getEmotionImage(p.pid, 'neutral') || await getNeutralImage(p.pid);
 
     // 새 render 호출이 이미 시작됐으면 이 루프 중단
     if (myVersion !== _personaGridRenderVersion) return;
@@ -581,7 +581,7 @@ async function renderPersonaGrid() {
     const isCeleb = p.type === 'celebrity';
     const celebStroke = isCeleb ? `box-shadow: inset 0 0 0 1.5px hsl(${p.hue},70%,60%), 0 0 8px hsl(${p.hue},60%,40%);` : '';
     card.innerHTML = `
-      <div class="persona-card-img" style="${celebStroke}; aspect-ratio: 1 / 3; overflow: hidden; max-height: 1200px;">
+      <div class="persona-card-img" style="${celebStroke}; aspect-ratio: 1 / 3; overflow: hidden; max-height: 600px;">
         ${imgSrc ? `<img src="${imgSrc}" style="width: 100%; height: 100%; object-fit: cover; object-position: center;">` : defaultAvatar(p.hue)}
       </div>
       <div class="persona-card-name" style="background:${nametagBg}">${esc(p.name)}</div>`;
