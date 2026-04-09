@@ -1,0 +1,17 @@
+{
+  "name": "persona-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-01-01",
+  "kv_namespaces": [
+    {
+      "binding": "KV",
+      "id": "6370fac4b77743d2b6e1a1617ba00763"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "R2",
+      "bucket_name": "persona-images"
+    }
+  ]
+}
