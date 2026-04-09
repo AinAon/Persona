@@ -1,7 +1,7 @@
 // ══════════════════════════════
 //  INDEXED DB (로컬 이미지 캐싱)
 // ══════════════════════════════
-const IDB_NAME = 'personachat_v4', IDB_STORE = 'images', IDB_VER = 2;
+const IDB_NAME = 'personachat_v4', IDB_STORE = 'images', IDB_VER = 3;
 let _idb = null;
 const IMAGE_CACHE_SIZES = {
   HD: 1200,
@@ -16,7 +16,8 @@ function openIDB() {
     const req = indexedDB.open(IDB_NAME, IDB_VER);
     req.onupgradeneeded = e => {
       const db = e.target.result;
-      if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
+      if (db.objectStoreNames.contains(IDB_STORE)) db.deleteObjectStore(IDB_STORE);
+      db.createObjectStore(IDB_STORE);
     };
     req.onsuccess = e => { _idb = e.target.result; res(_idb); };
     req.onerror = () => rej(req.error);
