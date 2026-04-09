@@ -694,6 +694,7 @@ function deleteSettingsUserImage() {
 // ══════════════════════════════
 let _personaGridRenderVersion = 0;
 let _suppressPersonaTapUntil = 0;
+let _chatOpenToken = 0;
 
 async function getRandomPersonaGridImage(pid) {
   const emotions = ['neutral', 'subtlesmile', 'shy', 'surprise'];
@@ -815,9 +816,8 @@ function setupTouchDrag(grid) {
 
   const LONG_PRESS_MS = 280;
   const MOVE_CANCEL_PX = 12;
-  const COLS = 3;
-  const GAP = 12;
   const getCards = () => [...grid.querySelectorAll('.persona-card[data-pid]')];
+  const getAddCard = () => grid.querySelector('.persona-card.add-card');
 
   let holdTimer = null;
   let pressStart = null;
@@ -825,51 +825,44 @@ function setupTouchDrag(grid) {
   let dragEl = null;
   let dragPid = null;
   let ghost = null;
-  let currentOrder = null;
+  let slotEl = null;
   let pressType = null; // 'touch' | 'mouse'
 
   function clearVisuals() {
     getCards().forEach(c => {
       c.style.transition = '';
-      c.style.transform = '';
       c.style.opacity = '';
       delete c.dataset.dragging;
     });
     if (ghost?.parentNode) ghost.parentNode.removeChild(ghost);
+    if (slotEl?.parentNode) slotEl.parentNode.removeChild(slotEl);
     ghost = null;
+    slotEl = null;
   }
 
-  function applyOrderPreview(order) {
-    const cards = getCards();
-    const gridRect = grid.getBoundingClientRect();
-    const colWidth = (gridRect.width - GAP * (COLS - 1)) / COLS;
-    const rowHeight = (dragEl?.getBoundingClientRect().height || 0) + GAP;
-
-    cards.forEach((c, i) => {
-      const newPos = order.indexOf(c.dataset.pid);
-      const curRow = Math.floor(i / COLS), curCol = i % COLS;
-      const newRow = Math.floor(newPos / COLS), newCol = newPos % COLS;
-      const tx = (newCol - curCol) * (colWidth + GAP);
-      const ty = (newRow - curRow) * rowHeight;
-      c.style.transition = 'transform .18s cubic-bezier(.22,.8,.26,1)';
-      if (c !== dragEl) c.style.transform = `translate(${tx}px,${ty}px)`;
-    });
+  function ensureSlot() {
+    if (slotEl) return slotEl;
+    slotEl = document.createElement('div');
+    slotEl.className = 'persona-card drag-slot';
+    const addCard = getAddCard();
+    if (addCard) grid.insertBefore(slotEl, addCard);
+    else grid.appendChild(slotEl);
+    return slotEl;
   }
 
-  function closestIndex(touchX, touchY, order) {
+  function findClosestCard(x, y) {
     const cards = getCards();
-    let bestPid = null;
+    let bestCard = null;
     let best = Infinity;
     for (const c of cards) {
       if (c === dragEl) continue;
       const r = c.getBoundingClientRect();
       const cx = r.left + r.width / 2;
       const cy = r.top + r.height / 2;
-      const d = Math.hypot(touchX - cx, touchY - cy);
-      if (d < best) { best = d; bestPid = c.dataset.pid; }
+      const d = Math.hypot(x - cx, y - cy);
+      if (d < best) { best = d; bestCard = c; }
     }
-    if (!bestPid) return order.indexOf(dragPid);
-    return order.indexOf(bestPid);
+    return bestCard;
   }
 
   function finishDrag(commit = true) {
@@ -878,11 +871,16 @@ function setupTouchDrag(grid) {
     if (!isDragging) return;
     isDragging = false;
 
-    const finalOrder = currentOrder ? [...currentOrder] : null;
+    const finalOrder = commit ? [...grid.children]
+      .filter(el => el.classList?.contains('persona-card'))
+      .map(el => {
+        if (el === slotEl) return dragPid;
+        return el.dataset?.pid || null;
+      })
+      .filter(Boolean) : null;
     clearVisuals();
     dragEl = null;
     dragPid = null;
-    currentOrder = null;
     pressStart = null;
     pressType = null;
 
@@ -901,10 +899,10 @@ function setupTouchDrag(grid) {
       isDragging = true;
       dragEl = card;
       dragPid = card.dataset.pid;
-      currentOrder = getCards().map(c => c.dataset.pid);
-
       card.dataset.dragging = '1';
       card.style.opacity = '0.12';
+      ensureSlot();
+      grid.insertBefore(slotEl, card.nextSibling);
 
       const rect = card.getBoundingClientRect();
       ghost = card.cloneNode(true);
@@ -945,15 +943,15 @@ function setupTouchDrag(grid) {
     ghost.style.left = `${x - rect.width / 2}px`;
     ghost.style.top = `${y - rect.height / 2}px`;
 
-    const from = currentOrder.indexOf(dragPid);
-    const to = closestIndex(x, y, currentOrder);
-    if (from === to || to < 0) return;
-
-    const next = [...currentOrder];
-    next.splice(from, 1);
-    next.splice(to, 0, dragPid);
-    currentOrder = next;
-    applyOrderPreview(next);
+    const closest = findClosestCard(x, y);
+    if (!closest) return;
+    const r = closest.getBoundingClientRect();
+    const insertBefore = y < (r.top + r.height / 2);
+    if (insertBefore) {
+      if (closest !== slotEl) grid.insertBefore(slotEl, closest);
+    } else {
+      if (closest.nextSibling !== slotEl) grid.insertBefore(slotEl, closest.nextSibling);
+    }
   }
 
   // Disable browser long-press/context-menu on cards (mobile + desktop).
@@ -1553,8 +1551,17 @@ function startNewChat() {
 async function openChat(id) {
   _isDemoMode = false;
   activeChatId = id;
+  const openToken = ++_chatOpenToken;
   const s = getActiveSession(); if (!s) return;
   const pList = getSessionPersonas(s);
+  const area = document.getElementById('chatArea');
+  const empty = document.getElementById('chatEmpty2');
+  if (area) {
+    area.classList.remove('has-messages');
+    [...area.children].forEach(c => { if (c.id !== 'chatEmpty2') c.remove(); });
+    area.scrollTop = 0;
+  }
+  if (empty) empty.style.display = 'flex';
 
   const avatarsEl = document.getElementById('chatHeaderAvatars');
   avatarsEl.innerHTML = pList.map(p => {
@@ -1573,7 +1580,9 @@ async function openChat(id) {
   updateChatHeaderActionButtons();
 
   pList.forEach(async (p, i) => {
+    if (openToken !== _chatOpenToken || activeChatId !== id) return;
     const img = await getNeutralImage(p.pid); // 사각 crop 소스 호출
+    if (openToken !== _chatOpenToken || activeChatId !== id) return;
     if (img) {
       const avEl = avatarsEl.children[i];
       if (avEl) avEl.innerHTML = `<img src="${img}" style="width:100%;height:100%;object-fit:cover;object-position:top;">`;
@@ -1595,6 +1604,7 @@ async function openChat(id) {
     Promise.all(pList.map(p => getNeutralImage(p.pid))),
     new Promise(r => setTimeout(r, 2000))
   ]);
+  if (openToken !== _chatOpenToken || activeChatId !== id) return;
   renderChatArea();
 
   // _loaded 안 됐으면 무조건 로드
@@ -1657,12 +1667,14 @@ async function renderChatArea() {
         : pList;
       el.innerHTML = await renderAIResponseHTML(msg.content, renderPersonas, msg._suffixes || {});
     }
+    if (activeChatId !== renderSessionId) return;
     if (el.firstElementChild) {
       enhanceRenderedMessage(el.firstElementChild);
       attachMessageMeta(el.firstElementChild, msg.createdAt, msg.role === 'user' ? 'right' : 'left');
       fragment.appendChild(el.firstElementChild);
     }
   }
+  if (activeChatId !== renderSessionId) return;
   [...area.children].forEach(c => { if (c.id !== 'chatEmpty2') c.remove(); });
   area.appendChild(fragment);
   renderMermaidBlocks(area);

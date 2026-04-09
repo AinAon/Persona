@@ -451,7 +451,11 @@ async function loadSession(id) {
   if (!s._loaded) {
     try {
       const cached = getLocalSession(id);
-      if (cached) { s.history = cached; s._loaded = true; renderChatArea(); }
+      if (cached) {
+        s.history = cached;
+        s._loaded = true;
+        if (activeChatId === id) renderChatArea();
+      }
     } catch(e) {}
   }
   // KV에서 로드
@@ -464,7 +468,7 @@ async function loadSession(id) {
       s.history = data.session.history;
       s._loaded = true;
       setLocalSession(id, s.history);
-      renderChatArea();
+      if (activeChatId === id) renderChatArea();
     } else { s._loaded = true; }
   } catch(e) {}
 }
