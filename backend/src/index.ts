@@ -3,9 +3,21 @@ import { handleChat } from "./routes_chat";
 
 export type CorsHeaders = Record<string, string>;
 
+interface KVStore {
+  get(key: string): Promise<string | null>;
+  put(key: string, value: string): Promise<void>;
+  delete(key: string): Promise<void>;
+}
+
+interface R2Store {
+  get(key: string): Promise<any>;
+  put(key: string, value: any, options?: any): Promise<void>;
+  list(options?: any): Promise<{ objects?: Array<{ key: string }> }>;
+}
+
 export interface Env {
-  KV: KVNamespace;
-  R2: R2Bucket;
+  KV: KVStore;
+  R2: R2Store;
   GEMINI_KEY?: string;
   GROK_KEY?: string;
   OPENAI_KEY?: string;
