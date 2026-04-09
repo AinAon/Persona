@@ -343,6 +343,18 @@ function pickRespondingPersonas(session, pList) {
   return [shuffleArray(pList)[0]];
 }
 
+function getSessionPersonas(session) {
+  const seen = new Set();
+  return (session?.participantPids || [])
+    .filter(pid => {
+      if (!pid || seen.has(pid)) return false;
+      seen.add(pid);
+      return true;
+    })
+    .map(pid => getPersona(pid))
+    .filter(Boolean);
+}
+
 function wrapPersonaReply(pid, reply) {
   const text = String(reply || '').trim() || '...';
   const alreadyWrapped = new RegExp(`^\\[${pid}\\][\\s\\S]*\\[\\/${pid}\\]$`, 'i').test(text);
@@ -1382,7 +1394,7 @@ async function openChat(id) {
   _isDemoMode = false;
   activeChatId = id;
   const s = getActiveSession(); if (!s) return;
-  const pList = (s.participantPids || []).map(pid => getPersona(pid)).filter(Boolean);
+  const pList = getSessionPersonas(s);
 
   const avatarsEl = document.getElementById('chatHeaderAvatars');
   avatarsEl.innerHTML = pList.map(p => {
@@ -1479,7 +1491,7 @@ async function renderChatArea() {
   let text = typeof msg.content === 'string' ? msg.content : (Array.isArray(msg.content) ? msg.content.find(c=>c.type==='text')?.text||'(메시지)' : '(메시지)');
   el.innerHTML = msg._rendered || `<div class="msg-group"><div class="user-msg">${fmt(text)}</div></div>`;
 } else {
-      const pList = (session.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
+      const pList = getSessionPersonas(session);
       const renderPersonas = msg.personaSnapshot
         ? msg.personaSnapshot.map(snap => getPersona(snap.pid) || { pid:snap.pid, name:snap.name, image:null, hue:0, _ghost:true })
         : pList;
@@ -1880,7 +1892,7 @@ async function sendMessage() {
   area.appendChild(thinkEl);
   area.scrollTop = area.scrollHeight;
 
-  const pListAll = (session.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
+  const pListAll = getSessionPersonas(session);
 
   if (text === '/감정') {
     thinkEl.remove();
@@ -2377,7 +2389,7 @@ function toggleInvitePid(pid, card, s) {
 
 function confirmInvite() {
   const s = getActiveSession(); if (!s) return;
-  s.participantPids = [...(s.participantPids||[]), ...selectedPids];
+  s.participantPids = Array.from(new Set([...(s.participantPids || []), ...selectedPids]));
   s.updatedAt = Date.now();
   saveIndex(); closeInviteModal(); closeDrawer(); openChat(s.id); showToast(`${selectedPids.length}명 초대됨`);
 }

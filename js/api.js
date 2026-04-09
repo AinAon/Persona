@@ -391,7 +391,7 @@ function savePersonas() {
 function buildIndex() {
   return sessions.filter(s=>!s._demo).map(s=>({
     id:s.id, updatedAt:s.updatedAt, lastPreview:s.lastPreview,
-    participantPids:s.participantPids, roomName:s.roomName||'',
+    participantPids:Array.from(new Set(s.participantPids || [])), roomName:s.roomName||'',
     responseMode:s.responseMode, worldContext:s.worldContext,
     userOverride: s.userOverride || null,
     userProfileMode: s.userProfileMode || 'default',
