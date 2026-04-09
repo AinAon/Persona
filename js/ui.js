@@ -145,13 +145,36 @@ function getTargetModelForRequest(session, isImageReq) {
     return document.getElementById('imageModelSelect')?.value || 'grok-imagine-image-pro';
   }
   const pListForModel = (session.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
-  const targetModel = session.overrideModel
-    || pListForModel.find(p => p.defaultModel)?.defaultModel
+  const targetModel = pListForModel.find(p => p.defaultModel)?.defaultModel
     || document.getElementById('chatModeSelect')?.value
     || 'grok-4.20-non-reasoning-latest';
   const sel = document.getElementById('chatModeSelect');
   if (sel && sel.value !== targetModel) sel.value = targetModel;
   return targetModel;
+}
+
+function getPersonaModel(persona) {
+  return persona?.defaultModel || document.getElementById('chatModeSelect')?.value || 'grok-4.20-non-reasoning-latest';
+}
+
+function shuffleArray(list) {
+  const arr = [...list];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function pickRespondingPersonas(session, pList) {
+  if (pList.length <= 1) return pList;
+  if (session.responseMode === 'all') return shuffleArray(pList);
+  return [shuffleArray(pList)[0]];
+}
+
+function wrapPersonaReply(pid, reply) {
+  const cleaned = cleanContent(String(reply || '').trim()) || '...';
+  return `[${pid}]${cleaned}[/${pid}]`;
 }
 
 async function buildAttachmentRecord(file) {
@@ -1207,11 +1230,10 @@ async function openChat(id) {
   show('chatScreen');
   switchInputTab('chat');
 
-  // 페르소나 defaultModel 적용 (overrideModel 우선, 없으면 첫 번째 페르소나 기본값)
+  // 첫 번째 페르소나 기본 모델을 표시용으로만 동기화
   const modelEl = document.getElementById('chatModeSelect');
   if (modelEl) {
-    const effectiveModel = s.overrideModel
-      || pList.find(p => p.defaultModel)?.defaultModel
+    const effectiveModel = pList.find(p => p.defaultModel)?.defaultModel
       || '';
     if (effectiveModel) modelEl.value = effectiveModel;
   }
@@ -1521,8 +1543,8 @@ function autoResize(el) {
   el.style.height = Math.min(el.scrollHeight, 120) + 'px';
 }
 
-function buildSystemPrompt(session) {
-  const pList = (session.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
+function buildSystemPrompt(session, pListOverride = null) {
+  const pList = pListOverride || (session.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
   const worldPart = session.worldContext ? `${session.worldContext}\n\n` : '';
   
   const uMode = session.userProfileMode || 'default';
@@ -1723,6 +1745,41 @@ async function sendMessage() {
 
         // targetModel is resolved before we clear attachments.
 
+        if (!isImageReq) {
+          const responders = pickRespondingPersonas(session, pListAll);
+          const parts = [];
+          for (const persona of responders) {
+            const personaImageUrls = [];
+            for (const attachment of sentAttachments.filter(isImageAttachment)) {
+              const imageUrl = await getAttachmentRequestUrl(attachment, getPersonaModel(persona), false);
+              if (imageUrl) personaImageUrls.push(imageUrl);
+            }
+            const personaRequestMsgContent = sentAttachments.length > 0
+              ? buildUserMessageContent(text, personaImageUrls)
+              : text || '(?뚯씪)';
+            const personaMessages = [
+              { role:'system', content: buildSystemPrompt(session, [persona]) },
+              ...session.history
+                .filter(m => m.role==='user'||m.role==='assistant')
+                .map(m => ({ role:m.role, content: m === userMsg ? personaRequestMsgContent : m.content }))
+            ];
+            const res = await fetch(wUrl + '/chat', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                messages: personaMessages,
+                model: getPersonaModel(persona)
+              })
+            });
+            const data = await res.json();
+            if (data.result !== 'success') {
+              parts.push(`[${persona.pid}]?앹꽦 ?ㅻ쪟: ${data.error||'?????녿뒗 ?ㅻ쪟'}[/${persona.pid}]`);
+            } else {
+              parts.push(wrapPersonaReply(persona.pid, data.reply || ''));
+            }
+          }
+          reply = parts.join('\n');
+        } else {
         const ratio = typeof _selectedRatio !== 'undefined' ? _selectedRatio : "1:1";
 
         // 모델별 파라미터 분기
@@ -1765,6 +1822,7 @@ async function sendMessage() {
           const pid0 = session.participantPids?.[0] || 'p';
           reply = `[${pid0}]생성 오류: ${data.error||'알 수 없는 오류'}[/${pid0}]`;
         } else { reply = data.reply || ''; }
+        }
       } catch(e) {
         const pid0 = session.participantPids?.[0] || 'p';
         reply = `[${pid0}]연결 실패: ${e.message}[/${pid0}]`;
@@ -1922,7 +1980,7 @@ async function renderDrawerBody(s) {
     <div>
       <div class="field-label" style="margin-bottom:6px">이 채팅방 응답 모델</div>
       <div style="display:flex;gap:6px;align-items:center">
-        ${buildModelSelect('drawerModelSelect', s.overrideModel || '', 'font-size:12px;padding:7px 10px;')}
+        <div style="flex:1;display:flex;flex-direction:column;gap:6px">${pList.map(p => `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid var(--border2);border-radius:10px;background:var(--card)"><span style="font-size:12px;color:var(--text)">${esc(p.name)}</span><span style="font-size:11px;color:var(--muted)">${esc(p.defaultModel || '미설정')}</span></div>`).join('') || `<div style="font-size:11px;color:var(--muted)">참여 중인 페르소나가 없어</div>`}</div>
         <button onclick="applyDrawerModel()" style="padding:7px 12px;border-radius:9px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-family:'Pretendard',sans-serif;font-size:11px;cursor:pointer;white-space:nowrap;flex-shrink:0">적용</button>
       </div>
       <div style="font-size:10px;color:var(--muted);margin-top:4px">비워두면 페르소나 기본 모델 사용</div>
@@ -2110,17 +2168,11 @@ function confirmInvite() {
 
 function applyDrawerModel() {
   const s = getActiveSession(); if (!s) return;
-  const val = document.getElementById('drawerModelSelect')?.value || '';
-  s.overrideModel = val || null;
-  // chatModeSelect 즉시 동기화
+  const pList = (s.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
+  const effective = pList.find(p => p.defaultModel)?.defaultModel || document.getElementById('chatModeSelect')?.value || '';
   const sel = document.getElementById('chatModeSelect');
-  if (sel) {
-    const pList = (s.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
-    const effective = val || pList.find(p=>p.defaultModel)?.defaultModel || '';
-    if (effective) sel.value = effective;
-  }
-  saveIndex();
-  showToast(val ? `모델 변경: ${val}` : '페르소나 기본 모델로 되돌림');
+  if (sel && effective) sel.value = effective;
+  showToast('이제 채팅방 공통 모델 대신 각 페르소나 기본 모델을 사용해요.');
 }
 
 function setDrawerMode(m) {
@@ -2294,7 +2346,7 @@ function selectRatio(ratio) {
 document.addEventListener('click', (e) => {
   const popup = document.getElementById('ratioPopup');
   const btn = document.getElementById('imgRatioBtn');
-  if (popup && !popup.contains(e.target) && e.target !== btn) {
+  if (popup && !popup.contains(e.target) && btn && !btn.contains(e.target)) {
     popup.classList.add('hidden');
   }
 });
