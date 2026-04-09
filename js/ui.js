@@ -91,8 +91,44 @@ async function renderMermaidBlocks(container) {
 
 function fmt(s) { return mdRender(s); }
 
+function sanitizeUserInputValue(value) {
+  return String(value || '').replace(/[\u200B-\u200D\u2060\uFEFF\uFFFC]/g, '');
+}
+
+function initUserInputGuards() {
+  const input = document.getElementById('userInput');
+  if (!input) return;
+
+  input.addEventListener('paste', e => {
+    const items = [...(e.clipboardData?.items || [])];
+    const hasImage = items.some(item => item.kind === 'file' && item.type.startsWith('image/'));
+    if (hasImage) {
+      e.preventDefault();
+      showToast('클립보드 이미지 붙여넣기는 아직 지원하지 않아요. 파일 첨부 버튼을 사용해 주세요.');
+      return;
+    }
+    requestAnimationFrame(() => autoResize(input));
+  });
+
+  input.addEventListener('drop', e => {
+    const hasFile = [...(e.dataTransfer?.files || [])].length > 0;
+    if (hasFile) {
+      e.preventDefault();
+      showToast('파일 드롭은 아직 지원하지 않아요. 파일 첨부 버튼을 사용해 주세요.');
+    }
+  });
+
+  input.addEventListener('dragover', e => {
+    if ((e.dataTransfer?.types || []).includes('Files')) e.preventDefault();
+  });
+}
+
 // 라이브러리 초기화 (스크립트 로드 후)
-window.addEventListener('load', () => { initMarked(); initMermaid(); });
+window.addEventListener('load', () => {
+  initMarked();
+  initMermaid();
+  initUserInputGuards();
+});
 function show(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
@@ -1318,7 +1354,20 @@ function handleKey(e) {
     }
   }
 }
-function autoResize(el) { el.style.height='auto'; el.style.height = Math.min(el.scrollHeight, 120) + 'px'; }
+function autoResize(el) {
+  const cleaned = sanitizeUserInputValue(el.value);
+  if (cleaned !== el.value) {
+    const prevPos = el.selectionStart;
+    const removed = el.value.length - cleaned.length;
+    el.value = cleaned;
+    if (typeof prevPos === 'number' && typeof el.setSelectionRange === 'function') {
+      const nextPos = Math.max(0, prevPos - removed);
+      el.setSelectionRange(nextPos, nextPos);
+    }
+  }
+  el.style.height='auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
 
 function buildSystemPrompt(session) {
   const pList = (session.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
@@ -1374,7 +1423,7 @@ async function sendMessage() {
   if (isLoading) return;
   const session = getActiveSession(); if (!session) return;
   const input = document.getElementById('userInput');
-  const text = input.value.trim();
+  const text = sanitizeUserInputValue(input.value).trim();
   if (!text && !attachments.length) return;
 
   isLoading = true;
