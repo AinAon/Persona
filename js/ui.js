@@ -313,7 +313,9 @@ function buildUserMessageContent(text, imageUrls) {
 
 function getTargetModelForRequest(session, isImageReq) {
   if (isImageReq) {
-    return document.getElementById('imageModelSelect')?.value || 'grok-imagine-image-pro';
+    const selected = document.getElementById('imageModelSelect')?.value || 'grok-imagine-image-pro';
+    if (selected === 'gemini-3.1-flash-image-preview') return 'grok-imagine-image-pro';
+    return selected;
   }
   const pListForModel = (session.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
   const targetModel = pListForModel.find(p => p.defaultModel)?.defaultModel
@@ -322,6 +324,15 @@ function getTargetModelForRequest(session, isImageReq) {
   const sel = document.getElementById('chatModeSelect');
   if (sel && sel.value !== targetModel) sel.value = targetModel;
   return targetModel;
+}
+
+function buildChatPreviewText(text) {
+  const raw = String(text || '').replace(/\n/g, ' ').trim();
+  if (!raw) return '';
+  if (/(^|\s)(생성 오류|연결 실패)\s*:/.test(raw) || /API Error:|NOT_FOUND|INVALID_ARGUMENT|Gemini Image Error:/i.test(raw)) {
+    return '[오류] 이미지 생성 실패';
+  }
+  return raw.slice(0, 120);
 }
 
 function getPersonaModel(persona) {
@@ -2252,7 +2263,7 @@ async function sendMessage() {
 
     const parsed = parseResponse(reply, pList);
     const firstContent = parsed[0]?.content || '';
-    currentSession.lastPreview = firstContent.replace(/\n/g, ' ').slice(0, 120);
+    currentSession.lastPreview = buildChatPreviewText(firstContent);
     currentSession.updatedAt = Date.now();
 
     // 사용자가 해당 채팅방을 그대로 보고 있다면 화면에 즉시 렌더링
