@@ -3,6 +3,12 @@
 // ══════════════════════════════
 const IDB_NAME = 'personachat_v4', IDB_STORE = 'images', IDB_VER = 2;
 let _idb = null;
+const IMAGE_CACHE_SIZES = {
+  HD: 1200,
+  MD: 600,
+  LD: 300,
+  THUMB: 150,
+};
 
 function openIDB() {
   if (_idb) return Promise.resolve(_idb);
@@ -106,6 +112,10 @@ async function getNeutralImageThumb(pid) {
   try {
     const cached = await idbGet(`emotion_${pid}_neutral_thumb`);
     if (cached) return cached;
+    const legacyCircle = await idbGet(`emotion_${pid}_neutral_circle`);
+    if (legacyCircle) return legacyCircle;
+    const ld = await idbGet(`emotion_${pid}_neutral_ld`);
+    if (ld) return ld;
   } catch(e) {}
   return await getNeutralImage(pid); // fallback to MD
 }
@@ -115,6 +125,8 @@ async function getEmotionImage(pid, emotion) {
   try {
     const cached = await idbGet(key);
     if (cached) return cached;
+    const ld = await idbGet(`${key}_ld`);
+    if (ld) return ld;
     return await idbGet(`emotion_${pid}_neutral`) || null;
   } catch(e) { return null; }
 }
@@ -188,12 +200,18 @@ async function getEmotionImageHD(pid, emotion, letter = '') {
   const eid = emotion || 'neutral';
   const target = letter ? `${eid}_${letter}` : eid;
   try {
-    const full = await idbGet(`em_full_${pid}_${target}`);
-    if (full) return full;
     const hd = await idbGet(`emotion_${pid}_${target}_hd`);
     if (hd) return hd;
+    const full = await idbGet(`em_full_${pid}_${target}`);
+    if (full) {
+      const resized = await resizeImage(full, IMAGE_CACHE_SIZES.HD, 0.9);
+      await idbSet(`emotion_${pid}_${target}_hd`, resized).catch(() => {});
+      return resized;
+    }
     const md = await idbGet(`emotion_${pid}_${target}`);
     if (md) return md;
+    const ld = await idbGet(`emotion_${pid}_${target}_ld`);
+    if (ld) return ld;
   } catch(e) {}
   
   try {
@@ -220,7 +238,9 @@ async function getEmotionImageHD(pid, emotion, letter = '') {
     const dataUrl = await new Promise(r => {
       const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob);
     });
-    const hd = await resizeImage(dataUrl, 1000, 0.9);
+    const generated = await generateThumbnailSet(dataUrl, pid, target).catch(() => null);
+    if (generated?.fullHd) return generated.fullHd;
+    const hd = await resizeImage(dataUrl, IMAGE_CACHE_SIZES.HD, 0.9);
     await idbSet(`emotion_${pid}_${target}_hd`, hd).catch(() => {});
     return hd;
   } catch(e) { return null; }
@@ -258,7 +278,7 @@ async function generateThumbnailSet(fullDataUrl, pid, emotion = 'neutral') {
 
   // ── FULL 리사이즈 HD (그리드, 편집, 팝업용 - crop 없음) ──
   const fullCanvas = document.createElement('canvas');
-  const maxW = 1000, scale = Math.min(1, maxW / W);
+  const maxW = IMAGE_CACHE_SIZES.HD, scale = Math.min(1, maxW / W);
   fullCanvas.width = Math.round(W * scale);
   fullCanvas.height = Math.round(H * scale);
   fullCanvas.getContext('2d').drawImage(img, 0, 0, fullCanvas.width, fullCanvas.height);
@@ -277,19 +297,22 @@ async function generateThumbnailSet(fullDataUrl, pid, emotion = 'neutral') {
   const circPng = circCanvas.toDataURL('image/png');
 
   // 리사이즈
-  const [sqMd, circSm] = await Promise.all([
-    resizeImage(sqJpg, 300, 0.85),   // 사각형 MD → 채팅 말풍선
-    resizeImage(circPng, 200, 0.9),  // 원형 SM → 아바타
+  const [sqMd, sqLd, thumb] = await Promise.all([
+    resizeImage(sqJpg, IMAGE_CACHE_SIZES.MD, 0.88),
+    resizeImage(sqJpg, IMAGE_CACHE_SIZES.LD, 0.85),
+    resizeImage(circPng, IMAGE_CACHE_SIZES.THUMB, 0.9),
   ]);
 
   // IDB 저장
   await Promise.all([
     idbSet(`emotion_${pid}_${emotion}`, sqMd),        // 말풍선용 square crop
     idbSet(`emotion_${pid}_${emotion}_hd`, fullJpg),  // 그리드/팝업용 FULL HD
-    idbSet(`emotion_${pid}_${emotion}_circle`, circSm), // 아바타용 circle
+    idbSet(`emotion_${pid}_${emotion}_ld`, sqLd),
+    idbSet(`emotion_${pid}_${emotion}_thumb`, thumb),
+    idbSet(`emotion_${pid}_${emotion}_circle`, thumb), // legacy key
   ]);
 
-  return { sqMd, fullHd: fullJpg, circSm };
+  return { sqMd, sqLd, thumb, fullHd: fullJpg, circSm: thumb };
 }
 
 // 원형 썸네일 불러오기 (없으면 square MD fallback)
