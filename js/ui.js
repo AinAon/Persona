@@ -505,6 +505,8 @@ function timeLabel(ts) {
 //  TOAST / LOADING
 // ══════════════════════════════
 let toastTimer = null;
+let _speechRecognition = null;
+let _speechListening = false;
 function showToast(msg, duration = 1800) {
   const el = document.getElementById('toast');
   el.textContent = msg;
@@ -517,6 +519,68 @@ function setLoading(show, text = 'Loading...') {
   document.getElementById('loadingText').textContent = text;
   if (show) el.classList.remove('hidden');
   else el.classList.add('hidden');
+}
+
+function updateMicButtonState(active) {
+  const btn = document.getElementById('micBtn');
+  if (!btn) return;
+  btn.classList.toggle('active', !!active);
+  btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  btn.title = active ? '음성 입력 중지' : '음성 입력';
+}
+
+function stopMicInput() {
+  if (_speechRecognition) {
+    try { _speechRecognition.stop(); } catch(e) {}
+  }
+  _speechListening = false;
+  updateMicButtonState(false);
+}
+
+function toggleMicInput() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    showToast('이 브라우저는 음성 입력을 지원하지 않습니다.');
+    return;
+  }
+  if (_speechListening) {
+    stopMicInput();
+    return;
+  }
+  const input = document.getElementById('userInput');
+  if (!input) return;
+
+  const recognition = new SpeechRecognition();
+  _speechRecognition = recognition;
+  recognition.lang = 'ko-KR';
+  recognition.interimResults = true;
+  recognition.continuous = false;
+
+  recognition.onstart = () => {
+    _speechListening = true;
+    updateMicButtonState(true);
+    showToast('음성 입력을 듣는 중입니다.', 1200);
+  };
+  recognition.onresult = (event) => {
+    let transcript = '';
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      transcript += event.results[i][0]?.transcript || '';
+    }
+    const next = sanitizeUserInputValue(transcript).trim();
+    if (!next) return;
+    input.value = next;
+    autoResize(input);
+  };
+  recognition.onerror = () => {
+    _speechListening = false;
+    updateMicButtonState(false);
+    showToast('음성 입력을 처리하지 못했습니다.');
+  };
+  recognition.onend = () => {
+    _speechListening = false;
+    updateMicButtonState(false);
+  };
+  recognition.start();
 }
 
 // ══════════════════════════════
@@ -756,12 +820,13 @@ function setupTouchDrag(grid) {
   const getCards = () => [...grid.querySelectorAll('.persona-card[data-pid]')];
 
   let holdTimer = null;
-  let startTouch = null;
+  let pressStart = null;
   let isDragging = false;
   let dragEl = null;
   let dragPid = null;
   let ghost = null;
   let currentOrder = null;
+  let pressType = null; // 'touch' | 'mouse'
 
   function clearVisuals() {
     getCards().forEach(c => {
@@ -818,7 +883,8 @@ function setupTouchDrag(grid) {
     dragEl = null;
     dragPid = null;
     currentOrder = null;
-    startTouch = null;
+    pressStart = null;
+    pressType = null;
 
     if (!commit || !finalOrder) return;
     _suppressPersonaTapUntil = Date.now() + 260;
@@ -827,14 +893,10 @@ function setupTouchDrag(grid) {
     renderPersonaGrid();
   }
 
-  grid.addEventListener('touchstart', e => {
-    const card = e.target.closest('.persona-card[data-pid]');
+  function beginPress(card, x, y, type) {
     if (!card || isDragging) return;
-    if (!e.touches?.length) return;
-
-    const t = e.touches[0];
-    startTouch = { x: t.clientX, y: t.clientY };
-
+    pressStart = { x, y };
+    pressType = type;
     holdTimer = setTimeout(() => {
       isDragging = true;
       dragEl = card;
@@ -862,31 +924,29 @@ function setupTouchDrag(grid) {
       document.body.appendChild(ghost);
       navigator.vibrate?.(20);
     }, LONG_PRESS_MS);
-  }, { passive: true });
+  }
 
-  grid.addEventListener('touchmove', e => {
-    if (!e.touches?.length) return;
-    const t = e.touches[0];
-
+  function movePress(x, y, preventDefaultFn = null) {
     if (!isDragging) {
-      if (!startTouch) return;
-      const dx = Math.abs(t.clientX - startTouch.x);
-      const dy = Math.abs(t.clientY - startTouch.y);
+      if (!pressStart) return;
+      const dx = Math.abs(x - pressStart.x);
+      const dy = Math.abs(y - pressStart.y);
       if (dx > MOVE_CANCEL_PX || dy > MOVE_CANCEL_PX) {
         clearTimeout(holdTimer);
         holdTimer = null;
-        startTouch = null;
+        pressStart = null;
+        pressType = null;
       }
       return;
     }
 
-    e.preventDefault();
+    if (preventDefaultFn) preventDefaultFn();
     const rect = dragEl.getBoundingClientRect();
-    ghost.style.left = `${t.clientX - rect.width / 2}px`;
-    ghost.style.top = `${t.clientY - rect.height / 2}px`;
+    ghost.style.left = `${x - rect.width / 2}px`;
+    ghost.style.top = `${y - rect.height / 2}px`;
 
     const from = currentOrder.indexOf(dragPid);
-    const to = closestIndex(t.clientX, t.clientY, currentOrder);
+    const to = closestIndex(x, y, currentOrder);
     if (from === to || to < 0) return;
 
     const next = [...currentOrder];
@@ -894,10 +954,45 @@ function setupTouchDrag(grid) {
     next.splice(to, 0, dragPid);
     currentOrder = next;
     applyOrderPreview(next);
+  }
+
+  // Disable browser long-press/context-menu on cards (mobile + desktop).
+  grid.addEventListener('contextmenu', e => {
+    if (e.target.closest('.persona-card[data-pid]')) e.preventDefault();
+  });
+
+  grid.addEventListener('touchstart', e => {
+    const card = e.target.closest('.persona-card[data-pid]');
+    if (!card || !e.touches?.length) return;
+    const t = e.touches[0];
+    beginPress(card, t.clientX, t.clientY, 'touch');
+  }, { passive: true });
+
+  grid.addEventListener('touchmove', e => {
+    if (!e.touches?.length || pressType !== 'touch') return;
+    const t = e.touches[0];
+    movePress(t.clientX, t.clientY, () => e.preventDefault());
   }, { passive: false });
 
   grid.addEventListener('touchend', () => finishDrag(true), { passive: true });
   grid.addEventListener('touchcancel', () => finishDrag(false), { passive: true });
+
+  grid.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    const card = e.target.closest('.persona-card[data-pid]');
+    if (!card) return;
+    beginPress(card, e.clientX, e.clientY, 'mouse');
+  });
+
+  window.addEventListener('mousemove', e => {
+    if (pressType !== 'mouse') return;
+    movePress(e.clientX, e.clientY);
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (pressType !== 'mouse') return;
+    finishDrag(true);
+  });
 }
 
 // ══════════════════════════════
@@ -1869,6 +1964,7 @@ function renderUserBubbleHTML(text, atts) {
 async function sendMessage() {
   if (isLoading) return;
   const session = getActiveSession(); if (!session) return;
+  if (_speechListening) stopMicInput();
   const input = document.getElementById('userInput');
   const text = sanitizeUserInputValue(input.value).trim();
   if (!text && !attachments.length) return;
@@ -2237,7 +2333,7 @@ async function renderDrawerBody(s) {
     const imgHTML = imgSrc
       ? `<img src="${imgSrc}" style="width:100%;height:100%;object-fit:cover;object-position:top;display:block">`
       : `<div style="width:100%;height:100%">${defaultAvatar(p.hue)}</div>`;
-    const kickable = isGroup ? `onclick="toggleKickOverlay('${p.pid}',this)"` : '';
+    const kickable = isGroup ? `onclick="kickPersona('${p.pid}')"` : '';
     return `
     <div style="display:flex;flex-direction:column;align-items:center;gap:5px">
       <div id="kickWrap_${p.pid}" style="position:relative;width:60px;height:60px;border-radius:50%;overflow:hidden;border:1.5px solid hsl(${p.hue},28%,22%);cursor:${isGroup?'pointer':'default'};flex-shrink:0" ${kickable}>
