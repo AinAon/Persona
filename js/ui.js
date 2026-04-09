@@ -111,11 +111,19 @@ function buildTimeMetaHTML(ts, align = 'left') {
 }
 
 function encodeCopyPayload(text) {
-  return encodeURIComponent(String(text || ''));
+  try {
+    return btoa(unescape(encodeURIComponent(String(text || ''))));
+  } catch {
+    return '';
+  }
 }
 
 function decodeCopyPayload(payload) {
-  try { return decodeURIComponent(payload || ''); } catch { return String(payload || ''); }
+  try {
+    return decodeURIComponent(escape(atob(payload || '')));
+  } catch {
+    return String(payload || '');
+  }
 }
 
 function buildCurrentTimeSystemMessage() {
@@ -1454,6 +1462,7 @@ function copyBubble(btn, text, encoded = false) {
     btn.querySelector('svg')?.style && (btn.querySelector('svg').style.display = 'none');
     btn.dataset.orig = btn.innerHTML;
     btn.innerHTML = '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 9 7 13 15 5"/></svg>';
+    showToast('클립보드에 복사됐습니다', 1200);
     setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = btn.dataset.orig; }, 1500);
   };
   if (navigator.clipboard?.writeText) {
@@ -1519,7 +1528,7 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
       <div class="bubble-col">
         <div class="msg-pname" style="color:hsl(${h},65%,72%)">
           <span class="msg-pname-text">${esc(p.name)}${p._ghost?`<span style="font-size:9px;opacity:.5">(삭제됨)</span>`:''}</span>
-          ${hasImg ? '' : `<button class="copy-btn" onclick="copyBubble(this,'${encodeCopyPayload(seg.content)}',true)" title="복사">
+          ${hasImg ? '' : `<button class="copy-btn" type="button" title="복사">
             <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="10" height="11" rx="2"/><path d="M13 5V3.5A1.5 1.5 0 0 0 11.5 2h-7A1.5 1.5 0 0 0 3 3.5v10A1.5 1.5 0 0 0 4.5 15H5"/></svg>
           </button>`}
         </div>
