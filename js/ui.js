@@ -684,8 +684,7 @@ async function renderPersonaGrid() {
     card.dataset.pid = p.pid;
     card.draggable = false;
 
-    const randomGridImg = await getRandomPersonaGridImage(p.pid);
-    const neutral = randomGridImg || await getEmotionImageHD(p.pid, 'neutral') || await getNeutralImage(p.pid);
+    const neutral = await getEmotionImageHD(p.pid, 'neutral') || await getNeutralImage(p.pid);
 
     // 새 render 호출이 이미 시작됐으면 이 루프 중단
     if (myVersion !== _personaGridRenderVersion) return;
