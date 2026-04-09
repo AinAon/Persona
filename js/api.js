@@ -395,7 +395,8 @@ function buildIndex() {
     responseMode:s.responseMode, worldContext:s.worldContext,
     userOverride: s.userOverride || null,
     userProfileMode: s.userProfileMode || 'default',
-    overrideModel: s.overrideModel || null
+    overrideModel: s.overrideModel || null,
+    chatProfileOverride: s.chatProfileOverride || null
   }));
 }
 

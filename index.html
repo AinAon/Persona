@@ -326,9 +326,12 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .chat-header-av svg { width: 100%; height: 100%; }
 .chat-header-info { flex: 1; min-width: 0; margin-left: 4px; }
 .chat-header-names { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.chat-settings-btn { background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; padding: 4px; }
+.chat-header-actions { display: flex; align-items: center; gap: 2px; }
+.chat-settings-btn, .chat-action-btn { background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; padding: 4px; }
+.chat-action-btn.on { color: var(--text); }
 
 .chat-area { flex: 1; overflow-y: auto; padding: 12px 12px 8px; display: flex; flex-direction: column; gap: 12px; }
+.chat-area.has-messages { justify-content: flex-end; }
 .chat-area::-webkit-scrollbar { width: 3px; }
 .chat-area::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
 
@@ -360,11 +363,11 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 
 .bubble-col { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
 .bubble-wrap { position: relative; display: inline-block; max-width: 100%; }
-.bubble-wrap.has-img { display: block; width: 100%; }
+.bubble-wrap.has-img { display: block; width: 90%; max-width: 90%; }
 .user-msg-wrap { display: flex; align-items: flex-end; justify-content: flex-end; gap: 6px; }
-.msg-time { font-size: 10px; color: var(--muted); line-height: 1; margin-top: 2px; }
-.msg-time-left { padding-left: calc(min(25vw, 200px) + 10px); text-align: left; }
-.msg-time-right { text-align: right; }
+.msg-time { font-size: 10px; color: var(--muted); line-height: 1.2; margin-top: 4px; }
+.msg-time-left { text-align: left; align-self: flex-start; }
+.msg-time-right { text-align: right; align-self: flex-end; }
 /* AI 생성 이미지 */
 .ai-bubble img { width: 100%; height: auto; border-radius: 8px; display: block; margin-top: 4px; cursor: pointer; }
 .ai-bubble.has-img { width: 100%; padding: 8px 10px 10px; }
@@ -437,6 +440,8 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .thinking-dots span:nth-child(2) { animation-delay: .2s; }
 .thinking-dots span:nth-child(3) { animation-delay: .4s; }
 @keyframes blink { 0%,80%,100%{opacity:.15} 40%{opacity:.8} }
+@keyframes msgRise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+.msg-group.msg-enter { animation: msgRise .24s ease-out; }
 
 /* 입력창 */
 .chat-input-bar { background: var(--surface); border-top: 1px solid var(--border); padding: 0 10px 6px; flex-shrink: 0; }
@@ -812,7 +817,11 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
     <div class="chat-header-info">
       <div class="chat-header-names" id="chatHeaderNames"></div>
     </div>
-    <button class="chat-settings-btn" onclick="openDrawer()">⚙</button>
+    <div class="chat-header-actions">
+      <button class="chat-action-btn" id="chatRefreshBtn" onclick="refreshCurrentChat()" title="대화 새로고침">↻</button>
+      <button class="chat-action-btn" id="chatProfileToggleBtn" onclick="toggleChatProfileOverride()" title="프로필 표시 on/off">👤</button>
+      <button class="chat-settings-btn" onclick="openDrawer()" title="설정">⚙</button>
+    </div>
   </div>
 
   <!-- 이미지 생성 영역 -->

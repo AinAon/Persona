@@ -94,11 +94,17 @@ function fmt(s) { return mdRender(s); }
 function formatMessageTime(ts) {
   if (!ts) return '';
   try {
-    return new Intl.DateTimeFormat('ko-KR', {
+    const parts = new Intl.DateTimeFormat('ko-KR', {
+      timeZone: 'Asia/Seoul',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
       hour12: false
-    }).format(new Date(ts));
+    }).formatToParts(new Date(ts));
+    const pick = t => parts.find(p => p.type === t)?.value || '';
+    return `${pick('year')}년 ${pick('month')}월 ${pick('day')}일 ${pick('hour')}:${pick('minute')}`;
   } catch {
     return '';
   }
@@ -141,6 +147,51 @@ function buildCurrentTimeSystemMessage() {
     role: 'system',
     content: `Seoul time: ${text}. Use only if relevant.`
   };
+}
+
+function getChatAvatarStyle() {
+  const session = getActiveSession();
+  const override = session?.chatProfileOverride || null; // 'on' | 'off' | null
+  const baseStyle = userProfile.chatAvatarStyle || 'square';
+  if (override === 'off') return 'hidden';
+  if (override === 'on') return baseStyle === 'hidden' ? 'square' : baseStyle;
+  return baseStyle;
+}
+
+function updateChatHeaderActionButtons() {
+  const btn = document.getElementById('chatProfileToggleBtn');
+  if (!btn) return;
+  const session = getActiveSession();
+  const override = session?.chatProfileOverride || null;
+  const effective = getChatAvatarStyle();
+  const on = effective !== 'hidden';
+  btn.classList.toggle('on', on);
+  btn.textContent = on ? 'P' : 'X';
+  btn.title = `프로필 표시 ${on ? 'ON' : 'OFF'} (클릭해서 전환)`;
+  if (!override) btn.classList.remove('on');
+}
+
+async function refreshCurrentChat() {
+  const session = getActiveSession();
+  if (!session || !activeChatId) return;
+  if (session._demo) {
+    showToast('데모 채팅은 새로고침 대상이 아니야');
+    return;
+  }
+  await loadSession(activeChatId);
+  renderChatArea();
+  showToast('대화를 새로고침했어');
+}
+
+function toggleChatProfileOverride() {
+  const session = getActiveSession();
+  if (!session || !activeChatId) return;
+  const cur = session.chatProfileOverride || null;
+  session.chatProfileOverride = cur === 'off' ? 'on' : 'off';
+  updateChatHeaderActionButtons();
+  renderChatArea();
+  saveSession(activeChatId);
+  saveIndex();
 }
 
 function enhanceRenderedMessage(container) {
@@ -196,9 +247,19 @@ function enhanceRenderedMessage(container) {
 function attachMessageMeta(container, ts, align = 'left') {
   if (!container || !ts) return;
   if (container.querySelector('.msg-time')) return;
-  const label = buildTimeMetaHTML(ts, align);
+  const label = formatMessageTime(ts);
   if (!label) return;
-  container.insertAdjacentHTML('beforeend', label);
+  const cls = align === 'right' ? 'msg-time msg-time-right' : 'msg-time msg-time-left';
+  if (align === 'left') {
+    const leftTarget = container.querySelector('.ai-msg:last-child .bubble-col:last-child')
+      || container.querySelector('.bubble-col:last-child')
+      || container;
+    leftTarget.insertAdjacentHTML('beforeend', `<div class="${cls}">${label}</div>`);
+    return;
+  }
+  const rightWrap = container.querySelector('.user-msg-wrap');
+  if (rightWrap) rightWrap.insertAdjacentHTML('afterend', `<div class="${cls}">${label}</div>`);
+  else container.insertAdjacentHTML('beforeend', `<div class="${cls}">${label}</div>`);
 }
 
 function sanitizeUserInputValue(value) {
@@ -1329,6 +1390,15 @@ async function openChat(id) {
     return `<div class="chat-header-av" style="background:hsl(${p.hue},22%,14%);border-color:hsl(${p.hue},30%,26%);width:42px;height:42px;border-radius:50%;overflow:hidden;flex-shrink:0;">${img}</div>`;
   }).join('');
   document.getElementById('chatHeaderNames').textContent = s.roomName || pList.map(p=>p.name).join(', ');
+  const actionsEl = document.querySelector('.chat-header-actions');
+  if (actionsEl) {
+    actionsEl.innerHTML = `
+      <button class="chat-action-btn" id="chatRefreshBtn" onclick="refreshCurrentChat()" title="Refresh">R</button>
+      <button class="chat-action-btn" id="chatProfileToggleBtn" onclick="toggleChatProfileOverride()" title="Profile on/off">P</button>
+      <button class="chat-settings-btn" onclick="openDrawer()" title="Settings">S</button>
+    `;
+  }
+  updateChatHeaderActionButtons();
 
   pList.forEach(async (p, i) => {
     const img = await getNeutralImage(p.pid); // 사각 crop 소스 호출
@@ -1392,12 +1462,14 @@ async function renderChatArea() {
   const empty = document.getElementById('chatEmpty2');
 
   if (!session.history || !session.history.length) {
+    area.classList.remove('has-messages');
     [...area.children].forEach(c => { if (c.id !== 'chatEmpty2') c.remove(); });
     empty.style.display = 'flex';
     const pList = (session.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
     document.getElementById('emptyText').textContent = pList.map(p=>p.name).join(', ') + '에게 뭐든 던져봐';
     return;
   }
+  area.classList.add('has-messages');
   empty.style.display = 'none';
 
   const fragment = document.createDocumentFragment();
@@ -1435,7 +1507,7 @@ function buildEmotionCard(p, emotion, letter, dataUrl) {
   const safeEmotion = emotion.replace(/'/g, "\\'");
   const safeLetter = (letter || '').replace(/'/g, "\\'");
   
-  const avStyle = userProfile.chatAvatarStyle || 'square';
+  const avStyle = getChatAvatarStyle();
   const avDisplay = avStyle === 'hidden' ? 'display:none;' : '';
   const avShape = avStyle === 'circle' ? 'border-radius:50%; width:min(25vw,80px); height:min(25vw,80px); aspect-ratio:1/1; max-height:80px;' : '';
 
@@ -1496,7 +1568,7 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
     const celebStroke = p.type === 'celebrity' ? `box-shadow: inset 0 0 0 1.5px hsl(${h},70%,60%), 0 0 6px hsl(${h},60%,40%);` : '';
     
     // 설정에 따른 스타일 결정
-    const avStyle = userProfile.chatAvatarStyle || 'square';
+    const avStyle = getChatAvatarStyle();
     const avDisplay = avStyle === 'hidden' ? 'display:none;' : '';
     const avShape = avStyle === 'circle' ? 'border-radius:50%; width:min(25vw,80px); height:min(25vw,80px); aspect-ratio:1/1; max-height:80px;' : '';
     
@@ -1772,11 +1844,13 @@ async function sendMessage() {
 
   // imageArea는 display:none — 탭 무관하게 항상 chatArea 사용
   const area = document.getElementById('chatArea');
+  area.classList.add('has-messages');
   document.getElementById('chatEmpty2').style.display = 'none';
 
   const userEl = document.createElement('div');
   userEl.innerHTML = userMsg._rendered;
   if (userEl.firstElementChild) {
+    userEl.firstElementChild.classList.add('msg-enter');
     enhanceRenderedMessage(userEl.firstElementChild);
     attachMessageMeta(userEl.firstElementChild, userMsg.createdAt, 'right');
     area.appendChild(userEl.firstElementChild);
@@ -1844,6 +1918,7 @@ async function sendMessage() {
     const replyEl = document.createElement('div');
     replyEl.innerHTML = html;
     if (replyEl.firstElementChild) {
+      replyEl.firstElementChild.classList.add('msg-enter');
       enhanceRenderedMessage(replyEl.firstElementChild);
       attachMessageMeta(replyEl.firstElementChild, emotionTestCreatedAt, 'left');
       area.appendChild(replyEl.firstElementChild);
@@ -2000,10 +2075,12 @@ async function sendMessage() {
       const replyEl = document.createElement('div');
       replyEl.innerHTML = await renderAIResponseHTML(reply, pList, suffixes, assistantCreatedAt);
       if (replyEl.firstElementChild) {
+        replyEl.firstElementChild.classList.add('msg-enter');
         // chatArea로 통일
         enhanceRenderedMessage(replyEl.firstElementChild);
         attachMessageMeta(replyEl.firstElementChild, assistantCreatedAt, 'left');
         const tgtArea = document.getElementById('chatArea');
+        tgtArea.classList.add('has-messages');
         tgtArea.appendChild(replyEl.firstElementChild);
         renderMermaidBlocks(tgtArea);
         tgtArea.scrollTop = tgtArea.scrollHeight;
