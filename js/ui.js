@@ -1652,6 +1652,7 @@ function goMain() {
 
 async function renderChatArea() {
   const session = getActiveSession(); if (!session) return;
+  const renderSessionId = session.id;
   if (session._markdownDemo) return; // 데모는 직접 관리
   const area = document.getElementById('chatArea');
   const empty = document.getElementById('chatEmpty2');
