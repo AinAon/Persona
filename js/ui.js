@@ -1989,6 +1989,7 @@ function renderUserBubbleHTML(text, atts) {
 async function sendMessage() {
   if (isLoading) return;
   const session = getActiveSession(); if (!session) return;
+  const renderSessionId = session.id;
   if (_speechListening) stopMicInput();
   const input = document.getElementById('userInput');
   const text = sanitizeUserInputValue(input.value).trim();
