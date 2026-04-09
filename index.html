@@ -346,6 +346,7 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .msg-group { display: flex; flex-direction: column; gap: 8px; }
 .ai-msgs { align-items: flex-start; }
 .ai-msg { display: flex; align-items: flex-start; gap: 10px; }
+.ai-msg.ai-msg-img { padding-right: 10%; box-sizing: border-box; }
 
 /* 프로필 이미지: 설정에 따라 변화 */
 .msg-av {
@@ -364,6 +365,14 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .bubble-col { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
 .bubble-wrap { position: relative; display: inline-block; max-width: 100%; }
 .bubble-wrap.has-img { display: block; width: 90%; max-width: 90%; }
+.ai-msg .bubble-wrap.has-img {
+  width: 100%;
+  max-width: 100%;
+}
+.ai-msg .bubble-wrap.has-img .ai-bubble.has-img {
+  width: 100%;
+  max-width: 100%;
+}
 .user-msg-wrap { display: flex; align-items: flex-end; justify-content: flex-end; gap: 6px; }
 .msg-time { font-size: 10px; color: var(--muted); line-height: 1.2; margin-top: 4px; }
 .msg-time-left { text-align: left; align-self: flex-start; }
