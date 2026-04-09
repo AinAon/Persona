@@ -629,6 +629,46 @@ function deleteSettingsUserImage() {
 //  PERSONA GRID
 // ══════════════════════════════
 let _personaGridRenderVersion = 0;
+let _suppressPersonaTapUntil = 0;
+
+async function getRandomPersonaGridImage(pid) {
+  const emotions = ['neutral', 'subtlesmile', 'shy', 'surprise'];
+  const preferredLetters = ['a', 'b', 'c', 'd'];
+
+  try {
+    const keys = await getImageList(pid);
+    const candidates = [];
+
+    for (const key of keys || []) {
+      const m = key.match(new RegExp(`^profile/${pid}/${pid}_([a-z]+)(?:_([a-z]))?\\.jpg$`, 'i'));
+      if (!m) continue;
+      const emotion = (m[1] || '').toLowerCase();
+      const letter = (m[2] || '').toLowerCase();
+      if (!emotions.includes(emotion)) continue;
+      if (letter && !preferredLetters.includes(letter)) continue;
+      candidates.push({ emotion, letter });
+    }
+
+    // If preferred files exist, choose one at random.
+    if (candidates.length > 0) {
+      const picked = candidates[Math.floor(Math.random() * candidates.length)];
+      const img = await getEmotionImageSuffixed(pid, picked.emotion, picked.letter || '');
+      if (img) return img;
+    }
+
+    // Fallback order with randomized letters a-d then base.
+    const shuffledEmotions = shuffleArray(emotions);
+    const shuffledLetters = shuffleArray(preferredLetters);
+    for (const emotion of shuffledEmotions) {
+      for (const letter of [...shuffledLetters, '']) {
+        const img = await getEmotionImageSuffixed(pid, emotion, letter);
+        if (img) return img;
+      }
+    }
+  } catch (e) {}
+
+  return null;
+}
 
 async function renderPersonaGrid() {
   const COLS = 3;
@@ -642,9 +682,10 @@ async function renderPersonaGrid() {
     const card = document.createElement('div');
     card.className = 'persona-card';
     card.dataset.pid = p.pid;
-    card.draggable = true;
+    card.draggable = false;
 
-    const neutral = await getEmotionImageHD(p.pid, 'neutral') || await getNeutralImage(p.pid);
+    const randomGridImg = await getRandomPersonaGridImage(p.pid);
+    const neutral = randomGridImg || await getEmotionImageHD(p.pid, 'neutral') || await getNeutralImage(p.pid);
 
     // 새 render 호출이 이미 시작됐으면 이 루프 중단
     if (myVersion !== _personaGridRenderVersion) return;
@@ -662,6 +703,7 @@ async function renderPersonaGrid() {
     let pointerStartX = 0, pointerStartY = 0;
     card.addEventListener('pointerdown', e => { pointerStartX = e.clientX; pointerStartY = e.clientY; });
     card.addEventListener('pointerup', e => {
+      if (Date.now() < _suppressPersonaTapUntil) return;
       if (card.dataset.dragging === '1') return;
       const dx = Math.abs(e.clientX - pointerStartX);
       const dy = Math.abs(e.clientY - pointerStartY);
@@ -672,58 +714,6 @@ async function renderPersonaGrid() {
           selectPersonaForChat(p.pid);
         }
       }
-    });
-
-    card.addEventListener('dragstart', e => {
-      e.dataTransfer.setData('pid', p.pid);
-      setTimeout(() => { card.style.opacity = '0.01'; }, 0);
-    });
-    card.addEventListener('dragend', () => {
-      card.style.opacity = '';
-      delete card.dataset.dragging;
-      grid.querySelectorAll('.persona-card[data-pid]').forEach(c => { c.style.transition = ''; c.style.transform = ''; });
-    });
-    card.addEventListener('dragover', e => {
-      e.preventDefault();
-      const fromPid = [...grid.querySelectorAll('.persona-card[data-pid]')].find(c => c.style.opacity === '0.01')?.dataset.pid;
-      if (!fromPid || fromPid === p.pid) return;
-
-      const cards = [...grid.querySelectorAll('.persona-card[data-pid]')];
-      const order = cards.map(c => c.dataset.pid);
-      const fromIdx = order.indexOf(fromPid);
-      const toIdx = order.indexOf(p.pid);
-      if (fromIdx === toIdx) return;
-
-      const newOrder = [...order];
-      newOrder.splice(fromIdx, 1);
-      newOrder.splice(toIdx, 0, fromPid);
-
-      const gridRect = grid.getBoundingClientRect();
-      const gap = 12;
-      const colWidth = (gridRect.width - gap * (COLS - 1)) / COLS;
-      const rowHeight = card.getBoundingClientRect().height + gap;
-
-      cards.forEach((c, i) => {
-        const newPos = newOrder.indexOf(c.dataset.pid);
-        const curRow = Math.floor(i / COLS), curCol = i % COLS;
-        const newRow = Math.floor(newPos / COLS), newCol = newPos % COLS;
-        const tx = (newCol - curCol) * (colWidth + gap);
-        const ty = (newRow - curRow) * rowHeight;
-        c.style.transition = 'transform .2s cubic-bezier(.25,.8,.25,1)';
-        if (c.style.opacity !== '0.01') c.style.transform = `translate(${tx}px,${ty}px)`;
-      });
-      card._pendingOrder = newOrder;
-    });
-    card.addEventListener('drop', e => {
-      e.preventDefault();
-      const fromPid = e.dataTransfer.getData('pid');
-      if (!fromPid || fromPid === p.pid) return;
-      if (card._pendingOrder) {
-        personas.sort((a, b) => card._pendingOrder.indexOf(a.pid) - card._pendingOrder.indexOf(b.pid));
-        delete card._pendingOrder;
-      }
-      savePersonas();
-      renderPersonaGrid();
     });
 
     grid.appendChild(card);
@@ -741,98 +731,174 @@ async function renderPersonaGrid() {
   grid.appendChild(addCard);
 
   setupTouchDrag(grid);
+  setupPersonaGridBlankTapClear(grid);
+}
+
+function setupPersonaGridBlankTapClear(grid) {
+  if (grid.dataset.blankTapBound === '1') return;
+  grid.dataset.blankTapBound = '1';
+
+  grid.addEventListener('click', e => {
+    if (Date.now() < _suppressPersonaTapUntil) return;
+    if (e.target !== grid) return; // 카드가 아닌, 빈 공간 터치/클릭만 처리
+    if (!_selectedPersonaPid) return;
+    clearPersonaSelection();
+  });
 }
 
 function setupTouchDrag(grid) {
-  let dragEl = null, ghost = null, dragPid = null, currentOrder = null;
-  const getCards = () => [...grid.querySelectorAll('.persona-card[data-pid]')];
+  if (grid.dataset.touchDragBound === '1') return;
+  grid.dataset.touchDragBound = '1';
+
+  const LONG_PRESS_MS = 280;
+  const MOVE_CANCEL_PX = 12;
   const COLS = 3;
+  const GAP = 12;
+  const getCards = () => [...grid.querySelectorAll('.persona-card[data-pid]')];
+
+  let holdTimer = null;
+  let startTouch = null;
+  let isDragging = false;
+  let dragEl = null;
+  let dragPid = null;
+  let ghost = null;
+  let currentOrder = null;
+
+  function clearVisuals() {
+    getCards().forEach(c => {
+      c.style.transition = '';
+      c.style.transform = '';
+      c.style.opacity = '';
+      delete c.dataset.dragging;
+    });
+    if (ghost?.parentNode) ghost.parentNode.removeChild(ghost);
+    ghost = null;
+  }
+
+  function applyOrderPreview(order) {
+    const cards = getCards();
+    const gridRect = grid.getBoundingClientRect();
+    const colWidth = (gridRect.width - GAP * (COLS - 1)) / COLS;
+    const rowHeight = (dragEl?.getBoundingClientRect().height || 0) + GAP;
+
+    cards.forEach((c, i) => {
+      const newPos = order.indexOf(c.dataset.pid);
+      const curRow = Math.floor(i / COLS), curCol = i % COLS;
+      const newRow = Math.floor(newPos / COLS), newCol = newPos % COLS;
+      const tx = (newCol - curCol) * (colWidth + GAP);
+      const ty = (newRow - curRow) * rowHeight;
+      c.style.transition = 'transform .18s cubic-bezier(.22,.8,.26,1)';
+      if (c !== dragEl) c.style.transform = `translate(${tx}px,${ty}px)`;
+    });
+  }
+
+  function closestIndex(touchX, touchY, order) {
+    const cards = getCards();
+    let bestPid = null;
+    let best = Infinity;
+    for (const c of cards) {
+      if (c === dragEl) continue;
+      const r = c.getBoundingClientRect();
+      const cx = r.left + r.width / 2;
+      const cy = r.top + r.height / 2;
+      const d = Math.hypot(touchX - cx, touchY - cy);
+      if (d < best) { best = d; bestPid = c.dataset.pid; }
+    }
+    if (!bestPid) return order.indexOf(dragPid);
+    return order.indexOf(bestPid);
+  }
+
+  function finishDrag(commit = true) {
+    clearTimeout(holdTimer);
+    holdTimer = null;
+    if (!isDragging) return;
+    isDragging = false;
+
+    const finalOrder = currentOrder ? [...currentOrder] : null;
+    clearVisuals();
+    dragEl = null;
+    dragPid = null;
+    currentOrder = null;
+    startTouch = null;
+
+    if (!commit || !finalOrder) return;
+    _suppressPersonaTapUntil = Date.now() + 260;
+    personas.sort((a, b) => finalOrder.indexOf(a.pid) - finalOrder.indexOf(b.pid));
+    savePersonas();
+    renderPersonaGrid();
+  }
 
   grid.addEventListener('touchstart', e => {
     const card = e.target.closest('.persona-card[data-pid]');
-    if (!card) return;
+    if (!card || isDragging) return;
+    if (!e.touches?.length) return;
 
-    let holdTimer = null, isDragging = false;
-    const touch0 = e.touches[0];
-    let lastX = touch0.clientX, lastY = touch0.clientY;
+    const t = e.touches[0];
+    startTouch = { x: t.clientX, y: t.clientY };
 
     holdTimer = setTimeout(() => {
-      isDragging = true; dragEl = card; dragPid = card.dataset.pid;
-      card.dataset.dragging = '1'; currentOrder = getCards().map(c => c.dataset.pid);
+      isDragging = true;
+      dragEl = card;
+      dragPid = card.dataset.pid;
+      currentOrder = getCards().map(c => c.dataset.pid);
+
+      card.dataset.dragging = '1';
+      card.style.opacity = '0.12';
 
       const rect = card.getBoundingClientRect();
       ghost = card.cloneNode(true);
       ghost.style.cssText = `
-        position:fixed;z-index:999; left:${rect.left}px;top:${rect.top}px;
-        width:${rect.width}px;height:${rect.height}px; opacity:.9;pointer-events:none;
-        border-radius:14px; box-shadow:0 12px 40px rgba(0,0,0,.5); transform:scale(1.06); transition:transform .1s;
+        position: fixed;
+        left: ${rect.left}px;
+        top: ${rect.top}px;
+        width: ${rect.width}px;
+        height: ${rect.height}px;
+        z-index: 999;
+        opacity: 0.95;
+        pointer-events: none;
+        border-radius: 14px;
+        box-shadow: 0 14px 34px rgba(0,0,0,.45);
+        transform: scale(1.04);
       `;
       document.body.appendChild(ghost);
-      card.style.opacity = '0';
-      navigator.vibrate?.(30);
-    }, 300);
-
-    const onMove = e2 => {
-      const t = e2.touches[0];
-      const dx = t.clientX - touch0.clientX, dy = t.clientY - touch0.clientY;
-
-      if (!isDragging) {
-        if (Math.abs(dx) > 18 || Math.abs(dy) > 18) clearTimeout(holdTimer);
-        return;
-      }
-      e2.preventDefault();
-      lastX = t.clientX; lastY = t.clientY;
-
-      const rect = dragEl.getBoundingClientRect();
-      ghost.style.left = (t.clientX - rect.width / 2) + 'px';
-      ghost.style.top = (t.clientY - rect.height / 2) + 'px';
-
-      const cards = getCards();
-      let targetPid = null, minDist = Infinity;
-      for (const c of cards) {
-        if (c === dragEl) continue;
-        const r = c.getBoundingClientRect();
-        const dist = Math.hypot(t.clientX - (r.left + r.width / 2), t.clientY - (r.top + r.height / 2));
-        if (dist < minDist && dist < r.width) { minDist = dist; targetPid = c.dataset.pid; }
-      }
-      if (!targetPid) return;
-
-      const fromIdx = currentOrder.indexOf(dragPid), toIdx = currentOrder.indexOf(targetPid);
-      if (fromIdx === toIdx) return;
-
-      const newOrder = [...currentOrder];
-      newOrder.splice(fromIdx, 1); newOrder.splice(toIdx, 0, dragPid);
-
-      const gridRect = grid.getBoundingClientRect(), gap = 12;
-      const colWidth = (gridRect.width - gap * (COLS - 1)) / COLS;
-      const rowHeight = dragEl.getBoundingClientRect().height + gap;
-
-      cards.forEach((c, i) => {
-        const curPos = currentOrder.indexOf(c.dataset.pid), newPos = newOrder.indexOf(c.dataset.pid);
-        const tx = (newPos % COLS - curPos % COLS) * (colWidth + gap);
-        const ty = (Math.floor(newPos / COLS) - Math.floor(curPos / COLS)) * rowHeight;
-        c.style.transition = 'transform .2s cubic-bezier(.25,.8,.25,1)';
-        c.style.transform = c === dragEl ? '' : `translate(${tx}px,${ty}px)`;
-      });
-      currentOrder = newOrder;
-    };
-
-    const onEnd = () => {
-      clearTimeout(holdTimer);
-      document.removeEventListener('touchmove', onMove); document.removeEventListener('touchend', onEnd);
-      if (!isDragging) return;
-      if (ghost) { document.body.removeChild(ghost); ghost = null; }
-      dragEl.style.opacity = '';
-      getCards().forEach(c => { c.style.transition = ''; c.style.transform = ''; });
-      if (currentOrder) {
-        personas.sort((a, b) => currentOrder.indexOf(a.pid) - currentOrder.indexOf(b.pid));
-        savePersonas(); renderPersonaGrid();
-      }
-      dragEl = null; dragPid = null; currentOrder = null;
-    };
-    document.addEventListener('touchmove', onMove, { passive: false });
-    document.addEventListener('touchend', onEnd);
+      navigator.vibrate?.(20);
+    }, LONG_PRESS_MS);
   }, { passive: true });
+
+  grid.addEventListener('touchmove', e => {
+    if (!e.touches?.length) return;
+    const t = e.touches[0];
+
+    if (!isDragging) {
+      if (!startTouch) return;
+      const dx = Math.abs(t.clientX - startTouch.x);
+      const dy = Math.abs(t.clientY - startTouch.y);
+      if (dx > MOVE_CANCEL_PX || dy > MOVE_CANCEL_PX) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+        startTouch = null;
+      }
+      return;
+    }
+
+    e.preventDefault();
+    const rect = dragEl.getBoundingClientRect();
+    ghost.style.left = `${t.clientX - rect.width / 2}px`;
+    ghost.style.top = `${t.clientY - rect.height / 2}px`;
+
+    const from = currentOrder.indexOf(dragPid);
+    const to = closestIndex(t.clientX, t.clientY, currentOrder);
+    if (from === to || to < 0) return;
+
+    const next = [...currentOrder];
+    next.splice(from, 1);
+    next.splice(to, 0, dragPid);
+    currentOrder = next;
+    applyOrderPreview(next);
+  }, { passive: false });
+
+  grid.addEventListener('touchend', () => finishDrag(true), { passive: true });
+  grid.addEventListener('touchcancel', () => finishDrag(false), { passive: true });
 }
 
 // ══════════════════════════════
