@@ -443,7 +443,7 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 /* 모델/옵션 영역 — 왼쪽 flex */
 .input-model-area {
   flex: 1; display: flex; align-items: center;
-  padding: 0 4px 2px 0; gap: 4px; min-width: 0; overflow: hidden;
+  padding: 0 4px 2px 0; gap: 4px; min-width: 0; overflow: visible;
 }
 /* 폴더탭 그룹 — 오른쪽 */
 .input-tabs-group { display: flex; align-items: flex-end; gap: 2px; flex-shrink: 0; }
@@ -464,7 +464,7 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .input-tab svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; }
 .input-tab.active { color: var(--text); background: var(--card); }
 
-.input-tab-options { display: flex; align-items: center; gap: 4px; }
+.input-tab-options { display: flex; align-items: center; gap: 4px; position: relative; }
 .input-tab-options.hidden { display: none; }
 .input-tab-select {
   background: var(--card); border: 1px solid var(--border2); color: var(--text);
