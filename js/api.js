@@ -1,57 +1,12 @@
 // ══════════════════════════════
 //  INDEXED DB (로컬 이미지 캐싱)
 // ══════════════════════════════
-const IDB_NAME = 'personachat_v4', IDB_STORE = 'images', IDB_VER = 3;
-let _idb = null;
 const IMAGE_CACHE_SIZES = {
   HD: 1200,
   MD: 600,
   LD: 300,
   THUMB: 150,
 };
-
-function openIDB() {
-  if (_idb) return Promise.resolve(_idb);
-  return new Promise((res, rej) => {
-    const req = indexedDB.open(IDB_NAME, IDB_VER);
-    req.onupgradeneeded = e => {
-      const db = e.target.result;
-      if (db.objectStoreNames.contains(IDB_STORE)) db.deleteObjectStore(IDB_STORE);
-      db.createObjectStore(IDB_STORE);
-    };
-    req.onsuccess = e => { _idb = e.target.result; res(_idb); };
-    req.onerror = () => rej(req.error);
-  });
-}
-
-async function idbSet(key, value) {
-  const db = await openIDB();
-  return new Promise((res, rej) => {
-    const tx = db.transaction(IDB_STORE, 'readwrite');
-    tx.objectStore(IDB_STORE).put(value, key);
-    tx.oncomplete = () => res();
-    tx.onerror = () => rej(tx.error);
-  });
-}
-
-async function idbGet(key) {
-  const db = await openIDB();
-  return new Promise((res, rej) => {
-    const req = db.transaction(IDB_STORE).objectStore(IDB_STORE).get(key);
-    req.onsuccess = () => res(req.result);
-    req.onerror = () => rej(req.error);
-  });
-}
-
-async function idbDel(key) {
-  const db = await openIDB();
-  return new Promise((res, rej) => {
-    const tx = db.transaction(IDB_STORE, 'readwrite');
-    tx.objectStore(IDB_STORE).delete(key);
-    tx.oncomplete = () => res();
-    tx.onerror = () => rej(tx.error);
-  });
-}
 
 // ══════════════════════════════
 //  IMAGE FETCH & CACHE
@@ -91,7 +46,7 @@ function getSuffixesForEmotion(keys, pid, emotion) {
 
 // 브라우저 HTTP 캐시 버스팅 (clearImageCache 후 재로드 시 강제 재요청)
 function cacheBustUrl(url) {
-  const t = localStorage.getItem('img_cache_bust');
+  const t = getImageCacheBustToken();
   if (!t) return url;
   return url + (url.includes('?') ? '&' : '?') + 't=' + t;
 }
@@ -397,13 +352,7 @@ async function clearImageCache() {
   if (!confirm('이미지 캐시를 전부 삭제하고 R2에서 다시 받을까요?')) return;
   try {
     // IDB 전체 삭제 (모든 캐시 키)
-    const db = await openIDB();
-    await new Promise((res, rej) => {
-      const tx = db.transaction(IDB_STORE, 'readwrite');
-      tx.objectStore(IDB_STORE).clear();
-      tx.oncomplete = res;
-      tx.onerror = () => rej(tx.error);
-    });
+    await idbClearAll();
 
     // 메모리 캐시 즉시 비우기
     Object.keys(_neutralCache).forEach(k => delete _neutralCache[k]);
@@ -411,7 +360,7 @@ async function clearImageCache() {
 
     // 브라우저 HTTP 캐시 버스트용 타임스탬프 저장
     // → 다음 로드 시 R2 URL에 ?t= 붙여서 강제 재요청
-    localStorage.setItem('img_cache_bust', Date.now().toString());
+    setImageCacheBustToken(Date.now().toString());
 
     showToast('캐시 삭제 완료. 재시작할게요...');
     setTimeout(() => location.reload(), 800);
@@ -427,7 +376,7 @@ function savePersonas() {
     const { neutral_md, neutral_hd, neutral_thumb, image, ...rest } = p;
     return rest;
   });
-  try { localStorage.setItem(CACHE_PERSONAS_KEY, JSON.stringify(toSave)); } catch(e) {}
+  setLocalPersonas(toSave);
   // Worker KV에 저장
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (wUrl) {
@@ -452,7 +401,7 @@ function buildIndex() {
 
 async function saveIndex() {
   const idx = buildIndex();
-  try { localStorage.setItem(CACHE_INDEX_KEY, JSON.stringify(idx)); } catch(e) {}
+  setLocalSessionIndex(idx);
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl) return;
   // 인덱스 저장
@@ -466,7 +415,7 @@ async function saveIndex() {
 async function saveSession(id) {
   const s = sessions.find(x=>x.id===id); if (!s) return;
   const history = s.history.map(({_rendered,...rest})=>rest);
-  try { localStorage.setItem(CACHE_SESSION_PREFIX+id, JSON.stringify(history)); } catch(e) {}
+  setLocalSession(id, history);
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl) return;
   const session = { ...buildIndex().find(x=>x.id===id), history };
@@ -490,7 +439,7 @@ async function loadIndex() {
     });
     const localOnly = sessions.filter(s => !index.find(item => item.id === s.id));
     sessions = [...updatedSessions, ...localOnly];
-    try { localStorage.setItem(CACHE_INDEX_KEY, JSON.stringify(index)); } catch(e) {}
+    setLocalSessionIndex(index);
     renderChatList();
   } catch(e) {}
 }
@@ -500,8 +449,8 @@ async function loadSession(id) {
   // 로컬 캐시 먼저
   if (!s._loaded) {
     try {
-      const cached = localStorage.getItem(CACHE_SESSION_PREFIX+id);
-      if (cached) { s.history = JSON.parse(cached); s._loaded = true; renderChatArea(); }
+      const cached = getLocalSession(id);
+      if (cached) { s.history = cached; s._loaded = true; renderChatArea(); }
     } catch(e) {}
   }
   // KV에서 로드
@@ -513,7 +462,7 @@ async function loadSession(id) {
     if (data.session?.history?.length) {
       s.history = data.session.history;
       s._loaded = true;
-      try { localStorage.setItem(CACHE_SESSION_PREFIX+id, JSON.stringify(s.history)); } catch(e) {}
+      setLocalSession(id, s.history);
       renderChatArea();
     } else { s._loaded = true; }
   } catch(e) {}
@@ -524,8 +473,8 @@ async function preloadAllSessions() {
   for (const s of sessions) {
     if (s._loaded) continue;
     try {
-      const cached = localStorage.getItem(CACHE_SESSION_PREFIX+s.id);
-      if (cached) { s.history = JSON.parse(cached); s._loaded = true; continue; }
+      const cached = getLocalSession(s.id);
+      if (cached) { s.history = cached; s._loaded = true; continue; }
     } catch(e) {}
     if (!wUrl) continue;
     try {
@@ -534,7 +483,7 @@ async function preloadAllSessions() {
       if (data.session?.history) {
         s.history = data.session.history;
         s._loaded = true;
-        try { localStorage.setItem(CACHE_SESSION_PREFIX+s.id, JSON.stringify(s.history)); } catch(e) {}
+        setLocalSession(s.id, s.history);
       }
     } catch(e) {}
   }
@@ -578,13 +527,13 @@ function makeImageFilename(prefix) {
 const LOCAL_ONLY_PROFILE_KEYS = ['defaultTab', 'chatAvatarStyle', 'fontSize'];
 
 function saveUserProfile() {
-  try { localStorage.setItem(CACHE_USER_KEY, JSON.stringify(userProfile)); } catch(e) {}
+  setLocalUserProfile(userProfile);
 }
 
 function loadUserProfile() {
   try {
-    const cached = localStorage.getItem(CACHE_USER_KEY);
-    if (cached) userProfile = JSON.parse(cached);
+    const cached = getLocalUserProfile();
+    if (cached) userProfile = cached;
   } catch(e) {}
 }
 

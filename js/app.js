@@ -53,9 +53,9 @@ window.getDemoReply = function(session) {
 // ══════════════════════════════
 function loadPersonasFromCache() {
   try {
-    const cached = localStorage.getItem(CACHE_PERSONAS_KEY);
+    const cached = getLocalPersonas();
     if (cached) {
-      const parsed = JSON.parse(cached);
+      const parsed = cached;
       if (parsed && parsed.length) {
         // pid 중복 제거
         const seen = new Set();
@@ -72,9 +72,9 @@ function loadPersonasFromCache() {
 
 function loadSessionsFromCache() {
   try {
-    const cached = localStorage.getItem(CACHE_INDEX_KEY);
+    const cached = getLocalSessionIndex();
     if (cached) {
-      const index = JSON.parse(cached);
+      const index = cached;
       sessions = (index||[]).map(item=>({...item, history:[], _loaded:false}));
     }
   } catch(e) {}
@@ -142,7 +142,7 @@ async function init() {
           if (seen.has(p.pid)) return false;
           seen.add(p.pid); return true;
         });
-        try { localStorage.setItem(CACHE_PERSONAS_KEY, JSON.stringify(personas)); } catch(e) {}
+        setLocalPersonas(personas);
         renderPersonaGrid();
         preloadEmotionImages();
       } else {
@@ -150,7 +150,7 @@ async function init() {
         fetch('celebrity.json').then(r => r.ok ? r.json() : []).catch(() => []).then(celebs => {
           if (!celebs.length) return;
           personas = celebs.map(p => ({ ...p, type: p.type || 'celebrity' }));
-          try { localStorage.setItem(CACHE_PERSONAS_KEY, JSON.stringify(personas)); } catch(e) {}
+          setLocalPersonas(personas);
           // KV에도 저장
           fetch(wUrl + '/personas', {
             method: 'PUT',

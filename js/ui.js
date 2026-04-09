@@ -1246,14 +1246,14 @@ function deleteChatFromDrawer() {
   if (!confirm('이 채팅방을 삭제할까? 대화 내용이 모두 사라져.')) return;
   const id = activeChatId;
   sessions = sessions.filter(s => s.id !== id);
-  try { localStorage.removeItem(CACHE_SESSION_PREFIX + id); } catch(e) {}
+  removeLocalSession(id);
   saveIndex(); closeDrawer(); activeChatId = null; goMain(); switchTab('chat');
 }
 
 function deleteChat(id) {
   if (!confirm('이 채팅을 삭제할까?')) return;
   sessions = sessions.filter(s => s.id !== id);
-  try { localStorage.removeItem(CACHE_SESSION_PREFIX + id); } catch(e) {}
+  removeLocalSession(id);
   renderChatList(); saveIndex();
 }
 
