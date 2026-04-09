@@ -91,6 +91,108 @@ async function renderMermaidBlocks(container) {
 
 function fmt(s) { return mdRender(s); }
 
+function formatMessageTime(ts) {
+  if (!ts) return '';
+  try {
+    return new Intl.DateTimeFormat('ko-KR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).format(new Date(ts));
+  } catch {
+    return '';
+  }
+}
+
+function buildTimeMetaHTML(ts, align = 'left') {
+  const label = formatMessageTime(ts);
+  if (!label) return '';
+  return `<div class="msg-time msg-time-${align}">${label}</div>`;
+}
+
+function encodeCopyPayload(text) {
+  return encodeURIComponent(String(text || ''));
+}
+
+function decodeCopyPayload(payload) {
+  try { return decodeURIComponent(payload || ''); } catch { return String(payload || ''); }
+}
+
+function buildCurrentTimeSystemMessage() {
+  const now = new Date();
+  const text = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).format(now);
+  return {
+    role: 'system',
+    content: `Seoul time: ${text}. Use only if relevant.`
+  };
+}
+
+function enhanceRenderedMessage(container) {
+  if (!container) return;
+  const group = container.classList?.contains('msg-group') ? container : container.querySelector?.('.msg-group');
+  if (group) {
+    const userMsg = group.querySelector('.user-msg');
+    if (userMsg && !group.querySelector('.user-copy-btn')) {
+      const btn = document.createElement('button');
+      btn.className = 'copy-btn user-copy-btn';
+      btn.type = 'button';
+      btn.title = '복사';
+      btn.dataset.copyText = encodeCopyPayload(userMsg.innerText || '');
+      btn.innerHTML = '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="10" height="11" rx="2"/><path d="M13 5V3.5A1.5 1.5 0 0 0 11.5 2h-7A1.5 1.5 0 0 0 3 3.5v10A1.5 1.5 0 0 0 4.5 15H5"/></svg>';
+      btn.onclick = () => copyBubble(btn, btn.dataset.copyText, true);
+      const wrap = document.createElement('div');
+      wrap.className = 'user-msg-wrap';
+      userMsg.parentNode.insertBefore(wrap, userMsg);
+      wrap.appendChild(userMsg);
+      wrap.appendChild(btn);
+    }
+    group.querySelectorAll('.msg-pname').forEach(nameRow => {
+      const bubble = nameRow.parentElement?.querySelector('.ai-bubble');
+      if (!bubble || bubble.querySelector('img')) return;
+      const btn = nameRow.querySelector('.copy-btn') || document.createElement('button');
+      if (!nameRow.querySelector('.copy-btn')) {
+        btn.className = 'copy-btn';
+        btn.type = 'button';
+        btn.innerHTML = '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="10" height="11" rx="2"/><path d="M13 5V3.5A1.5 1.5 0 0 0 11.5 2h-7A1.5 1.5 0 0 0 3 3.5v10A1.5 1.5 0 0 0 4.5 15H5"/></svg>';
+        nameRow.appendChild(btn);
+      }
+      btn.title = '복사';
+      btn.onclick = () => copyBubble(btn, btn.dataset.copyText, true);
+      btn.dataset.copyText = encodeCopyPayload(bubble.innerText || '');
+    });
+  }
+  container.querySelectorAll('pre').forEach(pre => {
+    if (pre.dataset.copyEnhanced === '1') return;
+    const code = pre.querySelector('code');
+    const text = code?.innerText || pre.innerText || '';
+    const btn = document.createElement('button');
+    btn.className = 'code-copy-btn';
+    btn.type = 'button';
+    btn.dataset.copyText = encodeCopyPayload(text);
+    btn.textContent = '복사';
+    btn.onclick = () => copyBubble(btn, btn.dataset.copyText, true);
+    pre.classList.add('code-copy-wrap');
+    pre.appendChild(btn);
+    pre.dataset.copyEnhanced = '1';
+  });
+}
+
+function attachMessageMeta(container, ts, align = 'left') {
+  if (!container || !ts) return;
+  if (container.querySelector('.msg-time')) return;
+  const label = buildTimeMetaHTML(ts, align);
+  if (!label) return;
+  container.insertAdjacentHTML('beforeend', label);
+}
+
 function sanitizeUserInputValue(value) {
   return String(value || '').replace(/[\u200B-\u200D\u2060\uFEFF\uFFFC]/g, '');
 }
@@ -1302,11 +1404,16 @@ async function renderChatArea() {
         : pList;
       el.innerHTML = await renderAIResponseHTML(msg.content, renderPersonas, msg._suffixes || {});
     }
-    if (el.firstElementChild) fragment.appendChild(el.firstElementChild);
+    if (el.firstElementChild) {
+      enhanceRenderedMessage(el.firstElementChild);
+      attachMessageMeta(el.firstElementChild, msg.createdAt, msg.role === 'user' ? 'right' : 'left');
+      fragment.appendChild(el.firstElementChild);
+    }
   }
   [...area.children].forEach(c => { if (c.id !== 'chatEmpty2') c.remove(); });
   area.appendChild(fragment);
   renderMermaidBlocks(area);
+  area.querySelectorAll('.msg-group').forEach(enhanceRenderedMessage);
   requestAnimationFrame(() => { area.scrollTop = area.scrollHeight; });
 }
 
@@ -1333,10 +1440,11 @@ function buildEmotionCard(p, emotion, letter, dataUrl) {
 }
 
 
-function copyBubble(btn, text) {
+function copyBubble(btn, text, encoded = false) {
+  const plainText = encoded ? decodeCopyPayload(text) : String(text || '');
   const doFallback = () => {
     const ta = document.createElement('textarea');
-    ta.value = text; ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+    ta.value = plainText; ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
     document.body.appendChild(ta); ta.focus(); ta.select();
     try { document.execCommand('copy'); } catch(e) {}
     ta.remove();
@@ -1349,11 +1457,11 @@ function copyBubble(btn, text) {
     setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = btn.dataset.orig; }, 1500);
   };
   if (navigator.clipboard?.writeText) {
-    navigator.clipboard.writeText(text).then(markDone).catch(() => { doFallback(); markDone(); });
+    navigator.clipboard.writeText(plainText).then(markDone).catch(() => { doFallback(); markDone(); });
   } else { doFallback(); markDone(); }
 }
 
-async function renderAIResponseHTML(rawText, pList, suffixes = {}) {
+async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = null) {
   const segments = parseResponse(rawText, pList);
   let html = '';
   for (const seg of segments) {
@@ -1411,7 +1519,7 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}) {
       <div class="bubble-col">
         <div class="msg-pname" style="color:hsl(${h},65%,72%)">
           <span class="msg-pname-text">${esc(p.name)}${p._ghost?`<span style="font-size:9px;opacity:.5">(삭제됨)</span>`:''}</span>
-          ${hasImg ? '' : `<button class="copy-btn" onclick="copyBubble(this,${JSON.stringify(seg.content)})" title="복사">
+          ${hasImg ? '' : `<button class="copy-btn" onclick="copyBubble(this,'${encodeCopyPayload(seg.content)}',true)" title="복사">
             <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="10" height="11" rx="2"/><path d="M13 5V3.5A1.5 1.5 0 0 0 11.5 2h-7A1.5 1.5 0 0 0 3 3.5v10A1.5 1.5 0 0 0 4.5 15H5"/></svg>
           </button>`}
         </div>
@@ -1635,7 +1743,8 @@ async function sendMessage() {
     ? buildUserMessageContent(text, requestImageUrls)
     : text || '(?뚯씪)';
 
-  const userMsg = { role:'user', content: msgContent, _rendered:`<div class="msg-group"><div class="user-msg">${userHTML}</div></div>` };
+  const nowTs = Date.now();
+  const userMsg = { role:'user', content: msgContent, createdAt: nowTs, _rendered:`<div class="msg-group"><div class="user-msg">${userHTML}</div></div>` };
   session.history.push(userMsg);
   session.updatedAt = Date.now();
 
@@ -1651,7 +1760,11 @@ async function sendMessage() {
 
   const userEl = document.createElement('div');
   userEl.innerHTML = userMsg._rendered;
-  if (userEl.firstElementChild) area.appendChild(userEl.firstElementChild);
+  if (userEl.firstElementChild) {
+    enhanceRenderedMessage(userEl.firstElementChild);
+    attachMessageMeta(userEl.firstElementChild, userMsg.createdAt, 'right');
+    area.appendChild(userEl.firstElementChild);
+  }
 
   // 로딩 플레이스홀더
   const thinkEl = document.createElement('div');
@@ -1711,12 +1824,17 @@ async function sendMessage() {
     }
     html += '</div>';
 
+    const emotionTestCreatedAt = Date.now();
     const replyEl = document.createElement('div');
     replyEl.innerHTML = html;
-    if (replyEl.firstElementChild) area.appendChild(replyEl.firstElementChild);
+    if (replyEl.firstElementChild) {
+      enhanceRenderedMessage(replyEl.firstElementChild);
+      attachMessageMeta(replyEl.firstElementChild, emotionTestCreatedAt, 'left');
+      area.appendChild(replyEl.firstElementChild);
+    }
     area.scrollTop = area.scrollHeight;
 
-    session.history.push({ role:'assistant', content:'(감정 테스트)', personaSnapshot, _suffixes: {} });
+    session.history.push({ role:'assistant', content:'(감정 테스트)', createdAt: emotionTestCreatedAt, personaSnapshot, _suffixes: {} });
     session.lastPreview = '(감정 테스트)'; session.updatedAt = Date.now();
     isLoading = false;
     document.getElementById('sendBtn').disabled = false;
@@ -1737,6 +1855,7 @@ async function sendMessage() {
       try {
         const apiMessages = [
           { role:'system', content: buildSystemPrompt(session) },
+          buildCurrentTimeSystemMessage(),
           ...session.history
             .filter(m => m.role==='user'||m.role==='assistant')
             .map(m => ({ role:m.role, content: m === userMsg ? requestMsgContent : m.content }))
@@ -1759,6 +1878,7 @@ async function sendMessage() {
               : text || '(?뚯씪)';
             const personaMessages = [
               { role:'system', content: buildSystemPrompt(session, [persona]) },
+              buildCurrentTimeSystemMessage(),
               ...session.history
                 .filter(m => m.role==='user'||m.role==='assistant')
                 .map(m => ({ role:m.role, content: m === userMsg ? personaRequestMsgContent : m.content }))
@@ -1851,7 +1971,8 @@ async function sendMessage() {
     const personaSnapshot = pList.map(p=>({pid:p.pid, name:p.name}));
     const suffixes = await resolveMessageSuffixes(reply, pList);
 
-    currentSession.history.push({ role:'assistant', content:reply, personaSnapshot, _suffixes: suffixes });
+    const assistantCreatedAt = Date.now();
+    currentSession.history.push({ role:'assistant', content:reply, createdAt: assistantCreatedAt, personaSnapshot, _suffixes: suffixes });
 
     const parsed = parseResponse(reply, pList);
     const firstContent = parsed[0]?.content || '';
@@ -1861,9 +1982,11 @@ async function sendMessage() {
     // 사용자가 해당 채팅방을 그대로 보고 있다면 화면에 즉시 렌더링
     if (activeChatId === currentSession.id) {
       const replyEl = document.createElement('div');
-      replyEl.innerHTML = await renderAIResponseHTML(reply, pList, suffixes);
+      replyEl.innerHTML = await renderAIResponseHTML(reply, pList, suffixes, assistantCreatedAt);
       if (replyEl.firstElementChild) {
         // chatArea로 통일
+        enhanceRenderedMessage(replyEl.firstElementChild);
+        attachMessageMeta(replyEl.firstElementChild, assistantCreatedAt, 'left');
         const tgtArea = document.getElementById('chatArea');
         tgtArea.appendChild(replyEl.firstElementChild);
         renderMermaidBlocks(tgtArea);

@@ -360,6 +360,10 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .bubble-col { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
 .bubble-wrap { position: relative; display: inline-block; max-width: 100%; }
 .bubble-wrap.has-img { display: block; width: 100%; }
+.user-msg-wrap { display: flex; align-items: flex-end; justify-content: flex-end; gap: 6px; }
+.msg-time { font-size: 10px; color: var(--muted); line-height: 1; margin-top: 2px; }
+.msg-time-left { padding-left: calc(min(25vw, 200px) + 10px); text-align: left; }
+.msg-time-right { text-align: right; }
 /* AI 생성 이미지 */
 .ai-bubble img { width: 100%; height: auto; border-radius: 8px; display: block; margin-top: 4px; cursor: pointer; }
 .ai-bubble.has-img { width: 100%; padding: 8px 10px 10px; }
@@ -390,8 +394,9 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .md-content ul,.md-content ol { margin: 6px 0 6px 18px; padding: 0; }
 .md-content li { margin: 3px 0; }
 .md-content code { font-family: 'JetBrains Mono','Fira Code',monospace; font-size: 0.85em; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.08); }
-.md-content pre { margin: 8px 0; border-radius: 8px; overflow-x: auto; }
+.md-content pre { margin: 8px 0; border-radius: 8px; overflow-x: auto; position: relative; }
 .md-content pre code { padding: 12px 14px; display: block; background: transparent; font-size: 13px; }
+.code-copy-btn { position: absolute; top: 8px; right: 8px; background: rgba(17,17,20,.92); color: var(--text); border: 1px solid var(--border2); border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer; }
 .md-content blockquote { border-left: 3px solid rgba(255,255,255,0.2); margin: 8px 0; padding: 4px 12px; opacity: 0.8; }
 .md-content table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 13px; }
 .md-content th,.md-content td { border: 1px solid rgba(255,255,255,0.15); padding: 6px 10px; text-align: left; }
