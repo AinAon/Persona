@@ -95,9 +95,132 @@ function sanitizeUserInputValue(value) {
   return String(value || '').replace(/[\u200B-\u200D\u2060\uFEFF\uFFFC]/g, '');
 }
 
+function isImageAttachment(a) {
+  return a?.type === 'image';
+}
+
+function getAttachmentPreviewUrl(a) {
+  return a?.previewUrl || a?.transportUrl || a?.dataUrl || '';
+}
+
+function getAttachmentStoredUrl(a) {
+  return a?.transportUrl || a?.dataUrl || getAttachmentPreviewUrl(a);
+}
+
+async function getAttachmentOriginalUrl(a) {
+  if (!a) return '';
+  if (a.originalDataUrl) return a.originalDataUrl;
+  if (a.originalCacheKey) {
+    const cached = await idbGet(a.originalCacheKey).catch(() => null);
+    if (cached) return cached;
+  }
+  const fallback = a?.dataUrl || a?.previewUrl || '';
+  return typeof fallback === 'string' && fallback.startsWith('data:') ? fallback : '';
+}
+
+async function getAttachmentRequestUrl(a, model, isImageReq) {
+  if (!isImageAttachment(a)) return '';
+  const original = await getAttachmentOriginalUrl(a);
+  const stored = getAttachmentStoredUrl(a);
+  if (isImageReq && model.startsWith('gpt-image')) return original || stored;
+  if (model.startsWith('gemini')) return original || stored;
+  return stored || original;
+}
+
+async function cleanupAttachmentCaches(items) {
+  await Promise.all((items || []).map(a => a?.originalCacheKey ? idbDel(a.originalCacheKey).catch(() => {}) : Promise.resolve()));
+}
+
+function buildUserMessageContent(text, imageUrls) {
+  const imgs = (imageUrls || []).filter(Boolean);
+  if (!imgs.length) return text || '(파일)';
+  const content = [];
+  if (text) content.push({ type: 'text', text });
+  imgs.forEach(url => content.push({ type: 'image_url', image_url: { url } }));
+  return content;
+}
+
+function getTargetModelForRequest(session, isImageReq) {
+  if (isImageReq) {
+    return document.getElementById('imageModelSelect')?.value || 'grok-imagine-image-pro';
+  }
+  const pListForModel = (session.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
+  const targetModel = session.overrideModel
+    || pListForModel.find(p => p.defaultModel)?.defaultModel
+    || document.getElementById('chatModeSelect')?.value
+    || 'grok-4.20-non-reasoning-latest';
+  const sel = document.getElementById('chatModeSelect');
+  if (sel && sel.value !== targetModel) sel.value = targetModel;
+  return targetModel;
+}
+
+async function buildAttachmentRecord(file) {
+  const id = uid();
+  const isImg = file.type.startsWith('image/');
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target.result);
+    reader.onerror = () => reject(reader.error || new Error('file read failed'));
+    reader.readAsDataURL(file);
+  });
+
+  const record = {
+    id,
+    type: isImg ? 'image' : 'file',
+    name: file.name,
+    mimeType: file.type || (isImg ? 'image/jpeg' : 'application/octet-stream'),
+    dataUrl,
+    previewUrl: dataUrl,
+    transportUrl: dataUrl,
+    originalCacheKey: null
+  };
+
+  if (!isImg) return record;
+
+  const cacheKey = `attachment_original_${id}`;
+  record.originalCacheKey = cacheKey;
+  await idbSet(cacheKey, dataUrl).catch(() => {});
+
+  const previewUrl = await resizeImage(dataUrl, 512, 0.82).catch(() => dataUrl);
+  record.previewUrl = previewUrl || dataUrl;
+  record.dataUrl = record.previewUrl;
+
+  const fname = makeImageFilename('uploaded') + '.jpg';
+  record.transportUrl = await uploadToR2(dataUrl, 'img_uploaded', fname).catch(() => dataUrl);
+  return record;
+}
+
+async function addFilesToAttachments(fileList, source = 'picker') {
+  const files = [...(fileList || [])];
+  if (!files.length) return 0;
+  let added = 0;
+  for (const file of files) {
+    const record = await buildAttachmentRecord(file);
+    record.source = source;
+    attachments.push(record);
+    added++;
+    renderAttachmentPreviews();
+  }
+  return added;
+}
+
+function setComposerDragActive(active) {
+  const bar = document.querySelector('.chat-input-bar');
+  const row = document.querySelector('.input-row');
+  const attachmentsRow = document.getElementById('attachmentsRow');
+  [bar, row, attachmentsRow].forEach(el => {
+    if (!el) return;
+    el.style.transition = 'box-shadow .12s ease, border-color .12s ease, background-color .12s ease';
+    el.style.boxShadow = active ? '0 0 0 1px rgba(255,255,255,.22), 0 0 0 4px rgba(255,255,255,.06)' : '';
+    el.style.backgroundColor = active && el === attachmentsRow ? 'rgba(255,255,255,.04)' : '';
+  });
+}
+
 function initUserInputGuards() {
   const input = document.getElementById('userInput');
   if (!input) return;
+  const composer = document.querySelector('.chat-input-bar');
+  let dragDepth = 0;
 
   input.addEventListener('paste', e => {
     const items = [...(e.clipboardData?.items || [])];
@@ -110,16 +233,45 @@ function initUserInputGuards() {
     requestAnimationFrame(() => autoResize(input));
   });
 
-  input.addEventListener('drop', e => {
-    const hasFile = [...(e.dataTransfer?.files || [])].length > 0;
-    if (hasFile) {
-      e.preventDefault();
-      showToast('파일 드롭은 아직 지원하지 않아요. 파일 첨부 버튼을 사용해 주세요.');
-    }
-  });
+  const onDragEnter = e => {
+    if (!(e.dataTransfer?.types || []).includes('Files')) return;
+    e.preventDefault();
+    dragDepth++;
+    setComposerDragActive(true);
+  };
 
-  input.addEventListener('dragover', e => {
-    if ((e.dataTransfer?.types || []).includes('Files')) e.preventDefault();
+  const onDragOver = e => {
+    if (!(e.dataTransfer?.types || []).includes('Files')) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    setComposerDragActive(true);
+  };
+
+  const onDragLeave = e => {
+    if (!(e.dataTransfer?.types || []).includes('Files')) return;
+    e.preventDefault();
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) setComposerDragActive(false);
+  };
+
+  const onDrop = async e => {
+    const files = [...(e.dataTransfer?.files || [])];
+    if (!files.length) return;
+    e.preventDefault();
+    dragDepth = 0;
+    setComposerDragActive(false);
+    const added = await addFilesToAttachments(files, 'drop');
+    if (added > 0) {
+      showToast(`${added}개 파일을 첨부했어요.`);
+      input.focus();
+    }
+  };
+
+  [composer, input, document.getElementById('attachmentsRow')].filter(Boolean).forEach(el => {
+    el.addEventListener('dragenter', onDragEnter);
+    el.addEventListener('dragover', onDragOver);
+    el.addEventListener('dragleave', onDragLeave);
+    el.addEventListener('drop', onDrop);
   });
 }
 
@@ -1408,7 +1560,7 @@ function buildSystemPrompt(session) {
 function renderUserBubbleHTML(text, atts) {
   let html = '';
   atts.forEach(a => {
-    const url = a.dataUrl;
+    const url = getAttachmentPreviewUrl(a);
     html += `
     <div class="bubble-img-container">
       <img class="bubble-img" src="${url}" onclick="openImagePopup('${url}')">
@@ -1426,13 +1578,22 @@ async function sendMessage() {
   const text = sanitizeUserInputValue(input.value).trim();
   if (!text && !attachments.length) return;
 
+  const isImageReq = (_inputTab === 'image');
+  const targetModel = getTargetModelForRequest(session, isImageReq);
+  const historyImageUrls = attachments.filter(isImageAttachment).map(getAttachmentStoredUrl).filter(Boolean);
+  const requestImageUrls = [];
+  for (const attachment of attachments.filter(isImageAttachment)) {
+    const imageUrl = await getAttachmentRequestUrl(attachment, targetModel, isImageReq);
+    if (imageUrl) requestImageUrls.push(imageUrl);
+  }
+  const sentAttachments = attachments.slice();
+
   isLoading = true;
   document.getElementById('sendBtn').disabled = true;
   input.value = ''; input.style.height = 'auto';
 
   // 이미지 탭 참조 이미지는 채팅에 표시 안 함 — 텍스트 프롬프트만 보여줌
-  const isImageReq = (_inputTab === 'image');
-  const userHTML = renderUserBubbleHTML(text, isImageReq ? [] : attachments);
+  const userHTML = renderUserBubbleHTML(text, attachments);
   
   let msgContent = text || '(파일)';
   if (attachments.length > 0) {
@@ -1445,14 +1606,19 @@ async function sendMessage() {
     });
   }
 
+  msgContent = attachments.length > 0
+    ? buildUserMessageContent(text, historyImageUrls)
+    : text || '(?뚯씪)';
+  const requestMsgContent = attachments.length > 0
+    ? buildUserMessageContent(text, requestImageUrls)
+    : text || '(?뚯씪)';
+
   const userMsg = { role:'user', content: msgContent, _rendered:`<div class="msg-group"><div class="user-msg">${userHTML}</div></div>` };
   session.history.push(userMsg);
   session.updatedAt = Date.now();
 
   // 이미지 편집용 참조 이미지: attachments 클리어 전에 미리 캡처
-  const refImages = Array.isArray(msgContent)
-    ? msgContent.filter(c => c.type === 'image_url').map(c => c.image_url.url)
-    : [];
+  const refImages = [...requestImageUrls];
 
   attachments = [];
   renderAttachmentPreviews();
@@ -1535,6 +1701,7 @@ async function sendMessage() {
     input.focus();
     if (!session._demo) { saveSession(session.id); saveIndex(); }
     renderChatList();
+    await cleanupAttachmentCaches(sentAttachments);
     return;
   }
 
@@ -1550,24 +1717,11 @@ async function sendMessage() {
           { role:'system', content: buildSystemPrompt(session) },
           ...session.history
             .filter(m => m.role==='user'||m.role==='assistant')
-            .map(m => ({ role:m.role, content: m.content }))
+            .map(m => ({ role:m.role, content: m === userMsg ? requestMsgContent : m.content }))
         ];
         const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
 
-        let targetModel;
-        if (isImageReq) {
-          targetModel = document.getElementById('imageModelSelect')?.value || 'grok-imagine-image-pro';
-        } else {
-          // 우선순위: 채팅방 override → 페르소나 기본 모델 → select 현재값
-          const pListForModel = (session.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
-          targetModel = session.overrideModel
-            || pListForModel.find(p => p.defaultModel)?.defaultModel
-            || document.getElementById('chatModeSelect')?.value
-            || 'grok-4.20-non-reasoning-latest';
-          // select UI도 동기화
-          const sel = document.getElementById('chatModeSelect');
-          if (sel && sel.value !== targetModel) sel.value = targetModel;
-        }
+        // targetModel is resolved before we clear attachments.
 
         const ratio = typeof _selectedRatio !== 'undefined' ? _selectedRatio : "1:1";
 
@@ -1661,6 +1815,7 @@ async function sendMessage() {
 
     if (!currentSession._demo) { saveSession(currentSession.id); saveIndex(); }
     renderChatList();
+    await cleanupAttachmentCaches(sentAttachments);
     
     // 완료 후 항상 락 해제 (이미지/채팅 공통)
     isLoading = false;
@@ -1673,6 +1828,9 @@ async function sendMessage() {
 }
 
 function handleFileSelect(input) {
+  addFilesToAttachments(input.files, 'picker').catch(e => showToast('泥⑤? ?ㅽ뙣: ' + e.message));
+  input.value = '';
+  return;
   [...input.files].forEach(file => {
     const reader = new FileReader();
     reader.onload = async e => {
@@ -1700,7 +1858,11 @@ function renderAttachmentPreviews() {
     row.appendChild(div);
   });
 }
-function removeAttachment(i) { attachments.splice(i,1); renderAttachmentPreviews(); }
+async function removeAttachment(i) {
+  const removed = attachments.splice(i,1)[0];
+  if (removed?.originalCacheKey) await idbDel(removed.originalCacheKey).catch(() => {});
+  renderAttachmentPreviews();
+}
 
 // ══════════════════════════════
 //  SETTINGS DRAWER & PROMPT MODAL

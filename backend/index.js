@@ -198,7 +198,7 @@ export default {
               form.append("size", openaiSize);
               form.append("n", "1");
               // 참조 이미지 첫 번째를 image 필드로 (base64 data URL → Blob)
-              const blob = dataUrlToBlob(images[0]);
+              const blob = await imageRefToBlob(images[0]);
               if (blob) form.append("image[]", blob, "reference.jpg");
 
               const r = await fetch("https://api.openai.com/v1/images/edits", {
@@ -333,6 +333,21 @@ function dataUrlToBlob(dataUrl) {
     for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
     return new Blob([arr], { type: mime });
   } catch { return null; }
+}
+
+async function imageRefToBlob(imageRef) {
+  if (!imageRef || typeof imageRef !== "string") return null;
+  if (imageRef.startsWith("data:")) return dataUrlToBlob(imageRef);
+  if (!/^https?:\/\//i.test(imageRef)) return null;
+  try {
+    const resp = await fetch(imageRef);
+    if (!resp.ok) return null;
+    const mime = (resp.headers.get("content-type") || "image/jpeg").split(";")[0];
+    const bytes = await resp.arrayBuffer();
+    return new Blob([bytes], { type: mime });
+  } catch {
+    return null;
+  }
 }
 
 async function contentItemToGeminiPart(item) {
