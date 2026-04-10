@@ -347,6 +347,7 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 
 .chat-area { flex: 1; min-height: 0; height: 0; overflow-y: auto; overflow-x: hidden; padding: 12px 12px 8px; display: flex; flex-direction: column; gap: 12px; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 .chat-area.has-messages { justify-content: flex-start; }
+.chat-area.has-messages > .chat-bottom-anchor { margin-top: auto; }
 .chat-area::-webkit-scrollbar { width: 3px; }
 .chat-area::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
 
@@ -464,8 +465,8 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .thinking-dots span:nth-child(2) { animation-delay: .2s; }
 .thinking-dots span:nth-child(3) { animation-delay: .4s; }
 @keyframes blink { 0%,80%,100%{opacity:.15} 40%{opacity:.8} }
-@keyframes msgRise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-.msg-group.msg-enter { animation: msgRise .24s ease-out; }
+@keyframes msgRise { from { opacity: 0; transform: translateY(18px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.msg-group.msg-enter { animation: msgRise .32s cubic-bezier(.22,.8,.24,1); }
 
 /* 입력창 */
 .chat-input-bar { background: var(--surface); border-top: 1px solid var(--border); padding: 0 10px 10px; flex-shrink: 0; }

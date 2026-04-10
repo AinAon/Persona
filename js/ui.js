@@ -262,6 +262,13 @@ function attachMessageMeta(container, ts, align = 'left') {
   else container.insertAdjacentHTML('beforeend', `<div class="${cls}">${label}</div>`);
 }
 
+function updateChatBottomAnchor(area = document.getElementById('chatArea')) {
+  if (!area) return;
+  area.querySelectorAll('.chat-bottom-anchor').forEach(el => el.classList.remove('chat-bottom-anchor'));
+  const firstContent = [...area.children].find(el => el.id !== 'chatEmpty2');
+  if (firstContent) firstContent.classList.add('chat-bottom-anchor');
+}
+
 function sanitizeUserInputValue(value) {
   return String(value || '').replace(/[\u200B-\u200D\u2060\uFEFF\uFFFC]/g, '');
 }
@@ -1748,6 +1755,7 @@ async function renderChatArea() {
   if (activeChatId !== renderSessionId) return;
   [...area.children].forEach(c => { if (c.id !== 'chatEmpty2') c.remove(); });
   area.appendChild(fragment);
+  updateChatBottomAnchor(area);
   renderMermaidBlocks(area);
   area.querySelectorAll('.msg-group').forEach(enhanceRenderedMessage);
   requestAnimationFrame(() => { area.scrollTop = area.scrollHeight; });
@@ -2110,6 +2118,7 @@ async function sendMessage() {
     enhanceRenderedMessage(userEl.firstElementChild);
     attachMessageMeta(userEl.firstElementChild, userMsg.createdAt, 'right');
     area.appendChild(userEl.firstElementChild);
+    updateChatBottomAnchor(area);
   }
 
   // 로딩 플레이스홀더
@@ -2134,6 +2143,7 @@ async function sendMessage() {
     thinkEl.innerHTML = `<div class="thinking-dots"><span></span><span></span><span></span></div>`;
   }
   area.appendChild(thinkEl);
+  updateChatBottomAnchor(area);
   area.scrollTop = area.scrollHeight;
 
   const pListAll = getSessionPersonas(session);
@@ -2178,6 +2188,7 @@ async function sendMessage() {
       enhanceRenderedMessage(replyEl.firstElementChild);
       attachMessageMeta(replyEl.firstElementChild, emotionTestCreatedAt, 'left');
       area.appendChild(replyEl.firstElementChild);
+      updateChatBottomAnchor(area);
     }
     area.scrollTop = area.scrollHeight;
 
@@ -2338,6 +2349,7 @@ async function sendMessage() {
         const tgtArea = document.getElementById('chatArea');
         tgtArea.classList.add('has-messages');
         tgtArea.appendChild(replyEl.firstElementChild);
+        updateChatBottomAnchor(tgtArea);
         renderMermaidBlocks(tgtArea);
         tgtArea.scrollTop = tgtArea.scrollHeight;
       }
