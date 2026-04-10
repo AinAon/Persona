@@ -1967,16 +1967,15 @@ function handleContextFile(input) {
   input.value = '';
 }
 function handleKey(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    if (_isDemoMode) {
-      // 데모 모드
-      const input = document.getElementById('userInput');
-      if (input) input.value = '';
-      _showDemoSlide(document.getElementById('chatArea'));
-    } else {
-      sendMessage();
-    }
+  if (e.key !== 'Enter' || e.isComposing) return;
+  if (!(e.ctrlKey || e.metaKey)) return;
+  e.preventDefault();
+  if (_isDemoMode) {
+    const input = document.getElementById('userInput');
+    if (input) input.value = '';
+    _showDemoSlide(document.getElementById('chatArea'));
+  } else {
+    sendMessage();
   }
 }
 function autoResize(el) {
