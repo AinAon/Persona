@@ -840,6 +840,12 @@ function setupTouchDrag(grid) {
   let slotEl = null;
   let pressType = null; // 'touch' | 'mouse'
 
+  function setNoSelect(on) {
+    document.body.classList.toggle('dragging-no-select', !!on);
+    const sel = window.getSelection?.();
+    if (sel && sel.type !== 'None') sel.removeAllRanges();
+  }
+
   function clearVisuals() {
     getCards().forEach(c => {
       c.style.transition = '';
@@ -916,6 +922,7 @@ function setupTouchDrag(grid) {
   function finishDrag(commit = true) {
     clearTimeout(holdTimer);
     holdTimer = null;
+    setNoSelect(false);
     if (!isDragging) return;
     isDragging = false;
 
@@ -942,6 +949,7 @@ function setupTouchDrag(grid) {
 
   function beginPress(card, x, y, type) {
     if (!card || isDragging) return;
+    setNoSelect(true);
     pressStart = { x, y };
     pressType = type;
     holdTimer = setTimeout(() => {
@@ -978,6 +986,7 @@ function setupTouchDrag(grid) {
       if (dx > MOVE_CANCEL_PX || dy > MOVE_CANCEL_PX) {
         clearTimeout(holdTimer);
         holdTimer = null;
+        setNoSelect(false);
         pressStart = null;
         pressType = null;
       }

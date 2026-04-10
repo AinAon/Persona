@@ -183,9 +183,9 @@ body {
 .persona-pane { flex: 1; overflow-y: auto; padding: 16px; }
 .persona-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .persona-grid, .persona-card, .persona-card * {
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  user-select: none;
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
 }
 .persona-card img {
   -webkit-user-drag: none;
@@ -197,9 +197,15 @@ body {
 .persona-card {
   background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden;
   cursor: pointer; transition: border-color .15s, transform .1s; display: flex; flex-direction: column; position: relative;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
 }
 .persona-card:active { transform: scale(.97); }
 .persona-card:hover { border-color: var(--border2); }
+.dragging-no-select, .dragging-no-select * {
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
 
 .persona-card-img {
   aspect-ratio: 2/3; background: var(--surface); overflow: hidden; position: relative; flex-shrink: 0;
