@@ -842,6 +842,7 @@ function setupTouchDrag(grid) {
   function clearVisuals() {
     getCards().forEach(c => {
       c.style.transition = '';
+      c.style.display = '';
       c.style.opacity = '';
       c.style.visibility = '';
       delete c.dataset.dragging;
@@ -887,6 +888,7 @@ function setupTouchDrag(grid) {
       .filter(el => el.classList?.contains('persona-card'))
       .map(el => {
         if (el === slotEl) return dragPid;
+        if (el === dragEl) return null;
         return el.dataset?.pid || null;
       })
       .filter(Boolean) : null;
@@ -912,10 +914,6 @@ function setupTouchDrag(grid) {
       dragEl = card;
       dragPid = card.dataset.pid;
       card.dataset.dragging = '1';
-      card.style.opacity = '0';
-      card.style.visibility = 'hidden';
-      ensureSlot();
-      grid.insertBefore(slotEl, card.nextSibling);
 
       const rect = card.getBoundingClientRect();
       ghost = card.cloneNode(true);
@@ -958,6 +956,11 @@ function setupTouchDrag(grid) {
 
     const closest = findClosestCard(x, y);
     if (!closest) return;
+    if (!slotEl) {
+      ensureSlot();
+      grid.insertBefore(slotEl, dragEl);
+      dragEl.style.display = 'none';
+    }
     const r = closest.getBoundingClientRect();
     const insertBefore = y < (r.top + r.height / 2);
     if (insertBefore) {
