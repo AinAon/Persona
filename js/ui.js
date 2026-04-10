@@ -706,6 +706,7 @@ function deleteSettingsUserImage() {
 let _personaGridRenderVersion = 0;
 let _suppressPersonaTapUntil = 0;
 let _chatOpenToken = 0;
+let _personaGridSortable = null;
 
 async function getRandomPersonaGridImage(pid) {
   const emotions = ['neutral', 'subtlesmile', 'shy', 'surprise'];
@@ -805,7 +806,7 @@ async function renderPersonaGrid() {
     </div>`;
   grid.appendChild(addCard);
 
-  setupTouchDrag(grid);
+  setupPersonaGridSort(grid);
   setupPersonaGridBlankTapClear(grid);
 }
 
@@ -821,246 +822,44 @@ function setupPersonaGridBlankTapClear(grid) {
   });
 }
 
-function setupTouchDrag(grid) {
-  if (grid.dataset.touchDragBound === '1') return;
-  grid.dataset.touchDragBound = '1';
+function setupPersonaGridSort(grid) {
+  _personaGridSortable?.destroy?.();
+  _personaGridSortable = null;
 
-  const LONG_PRESS_MS = 280;
-  const MOVE_CANCEL_PX = 12;
-  const REORDER_MS = 180;
-  const getCards = () => [...grid.querySelectorAll('.persona-card[data-pid]')];
-  const getAddCard = () => grid.querySelector('.persona-card.add-card');
-
-  let holdTimer = null;
-  let pressStart = null;
-  let isDragging = false;
-  let dragEl = null;
-  let dragPid = null;
-  let ghost = null;
-  let slotEl = null;
-  let pressType = null; // 'touch' | 'mouse'
-  let dragOffsetX = 0;
-  let dragOffsetY = 0;
-
-  function setNoSelect(on) {
-    document.documentElement.classList.toggle('dragging-no-select', !!on);
-    document.body.classList.toggle('dragging-no-select', !!on);
-    const sel = window.getSelection?.();
-    if (sel && sel.type !== 'None') sel.removeAllRanges();
+  if (!window.Sortable) {
+    console.warn('SortableJS not loaded; persona grid reordering disabled.');
+    return;
   }
 
-  function clearVisuals() {
-    getCards().forEach(c => {
-      c.style.transition = '';
-      c.style.transform = '';
-      c.style.display = '';
-      c.style.opacity = '';
-      c.style.visibility = '';
-      delete c.dataset.dragging;
-    });
-    if (ghost?.parentNode) ghost.parentNode.removeChild(ghost);
-    if (slotEl?.parentNode) slotEl.parentNode.removeChild(slotEl);
-    ghost = null;
-    slotEl = null;
-    dragOffsetX = 0;
-    dragOffsetY = 0;
-  }
-
-  function animateGridReflow(moveFn) {
-    const targets = [...getCards()];
-    if (slotEl) targets.push(slotEl);
-    const firstRects = new Map(targets.map(el => [el, el.getBoundingClientRect()]));
-    moveFn();
-    const secondTargets = [...getCards()];
-    if (slotEl) secondTargets.push(slotEl);
-    secondTargets.forEach(el => {
-      const first = firstRects.get(el);
-      if (!first) return;
-      const last = el.getBoundingClientRect();
-      const dx = first.left - last.left;
-      const dy = first.top - last.top;
-      if (!dx && !dy) return;
-      el.style.transition = 'none';
-      el.style.transform = `translate(${dx}px, ${dy}px)`;
-      requestAnimationFrame(() => {
-        el.style.transition = `transform ${REORDER_MS}ms cubic-bezier(.22,.8,.24,1)`;
-        el.style.transform = '';
-      });
-    });
-  }
-
-  function ensureSlot() {
-    if (slotEl) return slotEl;
-    slotEl = document.createElement('div');
-    slotEl.className = 'persona-card drag-slot';
-    const addCard = getAddCard();
-    if (addCard) grid.insertBefore(slotEl, addCard);
-    else grid.appendChild(slotEl);
-    return slotEl;
-  }
-
-  function getInsertionReference(x, y) {
-    const cards = getCards().filter(c => c !== dragEl);
-    if (!cards.length) return { beforeEl: null };
-    let closest = cards[0];
-    let best = Infinity;
-    for (const card of cards) {
-      const r = card.getBoundingClientRect();
-      const cx = r.left + r.width / 2;
-      const cy = r.top + r.height / 2;
-      const d = Math.hypot(x - cx, y - cy);
-      if (d < best) {
-        best = d;
-        closest = card;
+  _personaGridSortable = new window.Sortable(grid, {
+    draggable: '.persona-card[data-pid]',
+    animation: 180,
+    easing: 'cubic-bezier(.22,.8,.24,1)',
+    delay: 220,
+    delayOnTouchOnly: true,
+    touchStartThreshold: 8,
+    fallbackTolerance: 6,
+    forceFallback: false,
+    ghostClass: 'sortable-ghost',
+    chosenClass: 'sortable-chosen',
+    dragClass: 'sortable-drag',
+    filter: '.add-card',
+    preventOnFilter: false,
+    onChoose: () => {
+      _suppressPersonaTapUntil = Date.now() + 400;
+    },
+    onEnd: evt => {
+      _suppressPersonaTapUntil = Date.now() + 400;
+      const oldIndex = evt.oldDraggableIndex;
+      const newIndex = evt.newDraggableIndex;
+      if (oldIndex == null || newIndex == null || oldIndex === newIndex) {
+        return;
       }
+      const moved = personas.splice(oldIndex, 1)[0];
+      personas.splice(newIndex, 0, moved);
+      savePersonas();
+      renderPersonaGrid();
     }
-    const r = closest.getBoundingClientRect();
-    const cx = r.left + r.width / 2;
-    const cy = r.top + r.height / 2;
-    const sameRowBias = Math.abs(y - cy) <= r.height * 0.35;
-    const beforeEl = sameRowBias
-      ? (x < cx ? closest : closest.nextSibling)
-      : (y < cy ? closest : closest.nextSibling);
-    return { beforeEl };
-  }
-
-  function finishDrag(commit = true) {
-    clearTimeout(holdTimer);
-    holdTimer = null;
-    setNoSelect(false);
-    if (!isDragging) return;
-    isDragging = false;
-
-    const finalOrder = commit ? [...grid.children]
-      .filter(el => el.classList?.contains('persona-card'))
-      .map(el => {
-        if (el === slotEl) return dragPid;
-        if (el === dragEl) return null;
-        return el.dataset?.pid || null;
-      })
-      .filter(Boolean) : null;
-    clearVisuals();
-    dragEl = null;
-    dragPid = null;
-    pressStart = null;
-    pressType = null;
-
-    if (!commit || !finalOrder) return;
-    _suppressPersonaTapUntil = Date.now() + 260;
-    personas.sort((a, b) => finalOrder.indexOf(a.pid) - finalOrder.indexOf(b.pid));
-    savePersonas();
-    renderPersonaGrid();
-  }
-
-  function beginPress(card, x, y, type) {
-    if (!card || isDragging) return;
-    setNoSelect(true);
-    pressStart = { x, y };
-    pressType = type;
-    holdTimer = setTimeout(() => {
-      isDragging = true;
-      dragEl = card;
-      dragPid = card.dataset.pid;
-      card.dataset.dragging = '1';
-
-      const rect = card.getBoundingClientRect();
-      dragOffsetX = Math.max(0, Math.min(rect.width, pressStart.x - rect.left));
-      dragOffsetY = Math.max(0, Math.min(rect.height, pressStart.y - rect.top));
-      ghost = card.cloneNode(true);
-      ghost.style.cssText = `
-        position: fixed;
-        left: ${rect.left}px;
-        top: ${rect.top}px;
-        width: ${rect.width}px;
-        height: ${rect.height}px;
-        z-index: 999;
-        opacity: 0.95;
-        pointer-events: none;
-        border-radius: 14px;
-        box-shadow: 0 14px 34px rgba(0,0,0,.45);
-        transform: scale(1.04);
-      `;
-      document.body.appendChild(ghost);
-      navigator.vibrate?.(20);
-    }, LONG_PRESS_MS);
-  }
-
-  function movePress(x, y, preventDefaultFn = null) {
-    if (!isDragging) {
-      if (!pressStart) return;
-      const dx = Math.abs(x - pressStart.x);
-      const dy = Math.abs(y - pressStart.y);
-      if (dx > MOVE_CANCEL_PX || dy > MOVE_CANCEL_PX) {
-        clearTimeout(holdTimer);
-        holdTimer = null;
-        setNoSelect(false);
-        pressStart = null;
-        pressType = null;
-      }
-      return;
-    }
-
-    if (preventDefaultFn) preventDefaultFn();
-    ghost.style.left = `${x - dragOffsetX}px`;
-    ghost.style.top = `${y - dragOffsetY}px`;
-
-    if (!slotEl) {
-      ensureSlot();
-      animateGridReflow(() => {
-        grid.insertBefore(slotEl, dragEl);
-        dragEl.style.display = 'none';
-      });
-    }
-    const { beforeEl } = getInsertionReference(x, y);
-    const currentNext = slotEl.nextSibling;
-    if (beforeEl === slotEl || beforeEl === currentNext) return;
-    animateGridReflow(() => {
-      grid.insertBefore(slotEl, beforeEl || getAddCard());
-    });
-  }
-
-  // Disable browser long-press/context-menu on cards (mobile + desktop).
-  grid.addEventListener('contextmenu', e => {
-    if (e.target.closest('.persona-card[data-pid]')) e.preventDefault();
-  });
-  grid.addEventListener('selectstart', e => {
-    if (e.target.closest('.persona-card[data-pid]')) e.preventDefault();
-  });
-  grid.addEventListener('dragstart', e => {
-    if (e.target.closest('.persona-card[data-pid]')) e.preventDefault();
-  });
-
-  grid.addEventListener('touchstart', e => {
-    const card = e.target.closest('.persona-card[data-pid]');
-    if (!card || !e.touches?.length) return;
-    const t = e.touches[0];
-    beginPress(card, t.clientX, t.clientY, 'touch');
-  }, { passive: true });
-
-  grid.addEventListener('touchmove', e => {
-    if (!e.touches?.length || pressType !== 'touch') return;
-    const t = e.touches[0];
-    movePress(t.clientX, t.clientY, () => e.preventDefault());
-  }, { passive: false });
-
-  grid.addEventListener('touchend', () => finishDrag(true), { passive: true });
-  grid.addEventListener('touchcancel', () => finishDrag(false), { passive: true });
-
-  grid.addEventListener('mousedown', e => {
-    if (e.button !== 0) return;
-    const card = e.target.closest('.persona-card[data-pid]');
-    if (!card) return;
-    beginPress(card, e.clientX, e.clientY, 'mouse');
-  });
-
-  window.addEventListener('mousemove', e => {
-    if (pressType !== 'mouse') return;
-    movePress(e.clientX, e.clientY);
-  });
-
-  window.addEventListener('mouseup', () => {
-    if (pressType !== 'mouse') return;
-    finishDrag(true);
   });
 }
 

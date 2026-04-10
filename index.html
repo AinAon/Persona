@@ -191,9 +191,6 @@ body {
   -webkit-user-drag: none;
   user-drag: none;
 }
-.persona-card.dragging { opacity: .4; transform: scale(.95); }
-.persona-card.drag-over { border-color: var(--text); transform: scale(1.03); }
-
 .persona-card {
   background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden;
   cursor: pointer; transition: border-color .15s, transform .1s; display: flex; flex-direction: column; position: relative;
@@ -201,11 +198,10 @@ body {
 }
 .persona-card:active { transform: scale(.97); }
 .persona-card:hover { border-color: var(--border2); }
-.dragging-no-select, .dragging-no-select * {
-  -webkit-touch-callout: none !important;
-  -webkit-user-select: none !important;
-  user-select: none !important;
-}
+.persona-card.sortable-chosen,
+.persona-card.sortable-drag { z-index: 3; }
+.persona-card.sortable-drag { opacity: .96; transform: scale(1.03); box-shadow: 0 14px 34px rgba(0,0,0,.45); }
+.persona-card.sortable-ghost { opacity: .18; }
 
 .persona-card-img {
   aspect-ratio: 2/3; background: var(--surface); overflow: hidden; position: relative; flex-shrink: 0;
@@ -1077,6 +1073,7 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 <script src="js/data.js"></script>
 <script src="js/storage.js"></script>
 <script src="js/api.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/ui_crop.js"></script>
 <script src="js/app.js"></script>
