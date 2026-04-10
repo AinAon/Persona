@@ -2312,15 +2312,15 @@ async function sendMessage() {
     const currentSession = sessions.find(s => s.id === session.id);
     if (!currentSession) return;
 
-    // 생성된 이미지가 data URL이면 R2에 업로드 후 교체
-    if (isImageReq && reply.includes('data:image')) {
-      const dataUrlRe = /!\[.*?\]\((data:image\/[^)]+)\)/g;
+    // 생성된 이미지는 data URL / 원격 URL 모두 R2에 업로드 후 교체
+    if (isImageReq && /!\[.*?\]\((data:image\/[^)]+|https?:\/\/[^)\s]+)\)/i.test(reply)) {
+      const dataUrlRe = /!\[.*?\]\((data:image\/[^)]+|https?:\/\/[^)\s]+)\)/g;
       let m;
       while ((m = dataUrlRe.exec(reply)) !== null) {
-        const dataUrl = m[1];
+        const imageRef = m[1];
         const fname = makeImageFilename('generated') + '.jpg';
-        const r2Url = await uploadToR2(dataUrl, 'img_generated', fname).catch(() => dataUrl);
-        reply = reply.replace(dataUrl, r2Url);
+        const r2Url = await uploadToR2(imageRef, 'img_generated', fname).catch(() => imageRef);
+        reply = reply.replace(imageRef, r2Url);
       }
     }
 

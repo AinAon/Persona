@@ -495,24 +495,35 @@ async function preloadAllSessions() {
 }
 
 // R2에 이미지 업로드 유틸리티 (데이터 URL을 서버 URL로 변환)
-async function uploadToR2(dataUrl, folder, fname) {
+async function uploadToR2(imageRef, folder, fname) {
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-  if (!wUrl || !dataUrl.startsWith('data:')) return dataUrl;
+  if (!wUrl || !imageRef || typeof imageRef !== 'string') return imageRef;
 
   try {
-    const b64 = dataUrl.split(',')[1];
-    const byteArr = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-    const blob = new Blob([byteArr], { type: 'image/jpeg' });
+    let blob = null;
+    if (imageRef.startsWith('data:')) {
+      const [header, b64 = ''] = imageRef.split(',');
+      const mime = header.match(/data:([^;]+)/)?.[1] || 'image/jpeg';
+      const byteArr = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+      blob = new Blob([byteArr], { type: mime });
+    } else if (/^https?:\/\//i.test(imageRef)) {
+      const remote = await fetch(imageRef);
+      if (!remote.ok) return imageRef;
+      const mime = (remote.headers.get('content-type') || 'image/jpeg').split(';')[0];
+      blob = new Blob([await remote.arrayBuffer()], { type: mime });
+    } else {
+      return imageRef;
+    }
     const form = new FormData();
     form.append('file', blob, fname);
     form.append('folder', folder);
 
     const res = await fetch(wUrl + '/image', { method: 'POST', body: form });
     const data = await res.json();
-    return data.url || dataUrl;
+    return data.url || imageRef;
   } catch(e) {
     console.error('R2 Upload failed:', e);
-    return dataUrl;
+    return imageRef;
   }
 }
 
