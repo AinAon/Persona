@@ -839,8 +839,11 @@ function setupTouchDrag(grid) {
   let ghost = null;
   let slotEl = null;
   let pressType = null; // 'touch' | 'mouse'
+  let dragOffsetX = 0;
+  let dragOffsetY = 0;
 
   function setNoSelect(on) {
+    document.documentElement.classList.toggle('dragging-no-select', !!on);
     document.body.classList.toggle('dragging-no-select', !!on);
     const sel = window.getSelection?.();
     if (sel && sel.type !== 'None') sel.removeAllRanges();
@@ -859,6 +862,8 @@ function setupTouchDrag(grid) {
     if (slotEl?.parentNode) slotEl.parentNode.removeChild(slotEl);
     ghost = null;
     slotEl = null;
+    dragOffsetX = 0;
+    dragOffsetY = 0;
   }
 
   function animateGridReflow(moveFn) {
@@ -959,6 +964,8 @@ function setupTouchDrag(grid) {
       card.dataset.dragging = '1';
 
       const rect = card.getBoundingClientRect();
+      dragOffsetX = Math.max(0, Math.min(rect.width, pressStart.x - rect.left));
+      dragOffsetY = Math.max(0, Math.min(rect.height, pressStart.y - rect.top));
       ghost = card.cloneNode(true);
       ghost.style.cssText = `
         position: fixed;
@@ -994,9 +1001,8 @@ function setupTouchDrag(grid) {
     }
 
     if (preventDefaultFn) preventDefaultFn();
-    const rect = dragEl.getBoundingClientRect();
-    ghost.style.left = `${x - rect.width / 2}px`;
-    ghost.style.top = `${y - rect.height / 2}px`;
+    ghost.style.left = `${x - dragOffsetX}px`;
+    ghost.style.top = `${y - dragOffsetY}px`;
 
     if (!slotEl) {
       ensureSlot();
@@ -1015,6 +1021,12 @@ function setupTouchDrag(grid) {
 
   // Disable browser long-press/context-menu on cards (mobile + desktop).
   grid.addEventListener('contextmenu', e => {
+    if (e.target.closest('.persona-card[data-pid]')) e.preventDefault();
+  });
+  grid.addEventListener('selectstart', e => {
+    if (e.target.closest('.persona-card[data-pid]')) e.preventDefault();
+  });
+  grid.addEventListener('dragstart', e => {
     if (e.target.closest('.persona-card[data-pid]')) e.preventDefault();
   });
 
