@@ -30,7 +30,7 @@ async function imageRefToBlob(imageRef: string): Promise<Blob | null> {
 export async function generateOpenAIImage(params: {
   model: string;
   prompt: string;
-  size: string;
+  size?: string;
   images: string[];
   apiKey: string;
 }): Promise<string> {
@@ -40,7 +40,6 @@ export async function generateOpenAIImage(params: {
     const form = new FormData();
     form.append("model", model);
     form.append("prompt", prompt);
-    form.append("size", size);
     form.append("n", "1");
 
     const refBlob = await imageRefToBlob(images[0]);
@@ -58,13 +57,16 @@ export async function generateOpenAIImage(params: {
     return editData.data?.[0]?.url || (editData.data?.[0]?.b64_json ? `data:image/png;base64,${editData.data[0].b64_json}` : "");
   }
 
+  const genBody: Record<string, unknown> = { model, prompt, n: 1 };
+  if (size) genBody.size = size;
+
   const genRes = await fetch("https://api.openai.com/v1/images/generations", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({ model, prompt, size, n: 1 }),
+    body: JSON.stringify(genBody),
   });
   const genText = await genRes.text();
   if (!genRes.ok) throw new Error(`GPT Image Error: ${genText}`);

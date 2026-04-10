@@ -72,7 +72,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
         imageUrl = await generateOpenAIImage({
           model,
           prompt: userPrompt,
-          size: size || RATIO_TO_SIZE[ratio] || "1024x1024",
+          size: images.length > 0 ? undefined : (size || RATIO_TO_SIZE[ratio] || "1024x1024"),
           images,
           apiKey: apiKeys.openai,
         });

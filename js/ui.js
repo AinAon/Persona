@@ -2299,7 +2299,7 @@ async function sendMessage() {
           reqBody = {
             model: targetModel,
             prompt: promptText,
-            ...(isGptImg
+            ...(isGptImg && refImages.length === 0
               ? { size: RATIO_TO_OPENAI_SIZE[ratio] || '1024x1024' }
               : { aspect_ratio: ratio }
             ),
