@@ -500,22 +500,19 @@ async function uploadToR2(imageRef, folder, fname) {
   if (!wUrl || !imageRef || typeof imageRef !== 'string') return imageRef;
 
   try {
-    let blob = null;
+    const form = new FormData();
     if (imageRef.startsWith('data:')) {
       const [header, b64 = ''] = imageRef.split(',');
       const mime = header.match(/data:([^;]+)/)?.[1] || 'image/jpeg';
       const byteArr = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-      blob = new Blob([byteArr], { type: mime });
+      const blob = new Blob([byteArr], { type: mime });
+      form.append('file', blob, fname);
     } else if (/^https?:\/\//i.test(imageRef)) {
-      const remote = await fetch(imageRef);
-      if (!remote.ok) return imageRef;
-      const mime = (remote.headers.get('content-type') || 'image/jpeg').split(';')[0];
-      blob = new Blob([await remote.arrayBuffer()], { type: mime });
+      form.append('sourceUrl', imageRef);
+      form.append('fileName', fname);
     } else {
       return imageRef;
     }
-    const form = new FormData();
-    form.append('file', blob, fname);
     form.append('folder', folder);
 
     const res = await fetch(wUrl + '/image', { method: 'POST', body: form });

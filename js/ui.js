@@ -345,6 +345,14 @@ function getPersonaModel(persona) {
   return persona?.defaultModel || document.getElementById('chatModeSelect')?.value || 'grok-4.20-non-reasoning-latest';
 }
 
+function sanitizeChatListPreview(text) {
+  const raw = String(text || '').trim();
+  if (/!\[[^\]]*\]\((data:image\/[^)]+|https?:\/\/[^)\s]+)\)/i.test(raw)) {
+    return '[이미지]';
+  }
+  return raw;
+}
+
 function shuffleArray(list) {
   const arr = [...list];
   for (let i = arr.length - 1; i > 0; i--) {
@@ -2333,7 +2341,7 @@ async function sendMessage() {
 
     const parsed = parseResponse(reply, pList);
     const firstContent = parsed[0]?.content || '';
-    currentSession.lastPreview = buildChatPreviewText(firstContent);
+    currentSession.lastPreview = sanitizeChatListPreview(buildChatPreviewText(firstContent));
     currentSession.updatedAt = Date.now();
 
     // 사용자가 해당 채팅방을 그대로 보고 있다면 화면에 즉시 렌더링

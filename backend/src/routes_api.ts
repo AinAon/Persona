@@ -72,15 +72,27 @@ export async function handleApiRoute(
   if (url.pathname === "/image" && request.method === "POST") {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
-    if (!file) return Response.json({ error: "no file" }, { status: 400, headers: cors });
+    const sourceUrl = String(formData.get("sourceUrl") || "");
+    if (!file && !sourceUrl) return Response.json({ error: "no file" }, { status: 400, headers: cors });
 
     const folder = String(formData.get("folder") || "").replace(/\/+$/, "");
-    const fileName = file.name || `${Date.now()}.jpg`;
+    const fileName = file?.name || String(formData.get("fileName") || `${Date.now()}.jpg`);
     const key = folder ? `${folder}/${fileName}` : fileName;
 
-    await env.R2.put(key, file.stream(), {
-      httpMetadata: { contentType: file.type || "image/jpeg" },
-    });
+    if (file) {
+      await env.R2.put(key, file.stream(), {
+        httpMetadata: { contentType: file.type || "image/jpeg" },
+      });
+    } else {
+      const remote = await fetch(sourceUrl);
+      if (!remote.ok) {
+        return Response.json({ error: `remote fetch failed: ${remote.status}` }, { status: 400, headers: cors });
+      }
+      const contentType = (remote.headers.get("content-type") || "image/jpeg").split(";")[0];
+      await env.R2.put(key, remote.body, {
+        httpMetadata: { contentType },
+      });
+    }
     return Response.json({ url: `${url.origin}/image/${key}`, key }, { headers: cors });
   }
 
