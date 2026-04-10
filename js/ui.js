@@ -827,6 +827,7 @@ function setupTouchDrag(grid) {
 
   const LONG_PRESS_MS = 280;
   const MOVE_CANCEL_PX = 12;
+  const REORDER_MS = 180;
   const getCards = () => [...grid.querySelectorAll('.persona-card[data-pid]')];
   const getAddCard = () => grid.querySelector('.persona-card.add-card');
 
@@ -842,6 +843,7 @@ function setupTouchDrag(grid) {
   function clearVisuals() {
     getCards().forEach(c => {
       c.style.transition = '';
+      c.style.transform = '';
       c.style.display = '';
       c.style.opacity = '';
       c.style.visibility = '';
@@ -851,6 +853,29 @@ function setupTouchDrag(grid) {
     if (slotEl?.parentNode) slotEl.parentNode.removeChild(slotEl);
     ghost = null;
     slotEl = null;
+  }
+
+  function animateGridReflow(moveFn) {
+    const targets = [...getCards()];
+    if (slotEl) targets.push(slotEl);
+    const firstRects = new Map(targets.map(el => [el, el.getBoundingClientRect()]));
+    moveFn();
+    const secondTargets = [...getCards()];
+    if (slotEl) secondTargets.push(slotEl);
+    secondTargets.forEach(el => {
+      const first = firstRects.get(el);
+      if (!first) return;
+      const last = el.getBoundingClientRect();
+      const dx = first.left - last.left;
+      const dy = first.top - last.top;
+      if (!dx && !dy) return;
+      el.style.transition = 'none';
+      el.style.transform = `translate(${dx}px, ${dy}px)`;
+      requestAnimationFrame(() => {
+        el.style.transition = `transform ${REORDER_MS}ms cubic-bezier(.22,.8,.24,1)`;
+        el.style.transform = '';
+      });
+    });
   }
 
   function ensureSlot() {
@@ -863,19 +888,29 @@ function setupTouchDrag(grid) {
     return slotEl;
   }
 
-  function findClosestCard(x, y) {
-    const cards = getCards();
-    let bestCard = null;
+  function getInsertionReference(x, y) {
+    const cards = getCards().filter(c => c !== dragEl);
+    if (!cards.length) return { beforeEl: null };
+    let closest = cards[0];
     let best = Infinity;
-    for (const c of cards) {
-      if (c === dragEl) continue;
-      const r = c.getBoundingClientRect();
+    for (const card of cards) {
+      const r = card.getBoundingClientRect();
       const cx = r.left + r.width / 2;
       const cy = r.top + r.height / 2;
       const d = Math.hypot(x - cx, y - cy);
-      if (d < best) { best = d; bestCard = c; }
+      if (d < best) {
+        best = d;
+        closest = card;
+      }
     }
-    return bestCard;
+    const r = closest.getBoundingClientRect();
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    const sameRowBias = Math.abs(y - cy) <= r.height * 0.35;
+    const beforeEl = sameRowBias
+      ? (x < cx ? closest : closest.nextSibling)
+      : (y < cy ? closest : closest.nextSibling);
+    return { beforeEl };
   }
 
   function finishDrag(commit = true) {
@@ -954,20 +989,19 @@ function setupTouchDrag(grid) {
     ghost.style.left = `${x - rect.width / 2}px`;
     ghost.style.top = `${y - rect.height / 2}px`;
 
-    const closest = findClosestCard(x, y);
-    if (!closest) return;
     if (!slotEl) {
       ensureSlot();
-      grid.insertBefore(slotEl, dragEl);
-      dragEl.style.display = 'none';
+      animateGridReflow(() => {
+        grid.insertBefore(slotEl, dragEl);
+        dragEl.style.display = 'none';
+      });
     }
-    const r = closest.getBoundingClientRect();
-    const insertBefore = y < (r.top + r.height / 2);
-    if (insertBefore) {
-      if (closest !== slotEl) grid.insertBefore(slotEl, closest);
-    } else {
-      if (closest.nextSibling !== slotEl) grid.insertBefore(slotEl, closest.nextSibling);
-    }
+    const { beforeEl } = getInsertionReference(x, y);
+    const currentNext = slotEl.nextSibling;
+    if (beforeEl === slotEl || beforeEl === currentNext) return;
+    animateGridReflow(() => {
+      grid.insertBefore(slotEl, beforeEl || getAddCard());
+    });
   }
 
   // Disable browser long-press/context-menu on cards (mobile + desktop).
