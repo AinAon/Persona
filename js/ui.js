@@ -321,7 +321,6 @@ function buildUserMessageContent(text, imageUrls) {
 function getTargetModelForRequest(session, isImageReq) {
   if (isImageReq) {
     const selected = document.getElementById('imageModelSelect')?.value || 'grok-imagine-image-pro';
-    if (selected === 'gemini-3.1-flash-image-preview') return 'grok-imagine-image-pro';
     return selected;
   }
   const pListForModel = (session.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
