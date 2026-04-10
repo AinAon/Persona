@@ -65,6 +65,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
           model,
           prompt: userPrompt,
           ratio,
+          images,
           apiKey: apiKeys.grok,
         });
       } else if (model.startsWith("gpt-image")) {
@@ -80,6 +81,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
           model,
           prompt: userPrompt,
           ratio,
+          images,
           apiKey: apiKeys.gemini,
         });
       } else if (model.startsWith("imagen")) {

@@ -405,7 +405,9 @@ async function buildAttachmentRecord(file) {
     dataUrl,
     previewUrl: dataUrl,
     transportUrl: dataUrl,
-    originalCacheKey: null
+    originalCacheKey: null,
+    uploading: !!isImg,
+    uploadError: false
   };
 
   if (!isImg) return record;
@@ -417,9 +419,6 @@ async function buildAttachmentRecord(file) {
   const previewUrl = await resizeImage(dataUrl, 512, 0.82).catch(() => dataUrl);
   record.previewUrl = previewUrl || dataUrl;
   record.dataUrl = record.previewUrl;
-
-  const fname = makeImageFilename('uploaded') + '.jpg';
-  record.transportUrl = await uploadToR2(dataUrl, 'img_uploaded', fname).catch(() => dataUrl);
   return record;
 }
 
@@ -433,6 +432,21 @@ async function addFilesToAttachments(fileList, source = 'picker') {
     attachments.push(record);
     added++;
     renderAttachmentPreviews();
+    if (record.type === 'image') {
+      const fname = makeImageFilename('uploaded') + '.jpg';
+      uploadToR2(record.previewUrl || record.dataUrl, 'img_uploaded', fname)
+        .then(url => {
+          record.transportUrl = url || record.transportUrl;
+          record.uploading = false;
+          record.uploadError = false;
+          renderAttachmentPreviews();
+        })
+        .catch(() => {
+          record.uploading = false;
+          record.uploadError = true;
+          renderAttachmentPreviews();
+        });
+    }
   }
   return added;
 }
@@ -2403,7 +2417,17 @@ function renderAttachmentPreviews() {
   row.innerHTML = '';
   attachments.forEach((a,i) => {
     const div = document.createElement('div'); div.className = 'attachment-thumb';
-    div.innerHTML = `${a.type==='image'?`<img src="${a.dataUrl}">`:`<div style="font-size:11px;color:var(--muted);padding:4px">📄</div>`}<button class="remove-btn" onclick="removeAttachment(${i})">×</button>`;
+    if (a.uploading) div.classList.add('is-uploading');
+    if (a.uploadError) div.classList.add('upload-error');
+    const media = a.type === 'image'
+      ? `<img src="${a.dataUrl}">`
+      : `<div class="attachment-file">${a.name || '파일'}</div>`;
+    const status = a.uploading
+      ? `<div class="attachment-status"><div class="attachment-spinner"></div></div>`
+      : a.uploadError
+        ? `<div class="attachment-status attachment-status-error">!</div>`
+        : '';
+    div.innerHTML = `${media}${status}<button class="remove-btn" onclick="removeAttachment(${i})">×</button>`;
     row.appendChild(div);
   });
 }
