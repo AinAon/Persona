@@ -1161,6 +1161,13 @@ function renderEditBody(p, hdImage = null) {
     <button onclick="document.getElementById('editMultiImgInput').click()" style="width:100%;padding:9px;border-radius:10px;border:1px solid var(--border2);background:transparent;color:var(--muted);font-family:'Pretendard',sans-serif;font-size:12px;cursor:pointer;margin-top:6px">
       📁 감정 이미지 일괄 업로드 (파일명 그대로 저장)
     </button>
+    <div id="editMultiDropzone" class="edit-multi-dropzone" role="button" tabindex="0" onclick="document.getElementById('editMultiImgInput').click()">
+      <div class="edit-multi-dropzone-icon">
+        <svg viewBox="0 0 24 24"><path d="M12 16V6"/><path d="M8.5 9.5L12 6l3.5 3.5"/><path d="M20 16.5V18a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-1.5"/><path d="M7 12.5a4 4 0 0 1 7.4-2.1A3.5 3.5 0 1 1 17 17"/></svg>
+      </div>
+      <div class="edit-multi-dropzone-title">감정 이미지 여러 장 업로드</div>
+      <div class="edit-multi-dropzone-sub">파일을 드래그해서 놓거나 클릭해 선택</div>
+    </div>
 
     <div>
       <div class="edit-section-title">Identity Details</div>
@@ -1228,6 +1235,7 @@ function renderEditBody(p, hdImage = null) {
       <div class="edit-field-label">기본 응답 모델 (이 페르소나가 참여한 채팅의 기본값)</div>
       ${buildModelSelect('editDefaultModel', p.defaultModel || '')}
     </div>`;
+  initEditMultiDropzone();
 }
 
 function selectEditHue(h, el) {
@@ -1272,8 +1280,13 @@ function handleEditImage(input) {
 }
 
 async function handleMultiImageUpload(input) {
+  const files = [...(input?.files || [])];
+  if (!files.length) return;
+  await handleMultiImageFiles(files);
+  if (input) input.value = '';
+  return;
   const p = getPersona(editingPid); if (!p) return;
-  const files = [...input.files]; if (!files.length) return;
+  const filesLegacy = [...input.files]; if (!filesLegacy.length) return;
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl) { alert('Worker URL 없음'); return; }
 
@@ -1319,6 +1332,114 @@ async function handleMultiImageUpload(input) {
   if (typeof _imageListCache !== 'undefined') delete _imageListCache[p.pid];
   showToast(`✓ ${ok}개 완료${fail ? ` / ${fail}개 실패` : ''}`);
   input.value = '';
+}
+
+function initEditMultiDropzone() {
+  const zone = document.getElementById('editMultiDropzone');
+  const input = document.getElementById('editMultiImgInput');
+  if (!zone || !input || zone.dataset.bound === '1') return;
+  zone.dataset.bound = '1';
+
+  let dragDepth = 0;
+  const mark = (on) => zone.classList.toggle('dragover', !!on);
+  const hasImageFiles = (dt) => {
+    const files = [...(dt?.files || [])];
+    if (files.some(f => (f?.type || '').startsWith('image/'))) return true;
+    const items = [...(dt?.items || [])];
+    return items.some(it => it.kind === 'file' && (it.type || '').startsWith('image/'));
+  };
+
+  zone.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    input.click();
+  });
+
+  zone.addEventListener('dragenter', e => {
+    if (!hasImageFiles(e.dataTransfer)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepth++;
+    mark(true);
+  });
+
+  zone.addEventListener('dragover', e => {
+    if (!hasImageFiles(e.dataTransfer)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    mark(true);
+  });
+
+  zone.addEventListener('dragleave', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) mark(false);
+  });
+
+  zone.addEventListener('drop', async e => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepth = 0;
+    mark(false);
+    const files = [...(e.dataTransfer?.files || [])].filter(f => (f?.type || '').startsWith('image/'));
+    if (!files.length) {
+      showToast('이미지 파일만 업로드할 수 있어');
+      return;
+    }
+    await handleMultiImageFiles(files);
+  });
+}
+
+async function handleMultiImageFiles(fileList) {
+  const p = getPersona(editingPid); if (!p) return;
+  const files = [...(fileList || [])].filter(f => (f?.type || '').startsWith('image/'));
+  if (!files.length) return;
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) { alert('Worker URL ?놁쓬'); return; }
+
+  showToast(`??${files.length}媛??낅줈??以?..`, 10000);
+  let ok = 0, fail = 0;
+  for (const file of files) {
+    try {
+      const dataUrl = await new Promise(r => {
+        const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(file);
+      });
+      const resized = await resizeImage(dataUrl, 1200, 0.93);
+      const b64 = resized.split(',')[1];
+      const byteArr = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+      const blob = new Blob([byteArr], { type: 'image/jpeg' });
+      const form = new FormData();
+      form.append('file', blob, file.name);
+      form.append('folder', `profile/${p.pid}`);
+      const res = await fetch(wUrl + '/image', { method: 'POST', body: form });
+      const data = await res.json();
+      if (data.url) {
+        ok++;
+        const fname = file.name.replace(/\.jpg$/i, '');
+        const namePrefix = p.pid + '_';
+        if (fname.startsWith(namePrefix)) {
+          const rest = fname.slice(namePrefix.length);
+          const parts = rest.split('_');
+          const emotion = parts[0];
+          const letter = parts[1] || '';
+          if (emotion === 'neutral') {
+            const { sqMd } = await generateThumbnailSet(resized, p.pid, 'neutral').catch(() => ({ sqMd: null }));
+            if (sqMd) {
+              _neutralCache[p.pid] = sqMd;
+              renderPersonaGrid();
+            }
+          } else {
+            const emotionKey = letter ? `${emotion}_${letter}` : emotion;
+            await generateThumbnailSet(resized, p.pid, emotionKey).catch(() => {});
+          }
+        }
+      } else { fail++; }
+    } catch(e) { fail++; }
+  }
+  if (typeof _imageListCache !== 'undefined') delete _imageListCache[p.pid];
+  showToast(`??${ok}媛??꾨즺${fail ? ` / ${fail}媛??ㅽ뙣` : ''}`);
 }
 
 async function savePersonaEdit() {

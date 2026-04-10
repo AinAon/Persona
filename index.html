@@ -311,6 +311,55 @@ body {
 .edit-big-img-overlay { position: absolute; bottom: 14px; right: 14px; width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,.18); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; transition: background .15s; }
 .edit-big-img-wrap:hover .edit-big-img-overlay { background: rgba(255,255,255,.28); }
 .edit-big-img-overlay svg { width: 20px; height: 20px; stroke: #fff; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.persona-edit-body input#editMultiImgInput + button { display: none !important; }
+.edit-multi-dropzone {
+  margin-top: 8px;
+  border: 1px dashed var(--border2);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: border-color .15s ease, background-color .15s ease, transform .1s ease;
+}
+.edit-multi-dropzone:hover {
+  border-color: var(--muted2);
+  background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+}
+.edit-multi-dropzone:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(255,255,255,.18);
+}
+.edit-multi-dropzone.dragover {
+  border-color: hsl(208,72%,64%);
+  background: linear-gradient(180deg, rgba(74,146,255,.18), rgba(74,146,255,.08));
+  transform: translateY(-1px);
+}
+.edit-multi-dropzone-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--border2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,.03);
+}
+.edit-multi-dropzone-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--muted);
+}
+.edit-multi-dropzone-title { font-size: 13px; font-weight: 700; color: var(--text); }
+.edit-multi-dropzone-sub { font-size: 11px; color: var(--muted); }
 
 .edit-section-title { font-size: 18px; font-weight: 700; color: #7B6EF6; margin-bottom: 14px; margin-top: 4px; }
 .edit-field-label { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 5px; margin-top: 10px; }
