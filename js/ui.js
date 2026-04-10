@@ -502,9 +502,12 @@ function initUserInputGuards() {
   };
 
   const onDrop = async e => {
+    if (e.__personaDropHandled) return;
+    e.__personaDropHandled = true;
     const files = [...(e.dataTransfer?.files || [])];
     if (!files.length) return;
     e.preventDefault();
+    e.stopPropagation();
     dragDepth = 0;
     setComposerDragActive(false);
     const added = await addFilesToAttachments(files, 'drop');
