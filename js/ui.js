@@ -15,6 +15,7 @@ const CHAT_MODELS = [
   { value: 'grok-4.20-reasoning-latest',         label: 'Grok-4.20 Reason' },
   { value: 'grok-4.20-non-reasoning-latest',     label: 'Grok-4.20 Non' },
 ];
+let _editMultiUploadQueue = [];
 
 function buildModelSelect(id, selectedValue, style = '') {
   const opts = CHAT_MODELS.map(m => {
@@ -1168,6 +1169,7 @@ function renderEditBody(p, hdImage = null) {
       <div class="edit-multi-dropzone-title">감정 이미지 여러 장 업로드</div>
       <div class="edit-multi-dropzone-sub">파일을 드래그해서 놓거나 클릭해 선택</div>
     </div>
+    <div id="editMultiUploadList" class="edit-upload-list"></div>
 
     <div>
       <div class="edit-section-title">Identity Details</div>
@@ -1235,6 +1237,8 @@ function renderEditBody(p, hdImage = null) {
       <div class="edit-field-label">기본 응답 모델 (이 페르소나가 참여한 채팅의 기본값)</div>
       ${buildModelSelect('editDefaultModel', p.defaultModel || '')}
     </div>`;
+  _editMultiUploadQueue = [];
+  renderEditMultiUploadList();
   initEditMultiDropzone();
 }
 
@@ -1334,6 +1338,141 @@ async function handleMultiImageUpload(input) {
   input.value = '';
 }
 
+function renderEditMultiUploadList() {
+  const list = document.getElementById('editMultiUploadList');
+  if (!list) return;
+  if (!_editMultiUploadQueue.length) {
+    list.innerHTML = '';
+    list.style.display = 'none';
+    return;
+  }
+  list.style.display = 'grid';
+  list.innerHTML = _editMultiUploadQueue.map(item => {
+    const thumb = item.preview
+      ? `<img src="${item.preview}" alt="${esc(item.name || 'upload')}">`
+      : `<div class="edit-upload-file">${esc((item.name || '').slice(0, 12) || 'file')}</div>`;
+    const stateClass = item.status === 'done' ? 'is-done' : (item.status === 'fail' ? 'is-fail' : 'is-uploading');
+    const stateBadge = item.status === 'done'
+      ? `<div class="edit-upload-state done">완료</div>`
+      : item.status === 'fail'
+        ? `<div class="edit-upload-state fail">실패</div>`
+        : `<div class="edit-upload-state"><div class="attachment-spinner"></div></div>`;
+    return `<div class="edit-upload-thumb ${stateClass}">${thumb}${stateBadge}</div>`;
+  }).join('');
+}
+
+function initEditMultiDropzone_legacy() {
+  const zone = document.getElementById('editMultiDropzone');
+  const input = document.getElementById('editMultiImgInput');
+  if (!zone || !input || zone.dataset.bound === '1') return;
+  zone.dataset.bound = '1';
+
+  let dragDepth = 0;
+  const mark = (on) => zone.classList.toggle('dragover', !!on);
+  const hasImageFiles = (dt) => {
+    const files = [...(dt?.files || [])];
+    if (files.some(f => (f?.type || '').startsWith('image/'))) return true;
+    const items = [...(dt?.items || [])];
+    return items.some(it => it.kind === 'file' && (it.type || '').startsWith('image/'));
+  };
+
+  zone.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    input.click();
+  });
+
+  zone.addEventListener('dragenter', e => {
+    if (!hasImageFiles(e.dataTransfer)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepth++;
+    mark(true);
+  });
+
+  zone.addEventListener('dragover', e => {
+    if (!hasImageFiles(e.dataTransfer)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    mark(true);
+  });
+
+  zone.addEventListener('dragleave', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) mark(false);
+  });
+
+  zone.addEventListener('drop', async e => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepth = 0;
+    mark(false);
+    const files = [...(e.dataTransfer?.files || [])].filter(f => (f?.type || '').startsWith('image/'));
+    if (!files.length) {
+      showToast('이미지 파일만 업로드할 수 있어요.');
+      return;
+    }
+    if (!files.length) {
+      showToast('이미지 파일만 업로드할 수 있어');
+      return;
+    }
+    await handleMultiImageFiles(files);
+  });
+}
+
+async function handleMultiImageFiles_legacy(fileList) {
+  const p = getPersona(editingPid); if (!p) return;
+  const files = [...(fileList || [])].filter(f => (f?.type || '').startsWith('image/'));
+  if (!files.length) return;
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) { alert('Worker URL ?놁쓬'); return; }
+
+  showToast(`??${files.length}媛??낅줈??以?..`, 10000);
+  let ok = 0, fail = 0;
+  for (const file of files) {
+    try {
+      const dataUrl = await new Promise(r => {
+        const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(file);
+      });
+      const resized = await resizeImage(dataUrl, 1200, 0.93);
+      const b64 = resized.split(',')[1];
+      const byteArr = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+      const blob = new Blob([byteArr], { type: 'image/jpeg' });
+      const form = new FormData();
+      form.append('file', blob, file.name);
+      form.append('folder', `profile/${p.pid}`);
+      const res = await fetch(wUrl + '/image', { method: 'POST', body: form });
+      const data = await res.json();
+      if (data.url) {
+        ok++;
+        const fname = file.name.replace(/\.jpg$/i, '');
+        const namePrefix = p.pid + '_';
+        if (fname.startsWith(namePrefix)) {
+          const rest = fname.slice(namePrefix.length);
+          const parts = rest.split('_');
+          const emotion = parts[0];
+          const letter = parts[1] || '';
+          if (emotion === 'neutral') {
+            const { sqMd } = await generateThumbnailSet(resized, p.pid, 'neutral').catch(() => ({ sqMd: null }));
+            if (sqMd) {
+              _neutralCache[p.pid] = sqMd;
+              renderPersonaGrid();
+            }
+          } else {
+            const emotionKey = letter ? `${emotion}_${letter}` : emotion;
+            await generateThumbnailSet(resized, p.pid, emotionKey).catch(() => {});
+          }
+        }
+      } else { fail++; }
+    } catch(e) { fail++; }
+  }
+  if (typeof _imageListCache !== 'undefined') delete _imageListCache[p.pid];
+  showToast(`??${ok}媛??꾨즺${fail ? ` / ${fail}媛??ㅽ뙣` : ''}`);
+}
+
 function initEditMultiDropzone() {
   const zone = document.getElementById('editMultiDropzone');
   const input = document.getElementById('editMultiImgInput');
@@ -1385,7 +1524,7 @@ function initEditMultiDropzone() {
     mark(false);
     const files = [...(e.dataTransfer?.files || [])].filter(f => (f?.type || '').startsWith('image/'));
     if (!files.length) {
-      showToast('이미지 파일만 업로드할 수 있어');
+      showToast('이미지 파일만 업로드할 수 있어요.');
       return;
     }
     await handleMultiImageFiles(files);
@@ -1397,11 +1536,21 @@ async function handleMultiImageFiles(fileList) {
   const files = [...(fileList || [])].filter(f => (f?.type || '').startsWith('image/'));
   if (!files.length) return;
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-  if (!wUrl) { alert('Worker URL ?놁쓬'); return; }
+  if (!wUrl) { alert('Worker URL 없음'); return; }
 
-  showToast(`??${files.length}媛??낅줈??以?..`, 10000);
+  _editMultiUploadQueue = files.map((file, idx) => ({
+    id: `upload_${Date.now()}_${idx}`,
+    name: file.name,
+    preview: URL.createObjectURL(file),
+    status: 'uploading'
+  }));
+  renderEditMultiUploadList();
+  showToast(`이미지 ${files.length}장 업로드 시작`);
+
   let ok = 0, fail = 0;
-  for (const file of files) {
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const queueItem = _editMultiUploadQueue[i];
     try {
       const dataUrl = await new Promise(r => {
         const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(file);
@@ -1414,8 +1563,8 @@ async function handleMultiImageFiles(fileList) {
       form.append('file', blob, file.name);
       form.append('folder', `profile/${p.pid}`);
       const res = await fetch(wUrl + '/image', { method: 'POST', body: form });
-      const data = await res.json();
-      if (data.url) {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.url) {
         ok++;
         const fname = file.name.replace(/\.jpg$/i, '');
         const namePrefix = p.pid + '_';
@@ -1435,11 +1584,19 @@ async function handleMultiImageFiles(fileList) {
             await generateThumbnailSet(resized, p.pid, emotionKey).catch(() => {});
           }
         }
-      } else { fail++; }
-    } catch(e) { fail++; }
+        if (queueItem) queueItem.status = 'done';
+      } else {
+        fail++;
+        if (queueItem) queueItem.status = 'fail';
+      }
+    } catch (e) {
+      fail++;
+      if (queueItem) queueItem.status = 'fail';
+    }
+    renderEditMultiUploadList();
   }
   if (typeof _imageListCache !== 'undefined') delete _imageListCache[p.pid];
-  showToast(`??${ok}媛??꾨즺${fail ? ` / ${fail}媛??ㅽ뙣` : ''}`);
+  showToast(`업로드 완료: ${ok}장${fail ? `, 실패 ${fail}장` : ''}`);
 }
 
 async function savePersonaEdit() {
