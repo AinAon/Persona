@@ -707,6 +707,7 @@ let _personaGridRenderVersion = 0;
 let _suppressPersonaTapUntil = 0;
 let _chatOpenToken = 0;
 let _personaGridSortable = null;
+let _openChatSwipe = null;
 
 async function getRandomPersonaGridImage(pid) {
   const emotions = ['neutral', 'subtlesmile', 'shy', 'surprise'];
@@ -1221,6 +1222,7 @@ function _showDemoSlide(area) {
 async function renderChatList() {
   const list = document.getElementById('chatList');
   const empty = document.getElementById('chatEmpty');
+  _openChatSwipe = null;
   list.querySelectorAll('.chat-list-item').forEach(e => e.remove());
   if (!sessions.length) { empty.style.display = 'flex'; return; }
   empty.style.display = 'none';
@@ -1314,34 +1316,69 @@ function startChatFromPersona() {
 }
 
 function setupSwipeDelete(item, wrap, id) {
-  let startX = 0, startY = 0, currentX = 0, tracking = false, revealed = false;
   const REVEAL_W = 72, THRESHOLD = 40;
+  let revealed = false;
+
+  if (!window.Hammer) {
+    item.onclick = () => openChat(id);
+    return;
+  }
+
   const setTranslate = (x, animate = false) => {
     item.style.transition = animate ? 'transform .25s cubic-bezier(.25,.8,.25,1)' : 'none';
     item.style.transform = `translateX(${x}px)`;
   };
-  const reveal = () => { revealed = true; setTranslate(-REVEAL_W, true); item.onclick = null; };
-  const close  = () => { revealed = false; setTranslate(0, true); item.onclick = () => openChat(id); };
+  const reveal = () => {
+    revealed = true;
+    _openChatSwipe = { wrap, close };
+    setTranslate(-REVEAL_W, true);
+  };
+  const close = () => {
+    revealed = false;
+    if (_openChatSwipe?.wrap === wrap) _openChatSwipe = null;
+    setTranslate(0, true);
+  };
 
-  item.addEventListener('touchstart', e => { startX = e.touches[0].clientX; startY = e.touches[0].clientY; tracking = true; }, { passive: true });
-  item.addEventListener('touchmove', e => {
-    if (!tracking) return;
-    const dx = e.touches[0].clientX - startX, dy = Math.abs(e.touches[0].clientY - startY);
-    if (dy > 12 && Math.abs(dx) < dy) { tracking = false; return; }
-    if (dx > 0 && !revealed) return;
-    e.preventDefault();
-    currentX = Math.max(-REVEAL_W, Math.min(0, (revealed ? -REVEAL_W : 0) + dx));
-    setTranslate(currentX);
-  }, { passive: false });
-  item.addEventListener('touchend', e => {
-    if (!tracking) return;
-    tracking = false;
-    const dx = e.changedTouches[0].clientX - startX;
-    if (revealed) { dx > THRESHOLD ? close() : reveal(); } else { dx < -THRESHOLD ? reveal() : close(); }
+  item.style.touchAction = 'pan-y';
+  item.onclick = e => {
+    if (revealed) {
+      e.preventDefault();
+      e.stopPropagation();
+      close();
+      return;
+    }
+    openChat(id);
+  };
+
+  const hammer = new window.Hammer.Manager(item);
+  hammer.add(new window.Hammer.Pan({ direction: window.Hammer.DIRECTION_HORIZONTAL, threshold: 6 }));
+
+  hammer.on('panstart', () => {
+    if (_openChatSwipe?.wrap && _openChatSwipe.wrap !== wrap) _openChatSwipe.close();
   });
-  wrap.addEventListener('touchstart', () => {}, { passive: true });
-  document.addEventListener('touchstart', e => { if (revealed && !wrap.contains(e.target)) close(); }, { passive: true });
+
+  hammer.on('panmove', ev => {
+    if (Math.abs(ev.deltaY) > Math.abs(ev.deltaX)) return;
+    let nextX = (revealed ? -REVEAL_W : 0) + ev.deltaX;
+    if (!revealed) nextX = Math.min(0, nextX);
+    nextX = Math.max(-REVEAL_W, Math.min(0, nextX));
+    setTranslate(nextX);
+  });
+
+  hammer.on('panend pancancel', ev => {
+    if (revealed) {
+      ev.deltaX > THRESHOLD ? close() : reveal();
+    } else {
+      ev.deltaX < -THRESHOLD ? reveal() : close();
+    }
+  });
 }
+
+document.addEventListener('touchstart', e => {
+  if (_openChatSwipe?.wrap && !_openChatSwipe.wrap.contains(e.target)) {
+    _openChatSwipe.close();
+  }
+}, { passive: true });
 
 function deleteChatFromDrawer() {
   if (!confirm('이 채팅방을 삭제할까? 대화 내용이 모두 사라져.')) return;
