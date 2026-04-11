@@ -834,11 +834,15 @@ async function renderPersonaGrid() {
       const dx = Math.abs(e.clientX - pointerStartX);
       const dy = Math.abs(e.clientY - pointerStartY);
       if (dx < 8 && dy < 8) {
-        if (_selectedPersonaPid === p.pid) {
-          openPersonaEdit(p.pid);
-        } else {
-          selectPersonaForChat(p.pid);
+        const now = Date.now();
+        const isDoubleTap = _lastPersonaTapPid === p.pid && (now - _lastPersonaTapAt) <= 320;
+        _lastPersonaTapPid = p.pid;
+        _lastPersonaTapAt = now;
+        if (isDoubleTap) {
+          openLatestOneOnOneChatForPersona(p.pid);
+          return;
         }
+        selectPersonaForChat(p.pid);
       }
     });
 
@@ -1879,23 +1883,97 @@ async function purgeDeletedChat(id) {
 }
 
 let _selectedPersonaPid = null;
+let _lastPersonaTapPid = null;
+let _lastPersonaTapAt = 0;
+
+function findLatestOneOnOneSessionForPid(pid) {
+  if (!pid) return null;
+  const candidates = (sessions || []).filter((s) =>
+    !s?._demo &&
+    Array.isArray(s?.participantPids) &&
+    s.participantPids.length === 1 &&
+    s.participantPids[0] === pid,
+  );
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+  return candidates[0] || null;
+}
+
+function openLatestOneOnOneChatForPersona(pid) {
+  const target = findLatestOneOnOneSessionForPid(pid);
+  if (target?.id) {
+    clearPersonaSelection();
+    switchTab('chat');
+    openChat(target.id);
+    return;
+  }
+  _selectedPersonaPid = pid;
+  startChatFromPersona();
+}
+
+function ensurePersonaActionButtons() {
+  const bar = document.getElementById('personaStartBar');
+  const startBtn = document.getElementById('personaStartBtn');
+  if (!bar || !startBtn) return { bar, startBtn, editBtn: null };
+
+  let actions = document.getElementById('personaStartActions');
+  if (!actions) {
+    actions = document.createElement('div');
+    actions.id = 'personaStartActions';
+    actions.className = 'persona-start-actions';
+    if (startBtn.parentElement === bar) {
+      bar.appendChild(actions);
+      actions.appendChild(startBtn);
+    } else {
+      actions.appendChild(startBtn);
+      bar.appendChild(actions);
+    }
+  }
+
+  let editBtn = document.getElementById('personaEditBtn');
+  if (!editBtn) {
+    editBtn = document.createElement('button');
+    editBtn.id = 'personaEditBtn';
+    editBtn.className = 'persona-start-chat-btn secondary';
+    editBtn.type = 'button';
+    editBtn.textContent = '페르소나 수정';
+    editBtn.onclick = () => editSelectedPersona();
+    actions.appendChild(editBtn);
+  } else if (editBtn.parentElement !== actions) {
+    actions.appendChild(editBtn);
+  }
+
+  return { bar, startBtn, editBtn };
+}
+
 function selectPersonaForChat(pid) {
   _selectedPersonaPid = pid;
-  const btn = document.getElementById('personaStartBtn');
-  const bar = document.getElementById('personaStartBar');
-  if (btn && bar) {
-    btn.classList.add('visible');
-    document.querySelectorAll('.persona-card[data-pid]').forEach(c => {
-      c.style.opacity = c.dataset.pid === pid ? '1' : '0.5';
-    });
-  }
+  const { bar, startBtn: newBtn, editBtn } = ensurePersonaActionButtons();
+  if (bar) bar.classList.add('visible');
+  if (newBtn) newBtn.classList.add('visible');
+  if (editBtn) editBtn.classList.add('visible');
+  const p = getPersona(pid);
+  if (newBtn) newBtn.textContent = p?.name ? `${p.name} 새 채팅` : '새 채팅';
+  document.querySelectorAll('.persona-card[data-pid]').forEach(c => {
+    c.style.opacity = c.dataset.pid === pid ? '1' : '0.5';
+  });
 }
 function clearPersonaSelection() {
   _selectedPersonaPid = null;
-  const btn = document.getElementById('personaStartBtn');
-  if (btn) btn.classList.remove('visible');
+  const bar = document.getElementById('personaStartBar');
+  const newBtn = document.getElementById('personaStartBtn');
+  const editBtn = document.getElementById('personaEditBtn');
+  if (bar) bar.classList.remove('visible');
+  if (newBtn) newBtn.classList.remove('visible');
+  if (editBtn) editBtn.classList.remove('visible');
   document.querySelectorAll('.persona-card[data-pid]').forEach(c => { c.style.opacity = ''; });
 }
+
+function editSelectedPersona() {
+  if (!_selectedPersonaPid) return;
+  openPersonaEdit(_selectedPersonaPid);
+}
+
 function startChatFromPersona() {
   if (!_selectedPersonaPid) return;
   const session = {
@@ -1910,6 +1988,88 @@ function startChatFromPersona() {
   clearPersonaSelection();
   saveIndex(); renderChatList(); openChat(session.id);
 }
+
+function isEditableElement(el) {
+  if (!el) return false;
+  const tag = String(el.tagName || '').toLowerCase();
+  return tag === 'input' || tag === 'textarea' || tag === 'select' || !!el.isContentEditable;
+}
+
+function handleEscBackNavigation(event) {
+  if (!event || event.key !== 'Escape') return;
+  if (isEditableElement(event.target)) return;
+
+  const imagePopup = document.getElementById('imagePopup');
+  if (imagePopup?.classList.contains('active')) {
+    closeImagePopup();
+    event.preventDefault();
+    return;
+  }
+
+  const closers = [
+    ['chatDrawer', closeDrawer],
+    ['promptModal', closePromptModal],
+    ['inviteModal', closeInviteModal],
+    ['restoreModal', closeRestoreModal],
+    ['newChatModal', closeNewChatModal],
+    ['ratioModal', closeRatioModal],
+    ['profilePopup', closeProfilePopup],
+  ];
+  for (const [id, fn] of closers) {
+    const el = document.getElementById(id);
+    if (el?.classList.contains('open')) {
+      fn();
+      event.preventDefault();
+      return;
+    }
+  }
+
+  const cropOverlay = document.getElementById('cropOverlay');
+  if (cropOverlay?.classList.contains('open') && typeof closeCropEditor === 'function') {
+    closeCropEditor();
+    event.preventDefault();
+    return;
+  }
+  const cropOverlayAvatar = document.getElementById('cropOverlayAvatar');
+  if (cropOverlayAvatar?.classList.contains('open') && typeof closeAvatarCropEditor === 'function') {
+    closeAvatarCropEditor();
+    event.preventDefault();
+    return;
+  }
+
+  const editScreen = document.getElementById('editScreen');
+  if (editScreen?.classList.contains('active')) {
+    goMain();
+    event.preventDefault();
+    return;
+  }
+
+  const chatScreen = document.getElementById('chatScreen');
+  if (chatScreen?.classList.contains('active')) {
+    goMain();
+    event.preventDefault();
+    return;
+  }
+
+  if (activeTab !== 'persona') {
+    switchTab('persona');
+    event.preventDefault();
+    return;
+  }
+
+  if (_selectedPersonaPid) {
+    clearPersonaSelection();
+    event.preventDefault();
+  }
+}
+
+function ensureGlobalEscHandler() {
+  if (window.__personaEscBound) return;
+  window.__personaEscBound = true;
+  document.addEventListener('keydown', handleEscBackNavigation);
+}
+
+ensureGlobalEscHandler();
 
 function setupSwipeDelete(item, wrap, id) {
   let startX = 0, startY = 0, currentX = 0, tracking = false, revealed = false;
