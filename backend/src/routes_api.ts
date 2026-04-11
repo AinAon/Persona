@@ -87,6 +87,13 @@ async function listKvByPrefix(env: Env, prefix: string, max = 500): Promise<stri
   return names;
 }
 
+async function deleteKvByPrefix(env: Env, prefix: string, batchMax = 5000): Promise<number> {
+  const keys = await listKvByPrefix(env, prefix, batchMax);
+  if (!keys.length) return 0;
+  for (const key of keys) await env.KV.delete(key);
+  return keys.length;
+}
+
 async function getRecoverableSessions(env: Env): Promise<RecoverableSessionMeta[]> {
   const idxData = await env.KV.get(SESSION_INDEX_KEY);
   const activeIndex: SessionMeta[] = idxData ? JSON.parse(idxData) : [];
@@ -235,6 +242,53 @@ export async function handleApiRoute(
     if (!id) return Response.json({ error: "id required" }, { status: 400, headers: cors });
     const ok = await deleteMemory(env, scope, owner, id);
     return Response.json({ ok }, { headers: cors });
+  }
+
+  if (url.pathname === "/memory/purge" && request.method === "POST") {
+    const body = await request.json() as { scope?: string; owner?: string; all?: boolean };
+    const purgeAll = !!body.all;
+    let deleted = 0;
+    const deletedPrefixes: string[] = [];
+
+    if (purgeAll) {
+      const prefixes = [
+        "memory:item:",
+        "memory:index:",
+        "memory:fp:",
+        "memory:meta:session:",
+      ];
+      for (const p of prefixes) {
+        const n = await deleteKvByPrefix(env, p);
+        if (n > 0) deletedPrefixes.push(`${p}* (${n})`);
+        deleted += n;
+      }
+      await env.KV.delete("memory:meta:global");
+      deletedPrefixes.push("memory:meta:global (1)");
+      deleted += 1;
+      return Response.json({ ok: true, deleted, deletedPrefixes }, { headers: cors });
+    }
+
+    const scope = parseScope(body.scope || null);
+    if (!scope) return Response.json({ error: "invalid scope" }, { status: 400, headers: cors });
+    const owner = normalizeScopeOwner(scope, body.owner || null);
+    const base = `${scope}:${owner}`;
+
+    const targetPrefixes = [
+      `memory:item:${base}:`,
+      `memory:fp:${base}:`,
+    ];
+    for (const p of targetPrefixes) {
+      const n = await deleteKvByPrefix(env, p);
+      if (n > 0) deletedPrefixes.push(`${p}* (${n})`);
+      deleted += n;
+    }
+
+    // index/meta are single keys; delete directly.
+    await env.KV.delete(`memory:index:${base}`);
+    deletedPrefixes.push(`memory:index:${base} (1)`);
+    deleted += 1;
+
+    return Response.json({ ok: true, deleted, deletedPrefixes }, { headers: cors });
   }
 
   if (url.pathname === "/personas") {

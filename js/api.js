@@ -660,6 +660,25 @@ async function deleteMemoryApi({ scope, owner = '', id = '' } = {}) {
   }
 }
 
+async function purgeMemoryApi({ scope = '', owner = '', all = false } = {}) {
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) return { ok: false, deleted: 0, deletedPrefixes: [] };
+  try {
+    const res = await fetch(`${wUrl}/memory/purge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        scope: String(scope || ''),
+        owner: String(owner || ''),
+        all: !!all
+      })
+    });
+    return await res.json();
+  } catch {
+    return { ok: false, deleted: 0, deletedPrefixes: [] };
+  }
+}
+
 async function extractSessionMemories(session, { forceFull = false } = {}) {
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl || !session) return { ok: false, saved: 0, duplicate: 0, processed: 0, cursor: 0 };
