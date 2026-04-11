@@ -17,6 +17,7 @@ interface KVStore {
 interface R2Store {
   get(key: string): Promise<any>;
   put(key: string, value: any, options?: any): Promise<void>;
+  delete(key: string): Promise<void>;
   list(options?: any): Promise<{ objects?: Array<{ key: string }> }>;
 }
 

@@ -115,6 +115,44 @@ function globalMetaKey(): string {
   return "memory:meta:global";
 }
 
+type MemoryDoc = {
+  version: 1;
+  items: MemoryItem[];
+};
+
+function memoryDocR2Key(scope: MemoryScope, owner: string): string {
+  return `memory/${scope}/${owner}/memories.json`;
+}
+
+async function readR2Text(env: Env, key: string): Promise<string | null> {
+  try {
+    const obj = await env.R2.get(key);
+    if (!obj) return null;
+    if (typeof obj.text === "function") return await obj.text();
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function readR2Json<T>(env: Env, key: string, fallback: T): Promise<T> {
+  const text = await readR2Text(env, key);
+  if (!text) return fallback;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+async function writeR2Json(env: Env, key: string, value: unknown): Promise<void> {
+  await env.R2.put(
+    key,
+    JSON.stringify(value),
+    { httpMetadata: { contentType: "application/json; charset=utf-8" } },
+  );
+}
+
 async function getIndex(env: Env, scope: MemoryScope, owner: string): Promise<string[]> {
   return safeJsonParse<string[]>(await env.KV.get(indexKey(scope, owner)), []);
 }
@@ -125,6 +163,48 @@ async function putIndex(env: Env, scope: MemoryScope, owner: string, ids: string
 
 async function getItem(env: Env, scope: MemoryScope, owner: string, id: string): Promise<MemoryItem | null> {
   return safeJsonParse<MemoryItem | null>(await env.KV.get(itemKey(scope, owner, id)), null);
+}
+
+function normalizeMemoryItemShape(item: MemoryItem): MemoryItem {
+  return {
+    ...item,
+    locked: !!item.locked,
+  };
+}
+
+async function loadLegacyMemoryItems(env: Env, scope: MemoryScope, owner: string): Promise<MemoryItem[]> {
+  const ids = await getIndex(env, scope, owner);
+  if (!ids.length) return [];
+  const items: MemoryItem[] = [];
+  for (const id of ids) {
+    const it = await getItem(env, scope, owner, id);
+    if (it) items.push(normalizeMemoryItemShape(it));
+  }
+  return items;
+}
+
+async function getMemoryDoc(env: Env, scope: MemoryScope, owner: string): Promise<MemoryDoc> {
+  const key = memoryDocR2Key(scope, owner);
+  const fromR2 = await readR2Json<MemoryDoc | null>(env, key, null);
+  if (fromR2 && Array.isArray(fromR2.items)) {
+    return {
+      version: 1,
+      items: fromR2.items.map((it) => normalizeMemoryItemShape(it)),
+    };
+  }
+
+  const legacyItems = await loadLegacyMemoryItems(env, scope, owner);
+  const doc: MemoryDoc = { version: 1, items: legacyItems };
+  if (legacyItems.length) {
+    await writeR2Json(env, key, doc);
+  }
+  return doc;
+}
+
+async function putMemoryDoc(env: Env, scope: MemoryScope, owner: string, doc: MemoryDoc): Promise<void> {
+  const key = memoryDocR2Key(scope, owner);
+  const sorted = [...doc.items].sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+  await writeR2Json(env, key, { version: 1, items: sorted });
 }
 
 function tokenize(text: string): Set<string> {
@@ -143,19 +223,14 @@ function jaccard(a: Set<string>, b: Set<string>): number {
   return union ? inter / union : 0;
 }
 
-async function findNearDuplicate(
-  env: Env,
-  scope: MemoryScope,
-  owner: string,
+function findNearDuplicateInItems(
+  items: MemoryItem[],
   text: string,
   threshold = 0.86,
-): Promise<MemoryItem | null> {
-  const ids = (await getIndex(env, scope, owner)).slice(0, 30);
-  if (!ids.length) return null;
+): MemoryItem | null {
+  if (!items.length) return null;
   const target = tokenize(text);
-  for (const id of ids) {
-    const existing = await getItem(env, scope, owner, id);
-    if (!existing) continue;
+  for (const existing of items.slice(0, 30)) {
     const score = jaccard(target, tokenize(existing.text));
     if (score >= threshold) return existing;
   }
@@ -168,13 +243,12 @@ export async function listMemories(
   owner: string,
   limit = 50,
 ): Promise<MemoryItem[]> {
-  const ids = (await getIndex(env, scope, owner)).slice(0, Math.max(1, Math.min(limit, 200)));
-  const out: MemoryItem[] = [];
-  for (const id of ids) {
-    const it = await getItem(env, scope, owner, id);
-    if (it) out.push(it);
-  }
-  return out;
+  const cleanOwner = normalizeOwner(scope, owner);
+  const doc = await getMemoryDoc(env, scope, cleanOwner);
+  const max = Math.max(1, Math.min(limit, 200));
+  return [...doc.items]
+    .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0))
+    .slice(0, max);
 }
 
 export async function upsertMemory(
@@ -196,26 +270,22 @@ export async function upsertMemory(
   if (!normalized) return { item: null, duplicate: false };
   const fingerprint = makeFingerprint(normalized);
   const now = nowTs();
+  const doc = await getMemoryDoc(env, scope, owner);
+  const items = doc.items.map((it) => normalizeMemoryItemShape(it));
 
-  const byFpId = await env.KV.get(fpKey(scope, owner, fingerprint));
-  if (byFpId) {
-    const found = await getItem(env, scope, owner, byFpId);
-    if (found) {
-      found.lastSeenAt = now;
-      found.updatedAt = now;
-      if (typeof found.locked !== "boolean") found.locked = false;
-      await env.KV.put(itemKey(scope, owner, found.id), JSON.stringify(found));
-      return { item: found, duplicate: true };
-    }
+  const byFp = items.find((it) => it.fingerprint === fingerprint);
+  if (byFp) {
+    byFp.lastSeenAt = now;
+    byFp.updatedAt = now;
+    await putMemoryDoc(env, scope, owner, { version: 1, items });
+    return { item: byFp, duplicate: true };
   }
 
-  const nearDup = await findNearDuplicate(env, scope, owner, text);
+  const nearDup = findNearDuplicateInItems(items, text);
   if (nearDup) {
     nearDup.lastSeenAt = now;
     nearDup.updatedAt = now;
-    if (typeof nearDup.locked !== "boolean") nearDup.locked = false;
-    await env.KV.put(itemKey(scope, owner, nearDup.id), JSON.stringify(nearDup));
-    await env.KV.put(fpKey(scope, owner, fingerprint), nearDup.id);
+    await putMemoryDoc(env, scope, owner, { version: 1, items });
     return { item: nearDup, duplicate: true };
   }
 
@@ -232,11 +302,8 @@ export async function upsertMemory(
     updatedAt: now,
     lastSeenAt: now,
   };
-
-  await env.KV.put(itemKey(scope, owner, id), JSON.stringify(item));
-  await env.KV.put(fpKey(scope, owner, fingerprint), id);
-  const ids = await getIndex(env, scope, owner);
-  await putIndex(env, scope, owner, [id, ...ids.filter((x) => x !== id)]);
+  items.unshift(item);
+  await putMemoryDoc(env, scope, owner, { version: 1, items });
   return { item, duplicate: false };
 }
 
@@ -247,13 +314,13 @@ export async function deleteMemory(
   id: string,
   force = false,
 ): Promise<boolean> {
-  const found = await getItem(env, scope, owner, id);
+  const cleanOwner = normalizeOwner(scope, owner);
+  const doc = await getMemoryDoc(env, scope, cleanOwner);
+  const found = doc.items.find((it) => it.id === id) || null;
   if (!found) return false;
   if (found.locked && !force) return false;
-  await env.KV.delete(itemKey(scope, owner, id));
-  if (found.fingerprint) await env.KV.delete(fpKey(scope, owner, found.fingerprint));
-  const ids = await getIndex(env, scope, owner);
-  await putIndex(env, scope, owner, ids.filter((x) => x !== id));
+  const nextItems = doc.items.filter((it) => it.id !== id);
+  await putMemoryDoc(env, scope, cleanOwner, { version: 1, items: nextItems });
   return true;
 }
 
@@ -264,11 +331,13 @@ export async function setMemoryLock(
   id: string,
   locked: boolean,
 ): Promise<MemoryItem | null> {
-  const found = await getItem(env, scope, owner, id);
+  const cleanOwner = normalizeOwner(scope, owner);
+  const doc = await getMemoryDoc(env, scope, cleanOwner);
+  const found = doc.items.find((it) => it.id === id) || null;
   if (!found) return null;
   found.locked = !!locked;
   found.updatedAt = nowTs();
-  await env.KV.put(itemKey(scope, owner, found.id), JSON.stringify(found));
+  await putMemoryDoc(env, scope, cleanOwner, { version: 1, items: doc.items });
   return found;
 }
 

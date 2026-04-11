@@ -34,6 +34,10 @@ type RecoverableSessionMeta = DeletedSessionMeta & {
 
 const SESSION_INDEX_KEY = "session_index";
 const DELETED_SESSION_INDEX_KEY = "deleted_session_index";
+const SESSION_INDEX_R2_KEY = "session/index.json";
+const DELETED_SESSION_INDEX_R2_KEY = "session/deleted_index.json";
+const SESSION_R2_PREFIX = "session/data/";
+const DELETED_SESSION_R2_PREFIX = "session/deleted/";
 
 function buildSessionMeta(session: Record<string, unknown>): SessionMeta {
   return {
@@ -71,6 +75,77 @@ function parseSessionLike(raw: string | null): SessionMeta | null {
   }
 }
 
+function sessionR2Key(id: string): string {
+  return `${SESSION_R2_PREFIX}${id}.json`;
+}
+
+function deletedSessionR2Key(id: string): string {
+  return `${DELETED_SESSION_R2_PREFIX}${id}.json`;
+}
+
+async function r2Text(env: Env, key: string): Promise<string | null> {
+  try {
+    const obj = await env.R2.get(key);
+    if (!obj) return null;
+    if (typeof obj.text === "function") return await obj.text();
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function r2Json<T>(env: Env, key: string, fallback: T): Promise<T> {
+  const text = await r2Text(env, key);
+  if (!text) return fallback;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+async function r2PutJson(env: Env, key: string, value: unknown): Promise<void> {
+  await env.R2.put(
+    key,
+    JSON.stringify(value),
+    { httpMetadata: { contentType: "application/json; charset=utf-8" } },
+  );
+}
+
+async function getSessionIndex(env: Env): Promise<SessionMeta[]> {
+  const fromR2 = await r2Json<SessionMeta[] | null>(env, SESSION_INDEX_R2_KEY, null);
+  if (Array.isArray(fromR2)) return fromR2;
+  const legacy = await env.KV.get(SESSION_INDEX_KEY);
+  return legacy ? JSON.parse(legacy) : [];
+}
+
+async function putSessionIndex(env: Env, sessions: SessionMeta[]): Promise<void> {
+  await r2PutJson(env, SESSION_INDEX_R2_KEY, sessions);
+}
+
+async function getDeletedSessionIndex(env: Env): Promise<DeletedSessionMeta[]> {
+  const fromR2 = await r2Json<DeletedSessionMeta[] | null>(env, DELETED_SESSION_INDEX_R2_KEY, null);
+  if (Array.isArray(fromR2)) return fromR2;
+  const legacy = await env.KV.get(DELETED_SESSION_INDEX_KEY);
+  return legacy ? JSON.parse(legacy) : [];
+}
+
+async function putDeletedSessionIndex(env: Env, sessions: DeletedSessionMeta[]): Promise<void> {
+  await r2PutJson(env, DELETED_SESSION_INDEX_R2_KEY, sessions);
+}
+
+async function getSessionPayloadText(env: Env, id: string): Promise<string | null> {
+  const fromR2 = await r2Text(env, sessionR2Key(id));
+  if (fromR2) return fromR2;
+  return await env.KV.get(`session:${id}`);
+}
+
+async function getDeletedSessionPayloadText(env: Env, id: string): Promise<string | null> {
+  const fromR2 = await r2Text(env, deletedSessionR2Key(id));
+  if (fromR2) return fromR2;
+  return await env.KV.get(`deleted:session:${id}`);
+}
+
 async function listKvByPrefix(env: Env, prefix: string, max = 500): Promise<string[]> {
   if (!env.KV.list) return [];
   const names: string[] = [];
@@ -95,13 +170,36 @@ async function deleteKvByPrefix(env: Env, prefix: string, batchMax = 5000): Prom
   return keys.length;
 }
 
+async function listR2ByPrefix(env: Env, prefix: string, max = 5000): Promise<string[]> {
+  const names: string[] = [];
+  let cursor: string | undefined = undefined;
+  for (;;) {
+    const page = await env.R2.list({ prefix, cursor, limit: 1000 });
+    const objects = page.objects || [];
+    for (const o of objects) {
+      if (o?.key) names.push(o.key);
+      if (names.length >= max) return names;
+    }
+    const nextCursor = (page as any).cursor as string | undefined;
+    const listComplete = (page as any).list_complete as boolean | undefined;
+    if (listComplete || !nextCursor) break;
+    cursor = nextCursor;
+  }
+  return names;
+}
+
+async function deleteR2ByPrefix(env: Env, prefix: string, batchMax = 5000): Promise<number> {
+  const keys = await listR2ByPrefix(env, prefix, batchMax);
+  if (!keys.length) return 0;
+  for (const key of keys) await env.R2.delete(key);
+  return keys.length;
+}
+
 async function getRecoverableSessions(env: Env): Promise<RecoverableSessionMeta[]> {
-  const idxData = await env.KV.get(SESSION_INDEX_KEY);
-  const activeIndex: SessionMeta[] = idxData ? JSON.parse(idxData) : [];
+  const activeIndex = await getSessionIndex(env);
   const activeIds = new Set(activeIndex.map((s) => String(s.id || "")));
 
-  const deletedIdxData = await env.KV.get(DELETED_SESSION_INDEX_KEY);
-  const deletedIndex: DeletedSessionMeta[] = deletedIdxData ? JSON.parse(deletedIdxData) : [];
+  const deletedIndex = await getDeletedSessionIndex(env);
   const map = new Map<string, RecoverableSessionMeta>();
 
   for (const d of deletedIndex) {
@@ -119,11 +217,31 @@ async function getRecoverableSessions(env: Env): Promise<RecoverableSessionMeta[
     map.set(id, toRecoverable(meta, "deleted_kv", Date.now()));
   }
 
+  const deletedR2Keys = await listR2ByPrefix(env, DELETED_SESSION_R2_PREFIX);
+  for (const key of deletedR2Keys) {
+    const id = key.replace(DELETED_SESSION_R2_PREFIX, "").replace(/\.json$/, "");
+    if (!id || map.has(id)) continue;
+    const raw = await r2Text(env, key);
+    const meta = parseSessionLike(raw);
+    if (!meta) continue;
+    map.set(id, toRecoverable(meta, "deleted_kv", Date.now()));
+  }
+
   const sessionKeys = await listKvByPrefix(env, "session:");
   for (const key of sessionKeys) {
     const id = key.replace(/^session:/, "");
     if (!id || activeIds.has(id) || map.has(id)) continue;
     const raw = await env.KV.get(key);
+    const meta = parseSessionLike(raw);
+    if (!meta) continue;
+    map.set(id, toRecoverable(meta, "orphan_session_kv", Date.now()));
+  }
+
+  const sessionR2Keys = await listR2ByPrefix(env, SESSION_R2_PREFIX);
+  for (const key of sessionR2Keys) {
+    const id = key.replace(SESSION_R2_PREFIX, "").replace(/\.json$/, "");
+    if (!id || activeIds.has(id) || map.has(id)) continue;
+    const raw = await r2Text(env, key);
     const meta = parseSessionLike(raw);
     if (!meta) continue;
     map.set(id, toRecoverable(meta, "orphan_session_kv", Date.now()));
@@ -136,29 +254,27 @@ async function restoreSessionById(env: Env, sessionId: string): Promise<{ ok: bo
   const id = String(sessionId || "").trim();
   if (!id) return { ok: false, error: "id required" };
 
-  const deletedKey = `deleted:session:${id}`;
-  const activeKey = `session:${id}`;
-  const deletedRaw = await env.KV.get(deletedKey);
-  const activeRaw = await env.KV.get(activeKey);
+  const deletedRaw = await getDeletedSessionPayloadText(env, id);
+  const activeRaw = await getSessionPayloadText(env, id);
   const raw = deletedRaw || activeRaw;
-  if (!raw) return { ok: false, error: "session not found in KV" };
+  if (!raw) return { ok: false, error: "session not found" };
 
   const meta = parseSessionLike(raw);
   if (!meta) return { ok: false, error: "invalid session payload" };
 
-  await env.KV.put(activeKey, raw);
+  await env.R2.put(sessionR2Key(id), raw, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
+  await env.KV.delete(`session:${id}`);
 
-  const idxData = await env.KV.get(SESSION_INDEX_KEY);
-  const index: SessionMeta[] = idxData ? JSON.parse(idxData) : [];
+  const index = await getSessionIndex(env);
   const existingIndex = index.findIndex((s) => s.id === id);
   if (existingIndex >= 0) index[existingIndex] = meta;
   else index.unshift(meta);
-  await env.KV.put(SESSION_INDEX_KEY, JSON.stringify(index));
+  await putSessionIndex(env, index);
 
-  const deletedIdxData = await env.KV.get(DELETED_SESSION_INDEX_KEY);
-  const deletedIndex: DeletedSessionMeta[] = deletedIdxData ? JSON.parse(deletedIdxData) : [];
-  await env.KV.put(DELETED_SESSION_INDEX_KEY, JSON.stringify(deletedIndex.filter((s) => s.id !== id)));
-  await env.KV.delete(deletedKey);
+  const deletedIndex = await getDeletedSessionIndex(env);
+  await putDeletedSessionIndex(env, deletedIndex.filter((s) => s.id !== id));
+  await env.KV.delete(`deleted:session:${id}`);
+  await env.R2.delete(deletedSessionR2Key(id));
 
   return { ok: true, session: meta };
 }
@@ -277,6 +393,12 @@ export async function handleApiRoute(
       await env.KV.delete("memory:meta:global");
       deletedPrefixes.push("memory:meta:global (1)");
       deleted += 1;
+
+      const r2Deleted = await deleteR2ByPrefix(env, "memory/");
+      if (r2Deleted > 0) {
+        deletedPrefixes.push(`R2:memory/* (${r2Deleted})`);
+        deleted += r2Deleted;
+      }
       return Response.json({ ok: true, deleted, deletedPrefixes }, { headers: cors });
     }
 
@@ -299,6 +421,13 @@ export async function handleApiRoute(
     await env.KV.delete(`memory:index:${base}`);
     deletedPrefixes.push(`memory:index:${base} (1)`);
     deleted += 1;
+
+    const r2Prefix = `memory/${scope}/${owner}/`;
+    const r2Deleted = await deleteR2ByPrefix(env, r2Prefix);
+    if (r2Deleted > 0) {
+      deletedPrefixes.push(`R2:${r2Prefix}* (${r2Deleted})`);
+      deleted += r2Deleted;
+    }
 
     return Response.json({ ok: true, deleted, deletedPrefixes }, { headers: cors });
   }
@@ -331,20 +460,20 @@ export async function handleApiRoute(
 
   if (url.pathname === "/sessions") {
     if (request.method === "GET") {
-      const data = await env.KV.get(SESSION_INDEX_KEY);
-      return Response.json({ sessions: data ? JSON.parse(data) : [] }, { headers: cors });
+      const sessions = await getSessionIndex(env);
+      return Response.json({ sessions }, { headers: cors });
     }
     if (request.method === "PUT") {
       const { sessions } = (await request.json()) as { sessions: unknown[] };
-      await env.KV.put(SESSION_INDEX_KEY, JSON.stringify(sessions));
+      await putSessionIndex(env, (Array.isArray(sessions) ? sessions : []) as SessionMeta[]);
       return Response.json({ ok: true }, { headers: cors });
     }
     return null;
   }
 
   if (url.pathname === "/sessions/deleted" && request.method === "GET") {
-    const data = await env.KV.get(DELETED_SESSION_INDEX_KEY);
-    return Response.json({ sessions: data ? JSON.parse(data) : [] }, { headers: cors });
+    const sessions = await getDeletedSessionIndex(env);
+    return Response.json({ sessions }, { headers: cors });
   }
 
   if (url.pathname === "/sessions/recoverable" && request.method === "GET") {
@@ -379,14 +508,14 @@ export async function handleApiRoute(
 
     await env.KV.delete(`session:${sessionId}`);
     await env.KV.delete(`deleted:session:${sessionId}`);
+    await env.R2.delete(sessionR2Key(sessionId));
+    await env.R2.delete(deletedSessionR2Key(sessionId));
 
-    const idxData = await env.KV.get(SESSION_INDEX_KEY);
-    const index: SessionMeta[] = idxData ? JSON.parse(idxData) : [];
-    await env.KV.put(SESSION_INDEX_KEY, JSON.stringify(index.filter((s) => s.id !== sessionId)));
+    const index = await getSessionIndex(env);
+    await putSessionIndex(env, index.filter((s) => s.id !== sessionId));
 
-    const deletedIdxData = await env.KV.get(DELETED_SESSION_INDEX_KEY);
-    const deletedIndex: DeletedSessionMeta[] = deletedIdxData ? JSON.parse(deletedIdxData) : [];
-    await env.KV.put(DELETED_SESSION_INDEX_KEY, JSON.stringify(deletedIndex.filter((s) => s.id !== sessionId)));
+    const deletedIndex = await getDeletedSessionIndex(env);
+    await putDeletedSessionIndex(env, deletedIndex.filter((s) => s.id !== sessionId));
 
     return Response.json({ ok: true }, { headers: cors });
   }
@@ -453,48 +582,49 @@ async function handleSessionRoute(
   cors: CorsHeaders,
 ): Promise<Response | null> {
   if (request.method === "GET") {
-    const data = await env.KV.get(`session:${id}`);
+    const data = await getSessionPayloadText(env, id);
     return Response.json({ session: data ? JSON.parse(data) : null }, { headers: cors });
   }
 
   if (request.method === "PUT") {
     const { session } = (await request.json()) as { session: Record<string, unknown> };
-    await env.KV.put(`session:${id}`, JSON.stringify(session));
+    const payload = JSON.stringify(session);
+    await env.R2.put(sessionR2Key(id), payload, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
+    await env.KV.delete(`session:${id}`);
 
-    const idxData = await env.KV.get(SESSION_INDEX_KEY);
-    const index: SessionMeta[] = idxData ? JSON.parse(idxData) : [];
+    const index = await getSessionIndex(env);
     const meta: SessionMeta = buildSessionMeta(session);
 
     const existingIndex = index.findIndex((s) => s.id === id);
     if (existingIndex >= 0) index[existingIndex] = meta;
     else index.unshift(meta);
 
-    await env.KV.put(SESSION_INDEX_KEY, JSON.stringify(index));
+    await putSessionIndex(env, index);
     return Response.json({ ok: true }, { headers: cors });
   }
 
   if (request.method === "DELETE") {
-    const existingRaw = await env.KV.get(`session:${id}`);
+    const existingRaw = await getSessionPayloadText(env, id);
     if (existingRaw) {
       try {
         const session = JSON.parse(existingRaw) as Record<string, unknown>;
         const meta = buildSessionMeta(session);
         const deletedMeta: DeletedSessionMeta = { ...meta, deletedAt: Date.now() };
-        await env.KV.put(`deleted:session:${id}`, existingRaw);
-        const deletedIdxData = await env.KV.get(DELETED_SESSION_INDEX_KEY);
-        const deletedIndex: DeletedSessionMeta[] = deletedIdxData ? JSON.parse(deletedIdxData) : [];
+        await env.R2.put(deletedSessionR2Key(id), existingRaw, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
+        await env.KV.delete(`deleted:session:${id}`);
+        const deletedIndex = await getDeletedSessionIndex(env);
         const nextDeleted = [deletedMeta, ...deletedIndex.filter((s) => s.id !== id)].slice(0, 200);
-        await env.KV.put(DELETED_SESSION_INDEX_KEY, JSON.stringify(nextDeleted));
+        await putDeletedSessionIndex(env, nextDeleted);
       } catch {
         // ignore archival parse failure and continue hard-delete path
       }
     }
 
     await env.KV.delete(`session:${id}`);
-    const idxData = await env.KV.get(SESSION_INDEX_KEY);
-    let index: SessionMeta[] = idxData ? JSON.parse(idxData) : [];
+    await env.R2.delete(sessionR2Key(id));
+    let index = await getSessionIndex(env);
     index = index.filter((s) => s.id !== id);
-    await env.KV.put(SESSION_INDEX_KEY, JSON.stringify(index));
+    await putSessionIndex(env, index);
     return Response.json({ ok: true }, { headers: cors });
   }
 
