@@ -1735,6 +1735,7 @@ function _showDemoSlide(area) {
 async function renderChatList() {
   const list = document.getElementById('chatList');
   const empty = document.getElementById('chatEmpty');
+  list.querySelectorAll('.chat-list-wrap').forEach(e => e.remove());
   list.querySelectorAll('.chat-list-item').forEach(e => e.remove());
   if (!sessions.length) { empty.style.display = 'flex'; return; }
   empty.style.display = 'none';
@@ -1792,6 +1793,55 @@ let _chatSearchQuery = '';
 function filterChatList(q) {
   _chatSearchQuery = q.toLowerCase().trim();
   renderChatList();
+}
+
+function closeRestoreModal() {
+  const modal = document.getElementById('restoreModal');
+  if (modal) modal.classList.remove('open');
+}
+
+async function openRestoreModal() {
+  const modal = document.getElementById('restoreModal');
+  if (!modal) return;
+  modal.classList.add('open');
+  await renderRestoreList();
+}
+
+async function renderRestoreList() {
+  const wrap = document.getElementById('restoreList');
+  if (!wrap) return;
+  wrap.innerHTML = `<div style="font-size:12px;color:var(--muted);padding:6px 2px">불러오는 중...</div>`;
+  const deleted = await listDeletedSessionsRemote();
+  const sorted = [...deleted].sort((a, b) => (b.deletedAt || 0) - (a.deletedAt || 0));
+  if (!sorted.length) {
+    wrap.innerHTML = `<div style="font-size:12px;color:var(--muted);padding:6px 2px">복원 가능한 채팅이 없습니다.</div>`;
+    return;
+  }
+  wrap.innerHTML = sorted.map(s => {
+    const names = (s.roomName || (s.participantPids || []).map(pid => getPersona(pid)?.name || '').filter(Boolean).join(', ') || '채팅');
+    return `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--border2);border-radius:10px;background:var(--card)">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(names)}</div>
+          <div style="font-size:11px;color:var(--muted)">삭제: ${timeLabel(s.deletedAt || s.updatedAt || Date.now())}</div>
+        </div>
+        <button onclick="restoreDeletedChat('${s.id}')" style="padding:7px 10px;border-radius:9px;border:1px solid var(--border2);background:transparent;color:var(--text);font-size:12px;cursor:pointer">복원</button>
+      </div>
+    `;
+  }).join('');
+}
+
+async function restoreDeletedChat(id) {
+  if (!id) return;
+  const res = await restoreDeletedSessionRemote(id);
+  if (!res?.ok) {
+    showToast('채팅 복원 실패');
+    return;
+  }
+  await loadIndex();
+  await renderRestoreList();
+  renderChatList();
+  showToast('채팅이 복원되었습니다.');
 }
 
 let _selectedPersonaPid = null;
@@ -1863,6 +1913,7 @@ async function deleteChatFromDrawer() {
   sessions = sessions.filter(s => s.id !== id);
   removeLocalSession(id);
   await deleteSessionRemote(id).catch(() => {});
+  showToast('채팅을 휴지통으로 이동했습니다.');
   saveIndex(); closeDrawer(); activeChatId = null; goMain(); switchTab('chat');
 }
 
@@ -1871,6 +1922,7 @@ async function deleteChat(id) {
   sessions = sessions.filter(s => s.id !== id);
   removeLocalSession(id);
   await deleteSessionRemote(id).catch(() => {});
+  showToast('채팅을 휴지통으로 이동했습니다.');
   renderChatList(); saveIndex();
 }
 

@@ -23,6 +23,28 @@ type SessionMeta = {
   overrideModel: string | null;
 };
 
+type DeletedSessionMeta = SessionMeta & {
+  deletedAt: number;
+};
+
+const SESSION_INDEX_KEY = "session_index";
+const DELETED_SESSION_INDEX_KEY = "deleted_session_index";
+
+function buildSessionMeta(session: Record<string, unknown>): SessionMeta {
+  return {
+    id: String(session.id),
+    updatedAt: Number(session.updatedAt || Date.now()),
+    lastPreview: String(session.lastPreview || ""),
+    participantPids: Array.isArray(session.participantPids) ? (session.participantPids as string[]) : [],
+    roomName: String(session.roomName || ""),
+    responseMode: String(session.responseMode || "auto"),
+    worldContext: String(session.worldContext || ""),
+    userOverride: session.userOverride || null,
+    userProfileMode: String(session.userProfileMode || "default"),
+    overrideModel: (session.overrideModel as string | null) || null,
+  };
+}
+
 export async function handleApiRoute(
   request: Request,
   env: Env,
@@ -133,15 +155,52 @@ export async function handleApiRoute(
 
   if (url.pathname === "/sessions") {
     if (request.method === "GET") {
-      const data = await env.KV.get("session_index");
+      const data = await env.KV.get(SESSION_INDEX_KEY);
       return Response.json({ sessions: data ? JSON.parse(data) : [] }, { headers: cors });
     }
     if (request.method === "PUT") {
       const { sessions } = (await request.json()) as { sessions: unknown[] };
-      await env.KV.put("session_index", JSON.stringify(sessions));
+      await env.KV.put(SESSION_INDEX_KEY, JSON.stringify(sessions));
       return Response.json({ ok: true }, { headers: cors });
     }
     return null;
+  }
+
+  if (url.pathname === "/sessions/deleted" && request.method === "GET") {
+    const data = await env.KV.get(DELETED_SESSION_INDEX_KEY);
+    return Response.json({ sessions: data ? JSON.parse(data) : [] }, { headers: cors });
+  }
+
+  if (url.pathname === "/session/restore" && request.method === "POST") {
+    const { id } = (await request.json()) as { id?: string };
+    const sessionId = String(id || "").trim();
+    if (!sessionId) return Response.json({ ok: false, error: "id required" }, { status: 400, headers: cors });
+
+    const deletedKey = `deleted:session:${sessionId}`;
+    const raw = await env.KV.get(deletedKey);
+    if (!raw) return Response.json({ ok: false, error: "deleted session not found" }, { status: 404, headers: cors });
+
+    const session = JSON.parse(raw) as Record<string, unknown>;
+    const meta = buildSessionMeta(session);
+
+    await env.KV.put(`session:${sessionId}`, raw);
+
+    const idxData = await env.KV.get(SESSION_INDEX_KEY);
+    const index: SessionMeta[] = idxData ? JSON.parse(idxData) : [];
+    const existingIndex = index.findIndex((s) => s.id === sessionId);
+    if (existingIndex >= 0) index[existingIndex] = meta;
+    else index.unshift(meta);
+    await env.KV.put(SESSION_INDEX_KEY, JSON.stringify(index));
+
+    const deletedIdxData = await env.KV.get(DELETED_SESSION_INDEX_KEY);
+    const deletedIndex: DeletedSessionMeta[] = deletedIdxData ? JSON.parse(deletedIdxData) : [];
+    await env.KV.put(
+      DELETED_SESSION_INDEX_KEY,
+      JSON.stringify(deletedIndex.filter((s) => s.id !== sessionId)),
+    );
+    await env.KV.delete(deletedKey);
+
+    return Response.json({ ok: true, session: meta }, { headers: cors });
   }
 
   if (url.pathname.startsWith("/session/")) {
@@ -214,35 +273,40 @@ async function handleSessionRoute(
     const { session } = (await request.json()) as { session: Record<string, unknown> };
     await env.KV.put(`session:${id}`, JSON.stringify(session));
 
-    const idxData = await env.KV.get("session_index");
+    const idxData = await env.KV.get(SESSION_INDEX_KEY);
     const index: SessionMeta[] = idxData ? JSON.parse(idxData) : [];
-    const meta: SessionMeta = {
-      id: String(session.id),
-      updatedAt: Number(session.updatedAt || Date.now()),
-      lastPreview: String(session.lastPreview || ""),
-      participantPids: Array.isArray(session.participantPids) ? (session.participantPids as string[]) : [],
-      roomName: String(session.roomName || ""),
-      responseMode: String(session.responseMode || "auto"),
-      worldContext: String(session.worldContext || ""),
-      userOverride: session.userOverride || null,
-      userProfileMode: String(session.userProfileMode || "default"),
-      overrideModel: (session.overrideModel as string | null) || null,
-    };
+    const meta: SessionMeta = buildSessionMeta(session);
 
     const existingIndex = index.findIndex((s) => s.id === id);
     if (existingIndex >= 0) index[existingIndex] = meta;
     else index.unshift(meta);
 
-    await env.KV.put("session_index", JSON.stringify(index));
+    await env.KV.put(SESSION_INDEX_KEY, JSON.stringify(index));
     return Response.json({ ok: true }, { headers: cors });
   }
 
   if (request.method === "DELETE") {
+    const existingRaw = await env.KV.get(`session:${id}`);
+    if (existingRaw) {
+      try {
+        const session = JSON.parse(existingRaw) as Record<string, unknown>;
+        const meta = buildSessionMeta(session);
+        const deletedMeta: DeletedSessionMeta = { ...meta, deletedAt: Date.now() };
+        await env.KV.put(`deleted:session:${id}`, existingRaw);
+        const deletedIdxData = await env.KV.get(DELETED_SESSION_INDEX_KEY);
+        const deletedIndex: DeletedSessionMeta[] = deletedIdxData ? JSON.parse(deletedIdxData) : [];
+        const nextDeleted = [deletedMeta, ...deletedIndex.filter((s) => s.id !== id)].slice(0, 200);
+        await env.KV.put(DELETED_SESSION_INDEX_KEY, JSON.stringify(nextDeleted));
+      } catch {
+        // ignore archival parse failure and continue hard-delete path
+      }
+    }
+
     await env.KV.delete(`session:${id}`);
-    const idxData = await env.KV.get("session_index");
+    const idxData = await env.KV.get(SESSION_INDEX_KEY);
     let index: SessionMeta[] = idxData ? JSON.parse(idxData) : [];
     index = index.filter((s) => s.id !== id);
-    await env.KV.put("session_index", JSON.stringify(index));
+    await env.KV.put(SESSION_INDEX_KEY, JSON.stringify(index));
     return Response.json({ ok: true }, { headers: cors });
   }
 

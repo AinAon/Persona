@@ -707,3 +707,30 @@ async function deleteSessionRemote(id) {
     return { ok: false };
   }
 }
+
+async function listDeletedSessionsRemote() {
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) return [];
+  try {
+    const res = await fetch(`${wUrl}/sessions/deleted`);
+    const data = await res.json();
+    return data.sessions || [];
+  } catch {
+    return [];
+  }
+}
+
+async function restoreDeletedSessionRemote(id) {
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl || !id) return { ok: false };
+  try {
+    const res = await fetch(`${wUrl}/session/restore`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    });
+    return await res.json();
+  } catch {
+    return { ok: false };
+  }
+}
