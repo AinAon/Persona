@@ -591,3 +591,74 @@ async function loadUserProfileKV() {
     saveUserProfile();
   } catch(e) {}
 }
+
+// Memory API
+async function listMemoriesApi(scope, owner = '', limit = 50) {
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) return [];
+  const qs = new URLSearchParams({
+    scope: String(scope || ''),
+    owner: String(owner || ''),
+    limit: String(limit || 50)
+  });
+  try {
+    const res = await fetch(`${wUrl}/memory/list?${qs.toString()}`);
+    const data = await res.json();
+    return data.items || [];
+  } catch {
+    return [];
+  }
+}
+
+async function upsertMemoryApi({ scope, owner = '', text = '', source = 'manual', createdAt } = {}) {
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) return { ok: false, duplicate: false, item: null };
+  try {
+    const res = await fetch(`${wUrl}/memory/upsert`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scope, owner, text, source, createdAt })
+    });
+    return await res.json();
+  } catch {
+    return { ok: false, duplicate: false, item: null };
+  }
+}
+
+async function deleteMemoryApi({ scope, owner = '', id = '' } = {}) {
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl || !id) return { ok: false };
+  try {
+    const res = await fetch(`${wUrl}/memory/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scope, owner, id })
+    });
+    return await res.json();
+  } catch {
+    return { ok: false };
+  }
+}
+
+async function extractSessionMemories(session) {
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl || !session) return { ok: false, saved: 0, duplicate: 0 };
+  try {
+    const payload = {
+      participantPids: Array.from(new Set(session.participantPids || [])),
+      history: (session.history || []).map(m => ({
+        role: m.role,
+        content: m.content,
+        createdAt: m.createdAt || Date.now()
+      }))
+    };
+    const res = await fetch(`${wUrl}/memory/extract`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return await res.json();
+  } catch {
+    return { ok: false, saved: 0, duplicate: 0 };
+  }
+}

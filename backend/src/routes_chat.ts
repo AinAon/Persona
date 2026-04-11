@@ -2,6 +2,7 @@ import type { CorsHeaders, Env } from "./index";
 import { generateGeminiImage, generateGeminiText, generateImagenImage } from "./model_gemini";
 import { generateOpenAIImage, generateOpenAIText } from "./model_openai";
 import { generateGrokImage, generateGrokText } from "./model_grok";
+import { buildMemorySystemPrompt } from "./memory";
 
 const IMAGE_MODELS = ["gemini-3.1-flash-image-preview", "grok-imagine-image-pro", "gpt-image-1.5"];
 const RATIO_TO_SIZE: Record<string, string> = {
@@ -29,6 +30,7 @@ type ChatBody = {
   aspect_ratio?: string;
   size?: string;
   images?: string[];
+  participant_pids?: string[];
 };
 
 export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders): Promise<Response> {
@@ -40,6 +42,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     aspect_ratio,
     size,
     images = [],
+    participant_pids = [],
   } = reqBody;
 
   const apiKeys = {
@@ -52,6 +55,13 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
   const isImageReq = IMAGE_MODELS.includes(model) || !!prompt;
 
   try {
+    const memPrompt = isImageReq
+      ? ""
+      : await buildMemorySystemPrompt(env, { participantPids: participant_pids });
+    const effectiveMessages = (!isImageReq && memPrompt)
+      ? [{ role: "system", content: memPrompt }, ...messages]
+      : messages;
+
     let reply = "";
     if (isImageReq) {
       const userPrompt = typeof prompt === "string" && prompt.trim()
@@ -98,25 +108,25 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     } else if (model.startsWith("gemini")) {
       reply = await generateGeminiText({
         model,
-        messages,
+        messages: effectiveMessages,
         apiKey: apiKeys.gemini,
       });
     } else if (model.startsWith("grok")) {
       reply = await generateGrokText({
         model,
-        messages,
+        messages: effectiveMessages,
         apiKey: apiKeys.grok,
       });
     } else if (model.startsWith("claude")) {
       reply = await generateClaudeText({
         model,
-        messages,
+        messages: effectiveMessages,
         apiKey: apiKeys.anthropic,
       });
     } else {
       reply = await generateOpenAIText({
         model,
-        messages,
+        messages: effectiveMessages,
         apiKey: apiKeys.openai,
       });
     }

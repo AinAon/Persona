@@ -684,6 +684,8 @@ function renderSettingsPane() {
   // 썸네일 스타일 설정 추가
   const avStyleEl = document.getElementById('settingsAvatarStyle');
   if (avStyleEl) avStyleEl.value = userProfile.chatAvatarStyle || 'square';
+  ensureSettingsMemoryPanel();
+  renderPublicMemoryList();
 }
 
 function previewFontSize(val) {
@@ -1240,6 +1242,8 @@ function renderEditBody(p, hdImage = null) {
   _editMultiUploadQueue = [];
   renderEditMultiUploadList();
   initEditMultiDropzone();
+  ensureEditPrivateMemoryPanel(p.pid);
+  renderPrivateMemoryList(p.pid);
 }
 
 function selectEditHue(h, el) {
@@ -2361,6 +2365,7 @@ async function sendMessage() {
   const input = document.getElementById('userInput');
   const text = sanitizeUserInputValue(input.value).trim();
   if (!text && !attachments.length) return;
+  const shouldAutoMemorySave = /(기억해|기억해줘|remember this|note this|메모해|기록해)/i.test(text);
 
   const isImageReq = (_inputTab === 'image');
   const targetModel = getTargetModelForRequest(session, isImageReq);
@@ -2548,7 +2553,8 @@ async function sendMessage() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 messages: personaMessages,
-                model: getPersonaModel(persona)
+                model: getPersonaModel(persona),
+                participant_pids: [persona.pid]
               })
             });
             const data = await res.json();
@@ -2577,6 +2583,7 @@ async function sendMessage() {
           reqBody = {
             model: targetModel,
             prompt: promptText,
+            participant_pids: Array.from(new Set(session.participantPids || [])),
             ...(isGptImg && refImages.length === 0
               ? { size: RATIO_TO_OPENAI_SIZE[ratio] || '1024x1024' }
               : { aspect_ratio: ratio }
@@ -2587,7 +2594,8 @@ async function sendMessage() {
           // 채팅: 기존 messages 배열
           reqBody = {
             messages: apiMessages,
-            model: targetModel
+            model: targetModel,
+            participant_pids: Array.from(new Set(session.participantPids || []))
           };
         }
 
@@ -2659,6 +2667,9 @@ async function sendMessage() {
 
     if (!currentSession._demo) { saveSession(currentSession.id); saveIndex(); }
     renderChatList();
+    if (!currentSession._demo && (shouldAutoMemorySave || ((currentSession.history?.length || 0) % 12 === 0))) {
+      extractSessionMemories(currentSession).catch(() => {});
+    }
     await cleanupAttachmentCaches(sentAttachments);
     
     // 완료 후 항상 락 해제 (이미지/채팅 공통)
@@ -3018,6 +3029,7 @@ async function compressChat() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: compressModel,
+        participant_pids: Array.from(new Set(s.participantPids || [])),
         messages: [
           { role:'system', content:'대화를 핵심만 남겨 간결하게 요약해줘. 한국어로.' },
           { role:'user',   content:`아래 대화를 요약해줘.\n\n${histText}` }
@@ -3146,3 +3158,164 @@ document.addEventListener('click', (e) => {
     popup.classList.add('hidden');
   }
 });
+
+function ensureSettingsMemoryPanel() {
+  const pane = document.getElementById('settingsPane');
+  if (!pane) return;
+  if (document.getElementById('publicMemoryList')) return;
+  const scroller = pane.querySelector('div[style*="overflow-y:auto"]');
+  if (!scroller) return;
+  const block = document.createElement('div');
+  block.style.paddingTop = '20px';
+  block.style.borderTop = '1px solid var(--border)';
+  block.innerHTML = `
+    <div class="field-label" style="margin-bottom:10px">Public Memory</div>
+    <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px">
+      <textarea id="publicMemoryInput" class="edit-input" placeholder="Rememberable user fact..." style="flex:1;height:72px;resize:none;line-height:1.5"></textarea>
+      <button onclick="addPublicMemoryManual()" style="padding:10px 12px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;font-family:'Pretendard',sans-serif">Save</button>
+    </div>
+    <div id="publicMemoryList" style="display:flex;flex-direction:column;gap:8px"></div>
+  `;
+  scroller.appendChild(block);
+}
+
+function memoryItemRowHTML(item, onDelete) {
+  const scopeBadge = String(item.scope || '').replace('_', ' ');
+  return `<div style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border:1px solid var(--border2);border-radius:10px;background:var(--card)">
+    <div style="flex:1">
+      <div style="font-size:10px;color:var(--muted);margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em">${esc(scopeBadge)}</div>
+      <div style="font-size:12px;line-height:1.5;color:var(--text)">${esc(item.text || '')}</div>
+    </div>
+    <button onclick="${onDelete}('${item.id}','${item.scope || ''}','${item.owner || ''}')" style="flex-shrink:0;padding:4px 8px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--muted);font-size:11px;cursor:pointer">Delete</button>
+  </div>`;
+}
+
+async function renderPublicMemoryList() {
+  const wrap = document.getElementById('publicMemoryList');
+  if (!wrap) return;
+  const [profile, chronicle] = await Promise.all([
+    listMemoriesApi('public_profile', 'global', 120),
+    listMemoriesApi('public_chronicle', 'global', 120)
+  ]);
+  const items = [...profile, ...chronicle].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  if (!items.length) {
+    wrap.innerHTML = `<div style="font-size:11px;color:var(--muted);padding:4px 2px">No public memory yet.</div>`;
+    return;
+  }
+  wrap.innerHTML = items.map(item => memoryItemRowHTML(item, 'deletePublicMemoryItem')).join('');
+}
+
+async function addPublicMemoryManual() {
+  const input = document.getElementById('publicMemoryInput');
+  const text = input?.value?.trim() || '';
+  if (!text) return;
+  const res = await upsertMemoryApi({
+    scope: 'public_profile',
+    owner: 'global',
+    text,
+    source: 'manual'
+  });
+  if (res?.ok) {
+    input.value = '';
+    showToast(res.duplicate ? 'Already saved memory.' : 'Public memory saved.');
+    renderPublicMemoryList();
+  } else {
+    showToast('Failed to save memory.');
+  }
+}
+
+async function deletePublicMemoryItem(id, scope = 'public_profile', owner = 'global') {
+  if (!id || !scope) return;
+  const res = await deleteMemoryApi({
+    scope,
+    owner,
+    id
+  });
+  if (res?.ok) {
+    showToast('Public memory deleted.');
+    renderPublicMemoryList();
+  } else {
+    showToast('Delete failed.');
+  }
+}
+
+function ensureEditPrivateMemoryPanel(pid) {
+  const body = document.getElementById('editBody');
+  if (!body || !pid) return;
+  const existing = document.getElementById('editPrivateMemoryWrap');
+  if (existing) existing.remove();
+  const wrap = document.createElement('div');
+  wrap.id = 'editPrivateMemoryWrap';
+  wrap.innerHTML = `
+    <div class="edit-section-title">Private Memory</div>
+    <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px">
+      <textarea id="privateMemoryInput" class="edit-input" placeholder="Memory for ${esc(pid)}..." style="flex:1;height:64px;resize:none;line-height:1.5"></textarea>
+      <button onclick="addPrivateMemoryManual('${esc(pid)}')" style="padding:10px 12px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;font-family:'Pretendard',sans-serif">Save</button>
+    </div>
+    <div id="privateMemoryList" style="display:flex;flex-direction:column;gap:8px"></div>
+  `;
+  body.appendChild(wrap);
+}
+
+async function renderPrivateMemoryList(pid) {
+  const wrap = document.getElementById('privateMemoryList');
+  if (!wrap || !pid) return;
+  const [profile, chronicle] = await Promise.all([
+    listMemoriesApi('private_profile', pid, 120),
+    listMemoriesApi('private_chronicle', pid, 120)
+  ]);
+  const items = [...profile, ...chronicle].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  if (!items.length) {
+    wrap.innerHTML = `<div style="font-size:11px;color:var(--muted);padding:4px 2px">No private memory yet.</div>`;
+    return;
+  }
+  wrap.innerHTML = items.map(item => memoryItemRowHTML(item, 'deletePrivateMemoryItem')).join('');
+}
+
+async function addPrivateMemoryManual(pid) {
+  const input = document.getElementById('privateMemoryInput');
+  const text = input?.value?.trim() || '';
+  if (!text || !pid) return;
+  const res = await upsertMemoryApi({
+    scope: 'private_profile',
+    owner: pid,
+    text,
+    source: 'manual'
+  });
+  if (res?.ok) {
+    input.value = '';
+    showToast(res.duplicate ? 'Already saved memory.' : 'Private memory saved.');
+    renderPrivateMemoryList(pid);
+  } else {
+    showToast('Failed to save memory.');
+  }
+}
+
+async function deletePrivateMemoryItem(id, scope = 'private_profile', owner = '') {
+  const pid = owner || editingPid;
+  if (!id || !pid || !scope) return;
+  const res = await deleteMemoryApi({
+    scope,
+    owner: pid,
+    id
+  });
+  if (res?.ok) {
+    showToast('Private memory deleted.');
+    renderPrivateMemoryList(pid);
+  } else {
+    showToast('Delete failed.');
+  }
+}
+
+async function saveMemoryFromCurrentChat() {
+  const s = getActiveSession(); if (!s) return;
+  const res = await extractSessionMemories(s);
+  if (res?.ok) {
+    showToast(`Memory saved: ${res.saved || 0}, duplicates: ${res.duplicate || 0}`);
+    renderPublicMemoryList();
+    if (editingPid) renderPrivateMemoryList(editingPid);
+    closeDrawer();
+  } else {
+    showToast('Memory save failed.');
+  }
+}

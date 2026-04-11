@@ -1,4 +1,12 @@
 import type { CorsHeaders, Env } from "./index";
+import {
+  deleteMemory,
+  extractAndStoreMemories,
+  listMemories,
+  normalizeScopeOwner,
+  parseScope,
+  upsertMemory,
+} from "./memory";
 
 type SessionMeta = {
   id: string;
@@ -19,6 +27,63 @@ export async function handleApiRoute(
   url: URL,
   cors: CorsHeaders,
 ): Promise<Response | null> {
+  if (url.pathname === "/memory/list" && request.method === "GET") {
+    const scope = parseScope(url.searchParams.get("scope"));
+    if (!scope) return Response.json({ error: "invalid scope" }, { status: 400, headers: cors });
+    const owner = normalizeScopeOwner(scope, url.searchParams.get("owner"));
+    const limit = Number(url.searchParams.get("limit") || "50");
+    const items = await listMemories(env, scope, owner, Number.isFinite(limit) ? limit : 50);
+    return Response.json({ items }, { headers: cors });
+  }
+
+  if (url.pathname === "/memory/upsert" && request.method === "POST") {
+    const body = await request.json() as {
+      scope?: string;
+      owner?: string;
+      text?: string;
+      source?: "manual" | "chat";
+      createdAt?: number;
+    };
+    const scope = parseScope(body.scope || null);
+    if (!scope) return Response.json({ error: "invalid scope" }, { status: 400, headers: cors });
+    const owner = normalizeScopeOwner(scope, body.owner || null);
+    const result = await upsertMemory(env, {
+      scope,
+      owner,
+      text: String(body.text || ""),
+      source: body.source || "manual",
+      createdAt: Number(body.createdAt || 0) || undefined,
+    });
+    return Response.json({
+      ok: !!result.item,
+      duplicate: result.duplicate,
+      item: result.item,
+    }, { headers: cors });
+  }
+
+  if (url.pathname === "/memory/extract" && request.method === "POST") {
+    const body = await request.json() as {
+      history?: Array<{ role?: string; content?: unknown; createdAt?: number }>;
+      participantPids?: string[];
+    };
+    const outcome = await extractAndStoreMemories(env, {
+      history: Array.isArray(body.history) ? body.history : [],
+      participantPids: Array.isArray(body.participantPids) ? body.participantPids : [],
+    });
+    return Response.json({ ok: true, ...outcome }, { headers: cors });
+  }
+
+  if (url.pathname === "/memory/delete" && request.method === "POST") {
+    const body = await request.json() as { scope?: string; owner?: string; id?: string };
+    const scope = parseScope(body.scope || null);
+    if (!scope) return Response.json({ error: "invalid scope" }, { status: 400, headers: cors });
+    const owner = normalizeScopeOwner(scope, body.owner || null);
+    const id = String(body.id || "").trim();
+    if (!id) return Response.json({ error: "id required" }, { status: 400, headers: cors });
+    const ok = await deleteMemory(env, scope, owner, id);
+    return Response.json({ ok }, { headers: cors });
+  }
+
   if (url.pathname === "/personas") {
     if (request.method === "GET") {
       const data = await env.KV.get("personas");
