@@ -132,7 +132,6 @@ async function init() {
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (wUrl) {
     loadIndex().then(() => preloadAllSessions()).catch(()=>{});
-    if (hasLocalPersonas) return;
 
     // KV에서 페르소나 로드 (celebrity.json + GAS 대체)
     fetch(wUrl + '/personas').then(r => r.json()).then(data => {
