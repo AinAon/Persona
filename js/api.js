@@ -712,7 +712,7 @@ async function listDeletedSessionsRemote() {
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl) return [];
   try {
-    const res = await fetch(`${wUrl}/sessions/deleted`);
+    const res = await fetch(`${wUrl}/sessions/recoverable`);
     const data = await res.json();
     return data.sessions || [];
   } catch {
@@ -724,7 +724,7 @@ async function restoreDeletedSessionRemote(id) {
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl || !id) return { ok: false };
   try {
-    const res = await fetch(`${wUrl}/session/restore`, {
+    const res = await fetch(`${wUrl}/session/recover`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id })

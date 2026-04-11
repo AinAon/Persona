@@ -1812,7 +1812,7 @@ async function renderRestoreList() {
   if (!wrap) return;
   wrap.innerHTML = `<div style="font-size:12px;color:var(--muted);padding:6px 2px">불러오는 중...</div>`;
   const deleted = await listDeletedSessionsRemote();
-  const sorted = [...deleted].sort((a, b) => (b.deletedAt || 0) - (a.deletedAt || 0));
+  const sorted = [...deleted].sort((a, b) => (b.deletedAt || b.updatedAt || 0) - (a.deletedAt || a.updatedAt || 0));
   if (!sorted.length) {
     wrap.innerHTML = `<div style="font-size:12px;color:var(--muted);padding:6px 2px">복원 가능한 채팅이 없습니다.</div>`;
     return;
@@ -1823,9 +1823,9 @@ async function renderRestoreList() {
       <div style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--border2);border-radius:10px;background:var(--card)">
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(names)}</div>
-          <div style="font-size:11px;color:var(--muted)">삭제: ${timeLabel(s.deletedAt || s.updatedAt || Date.now())}</div>
+          <div style="font-size:11px;color:var(--muted)">발견: ${timeLabel(s.deletedAt || s.updatedAt || Date.now())}</div>
         </div>
-        <button onclick="restoreDeletedChat('${s.id}')" style="padding:7px 10px;border-radius:9px;border:1px solid var(--border2);background:transparent;color:var(--text);font-size:12px;cursor:pointer">복원</button>
+        <button onclick="restoreDeletedChat('${s.id}')" style="padding:7px 10px;border-radius:9px;border:1px solid var(--border2);background:transparent;color:var(--text);font-size:12px;cursor:pointer">강제복구</button>
       </div>
     `;
   }).join('');
