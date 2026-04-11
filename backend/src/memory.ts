@@ -85,6 +85,12 @@ function clampText(text: string, max = MAX_ITEM_LEN): string {
   return `${trimmed.slice(0, max - 3)}...`;
 }
 
+function stripProfilePrefix(text: string): string {
+  return String(text || "")
+    .replace(/^\s*profile\s*:\s*/i, "")
+    .trim();
+}
+
 function isValidScope(scope: string): scope is MemoryScope {
   return scope === "public_profile" || scope === "private_profile";
 }
@@ -370,7 +376,7 @@ export async function upsertMemory(
 ): Promise<{ item: MemoryItem | null; duplicate: boolean }> {
   const scope = args.scope;
   const owner = normalizeOwner(scope, args.owner);
-  const text = clampText(args.text, MAX_ITEM_LEN);
+  const text = clampText(stripProfilePrefix(args.text), MAX_ITEM_LEN);
   if (!text) return { item: null, duplicate: false };
 
   const normalized = normalizeText(text);
@@ -712,11 +718,12 @@ export async function extractAndStoreMemories(
 
 export async function optimizeMemories(
   env: Env,
-  args: { participantPids?: string[]; sessionId?: string },
+  args: { participantPids?: string[]; sessionId?: string; includePublic?: boolean },
 ): Promise<{ ok: boolean; optimized: number; removed: number }> {
   const participantPids = Array.isArray(args.participantPids) ? [...new Set(args.participantPids.filter(Boolean))] : [];
+  const includePublic = args.includePublic !== false;
   const targets: Array<{ scope: MemoryScope; owner: string; mode: "user" | "persona"; pid?: string }> = [
-    { scope: "public_profile", owner: "global", mode: "user" },
+    ...(includePublic ? [{ scope: "public_profile" as MemoryScope, owner: "global", mode: "user" as const }] : []),
     ...participantPids.map((pid) => ({ scope: "private_profile" as MemoryScope, owner: pid, mode: "persona" as const, pid })),
   ];
 

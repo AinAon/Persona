@@ -783,7 +783,7 @@ async function extractSessionMemories(session, { forceFull = false } = {}) {
   }
 }
 
-async function optimizeMemoriesApi({ sessionId = '', participantPids = [] } = {}) {
+async function optimizeMemoriesApi({ sessionId = '', participantPids = [], includePublic = true } = {}) {
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl) return { ok: false, optimized: 0, removed: 0 };
   try {
@@ -792,7 +792,8 @@ async function optimizeMemoriesApi({ sessionId = '', participantPids = [] } = {}
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         sessionId: String(sessionId || ''),
-        participantPids: Array.from(new Set(participantPids || []))
+        participantPids: Array.from(new Set(participantPids || [])),
+        includePublic: includePublic !== false
       })
     });
     return await res.json();

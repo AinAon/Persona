@@ -336,10 +336,11 @@ export async function handleApiRoute(
   }
 
   if (url.pathname === "/memory/optimize" && request.method === "POST") {
-    const body = await request.json() as { participantPids?: string[]; sessionId?: string };
+    const body = await request.json() as { participantPids?: string[]; sessionId?: string; includePublic?: boolean };
     const outcome = await optimizeMemories(env, {
       participantPids: Array.isArray(body.participantPids) ? body.participantPids : [],
       sessionId: String(body.sessionId || ""),
+      includePublic: body.includePublic !== false,
     });
     return Response.json(outcome, { headers: cors });
   }

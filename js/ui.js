@@ -3445,6 +3445,7 @@ function memoryTrashIconSVG() {
 
 function memoryItemRowHTML(item, onDelete) {
   const scopeBadge = String(item.scope || '').replace('_', ' ');
+  const displayText = String(item.text || '').replace(/^\s*profile\s*:\s*/i, '');
   const locked = !!item.locked;
   const lockTitle = locked ? '잠금 해제' : '잠금';
   const lockNext = locked ? 'false' : 'true';
@@ -3453,7 +3454,7 @@ function memoryItemRowHTML(item, onDelete) {
   return `<div style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border:1px solid var(--border2);border-radius:10px;background:var(--card)">
     <div style="flex:1">
       <div style="font-size:10px;color:var(--muted);margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em">${esc(scopeBadge)}</div>
-      <div style="font-size:12px;line-height:1.5;color:var(--text)">${esc(item.text || '')}</div>
+      <div style="font-size:12px;line-height:1.5;color:var(--text)">${esc(displayText)}</div>
     </div>
     <button onclick="toggleMemoryLockItem('${item.id}','${item.scope || ''}','${item.owner || ''}',${lockNext})" title="${lockTitle}" style="flex-shrink:0;width:28px;height:28px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:${locked ? 'hsl(45,80%,68%)' : 'var(--muted)'};display:inline-flex;align-items:center;justify-content:center;cursor:pointer">${memoryLockIconSVG(locked)}</button>
     <button onclick="${onDelete}('${item.id}','${item.scope || ''}','${item.owner || ''}')" title="삭제" ${deleteDisabled} style="flex-shrink:0;width:28px;height:28px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--muted);display:inline-flex;align-items:center;justify-content:center;${deleteOpacity}">${memoryTrashIconSVG()}</button>
@@ -3474,7 +3475,7 @@ async function renderPublicMemoryList() {
 
 async function addPublicMemoryManual() {
   const input = document.getElementById('publicMemoryInput');
-  const text = input?.value?.trim() || '';
+  const text = (input?.value?.trim() || '').replace(/^\s*profile\s*:\s*/i, '');
   if (!text) return;
   const res = await upsertMemoryApi({
     scope: 'public_profile',
@@ -3515,7 +3516,10 @@ function ensureEditPrivateMemoryPanel(pid) {
   const wrap = document.createElement('div');
   wrap.id = 'editPrivateMemoryWrap';
   wrap.innerHTML = `
-    <div class="edit-section-title">Private Memory</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
+      <div class="edit-section-title" style="margin:0">Private Memory</div>
+      <button onclick="optimizePrivateMemoryNow('${esc(pid)}')" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer;font-family:'Pretendard',sans-serif">최적화</button>
+    </div>
     <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px">
       <textarea id="privateMemoryInput" class="edit-input" placeholder="Memory for ${esc(pid)}..." style="flex:1;height:64px;resize:none;line-height:1.5"></textarea>
       <button onclick="addPrivateMemoryManual('${esc(pid)}')" style="padding:10px 12px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;font-family:'Pretendard',sans-serif">Save</button>
@@ -3539,7 +3543,7 @@ async function renderPrivateMemoryList(pid) {
 
 async function addPrivateMemoryManual(pid) {
   const input = document.getElementById('privateMemoryInput');
-  const text = input?.value?.trim() || '';
+  const text = (input?.value?.trim() || '').replace(/^\s*profile\s*:\s*/i, '');
   if (!text || !pid) return;
   const res = await upsertMemoryApi({
     scope: 'private_profile',
@@ -3553,6 +3557,23 @@ async function addPrivateMemoryManual(pid) {
     renderPrivateMemoryList(pid);
   } else {
     showToast('Failed to save memory.');
+  }
+}
+
+async function optimizePrivateMemoryNow(pid) {
+  if (!pid) return;
+  if (!confirm(`${pid} private memory만 최적화할까요?`)) return;
+  const session = getActiveSession();
+  const res = await optimizeMemoriesApi({
+    sessionId: session?.id || '',
+    participantPids: [pid],
+    includePublic: false
+  });
+  if (res?.ok) {
+    showToast(`Private 최적화 완료: ${res.optimized || 0}개 정리, ${res.removed || 0}개 제거`);
+    renderPrivateMemoryList(pid);
+  } else {
+    showToast('Private 메모리 최적화 실패');
   }
 }
 
