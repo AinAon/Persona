@@ -115,13 +115,38 @@ function globalMetaKey(): string {
   return "memory:meta:global";
 }
 
-type MemoryDoc = {
+type LegacyMemoryDoc = {
   version: 1;
   items: MemoryItem[];
 };
 
-function memoryDocR2Key(scope: MemoryScope, owner: string): string {
+type MemoryChunkIndexDoc = {
+  version: 1;
+  chunks: string[];
+};
+
+type MemoryChunkDoc = {
+  version: 1;
+  items: MemoryItem[];
+};
+
+function legacyMemoryDocR2Key(scope: MemoryScope, owner: string): string {
   return `memory/${scope}/${owner}/memories.json`;
+}
+
+function memoryChunkIndexR2Key(scope: MemoryScope, owner: string): string {
+  return `memory/${scope}/${owner}/index.json`;
+}
+
+function memoryChunkR2Key(scope: MemoryScope, owner: string, chunk: string): string {
+  return `memory/${scope}/${owner}/chunks/${chunk}.json`;
+}
+
+function monthChunkFromTs(ts: number): string {
+  const d = new Date(Number(ts || nowTs()));
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
 }
 
 async function readR2Text(env: Env, key: string): Promise<string | null> {
@@ -151,6 +176,10 @@ async function writeR2Json(env: Env, key: string, value: unknown): Promise<void>
     JSON.stringify(value),
     { httpMetadata: { contentType: "application/json; charset=utf-8" } },
   );
+}
+
+function sortMemoryItems(items: MemoryItem[]): MemoryItem[] {
+  return [...items].sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
 }
 
 async function getIndex(env: Env, scope: MemoryScope, owner: string): Promise<string[]> {
@@ -183,28 +212,100 @@ async function loadLegacyMemoryItems(env: Env, scope: MemoryScope, owner: string
   return items;
 }
 
-async function getMemoryDoc(env: Env, scope: MemoryScope, owner: string): Promise<MemoryDoc> {
-  const key = memoryDocR2Key(scope, owner);
-  const fromR2 = await readR2Json<MemoryDoc | null>(env, key, null);
-  if (fromR2 && Array.isArray(fromR2.items)) {
-    return {
-      version: 1,
-      items: fromR2.items.map((it) => normalizeMemoryItemShape(it)),
-    };
-  }
-
-  const legacyItems = await loadLegacyMemoryItems(env, scope, owner);
-  const doc: MemoryDoc = { version: 1, items: legacyItems };
-  if (legacyItems.length) {
-    await writeR2Json(env, key, doc);
-  }
-  return doc;
+async function getChunkIndex(env: Env, scope: MemoryScope, owner: string): Promise<string[]> {
+  const key = memoryChunkIndexR2Key(scope, owner);
+  const idx = await readR2Json<MemoryChunkIndexDoc | null>(env, key, null);
+  if (!idx || !Array.isArray(idx.chunks)) return [];
+  return [...new Set(idx.chunks.map((x) => String(x || "").trim()).filter(Boolean))].sort().reverse();
 }
 
-async function putMemoryDoc(env: Env, scope: MemoryScope, owner: string, doc: MemoryDoc): Promise<void> {
-  const key = memoryDocR2Key(scope, owner);
-  const sorted = [...doc.items].sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
-  await writeR2Json(env, key, { version: 1, items: sorted });
+async function putChunkIndex(env: Env, scope: MemoryScope, owner: string, chunks: string[]): Promise<void> {
+  const uniq = [...new Set(chunks.map((x) => String(x || "").trim()).filter(Boolean))].sort().reverse();
+  await writeR2Json(env, memoryChunkIndexR2Key(scope, owner), { version: 1, chunks: uniq } satisfies MemoryChunkIndexDoc);
+}
+
+async function getChunkItems(env: Env, scope: MemoryScope, owner: string, chunk: string): Promise<MemoryItem[]> {
+  const key = memoryChunkR2Key(scope, owner, chunk);
+  const doc = await readR2Json<MemoryChunkDoc | null>(env, key, null);
+  if (!doc || !Array.isArray(doc.items)) return [];
+  return doc.items.map((it) => normalizeMemoryItemShape(it));
+}
+
+async function putChunkItems(env: Env, scope: MemoryScope, owner: string, chunk: string, items: MemoryItem[]): Promise<void> {
+  const key = memoryChunkR2Key(scope, owner, chunk);
+  await writeR2Json(env, key, { version: 1, items: sortMemoryItems(items) } satisfies MemoryChunkDoc);
+}
+
+function bucketByMonth(items: MemoryItem[]): Record<string, MemoryItem[]> {
+  const out: Record<string, MemoryItem[]> = {};
+  for (const item of items) {
+    const chunk = monthChunkFromTs(item.createdAt || item.updatedAt || nowTs());
+    if (!out[chunk]) out[chunk] = [];
+    out[chunk].push(item);
+  }
+  return out;
+}
+
+async function migrateLegacyToChunks(env: Env, scope: MemoryScope, owner: string): Promise<void> {
+  let items: MemoryItem[] = [];
+
+  const legacyDoc = await readR2Json<LegacyMemoryDoc | null>(env, legacyMemoryDocR2Key(scope, owner), null);
+  if (legacyDoc && Array.isArray(legacyDoc.items)) {
+    items = legacyDoc.items.map((it) => normalizeMemoryItemShape(it));
+  } else {
+    items = await loadLegacyMemoryItems(env, scope, owner);
+  }
+  if (!items.length) return;
+
+  const buckets = bucketByMonth(items);
+  const chunks = Object.keys(buckets).sort().reverse();
+  for (const chunk of chunks) {
+    await putChunkItems(env, scope, owner, chunk, buckets[chunk] || []);
+  }
+  await putChunkIndex(env, scope, owner, chunks);
+
+  // best-effort cleanup of old layouts
+  await env.KV.delete(indexKey(scope, owner));
+  for (const item of items) {
+    await env.KV.delete(itemKey(scope, owner, item.id));
+    if (item.fingerprint) await env.KV.delete(fpKey(scope, owner, item.fingerprint));
+  }
+  await env.R2.delete(legacyMemoryDocR2Key(scope, owner));
+}
+
+async function loadAllChunkItems(
+  env: Env,
+  scope: MemoryScope,
+  owner: string,
+): Promise<{ chunks: string[]; byChunk: Record<string, MemoryItem[]>; all: MemoryItem[] }> {
+  let chunks = await getChunkIndex(env, scope, owner);
+  if (!chunks.length) {
+    await migrateLegacyToChunks(env, scope, owner);
+    chunks = await getChunkIndex(env, scope, owner);
+  }
+
+  const byChunk: Record<string, MemoryItem[]> = {};
+  const all: MemoryItem[] = [];
+  for (const chunk of chunks) {
+    const items = await getChunkItems(env, scope, owner, chunk);
+    byChunk[chunk] = items;
+    all.push(...items);
+  }
+  return { chunks, byChunk, all: sortMemoryItems(all) };
+}
+
+async function writeAllChunkItems(
+  env: Env,
+  scope: MemoryScope,
+  owner: string,
+  items: MemoryItem[],
+): Promise<void> {
+  const buckets = bucketByMonth(items);
+  const chunks = Object.keys(buckets).sort().reverse();
+  for (const chunk of chunks) {
+    await putChunkItems(env, scope, owner, chunk, buckets[chunk] || []);
+  }
+  await putChunkIndex(env, scope, owner, chunks);
 }
 
 function tokenize(text: string): Set<string> {
@@ -244,11 +345,17 @@ export async function listMemories(
   limit = 50,
 ): Promise<MemoryItem[]> {
   const cleanOwner = normalizeOwner(scope, owner);
-  const doc = await getMemoryDoc(env, scope, cleanOwner);
   const max = Math.max(1, Math.min(limit, 200));
-  return [...doc.items]
-    .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0))
-    .slice(0, max);
+  const { chunks, byChunk } = await loadAllChunkItems(env, scope, cleanOwner);
+  const out: MemoryItem[] = [];
+  for (const chunk of chunks) {
+    const items = sortMemoryItems(byChunk[chunk] || []);
+    for (const it of items) {
+      out.push(it);
+      if (out.length >= max) return out;
+    }
+  }
+  return out;
 }
 
 export async function upsertMemory(
@@ -270,14 +377,14 @@ export async function upsertMemory(
   if (!normalized) return { item: null, duplicate: false };
   const fingerprint = makeFingerprint(normalized);
   const now = nowTs();
-  const doc = await getMemoryDoc(env, scope, owner);
-  const items = doc.items.map((it) => normalizeMemoryItemShape(it));
+  const loaded = await loadAllChunkItems(env, scope, owner);
+  const items = loaded.all.map((it) => normalizeMemoryItemShape(it));
 
   const byFp = items.find((it) => it.fingerprint === fingerprint);
   if (byFp) {
     byFp.lastSeenAt = now;
     byFp.updatedAt = now;
-    await putMemoryDoc(env, scope, owner, { version: 1, items });
+    await writeAllChunkItems(env, scope, owner, items);
     return { item: byFp, duplicate: true };
   }
 
@@ -285,7 +392,7 @@ export async function upsertMemory(
   if (nearDup) {
     nearDup.lastSeenAt = now;
     nearDup.updatedAt = now;
-    await putMemoryDoc(env, scope, owner, { version: 1, items });
+    await writeAllChunkItems(env, scope, owner, items);
     return { item: nearDup, duplicate: true };
   }
 
@@ -303,7 +410,7 @@ export async function upsertMemory(
     lastSeenAt: now,
   };
   items.unshift(item);
-  await putMemoryDoc(env, scope, owner, { version: 1, items });
+  await writeAllChunkItems(env, scope, owner, items);
   return { item, duplicate: false };
 }
 
@@ -315,12 +422,12 @@ export async function deleteMemory(
   force = false,
 ): Promise<boolean> {
   const cleanOwner = normalizeOwner(scope, owner);
-  const doc = await getMemoryDoc(env, scope, cleanOwner);
-  const found = doc.items.find((it) => it.id === id) || null;
+  const loaded = await loadAllChunkItems(env, scope, cleanOwner);
+  const found = loaded.all.find((it) => it.id === id) || null;
   if (!found) return false;
   if (found.locked && !force) return false;
-  const nextItems = doc.items.filter((it) => it.id !== id);
-  await putMemoryDoc(env, scope, cleanOwner, { version: 1, items: nextItems });
+  const nextItems = loaded.all.filter((it) => it.id !== id);
+  await writeAllChunkItems(env, scope, cleanOwner, nextItems);
   return true;
 }
 
@@ -332,12 +439,12 @@ export async function setMemoryLock(
   locked: boolean,
 ): Promise<MemoryItem | null> {
   const cleanOwner = normalizeOwner(scope, owner);
-  const doc = await getMemoryDoc(env, scope, cleanOwner);
-  const found = doc.items.find((it) => it.id === id) || null;
+  const loaded = await loadAllChunkItems(env, scope, cleanOwner);
+  const found = loaded.all.find((it) => it.id === id) || null;
   if (!found) return null;
   found.locked = !!locked;
   found.updatedAt = nowTs();
-  await putMemoryDoc(env, scope, cleanOwner, { version: 1, items: doc.items });
+  await writeAllChunkItems(env, scope, cleanOwner, loaded.all);
   return found;
 }
 
