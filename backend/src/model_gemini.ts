@@ -131,10 +131,14 @@ export async function generateGeminiText(params: {
       }),
   );
 
-  const systemMessage = messages.find((m) => m.role === "system")?.content;
+  const systemMessages = messages
+    .filter((m) => m.role === "system")
+    .map((m) => (typeof m.content === "string" ? m.content.trim() : ""))
+    .filter(Boolean);
+
   const body: Record<string, unknown> = { contents };
-  if (typeof systemMessage === "string" && systemMessage) {
-    body.systemInstruction = { parts: [{ text: systemMessage }] };
+  if (systemMessages.length) {
+    body.systemInstruction = { parts: [{ text: systemMessages.join("\n\n") }] };
   }
 
   const res = await fetch(
