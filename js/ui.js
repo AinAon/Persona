@@ -3634,9 +3634,12 @@ async function optimizePrivateMemoryNow(pid) {
     return;
   }
   const hint = res?.status ? ` (HTTP ${res.status})` : '';
-  const msg = res?.error ? `: ${res.error}` : '';
+  const err = String(res?.error || '').trim();
+  const detail = String(res?.detail || '').trim();
+  const msg = err || detail ? `: ${err || detail}` : '';
   showToast(`Private memory optimize failed${hint}${msg}`);
-  console.error('optimizePrivateMemoryNow failed', { pid, res });
+  if (detail) showToast(`Detail: ${detail.slice(0, 120)}`);
+  console.error('optimizePrivateMemoryNow failed', { pid, res, raw: JSON.stringify(res || {}) });
 }
 
 async function deletePrivateMemoryItem(id, scope = 'private_profile', owner = '') {

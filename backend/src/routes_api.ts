@@ -343,6 +343,9 @@ export async function handleApiRoute(
       sessionId: String(body.sessionId || ""),
       includePublic: body.includePublic !== false,
     });
+    if (!outcome?.ok) {
+      return Response.json(outcome, { status: 500, headers: cors });
+    }
     return Response.json(outcome, { headers: cors });
   }
 

@@ -741,72 +741,88 @@ export async function extractAndStoreMemories(
 export async function optimizeMemories(
   env: Env,
   args: { participantPids?: string[]; sessionId?: string; includePublic?: boolean },
-): Promise<{ ok: boolean; optimized: number; removed: number }> {
-  const participantPids = Array.isArray(args.participantPids) ? [...new Set(args.participantPids.filter(Boolean))] : [];
-  const includePublic = args.includePublic !== false;
-  const targets: Array<{ scope: MemoryScope; owner: string; mode: "user" | "persona"; pid?: string }> = [
-    ...(includePublic ? [{ scope: "public_profile" as MemoryScope, owner: "global", mode: "user" as const }] : []),
-    ...participantPids.map((pid) => ({ scope: "private_profile" as MemoryScope, owner: pid, mode: "persona" as const, pid })),
-  ];
+): Promise<{ ok: boolean; optimized: number; removed: number; error?: string }> {
+  try {
+    const participantPids = Array.isArray(args.participantPids) ? [...new Set(args.participantPids.filter(Boolean))] : [];
+    const includePublic = args.includePublic !== false;
+    const targets: Array<{ scope: MemoryScope; owner: string; mode: "user" | "persona"; pid?: string }> = [
+      ...(includePublic ? [{ scope: "public_profile" as MemoryScope, owner: "global", mode: "user" as const }] : []),
+      ...participantPids.map((pid) => ({ scope: "private_profile" as MemoryScope, owner: pid, mode: "persona" as const, pid })),
+    ];
 
-  let optimized = 0;
-  let removed = 0;
-  const apiKey = env.GEMINI_KEY || "";
+    let optimized = 0;
+    let removed = 0;
+    const apiKey = env.GEMINI_KEY || "";
 
-  for (const t of targets) {
-    const items = await listMemories(env, t.scope, t.owner, 200);
-    const manual = items.filter((x) => x.source === "manual" && !x.locked);
-    const chat = items.filter((x) => x.source !== "manual" && !x.locked);
-    if (chat.length < 2) continue;
+    for (const t of targets) {
+      try {
+        const items = await listMemories(env, t.scope, t.owner, 200);
+        const manual = items.filter((x) => x.source === "manual" && !x.locked);
+        const chat = items.filter((x) => x.source !== "manual" && !x.locked);
+        if (chat.length < 2) continue;
 
-    const consolidated = await extractFactsWithGemini(
-      chat.map((x) => x.text),
-      apiKey,
-      t.mode,
-      t.pid || "",
-    );
-    if (!consolidated.length) continue;
+        let consolidated: string[] = [];
+        try {
+          consolidated = await extractFactsWithGemini(
+            chat.map((x) => x.text),
+            apiKey,
+            t.mode,
+            t.pid || "",
+          );
+        } catch {
+          // Keep optimize flow alive even when model call fails.
+          consolidated = [];
+        }
+        if (!consolidated.length) continue;
 
-    for (const it of chat) {
-      const ok = await deleteMemory(env, t.scope, t.owner, it.id);
-      if (ok) removed++;
+        for (const it of chat) {
+          const ok = await deleteMemory(env, t.scope, t.owner, it.id);
+          if (ok) removed++;
+        }
+
+        for (const text of consolidated) {
+          const r = await upsertMemory(env, {
+            scope: t.scope,
+            owner: t.owner,
+            text,
+            source: "chat",
+          });
+          if (r.item && !r.duplicate) optimized++;
+        }
+
+        for (const m of manual) {
+          await upsertMemory(env, {
+            scope: t.scope,
+            owner: t.owner,
+            text: m.text,
+            source: "manual",
+            createdAt: m.createdAt,
+          });
+        }
+      } catch {
+        // Skip only the failed target and continue optimizing others.
+        continue;
+      }
     }
 
-    for (const text of consolidated) {
-      const r = await upsertMemory(env, {
-        scope: t.scope,
-        owner: t.owner,
-        text,
-        source: "chat",
+    const now = nowTs();
+    const globalMeta = await getGlobalMeta(env);
+    await setGlobalMeta(env, { ...globalMeta, lastOptimizedAt: now });
+
+    const sessionId = String(args.sessionId || "").trim();
+    if (sessionId) {
+      const meta = await getSessionMeta(env, sessionId);
+      await setSessionMeta(env, sessionId, {
+        lastExtractedAt: meta.lastExtractedAt,
+        lastOptimizedAt: now,
       });
-      if (r.item && !r.duplicate) optimized++;
     }
 
-    for (const m of manual) {
-      await upsertMemory(env, {
-        scope: t.scope,
-        owner: t.owner,
-        text: m.text,
-        source: "manual",
-        createdAt: m.createdAt,
-      });
-    }
+    return { ok: true, optimized, removed };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error || "optimize_failed");
+    return { ok: false, optimized: 0, removed: 0, error: message };
   }
-
-  const now = nowTs();
-  const globalMeta = await getGlobalMeta(env);
-  await setGlobalMeta(env, { ...globalMeta, lastOptimizedAt: now });
-
-  const sessionId = String(args.sessionId || "").trim();
-  if (sessionId) {
-    const meta = await getSessionMeta(env, sessionId);
-    await setSessionMeta(env, sessionId, {
-      lastExtractedAt: meta.lastExtractedAt,
-      lastOptimizedAt: now,
-    });
-  }
-
-  return { ok: true, optimized, removed };
 }
 
 export async function buildMemorySystemPrompt(

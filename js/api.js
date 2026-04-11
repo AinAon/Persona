@@ -825,8 +825,9 @@ async function optimizeMemoriesApi({ sessionId = '', participantPids = [], inclu
       };
     }
     return data || { ok: false, optimized: 0, removed: 0, error: 'empty response' };
-  } catch {
-    return { ok: false, optimized: 0, removed: 0, error: 'network_error' };
+  } catch (e) {
+    const msg = e && typeof e === 'object' && 'message' in e ? String(e.message || '') : '';
+    return { ok: false, optimized: 0, removed: 0, error: msg || 'network_error' };
   }
 }
 
