@@ -159,6 +159,22 @@ function getChatAvatarStyle() {
   return baseStyle;
 }
 
+function iconRefreshSVG() {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>';
+}
+
+function iconSettingsSVG() {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
+}
+
+function iconEyeOpenSVG() {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+}
+
+function iconEyeClosedSVG() {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19C5 19 1 12 1 12a21.77 21.77 0 0 1 5.06-6.94"/><path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a21.76 21.76 0 0 1-3.17 4.56"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+}
+
 function updateChatHeaderActionButtons() {
   const btn = document.getElementById('chatProfileToggleBtn');
   if (!btn) return;
@@ -167,7 +183,7 @@ function updateChatHeaderActionButtons() {
   const effective = getChatAvatarStyle();
   const on = effective !== 'hidden';
   btn.classList.toggle('on', on);
-  btn.textContent = on ? 'P' : 'X';
+  btn.innerHTML = on ? iconEyeOpenSVG() : iconEyeClosedSVG();
   btn.title = `프로필 표시 ${on ? 'ON' : 'OFF'} (클릭해서 전환)`;
   if (!override) btn.classList.remove('on');
 }
@@ -2028,9 +2044,9 @@ async function openChat(id) {
   const actionsEl = document.querySelector('.chat-header-actions');
   if (actionsEl) {
     actionsEl.innerHTML = `
-      <button class="chat-action-btn" id="chatRefreshBtn" onclick="refreshCurrentChat()" title="Refresh">R</button>
-      <button class="chat-action-btn" id="chatProfileToggleBtn" onclick="toggleChatProfileOverride()" title="Profile on/off">P</button>
-      <button class="chat-settings-btn" onclick="openDrawer()" title="Settings">S</button>
+      <button class="chat-action-btn" id="chatProfileToggleBtn" onclick="toggleChatProfileOverride()" title="Profile on/off">${iconEyeOpenSVG()}</button>
+      <button class="chat-action-btn" id="chatRefreshBtn" onclick="refreshCurrentChat()" title="Refresh">${iconRefreshSVG()}</button>
+      <button class="chat-settings-btn" onclick="openDrawer()" title="Settings">${iconSettingsSVG()}</button>
     `;
   }
   updateChatHeaderActionButtons();
