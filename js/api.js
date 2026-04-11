@@ -433,14 +433,24 @@ async function loadIndex() {
   try {
     const res = await fetch(wUrl + '/sessions');
     const data = await res.json();
-    const index = data.sessions || [];
-    const updatedSessions = index.map(item => {
-      const exist = sessions.find(s => s.id === item.id);
-      return exist ? { ...exist, ...item } : { ...item, history: [], _loaded: false };
-    });
-    const localOnly = sessions.filter(s => !index.find(item => item.id === s.id));
-    sessions = [...updatedSessions, ...localOnly];
+    const index = Array.isArray(data.sessions) ? data.sessions : [];
+    const activeIds = new Set(index.map(item => item?.id).filter(Boolean));
+
+    // Remote index is authoritative to prevent deleted/orphan sessions from resurrecting.
+    sessions = index.map(item => ({ ...item, history: [], _loaded: false }));
     setLocalSessionIndex(index);
+
+    // Remove stale local session caches that are no longer present in remote index.
+    try {
+      const cached = getLocalSessionIndex();
+      if (Array.isArray(cached)) {
+        for (const s of cached) {
+          const sid = s?.id;
+          if (sid && !activeIds.has(sid)) removeLocalSession(sid);
+        }
+      }
+    } catch(e) {}
+
     renderChatList();
   } catch(e) {}
 }
@@ -464,12 +474,22 @@ async function loadSession(id) {
   try {
     const res = await fetch(wUrl + '/session/' + id);
     const data = await res.json();
-    if (data.session?.history?.length) {
-      s.history = data.session.history;
-      s._loaded = true;
-      setLocalSession(id, s.history);
-      if (activeChatId === id) renderChatArea();
-    } else { s._loaded = true; }
+    const remoteSession = data?.session || null;
+    if (!remoteSession) {
+      // Session missing in KV: keep UI/index consistent and avoid zombie sessions.
+      sessions = sessions.filter(x => x.id !== id);
+      removeLocalSession(id);
+      setLocalSessionIndex(buildIndex());
+      if (activeChatId === id) activeChatId = null;
+      renderChatList();
+      return;
+    }
+
+    const remoteHistory = Array.isArray(remoteSession.history) ? remoteSession.history : [];
+    s.history = remoteHistory;
+    s._loaded = true;
+    setLocalSession(id, s.history);
+    if (activeChatId === id) renderChatArea();
   } catch(e) {}
 }
 
