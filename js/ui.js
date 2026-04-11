@@ -3432,14 +3432,31 @@ function ensureSettingsMemoryPanel() {
   scroller.appendChild(block);
 }
 
+function memoryLockIconSVG(locked) {
+  if (locked) {
+    return '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 1 1 8 0v3"/></svg>';
+  }
+  return '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.3-2.2"/></svg>';
+}
+
+function memoryTrashIconSVG() {
+  return '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
+}
+
 function memoryItemRowHTML(item, onDelete) {
   const scopeBadge = String(item.scope || '').replace('_', ' ');
+  const locked = !!item.locked;
+  const lockTitle = locked ? '잠금 해제' : '잠금';
+  const lockNext = locked ? 'false' : 'true';
+  const deleteDisabled = locked ? 'disabled' : '';
+  const deleteOpacity = locked ? 'opacity:.45;cursor:not-allowed;' : 'cursor:pointer;';
   return `<div style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border:1px solid var(--border2);border-radius:10px;background:var(--card)">
     <div style="flex:1">
       <div style="font-size:10px;color:var(--muted);margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em">${esc(scopeBadge)}</div>
       <div style="font-size:12px;line-height:1.5;color:var(--text)">${esc(item.text || '')}</div>
     </div>
-    <button onclick="${onDelete}('${item.id}','${item.scope || ''}','${item.owner || ''}')" style="flex-shrink:0;padding:4px 8px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--muted);font-size:11px;cursor:pointer">Delete</button>
+    <button onclick="toggleMemoryLockItem('${item.id}','${item.scope || ''}','${item.owner || ''}',${lockNext})" title="${lockTitle}" style="flex-shrink:0;width:28px;height:28px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:${locked ? 'hsl(45,80%,68%)' : 'var(--muted)'};display:inline-flex;align-items:center;justify-content:center;cursor:pointer">${memoryLockIconSVG(locked)}</button>
+    <button onclick="${onDelete}('${item.id}','${item.scope || ''}','${item.owner || ''}')" title="삭제" ${deleteDisabled} style="flex-shrink:0;width:28px;height:28px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--muted);display:inline-flex;align-items:center;justify-content:center;${deleteOpacity}">${memoryTrashIconSVG()}</button>
   </div>`;
 }
 
@@ -3486,7 +3503,7 @@ async function deletePublicMemoryItem(id, scope = 'public_profile', owner = 'glo
     renderPublicMemoryList();
     renderMemoryMeta();
   } else {
-    showToast('Delete failed.');
+    showToast('삭제 실패. 잠금 상태인지 확인하세요.');
   }
 }
 
@@ -3551,8 +3568,20 @@ async function deletePrivateMemoryItem(id, scope = 'private_profile', owner = ''
     showToast('Private memory deleted.');
     renderPrivateMemoryList(pid);
   } else {
-    showToast('Delete failed.');
+    showToast('삭제 실패. 잠금 상태인지 확인하세요.');
   }
+}
+
+async function toggleMemoryLockItem(id, scope = '', owner = '', locked = false) {
+  if (!id || !scope) return;
+  const res = await setMemoryLockApi({ id, scope, owner, locked: !!locked });
+  if (!res?.ok) {
+    showToast('잠금 변경 실패');
+    return;
+  }
+  showToast(locked ? '메모리 잠금됨' : '메모리 잠금 해제');
+  if (scope === 'public_profile') renderPublicMemoryList();
+  if (scope === 'private_profile') renderPrivateMemoryList(owner || editingPid);
 }
 
 async function saveMemoryFromCurrentChat() {

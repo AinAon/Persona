@@ -645,18 +645,33 @@ async function upsertMemoryApi({ scope, owner = '', text = '', source = 'manual'
   }
 }
 
-async function deleteMemoryApi({ scope, owner = '', id = '' } = {}) {
+async function deleteMemoryApi({ scope, owner = '', id = '', force = false } = {}) {
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl || !id) return { ok: false };
   try {
     const res = await fetch(`${wUrl}/memory/delete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scope, owner, id })
+      body: JSON.stringify({ scope, owner, id, force: !!force })
     });
     return await res.json();
   } catch {
     return { ok: false };
+  }
+}
+
+async function setMemoryLockApi({ scope, owner = '', id = '', locked = false } = {}) {
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl || !id) return { ok: false, item: null };
+  try {
+    const res = await fetch(`${wUrl}/memory/lock`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scope, owner, id, locked: !!locked })
+    });
+    return await res.json();
+  } catch {
+    return { ok: false, item: null };
   }
 }
 

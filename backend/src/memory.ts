@@ -10,6 +10,7 @@ export type MemoryItem = {
   text: string;
   source: "manual" | "chat";
   fingerprint: string;
+  locked?: boolean;
   createdAt: number;
   updatedAt: number;
   lastSeenAt: number;
@@ -202,6 +203,7 @@ export async function upsertMemory(
     if (found) {
       found.lastSeenAt = now;
       found.updatedAt = now;
+      if (typeof found.locked !== "boolean") found.locked = false;
       await env.KV.put(itemKey(scope, owner, found.id), JSON.stringify(found));
       return { item: found, duplicate: true };
     }
@@ -211,6 +213,7 @@ export async function upsertMemory(
   if (nearDup) {
     nearDup.lastSeenAt = now;
     nearDup.updatedAt = now;
+    if (typeof nearDup.locked !== "boolean") nearDup.locked = false;
     await env.KV.put(itemKey(scope, owner, nearDup.id), JSON.stringify(nearDup));
     await env.KV.put(fpKey(scope, owner, fingerprint), nearDup.id);
     return { item: nearDup, duplicate: true };
@@ -224,6 +227,7 @@ export async function upsertMemory(
     text,
     source: args.source || "manual",
     fingerprint,
+    locked: false,
     createdAt: args.createdAt || now,
     updatedAt: now,
     lastSeenAt: now,
@@ -241,14 +245,31 @@ export async function deleteMemory(
   scope: MemoryScope,
   owner: string,
   id: string,
+  force = false,
 ): Promise<boolean> {
   const found = await getItem(env, scope, owner, id);
   if (!found) return false;
+  if (found.locked && !force) return false;
   await env.KV.delete(itemKey(scope, owner, id));
   if (found.fingerprint) await env.KV.delete(fpKey(scope, owner, found.fingerprint));
   const ids = await getIndex(env, scope, owner);
   await putIndex(env, scope, owner, ids.filter((x) => x !== id));
   return true;
+}
+
+export async function setMemoryLock(
+  env: Env,
+  scope: MemoryScope,
+  owner: string,
+  id: string,
+  locked: boolean,
+): Promise<MemoryItem | null> {
+  const found = await getItem(env, scope, owner, id);
+  if (!found) return null;
+  found.locked = !!locked;
+  found.updatedAt = nowTs();
+  await env.KV.put(itemKey(scope, owner, found.id), JSON.stringify(found));
+  return found;
 }
 
 function flattenMessageText(content: unknown): string {
@@ -284,7 +305,7 @@ function fallbackExtractFacts(lines: string[]): string[] {
     const t = normalizeText(base);
     const explicit = EXPLICIT_MARKERS.some((m) => t.includes(normalizeText(m)));
     if (!explicit && !shouldCaptureProfile(base)) continue;
-    out.add(clampText(`Profile: ${base}`));
+    out.add(clampText(base));
     if (out.size >= 40) break;
   }
   return [...out];
@@ -344,7 +365,7 @@ async function extractFactsWithGemini(
   const json = tryParseJsonObject(raw);
   const facts = Array.isArray(json?.profile_facts) ? json.profile_facts : [];
   return facts
-    .map((x) => clampText(`Profile: ${String(x || "").trim()}`))
+    .map((x) => clampText(String(x || "").trim()))
     .filter((x) => x.length > 12)
     .slice(0, 40);
 }
@@ -529,8 +550,8 @@ export async function optimizeMemories(
 
   for (const t of targets) {
     const items = await listMemories(env, t.scope, t.owner, 200);
-    const manual = items.filter((x) => x.source === "manual");
-    const chat = items.filter((x) => x.source !== "manual");
+    const manual = items.filter((x) => x.source === "manual" && !x.locked);
+    const chat = items.filter((x) => x.source !== "manual" && !x.locked);
     if (chat.length < 2) continue;
 
     const consolidated = await extractFactsWithGemini(

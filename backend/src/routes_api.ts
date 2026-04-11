@@ -7,6 +7,7 @@ import {
   normalizeScopeOwner,
   optimizeMemories,
   parseScope,
+  setMemoryLock,
   upsertMemory,
 } from "./memory";
 
@@ -234,14 +235,25 @@ export async function handleApiRoute(
   }
 
   if (url.pathname === "/memory/delete" && request.method === "POST") {
-    const body = await request.json() as { scope?: string; owner?: string; id?: string };
+    const body = await request.json() as { scope?: string; owner?: string; id?: string; force?: boolean };
     const scope = parseScope(body.scope || null);
     if (!scope) return Response.json({ error: "invalid scope" }, { status: 400, headers: cors });
     const owner = normalizeScopeOwner(scope, body.owner || null);
     const id = String(body.id || "").trim();
     if (!id) return Response.json({ error: "id required" }, { status: 400, headers: cors });
-    const ok = await deleteMemory(env, scope, owner, id);
+    const ok = await deleteMemory(env, scope, owner, id, !!body.force);
     return Response.json({ ok }, { headers: cors });
+  }
+
+  if (url.pathname === "/memory/lock" && request.method === "POST") {
+    const body = await request.json() as { scope?: string; owner?: string; id?: string; locked?: boolean };
+    const scope = parseScope(body.scope || null);
+    if (!scope) return Response.json({ error: "invalid scope" }, { status: 400, headers: cors });
+    const owner = normalizeScopeOwner(scope, body.owner || null);
+    const id = String(body.id || "").trim();
+    if (!id) return Response.json({ error: "id required" }, { status: 400, headers: cors });
+    const item = await setMemoryLock(env, scope, owner, id, !!body.locked);
+    return Response.json({ ok: !!item, item }, { headers: cors });
   }
 
   if (url.pathname === "/memory/purge" && request.method === "POST") {
