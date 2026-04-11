@@ -35,6 +35,8 @@ type RecoverableSessionMeta = DeletedSessionMeta & {
 
 const SESSION_INDEX_KEY = "session_index";
 const DELETED_SESSION_INDEX_KEY = "deleted_session_index";
+const PERSONAS_KEY = "personas";
+const PERSONAS_R2_KEY = "personas/personas.json";
 const SESSION_INDEX_R2_KEY = "session/index.json";
 const DELETED_SESSION_INDEX_R2_KEY = "session/deleted_index.json";
 const SESSION_R2_PREFIX = "session/data/";
@@ -452,12 +454,20 @@ export async function handleApiRoute(
 
   if (url.pathname === "/personas") {
     if (request.method === "GET") {
-      const data = await env.KV.get("personas");
+      const fromR2 = await r2Json<unknown[] | null>(env, PERSONAS_R2_KEY, null);
+      if (Array.isArray(fromR2)) return Response.json({ personas: fromR2 }, { headers: cors });
+      const data = await env.KV.get(PERSONAS_KEY);
       return Response.json({ personas: data ? JSON.parse(data) : [] }, { headers: cors });
     }
     if (request.method === "PUT") {
       const { personas } = (await request.json()) as { personas: unknown[] };
-      await env.KV.put("personas", JSON.stringify(personas));
+      const payload = Array.isArray(personas) ? personas : [];
+      await r2PutJson(env, PERSONAS_R2_KEY, payload);
+      try {
+        await env.KV.put(PERSONAS_KEY, JSON.stringify(payload));
+      } catch {
+        // KV daily write limit may be exceeded; R2 remains source of truth.
+      }
       return Response.json({ ok: true }, { headers: cors });
     }
     return null;

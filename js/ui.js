@@ -3734,7 +3734,12 @@ async function saveMemoryFromCurrentChat() {
     renderMemoryMeta();
     closeDrawer();
   } else {
-    showToast('Memory save failed.');
+    const hint = res?.status ? ` (HTTP ${res.status})` : '';
+    const err = String(res?.error || '').trim();
+    const detail = String(res?.detail || '').trim();
+    const msg = err || detail ? `: ${err || detail}` : '';
+    showToast(`Memory save failed${hint}${msg}`);
+    console.error('saveMemoryFromCurrentChat failed', { res, raw: JSON.stringify(res || {}) });
   }
 }
 

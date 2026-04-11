@@ -85,7 +85,8 @@ async function init() {
   applyFontSize(userProfile.fontSize || 15);
   switchTab(userProfile.defaultTab || 'persona');
   // 캐시에서 즉시 로드 (로딩 중 표시)
-  if (!loadPersonasFromCache()) personas = DEFAULT_PERSONAS.map(p=>({...p, tags:[...p.tags]}));
+  const hasLocalPersonas = loadPersonasFromCache();
+  if (!hasLocalPersonas) personas = DEFAULT_PERSONAS.map(p=>({...p, tags:[...p.tags]}));
   loadSessionsFromCache();
 
   // KV에서 프로필 동기화 (name/bio/image — 기기별 설정은 로컬 유지)
@@ -131,6 +132,7 @@ async function init() {
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (wUrl) {
     loadIndex().then(() => preloadAllSessions()).catch(()=>{});
+    if (hasLocalPersonas) return;
 
     // KV에서 페르소나 로드 (celebrity.json + GAS 대체)
     fetch(wUrl + '/personas').then(r => r.json()).then(data => {

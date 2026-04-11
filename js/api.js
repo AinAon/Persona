@@ -775,7 +775,7 @@ async function purgeMemoryApi({ scope = '', owner = '', all = false } = {}) {
 
 async function extractSessionMemories(session, { forceFull = false } = {}) {
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-  if (!wUrl || !session) return { ok: false, saved: 0, duplicate: 0, processed: 0, cursor: 0 };
+  if (!wUrl || !session) return { ok: false, saved: 0, duplicate: 0, processed: 0, cursor: 0, error: 'WORKER_URL/session missing' };
   try {
     const payload = {
       sessionId: session.id,
@@ -792,9 +792,25 @@ async function extractSessionMemories(session, { forceFull = false } = {}) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    return await res.json();
-  } catch {
-    return { ok: false, saved: 0, duplicate: 0, processed: 0, cursor: 0 };
+    const raw = await res.text();
+    let data = null;
+    try { data = raw ? JSON.parse(raw) : {}; } catch {}
+    if (!res.ok) {
+      return {
+        ok: false,
+        saved: 0,
+        duplicate: 0,
+        processed: 0,
+        cursor: 0,
+        status: res.status,
+        error: data?.error || `HTTP ${res.status}`,
+        detail: raw ? String(raw).slice(0, 220) : ''
+      };
+    }
+    return data || { ok: false, saved: 0, duplicate: 0, processed: 0, cursor: 0, error: 'empty response' };
+  } catch (e) {
+    const msg = e && typeof e === 'object' && 'message' in e ? String(e.message || '') : '';
+    return { ok: false, saved: 0, duplicate: 0, processed: 0, cursor: 0, error: msg || 'network_error' };
   }
 }
 

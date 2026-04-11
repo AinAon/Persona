@@ -734,10 +734,14 @@ export async function extractAndStoreMemories(
   }
 
   if (sessionId) {
-    await setSessionMeta(env, sessionId, {
-      lastExtractedAt: cursor,
-      lastOptimizedAt: sessionMeta.lastOptimizedAt || 0,
-    });
+    try {
+      await setSessionMeta(env, sessionId, {
+        lastExtractedAt: cursor,
+        lastOptimizedAt: sessionMeta.lastOptimizedAt || 0,
+      });
+    } catch (e) {
+      if (!isKvWriteLimitError(e)) throw e;
+    }
   }
 
   return { saved, duplicate, processed, cursor, usedFallback };
