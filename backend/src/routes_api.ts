@@ -8,6 +8,7 @@ import {
   optimizeMemories,
   parseScope,
   setMemoryLock,
+  setMemoryText,
   upsertMemory,
 } from "./memory";
 
@@ -370,6 +371,19 @@ export async function handleApiRoute(
     const id = String(body.id || "").trim();
     if (!id) return Response.json({ error: "id required" }, { status: 400, headers: cors });
     const item = await setMemoryLock(env, scope, owner, id, !!body.locked);
+    return Response.json({ ok: !!item, item }, { headers: cors });
+  }
+
+  if (url.pathname === "/memory/update" && request.method === "POST") {
+    const body = await request.json() as { scope?: string; owner?: string; id?: string; text?: string };
+    const scope = parseScope(body.scope || null);
+    if (!scope) return Response.json({ error: "invalid scope" }, { status: 400, headers: cors });
+    const owner = normalizeScopeOwner(scope, body.owner || null);
+    const id = String(body.id || "").trim();
+    const text = String(body.text || "").trim();
+    if (!id) return Response.json({ error: "id required" }, { status: 400, headers: cors });
+    if (!text) return Response.json({ error: "text required" }, { status: 400, headers: cors });
+    const item = await setMemoryText(env, scope, owner, id, text);
     return Response.json({ ok: !!item, item }, { headers: cors });
   }
 

@@ -739,6 +739,21 @@ async function setMemoryLockApi({ scope, owner = '', id = '', locked = false } =
   }
 }
 
+async function updateMemoryApi({ scope, owner = '', id = '', text = '' } = {}) {
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl || !id || !String(text || '').trim()) return { ok: false, item: null };
+  try {
+    const res = await fetch(`${wUrl}/memory/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scope, owner, id, text: String(text || '') })
+    });
+    return await res.json();
+  } catch {
+    return { ok: false, item: null };
+  }
+}
+
 async function purgeMemoryApi({ scope = '', owner = '', all = false } = {}) {
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl) return { ok: false, deleted: 0, deletedPrefixes: [] };

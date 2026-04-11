@@ -3443,29 +3443,59 @@ function memoryTrashIconSVG() {
   return '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
 }
 
+function memoryEditIconSVG() {
+  return '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>';
+}
+
+const _memoryListCache = {};
+function memoryCacheKey(scope, owner = '') { return `${scope || ''}::${owner || ''}`; }
+function getMemoryListFromCache(scope, owner = '') {
+  const key = memoryCacheKey(scope, owner);
+  return Array.isArray(_memoryListCache[key]) ? _memoryListCache[key] : null;
+}
+function setMemoryListToCache(scope, owner = '', items = []) {
+  const key = memoryCacheKey(scope, owner);
+  _memoryListCache[key] = Array.isArray(items) ? [...items] : [];
+}
+async function getMemoryListCached(scope, owner = '', limit = 120, force = false) {
+  if (!force) {
+    const cached = getMemoryListFromCache(scope, owner);
+    if (cached) return cached;
+  }
+  const fresh = await listMemoriesApi(scope, owner, limit);
+  setMemoryListToCache(scope, owner, fresh);
+  return getMemoryListFromCache(scope, owner) || [];
+}
+function sortMemoryList(items) {
+  return [...(items || [])].sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+}
+
 function memoryItemRowHTML(item, onDelete) {
   const scopeBadge = String(item.scope || '').replace('_', ' ');
   const displayText = String(item.text || '').replace(/^\s*profile\s*:\s*/i, '');
+  const safeText = esc(displayText);
   const locked = !!item.locked;
   const lockTitle = locked ? '잠금 해제' : '잠금';
   const lockNext = locked ? 'false' : 'true';
   const deleteDisabled = locked ? 'disabled' : '';
+  const editDisabled = locked ? 'disabled' : '';
+  const editOpacity = locked ? 'opacity:.45;cursor:not-allowed;' : 'cursor:pointer;';
   const deleteOpacity = locked ? 'opacity:.45;cursor:not-allowed;' : 'cursor:pointer;';
   return `<div style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border:1px solid var(--border2);border-radius:10px;background:var(--card)">
     <div style="flex:1">
       <div style="font-size:10px;color:var(--muted);margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em">${esc(scopeBadge)}</div>
-      <div style="font-size:12px;line-height:1.5;color:var(--text)">${esc(displayText)}</div>
+      <div style="font-size:12px;line-height:1.5;color:var(--text)">${safeText}</div>
     </div>
     <button onclick="toggleMemoryLockItem('${item.id}','${item.scope || ''}','${item.owner || ''}',${lockNext})" title="${lockTitle}" style="flex-shrink:0;width:28px;height:28px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:${locked ? 'hsl(45,80%,68%)' : 'var(--muted)'};display:inline-flex;align-items:center;justify-content:center;cursor:pointer">${memoryLockIconSVG(locked)}</button>
+    <button onclick="editMemoryItem('${item.id}','${item.scope || ''}','${item.owner || ''}')" title="Edit" ${editDisabled} style="flex-shrink:0;width:28px;height:28px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--muted);display:inline-flex;align-items:center;justify-content:center;${editOpacity}">${memoryEditIconSVG()}</button>
     <button onclick="${onDelete}('${item.id}','${item.scope || ''}','${item.owner || ''}')" title="삭제" ${deleteDisabled} style="flex-shrink:0;width:28px;height:28px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--muted);display:inline-flex;align-items:center;justify-content:center;${deleteOpacity}">${memoryTrashIconSVG()}</button>
   </div>`;
 }
 
-async function renderPublicMemoryList() {
+async function renderPublicMemoryList(force = false) {
   const wrap = document.getElementById('publicMemoryList');
   if (!wrap) return;
-  const items = (await listMemoriesApi('public_profile', 'global', 120))
-    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  const items = sortMemoryList(await getMemoryListCached('public_profile', 'global', 120, !!force));
   if (!items.length) {
     wrap.innerHTML = `<div style="font-size:11px;color:var(--muted);padding:4px 2px">No public memory yet.</div>`;
     return;
@@ -3486,6 +3516,11 @@ async function addPublicMemoryManual() {
   if (res?.ok) {
     input.value = '';
     showToast(res.duplicate ? 'Already saved memory.' : 'Public memory saved.');
+    const current = getMemoryListFromCache('public_profile', 'global') || [];
+    if (res.item) {
+      const next = [res.item, ...current.filter(it => it.id !== res.item.id)];
+      setMemoryListToCache('public_profile', 'global', next);
+    }
     renderPublicMemoryList();
   } else {
     showToast('Failed to save memory.');
@@ -3501,6 +3536,8 @@ async function deletePublicMemoryItem(id, scope = 'public_profile', owner = 'glo
   });
   if (res?.ok) {
     showToast('Public memory deleted.');
+    const current = getMemoryListFromCache(scope, owner) || [];
+    setMemoryListToCache(scope, owner, current.filter(it => it.id !== id));
     renderPublicMemoryList();
     renderMemoryMeta();
   } else {
@@ -3529,11 +3566,10 @@ function ensureEditPrivateMemoryPanel(pid) {
   body.appendChild(wrap);
 }
 
-async function renderPrivateMemoryList(pid) {
+async function renderPrivateMemoryList(pid, force = false) {
   const wrap = document.getElementById('privateMemoryList');
   if (!wrap || !pid) return;
-  const items = (await listMemoriesApi('private_profile', pid, 120))
-    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  const items = sortMemoryList(await getMemoryListCached('private_profile', pid, 120, !!force));
   if (!items.length) {
     wrap.innerHTML = `<div style="font-size:11px;color:var(--muted);padding:4px 2px">No private memory yet.</div>`;
     return;
@@ -3554,7 +3590,12 @@ async function addPrivateMemoryManual(pid) {
   if (res?.ok) {
     input.value = '';
     showToast(res.duplicate ? 'Already saved memory.' : 'Private memory saved.');
-    renderPrivateMemoryList(pid);
+    const current = getMemoryListFromCache('private_profile', pid) || [];
+    if (res.item) {
+      const next = [res.item, ...current.filter(it => it.id !== res.item.id)];
+      setMemoryListToCache('private_profile', pid, next);
+    }
+    renderPrivateMemoryList(pid, true);
   } else {
     showToast('Failed to save memory.');
   }
@@ -3587,6 +3628,8 @@ async function deletePrivateMemoryItem(id, scope = 'private_profile', owner = ''
   });
   if (res?.ok) {
     showToast('Private memory deleted.');
+    const current = getMemoryListFromCache(scope, pid) || [];
+    setMemoryListToCache(scope, pid, current.filter(it => it.id !== id));
     renderPrivateMemoryList(pid);
   } else {
     showToast('삭제 실패. 잠금 상태인지 확인하세요.');
@@ -3595,14 +3638,66 @@ async function deletePrivateMemoryItem(id, scope = 'private_profile', owner = ''
 
 async function toggleMemoryLockItem(id, scope = '', owner = '', locked = false) {
   if (!id || !scope) return;
-  const res = await setMemoryLockApi({ id, scope, owner, locked: !!locked });
+  const cacheOwner = scope === 'public_profile' ? 'global' : (owner || editingPid || '');
+  const current = getMemoryListFromCache(scope, cacheOwner) || await getMemoryListCached(scope, cacheOwner, 120);
+  const prev = current.map(it => ({ ...it }));
+  const optimistic = current.map(it => it.id === id ? { ...it, locked: !!locked } : it);
+  setMemoryListToCache(scope, cacheOwner, optimistic);
+  if (scope === 'public_profile') renderPublicMemoryList();
+  if (scope === 'private_profile') renderPrivateMemoryList(cacheOwner);
+
+  const res = await setMemoryLockApi({ id, scope, owner: cacheOwner, locked: !!locked });
   if (!res?.ok) {
+    setMemoryListToCache(scope, cacheOwner, prev);
+    if (scope === 'public_profile') renderPublicMemoryList();
+    if (scope === 'private_profile') renderPrivateMemoryList(cacheOwner);
     showToast('잠금 변경 실패');
     return;
   }
   showToast(locked ? '메모리 잠금됨' : '메모리 잠금 해제');
   if (scope === 'public_profile') renderPublicMemoryList();
-  if (scope === 'private_profile') renderPrivateMemoryList(owner || editingPid);
+  if (scope === 'private_profile') renderPrivateMemoryList(cacheOwner);
+}
+
+async function editMemoryItem(id, scope = '', owner = '') {
+  if (!id || !scope) return;
+  const cacheOwner = scope === 'public_profile' ? 'global' : (owner || editingPid || '');
+  const current = getMemoryListFromCache(scope, cacheOwner) || await getMemoryListCached(scope, cacheOwner, 120);
+  const target = current.find(it => it.id === id);
+  if (!target) return;
+  if (target.locked) {
+    showToast('Locked memory cannot be edited.');
+    return;
+  }
+  if (target.locked) {
+    showToast('?좉툼?맂 硫붾え由щ뒗 ?섏젙?븷 ???놁뼱??');
+    return;
+  }
+
+  const edited = prompt('메모리 수정', String(target.text || ''));
+  if (edited === null) return;
+  const clean = String(edited || '').replace(/^\s*profile\s*:\s*/i, '').trim();
+  if (!clean) {
+    showToast('빈 메모리는 저장할 수 없습니다.');
+    return;
+  }
+  if (clean === String(target.text || '').trim()) return;
+
+  const prev = current.map(it => ({ ...it }));
+  const optimistic = current.map(it => it.id === id ? { ...it, text: clean } : it);
+  setMemoryListToCache(scope, cacheOwner, optimistic);
+  if (scope === 'public_profile') renderPublicMemoryList();
+  if (scope === 'private_profile') renderPrivateMemoryList(cacheOwner);
+
+  const res = await updateMemoryApi({ id, scope, owner: cacheOwner, text: clean });
+  if (!res?.ok) {
+    setMemoryListToCache(scope, cacheOwner, prev);
+    if (scope === 'public_profile') renderPublicMemoryList();
+    if (scope === 'private_profile') renderPrivateMemoryList(cacheOwner);
+    showToast('메모리 수정 실패');
+    return;
+  }
+  showToast('메모리 수정 완료');
 }
 
 async function saveMemoryFromCurrentChat() {
@@ -3610,8 +3705,8 @@ async function saveMemoryFromCurrentChat() {
   const res = await extractSessionMemories(s);
   if (res?.ok) {
     showToast(`Memory saved: ${res.saved || 0}, duplicates: ${res.duplicate || 0}, processed: ${res.processed || 0}`);
-    renderPublicMemoryList();
-    if (editingPid) renderPrivateMemoryList(editingPid);
+    renderPublicMemoryList(true);
+    if (editingPid) renderPrivateMemoryList(editingPid, true);
     renderMemoryMeta();
     closeDrawer();
   } else {
@@ -3659,8 +3754,8 @@ async function optimizeMemoryNow() {
   });
   if (res?.ok) {
     showToast(`최적화 완료: ${res.optimized || 0}개 정리, ${res.removed || 0}개 제거`);
-    renderPublicMemoryList();
-    if (editingPid) renderPrivateMemoryList(editingPid);
+    renderPublicMemoryList(true);
+    if (editingPid) renderPrivateMemoryList(editingPid, true);
     renderMemoryMeta();
   } else {
     showToast('메모리 최적화 실패');

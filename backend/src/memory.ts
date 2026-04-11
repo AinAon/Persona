@@ -454,6 +454,28 @@ export async function setMemoryLock(
   return found;
 }
 
+export async function setMemoryText(
+  env: Env,
+  scope: MemoryScope,
+  owner: string,
+  id: string,
+  text: string,
+): Promise<MemoryItem | null> {
+  const cleanOwner = normalizeOwner(scope, owner);
+  const loaded = await loadAllChunkItems(env, scope, cleanOwner);
+  const found = loaded.all.find((it) => it.id === id) || null;
+  if (!found) return null;
+
+  const cleanText = clampText(stripProfilePrefix(text), MAX_ITEM_LEN);
+  if (!cleanText) return null;
+  found.text = cleanText;
+  found.fingerprint = makeFingerprint(normalizeText(cleanText));
+  found.updatedAt = nowTs();
+
+  await writeAllChunkItems(env, scope, cleanOwner, loaded.all);
+  return found;
+}
+
 function flattenMessageText(content: unknown): string {
   if (!content) return "";
   if (typeof content === "string") return content;
