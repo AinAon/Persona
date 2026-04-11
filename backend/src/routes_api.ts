@@ -368,6 +368,21 @@ export async function handleApiRoute(
     return Response.json({ ok }, { headers: cors });
   }
 
+  if (url.pathname === "/memory/delete-batch" && request.method === "POST") {
+    const body = await request.json() as { scope?: string; owner?: string; ids?: string[]; force?: boolean };
+    const scope = parseScope(body.scope || null);
+    if (!scope) return Response.json({ error: "invalid scope" }, { status: 400, headers: cors });
+    const owner = normalizeScopeOwner(scope, body.owner || null);
+    const ids = Array.isArray(body.ids) ? body.ids.map((x) => String(x || "").trim()).filter(Boolean) : [];
+    if (!ids.length) return Response.json({ ok: false, deleted: 0, error: "ids required" }, { status: 400, headers: cors });
+    let deleted = 0;
+    for (const id of ids) {
+      const ok = await deleteMemory(env, scope, owner, id, !!body.force);
+      if (ok) deleted++;
+    }
+    return Response.json({ ok: true, deleted, requested: ids.length }, { headers: cors });
+  }
+
   if (url.pathname === "/memory/lock" && request.method === "POST") {
     const body = await request.json() as { scope?: string; owner?: string; id?: string; locked?: boolean };
     const scope = parseScope(body.scope || null);

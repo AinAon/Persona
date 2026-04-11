@@ -506,6 +506,17 @@ function shouldCaptureProfile(text: string): boolean {
   return PROFILE_HINTS.some((k) => t.includes(normalizeText(k)));
 }
 
+function findMentionedPersonaPids(text: string, participantPids: string[]): string[] {
+  const t = normalizeText(text);
+  const out: string[] = [];
+  for (const pid of participantPids || []) {
+    const p = normalizeText(pid);
+    if (!p) continue;
+    if (t.includes(p)) out.push(pid);
+  }
+  return [...new Set(out)];
+}
+
 function fallbackExtractFacts(lines: string[]): string[] {
   const out = new Set<string>();
   for (const line of lines) {
@@ -696,12 +707,31 @@ export async function extractAndStoreMemories(
   let duplicate = 0;
 
   // User bubble -> only public user memory
-  let userFacts = await extractFactsWithGemini(userLines, apiKey, "user");
+  let userFacts: string[] = [];
+  try {
+    userFacts = await extractFactsWithGemini(userLines, apiKey, "user");
+  } catch {
+    userFacts = [];
+  }
   if (!userFacts.length) {
     usedFallback = true;
     userFacts = fallbackExtractFacts(userLines);
   }
   for (const text of userFacts) {
+    const mentionedPids = findMentionedPersonaPids(text, participantPids);
+    if (mentionedPids.length) {
+      for (const pid of mentionedPids) {
+        const pr = await upsertMemory(env, {
+          scope: "private_profile",
+          owner: pid,
+          text,
+          source: "chat",
+          createdAt: cursor,
+        });
+        if (pr.item) (pr.duplicate ? duplicate++ : saved++);
+      }
+      continue;
+    }
     const r = await upsertMemory(env, {
       scope: "public_profile",
       text,
@@ -715,7 +745,12 @@ export async function extractAndStoreMemories(
   for (const pid of participantPids) {
     const personaLines = personaLinesByPid[pid] || [];
     if (!personaLines.length) continue;
-    let personaFacts = await extractFactsWithGemini(personaLines, apiKey, "persona", pid);
+    let personaFacts: string[] = [];
+    try {
+      personaFacts = await extractFactsWithGemini(personaLines, apiKey, "persona", pid);
+    } catch {
+      personaFacts = [];
+    }
     if (!personaFacts.length) {
       usedFallback = true;
       personaFacts = fallbackExtractFacts(personaLines);

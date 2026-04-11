@@ -724,6 +724,22 @@ async function deleteMemoryApi({ scope, owner = '', id = '', force = false } = {
   }
 }
 
+async function deleteMemoryBatchApi({ scope, owner = '', ids = [], force = false } = {}) {
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  const cleanIds = Array.isArray(ids) ? ids.map(x => String(x || '').trim()).filter(Boolean) : [];
+  if (!wUrl || !cleanIds.length) return { ok: false, deleted: 0, requested: 0 };
+  try {
+    const res = await fetch(`${wUrl}/memory/delete-batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scope, owner, ids: cleanIds, force: !!force })
+    });
+    return await res.json();
+  } catch {
+    return { ok: false, deleted: 0, requested: cleanIds.length };
+  }
+}
+
 async function setMemoryLockApi({ scope, owner = '', id = '', locked = false } = {}) {
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl || !id) return { ok: false, item: null };

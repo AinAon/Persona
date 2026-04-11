@@ -3427,6 +3427,11 @@ function ensureSettingsMemoryPanel() {
     <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
       <button onclick="optimizeMemoryNow()" style="padding:8px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;font-family:'Pretendard',sans-serif">메모리최적화</button>
     </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:10px">
+      <button onclick="toggleMemorySelectAll('public_profile','global',true); renderPublicMemoryList();" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">전체선택</button>
+      <button onclick="clearMemorySelection('public_profile','global'); renderPublicMemoryList();" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">선택해제</button>
+      <button onclick="deleteSelectedMemories('public_profile','global')" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:#3a1f24;color:#ffd7dd;font-size:11px;cursor:pointer">선택삭제</button>
+    </div>
     <div id="publicMemoryList" style="display:flex;flex-direction:column;gap:8px"></div>
   `;
   scroller.appendChild(block);
@@ -3448,6 +3453,7 @@ function memoryEditIconSVG() {
 }
 
 const _memoryListCache = {};
+const _memorySelection = {};
 function memoryCacheKey(scope, owner = '') { return `${scope || ''}::${owner || ''}`; }
 function getMemoryListFromCache(scope, owner = '') {
   const key = memoryCacheKey(scope, owner);
@@ -3470,6 +3476,31 @@ function sortMemoryList(items) {
   return [...(items || [])].sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
 }
 
+function getMemorySelectionSet(scope, owner = '') {
+  const key = memoryCacheKey(scope, owner);
+  if (!_memorySelection[key]) _memorySelection[key] = new Set();
+  return _memorySelection[key];
+}
+
+function toggleMemoryItemSelection(scope, owner = '', id = '', checked = false) {
+  if (!id || !scope) return;
+  const set = getMemorySelectionSet(scope, owner);
+  if (checked) set.add(id);
+  else set.delete(id);
+}
+
+function clearMemorySelection(scope, owner = '') {
+  const key = memoryCacheKey(scope, owner);
+  _memorySelection[key] = new Set();
+}
+
+function toggleMemorySelectAll(scope, owner = '', checked = false) {
+  const items = getMemoryListFromCache(scope, owner) || [];
+  const set = getMemorySelectionSet(scope, owner);
+  set.clear();
+  if (checked) items.forEach(it => set.add(it.id));
+}
+
 function memoryItemRowHTML(item, onDelete) {
   const scopeBadge = String(item.scope || '').replace('_', ' ');
   const displayText = String(item.text || '').replace(/^\s*profile\s*:\s*/i, '');
@@ -3481,7 +3512,9 @@ function memoryItemRowHTML(item, onDelete) {
   const editDisabled = locked ? 'disabled' : '';
   const editOpacity = locked ? 'opacity:.45;cursor:not-allowed;' : 'cursor:pointer;';
   const deleteOpacity = locked ? 'opacity:.45;cursor:not-allowed;' : 'cursor:pointer;';
+  const selected = getMemorySelectionSet(item.scope || '', item.owner || '').has(item.id);
   return `<div style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border:1px solid var(--border2);border-radius:10px;background:var(--card)">
+    <input type="checkbox" ${selected ? 'checked' : ''} onchange="toggleMemoryItemSelection('${item.scope || ''}','${item.owner || ''}','${item.id}',this.checked)" style="margin-top:3px;cursor:pointer" />
     <div style="flex:1">
       <div style="font-size:10px;color:var(--muted);margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em">${esc(scopeBadge)}</div>
       <div style="font-size:12px;line-height:1.5;color:var(--text)">${safeText}</div>
@@ -3527,6 +3560,32 @@ async function addPublicMemoryManual() {
   }
 }
 
+async function deleteSelectedMemories(scope = '', owner = '') {
+  if (!scope) return;
+  const set = getMemorySelectionSet(scope, owner);
+  const ids = [...set];
+  if (!ids.length) {
+    showToast('선택된 메모리가 없습니다.');
+    return;
+  }
+  const res = await deleteMemoryBatchApi({ scope, owner, ids });
+  if (!res?.ok) {
+    showToast('선택삭제 실패');
+    return;
+  }
+  const current = getMemoryListFromCache(scope, owner) || [];
+  const idSet = new Set(ids);
+  setMemoryListToCache(scope, owner, current.filter(it => !idSet.has(it.id)));
+  clearMemorySelection(scope, owner);
+  showToast(`선택삭제 완료 (${res.deleted || 0}/${ids.length})`);
+  if (scope === 'public_profile') {
+    renderPublicMemoryList();
+    renderMemoryMeta();
+  } else if (scope === 'private_profile') {
+    renderPrivateMemoryList(owner || editingPid);
+  }
+}
+
 async function deletePublicMemoryItem(id, scope = 'public_profile', owner = 'global') {
   if (!id || !scope) return;
   const res = await deleteMemoryApi({
@@ -3538,6 +3597,7 @@ async function deletePublicMemoryItem(id, scope = 'public_profile', owner = 'glo
     showToast('Public memory deleted.');
     const current = getMemoryListFromCache(scope, owner) || [];
     setMemoryListToCache(scope, owner, current.filter(it => it.id !== id));
+    toggleMemoryItemSelection(scope, owner, id, false);
     renderPublicMemoryList();
     renderMemoryMeta();
   } else {
@@ -3560,6 +3620,11 @@ function ensureEditPrivateMemoryPanel(pid) {
     <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px">
       <textarea id="privateMemoryInput" class="edit-input" placeholder="Memory for ${esc(pid)}..." style="flex:1;height:64px;resize:none;line-height:1.5"></textarea>
       <button onclick="addPrivateMemoryManual('${esc(pid)}')" style="padding:10px 12px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;font-family:'Pretendard',sans-serif">Save</button>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:10px">
+      <button onclick="toggleMemorySelectAll('private_profile','${esc(pid)}',true); renderPrivateMemoryList('${esc(pid)}');" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">전체선택</button>
+      <button onclick="clearMemorySelection('private_profile','${esc(pid)}'); renderPrivateMemoryList('${esc(pid)}');" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">선택해제</button>
+      <button onclick="deleteSelectedMemories('private_profile','${esc(pid)}')" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:#3a1f24;color:#ffd7dd;font-size:11px;cursor:pointer">선택삭제</button>
     </div>
     <div id="privateMemoryList" style="display:flex;flex-direction:column;gap:8px"></div>
   `;
@@ -3601,23 +3666,6 @@ async function addPrivateMemoryManual(pid) {
   }
 }
 
-async function optimizePrivateMemoryNow(pid) {
-  if (!pid) return;
-  if (!confirm(`${pid} private memory만 최적화할까요?`)) return;
-  const session = getActiveSession();
-  const res = await optimizeMemoriesApi({
-    sessionId: session?.id || '',
-    participantPids: [pid],
-    includePublic: false
-  });
-  if (res?.ok) {
-    showToast(`Private 최적화 완료: ${res.optimized || 0}개 정리, ${res.removed || 0}개 제거`);
-    renderPrivateMemoryList(pid, true);
-  } else {
-    showToast('Private 메모리 최적화 실패');
-  }
-}
-
 // Override: keep diagnostics explicit for private-only optimization failures.
 async function optimizePrivateMemoryNow(pid) {
   if (!pid) return;
@@ -3654,6 +3702,7 @@ async function deletePrivateMemoryItem(id, scope = 'private_profile', owner = ''
     showToast('Private memory deleted.');
     const current = getMemoryListFromCache(scope, pid) || [];
     setMemoryListToCache(scope, pid, current.filter(it => it.id !== id));
+    toggleMemoryItemSelection(scope, pid, id, false);
     renderPrivateMemoryList(pid);
   } else {
     showToast('삭제 실패. 잠금 상태인지 확인하세요.');
@@ -3691,10 +3740,6 @@ async function editMemoryItem(id, scope = '', owner = '') {
   if (!target) return;
   if (target.locked) {
     showToast('Locked memory cannot be edited.');
-    return;
-  }
-  if (target.locked) {
-    showToast('?좉툼?맂 硫붾え由щ뒗 ?섏젙?븷 ???놁뼱??');
     return;
   }
 
