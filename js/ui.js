@@ -3612,10 +3612,31 @@ async function optimizePrivateMemoryNow(pid) {
   });
   if (res?.ok) {
     showToast(`Private 최적화 완료: ${res.optimized || 0}개 정리, ${res.removed || 0}개 제거`);
-    renderPrivateMemoryList(pid);
+    renderPrivateMemoryList(pid, true);
   } else {
     showToast('Private 메모리 최적화 실패');
   }
+}
+
+// Override: keep diagnostics explicit for private-only optimization failures.
+async function optimizePrivateMemoryNow(pid) {
+  if (!pid) return;
+  if (!confirm(`Optimize only ${pid} private memory?`)) return;
+  const session = getActiveSession();
+  const res = await optimizeMemoriesApi({
+    sessionId: session?.id || '',
+    participantPids: [pid],
+    includePublic: false
+  });
+  if (res?.ok) {
+    showToast(`Private optimize done: ${res.optimized || 0} merged, ${res.removed || 0} removed`);
+    renderPrivateMemoryList(pid, true);
+    return;
+  }
+  const hint = res?.status ? ` (HTTP ${res.status})` : '';
+  const msg = res?.error ? `: ${res.error}` : '';
+  showToast(`Private memory optimize failed${hint}${msg}`);
+  console.error('optimizePrivateMemoryNow failed', { pid, res });
 }
 
 async function deletePrivateMemoryItem(id, scope = 'private_profile', owner = '') {

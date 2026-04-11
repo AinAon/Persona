@@ -800,7 +800,7 @@ async function extractSessionMemories(session, { forceFull = false } = {}) {
 
 async function optimizeMemoriesApi({ sessionId = '', participantPids = [], includePublic = true } = {}) {
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-  if (!wUrl) return { ok: false, optimized: 0, removed: 0 };
+  if (!wUrl) return { ok: false, optimized: 0, removed: 0, error: 'WORKER_URL missing' };
   try {
     const res = await fetch(`${wUrl}/memory/optimize`, {
       method: 'POST',
@@ -811,9 +811,22 @@ async function optimizeMemoriesApi({ sessionId = '', participantPids = [], inclu
         includePublic: includePublic !== false
       })
     });
-    return await res.json();
+    const raw = await res.text();
+    let data = null;
+    try { data = raw ? JSON.parse(raw) : {}; } catch {}
+    if (!res.ok) {
+      return {
+        ok: false,
+        optimized: 0,
+        removed: 0,
+        status: res.status,
+        error: data?.error || `HTTP ${res.status}`,
+        detail: raw ? String(raw).slice(0, 220) : ''
+      };
+    }
+    return data || { ok: false, optimized: 0, removed: 0, error: 'empty response' };
   } catch {
-    return { ok: false, optimized: 0, removed: 0 };
+    return { ok: false, optimized: 0, removed: 0, error: 'network_error' };
   }
 }
 
