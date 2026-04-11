@@ -662,3 +662,16 @@ async function extractSessionMemories(session) {
     return { ok: false, saved: 0, duplicate: 0 };
   }
 }
+
+async function deleteSessionRemote(id) {
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl || !id) return { ok: false };
+  try {
+    const res = await fetch(`${wUrl}/session/${encodeURIComponent(id)}`, {
+      method: 'DELETE'
+    });
+    return await res.json();
+  } catch {
+    return { ok: false };
+  }
+}

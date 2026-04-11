@@ -17,6 +17,56 @@ export type MemoryItem = {
 const PROFILE_SCOPES = new Set<MemoryScope>(["public_profile", "private_profile"]);
 const CHRONICLE_SCOPES = new Set<MemoryScope>(["public_chronicle", "private_chronicle"]);
 
+const EXPLICIT_MARKERS = [
+  "remember this",
+  "note this",
+  "save this",
+  "keep this",
+  "remember",
+  "기억해",
+  "기억해줘",
+  "기록해",
+  "메모해",
+];
+
+const PROFILE_HINTS = [
+  "my name",
+  "i am",
+  "i'm",
+  "i like",
+  "i prefer",
+  "favorite",
+  "allergy",
+  "job",
+  "birthday",
+  "mbti",
+  "이름",
+  "좋아",
+  "선호",
+  "취향",
+  "직업",
+  "생일",
+];
+
+const CHRONICLE_HINTS = [
+  "today",
+  "yesterday",
+  "recently",
+  "appointment",
+  "trip",
+  "moved",
+  "graduated",
+  "married",
+  "오늘",
+  "어제",
+  "최근",
+  "약속",
+  "여행",
+  "이사",
+  "졸업",
+  "결혼",
+];
+
 function nowTs(): number {
   return Date.now();
 }
@@ -50,7 +100,7 @@ function makeFingerprint(normalized: string): string {
 function clampText(text: string, max = 220): string {
   const trimmed = String(text || "").trim();
   if (trimmed.length <= max) return trimmed;
-  return `${trimmed.slice(0, max - 1)}…`;
+  return `${trimmed.slice(0, max - 3)}...`;
 }
 
 function isValidScope(scope: string): scope is MemoryScope {
@@ -111,7 +161,7 @@ async function findNearDuplicate(
   scope: MemoryScope,
   owner: string,
   text: string,
-  threshold = 0.85,
+  threshold = 0.86,
 ): Promise<MemoryItem | null> {
   const ids = (await getIndex(env, scope, owner)).slice(0, 30);
   if (!ids.length) return null;
@@ -228,9 +278,21 @@ function flattenMessageText(content: unknown): string {
   return String(content);
 }
 
-const EXPLICIT_MARKERS = ["기억해", "기억해줘", "remember this", "note this", "기록해", "메모해"];
-const PROFILE_HINTS = ["좋아", "싫어", "선호", "알레르기", "직업", "mbti", "이름은", "사는 곳", "생일", "반려", "호칭"];
-const CHRONICLE_HINTS = ["오늘", "어제", "방금", "약속", "여행", "이사", "합격", "퇴사", "입원", "졸업", "결혼", "이별"];
+function stripNoisyPhrases(text: string): string {
+  return String(text || "")
+    .replace(/\[[^\]]+\]/g, " ")
+    .replace(/https?:\/\/\S+/gi, " ")
+    .replace(/[(){}]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isLikelyQuestion(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  if (t.includes("?")) return true;
+  return /(can you|could you|what|why|how|when|where|뭐야|뭐지|어떻게|언제|어디|왜|누가)\b/i.test(t);
+}
 
 function shouldCaptureProfile(text: string): boolean {
   const t = normalizeText(text);
@@ -242,9 +304,37 @@ function shouldCaptureChronicle(text: string): boolean {
   return CHRONICLE_HINTS.some((k) => t.includes(normalizeText(k)));
 }
 
-function summarizeLine(text: string): string {
-  const clean = clampText(text.replace(/\s+/g, " ").trim(), 220);
-  return clean;
+function extractCoreClause(text: string): string {
+  const clean = stripNoisyPhrases(text);
+  const delimiters = [" and ", " but ", " then ", " 그리고 ", " 그런데 ", " 하지만 ", " 그래서 "];
+  let chunk = clean;
+  for (const delimiter of delimiters) {
+    const idx = chunk.toLowerCase().indexOf(delimiter.trim().toLowerCase());
+    if (idx > 18) {
+      chunk = chunk.slice(0, idx).trim();
+      break;
+    }
+  }
+  return chunk;
+}
+
+function compactText(text: string): string {
+  return text
+    .replace(/["'`]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function summarizeProfile(text: string): string {
+  const core = compactText(extractCoreClause(text));
+  if (!core || core.length < 6 || isLikelyQuestion(core)) return "";
+  return clampText(`Profile: ${core}`, 180);
+}
+
+function summarizeChronicle(text: string): string {
+  const core = compactText(extractCoreClause(text));
+  if (!core || core.length < 6 || isLikelyQuestion(core)) return "";
+  return clampText(`Chronicle: ${core}`, 220);
 }
 
 export async function extractAndStoreMemories(
@@ -259,57 +349,69 @@ export async function extractAndStoreMemories(
   const lines = history
     .filter((m) => m?.role === "user")
     .slice(-30)
-    .map((m) => ({ text: flattenMessageText(m.content), createdAt: Number(m.createdAt || nowTs()) }))
-    .filter((x) => x.text.trim().length >= 4);
+    .map((m) => ({
+      text: flattenMessageText(m.content),
+      createdAt: Number(m.createdAt || nowTs()),
+    }))
+    .filter((x) => String(x.text || "").trim().length >= 4);
 
   let saved = 0;
   let duplicate = 0;
 
   for (const line of lines) {
-    const text = summarizeLine(line.text);
-    if (!text) continue;
-    const explicit = EXPLICIT_MARKERS.some((m) => normalizeText(text).includes(normalizeText(m)));
-    const toProfile = explicit || shouldCaptureProfile(text);
-    const toChronicle = explicit || shouldCaptureChronicle(text);
+    const base = stripNoisyPhrases(line.text);
+    if (!base) continue;
+    const normalizedBase = normalizeText(base);
+    const explicit = EXPLICIT_MARKERS.some((m) => normalizedBase.includes(normalizeText(m)));
+    const toProfile = explicit || shouldCaptureProfile(base);
+    const toChronicle = explicit || shouldCaptureChronicle(base);
     if (!toProfile && !toChronicle) continue;
 
     if (toProfile) {
-      const r = await upsertMemory(env, {
-        scope: "public_profile",
-        text,
-        source: "chat",
-        createdAt: line.createdAt,
-      });
-      if (r.item) (r.duplicate ? duplicate++ : saved++);
-      for (const pid of participantPids) {
-        const rp = await upsertMemory(env, {
-          scope: "private_profile",
-          owner: pid,
+      const text = summarizeProfile(base);
+      if (text) {
+        const r = await upsertMemory(env, {
+          scope: "public_profile",
           text,
           source: "chat",
           createdAt: line.createdAt,
         });
-        if (rp.item) (rp.duplicate ? duplicate++ : saved++);
+        if (r.item) (r.duplicate ? duplicate++ : saved++);
+
+        for (const pid of participantPids) {
+          const rp = await upsertMemory(env, {
+            scope: "private_profile",
+            owner: pid,
+            text,
+            source: "chat",
+            createdAt: line.createdAt,
+          });
+          if (rp.item) (rp.duplicate ? duplicate++ : saved++);
+        }
       }
     }
 
     if (toChronicle) {
-      const r = await upsertMemory(env, {
-        scope: "public_chronicle",
-        text,
-        source: "chat",
-        createdAt: line.createdAt,
-      });
-      if (r.item) (r.duplicate ? duplicate++ : saved++);
-      for (const pid of participantPids) {
-        const rp = await upsertMemory(env, {
-          scope: "private_chronicle",
-          owner: pid,
+      const text = summarizeChronicle(base);
+      if (text) {
+        const r = await upsertMemory(env, {
+          scope: "public_chronicle",
           text,
           source: "chat",
           createdAt: line.createdAt,
         });
-        if (rp.item) (rp.duplicate ? duplicate++ : saved++);
+        if (r.item) (r.duplicate ? duplicate++ : saved++);
+
+        for (const pid of participantPids) {
+          const rp = await upsertMemory(env, {
+            scope: "private_chronicle",
+            owner: pid,
+            text,
+            source: "chat",
+            createdAt: line.createdAt,
+          });
+          if (rp.item) (rp.duplicate ? duplicate++ : saved++);
+        }
       }
     }
   }
@@ -339,7 +441,7 @@ export async function buildMemorySystemPrompt(
   lines.push("Memory policy:");
   lines.push("- Use memory only as soft context; do not invent facts.");
   lines.push("- Prefer newer entries when conflicts exist.");
-  lines.push("- If memory conflicts with explicit current user message, follow current message.");
+  lines.push("- If memory conflicts with current user message, follow the current message.");
 
   if (pubProfile.length) {
     lines.push("Public profile memory:");
