@@ -16,6 +16,11 @@ const IMAGE_CACHE_SIZES = {
 //  R2 파일 목록 캐시
 // ══════════════════════════════
 const _imageListCache = {}; // { pid: ['profile/p_riley/riley_neutral.jpg', ...] }
+const REMOTE_SAVE_DEBOUNCE_MS = 1200;
+let _remoteIndexSaveTimer = null;
+let _remoteIndexPayload = null;
+const _remoteSessionSaveTimers = {};
+const _remoteSessionPayloadById = {};
 
 async function getImageList(pid) {
   if (_imageListCache[pid]) return _imageListCache[pid];
@@ -406,11 +411,19 @@ async function saveIndex() {
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl) return;
   // 인덱스 저장
-  fetch(wUrl + '/sessions', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessions: idx })
-  }).catch(() => {});
+  _remoteIndexPayload = idx;
+  if (_remoteIndexSaveTimer) clearTimeout(_remoteIndexSaveTimer);
+  _remoteIndexSaveTimer = setTimeout(() => {
+    const payload = _remoteIndexPayload;
+    _remoteIndexPayload = null;
+    _remoteIndexSaveTimer = null;
+    if (!payload) return;
+    fetch(wUrl + '/sessions', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessions: payload })
+    }).catch(() => {});
+  }, REMOTE_SAVE_DEBOUNCE_MS);
 }
 
 async function saveSession(id) {
@@ -420,11 +433,62 @@ async function saveSession(id) {
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl) return;
   const session = { ...buildIndex().find(x=>x.id===id), history };
-  fetch(wUrl + '/session/' + id, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ session })
-  }).catch(() => {});
+  _remoteSessionPayloadById[id] = session;
+  if (_remoteSessionSaveTimers[id]) clearTimeout(_remoteSessionSaveTimers[id]);
+  _remoteSessionSaveTimers[id] = setTimeout(() => {
+    const payload = _remoteSessionPayloadById[id];
+    delete _remoteSessionPayloadById[id];
+    delete _remoteSessionSaveTimers[id];
+    if (!payload) return;
+    fetch(wUrl + '/session/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session: payload })
+    }).catch(() => {});
+  }, REMOTE_SAVE_DEBOUNCE_MS);
+}
+
+function flushPendingRemoteSaves() {
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) return;
+
+  if (_remoteIndexPayload) {
+    const payload = _remoteIndexPayload;
+    _remoteIndexPayload = null;
+    if (_remoteIndexSaveTimer) {
+      clearTimeout(_remoteIndexSaveTimer);
+      _remoteIndexSaveTimer = null;
+    }
+    fetch(wUrl + '/sessions', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessions: payload }),
+      keepalive: true
+    }).catch(() => {});
+  }
+
+  for (const [id, payload] of Object.entries(_remoteSessionPayloadById)) {
+    if (!payload) continue;
+    if (_remoteSessionSaveTimers[id]) {
+      clearTimeout(_remoteSessionSaveTimers[id]);
+      delete _remoteSessionSaveTimers[id];
+    }
+    delete _remoteSessionPayloadById[id];
+    fetch(wUrl + '/session/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session: payload }),
+      keepalive: true
+    }).catch(() => {});
+  }
+}
+
+if (!window.__remoteSaveFlushBound) {
+  window.__remoteSaveFlushBound = true;
+  window.addEventListener('pagehide', flushPendingRemoteSaves);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushPendingRemoteSaves();
+  });
 }
 
 async function loadIndex() {
