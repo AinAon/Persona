@@ -26,10 +26,26 @@ type GlobalMemoryMeta = {
 
 const MEMORY_MODEL = "gemini-3.1-flash-lite-preview";
 const MAX_ITEM_LEN = 220;
-const EXPLICIT_MARKERS = ["remember this", "note this", "save this", "keep this", "기억해", "기억해줘", "메모해", "기록해"];
+
+const EXPLICIT_MARKERS = [
+  "remember this",
+  "note this",
+  "save this",
+  "keep this",
+  "remember",
+];
+
 const PROFILE_HINTS = [
-  "my name", "i am", "i'm", "i like", "i prefer", "favorite", "allergy", "job", "birthday", "mbti",
-  "이름", "좋아", "선호", "취향", "직업", "생일",
+  "my name",
+  "i am",
+  "i'm",
+  "i like",
+  "i prefer",
+  "favorite",
+  "allergy",
+  "job",
+  "birthday",
+  "mbti",
 ];
 
 function nowTs(): number {
@@ -249,7 +265,6 @@ function flattenMessageText(content: unknown): string {
 
 function stripNoisyPhrases(text: string): string {
   return String(text || "")
-    .replace(/\[[^\]]+\]/g, " ")
     .replace(/https?:\/\/\S+/gi, " ")
     .replace(/[(){}]/g, " ")
     .replace(/\s+/g, " ")
@@ -269,8 +284,7 @@ function fallbackExtractFacts(lines: string[]): string[] {
     const t = normalizeText(base);
     const explicit = EXPLICIT_MARKERS.some((m) => t.includes(normalizeText(m)));
     if (!explicit && !shouldCaptureProfile(base)) continue;
-    const fact = clampText(`Profile: ${base}`);
-    out.add(fact);
+    out.add(clampText(`Profile: ${base}`));
     if (out.size >= 40) break;
   }
   return [...out];
@@ -294,20 +308,28 @@ function tryParseJsonObject(raw: string): any | null {
 async function extractFactsWithGemini(
   lines: string[],
   apiKey: string,
+  mode: "user" | "persona",
+  personaPid = "",
 ): Promise<string[]> {
-  if (!apiKey) return [];
-  if (!lines.length) return [];
+  if (!apiKey || !lines.length) return [];
+  const purpose = mode === "user"
+    ? "extract durable user profile facts"
+    : `extract durable profile facts about the speaker persona "${personaPid}" only`;
+  const exclusion = mode === "user"
+    ? "Exclude persona facts."
+    : "Exclude user profile facts. Keep only facts about this persona speaker.";
 
   const prompt = [
     "You are a memory extraction assistant.",
-    "From the conversation lines, extract only durable user profile facts.",
+    `Task: ${purpose}.`,
+    exclusion,
     "Do NOT include requests/questions, roleplay flavor text, or one-off chatter.",
     "Output STRICT JSON only with this schema:",
     "{\"profile_facts\": [\"short fact\", ...]}",
     "Rules:",
     "- Keep each fact under 120 chars.",
-    "- Korean output preferred when source is Korean.",
     "- Max 40 facts.",
+    "- Prefer concise Korean if source is Korean.",
     "",
     "Conversation lines:",
     ...lines.map((line, idx) => `${idx + 1}. ${line}`),
@@ -324,6 +346,24 @@ async function extractFactsWithGemini(
     .map((x) => clampText(`Profile: ${String(x || "").trim()}`))
     .filter((x) => x.length > 12)
     .slice(0, 40);
+}
+
+function parsePersonaTaggedText(raw: string, participantPids: string[]): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const pid of participantPids) out[pid] = [];
+  const text = String(raw || "");
+  if (!text || !participantPids.length) return out;
+
+  for (const pid of participantPids) {
+    const escaped = pid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(`\\[${escaped}\\]([\\s\\S]*?)\\[\\/${escaped}\\]`, "gi");
+    const matches = [...text.matchAll(re)];
+    for (const match of matches) {
+      const seg = stripNoisyPhrases(String(match[1] || "").replace(/\[[^\]]+\]/g, " "));
+      if (seg && seg.length >= 4) out[pid].push(seg);
+    }
+  }
+  return out;
 }
 
 async function getSessionMeta(env: Env, sessionId: string): Promise<SessionMemoryMeta> {
@@ -364,65 +404,94 @@ export async function extractAndStoreMemories(
   },
 ): Promise<{ saved: number; duplicate: number; processed: number; cursor: number; usedFallback: boolean }> {
   const history = Array.isArray(args.history) ? args.history : [];
-  const participantPids = Array.isArray(args.participantPids) ? args.participantPids.filter(Boolean) : [];
+  const participantPids = Array.isArray(args.participantPids) ? [...new Set(args.participantPids.filter(Boolean))] : [];
   const sessionId = String(args.sessionId || "").trim();
   const forceFull = !!args.forceFull;
+  const apiKey = env.GEMINI_KEY || "";
 
   const sessionMeta = sessionId ? await getSessionMeta(env, sessionId) : { lastExtractedAt: 0, lastOptimizedAt: 0 };
   const cursorStart = forceFull ? 0 : sessionMeta.lastExtractedAt;
 
-  const lines = history
-    .filter((m) => m?.role === "user")
-    .map((m) => ({
-      text: stripNoisyPhrases(flattenMessageText(m.content)),
-      createdAt: Number(m.createdAt || 0) || nowTs(),
-    }))
-    .filter((x) => x.text.length >= 4 && x.createdAt > cursorStart);
+  const userLines: string[] = [];
+  const personaLinesByPid: Record<string, string[]> = {};
+  for (const pid of participantPids) personaLinesByPid[pid] = [];
+  let cursor = cursorStart;
 
-  if (!lines.length) {
-    return { saved: 0, duplicate: 0, processed: 0, cursor: cursorStart, usedFallback: false };
+  for (const msg of history) {
+    const createdAt = Number(msg?.createdAt || 0) || nowTs();
+    if (createdAt <= cursorStart) continue;
+    cursor = Math.max(cursor, createdAt);
+
+    const role = String(msg?.role || "");
+    if (role === "user") {
+      const text = stripNoisyPhrases(flattenMessageText(msg?.content));
+      if (text.length >= 4) userLines.push(text);
+      continue;
+    }
+
+    if (role === "assistant" && participantPids.length) {
+      const tagged = parsePersonaTaggedText(flattenMessageText(msg?.content), participantPids);
+      for (const pid of participantPids) {
+        const lines = tagged[pid] || [];
+        if (lines.length) personaLinesByPid[pid].push(...lines);
+      }
+    }
   }
 
-  const lineTexts = lines.map((x) => x.text);
+  const processed = userLines.length + Object.values(personaLinesByPid).reduce((a, b) => a + b.length, 0);
+  if (!processed) {
+    return { saved: 0, duplicate: 0, processed: 0, cursor, usedFallback: false };
+  }
+
   let usedFallback = false;
-  let facts = await extractFactsWithGemini(lineTexts, env.GEMINI_KEY || "");
-  if (!facts.length) {
-    usedFallback = true;
-    facts = fallbackExtractFacts(lineTexts);
-  }
-
   let saved = 0;
   let duplicate = 0;
-  const createdAt = Math.max(...lines.map((x) => x.createdAt));
 
-  for (const text of facts) {
-    const pub = await upsertMemory(env, {
+  // User bubble -> only public user memory
+  let userFacts = await extractFactsWithGemini(userLines, apiKey, "user");
+  if (!userFacts.length) {
+    usedFallback = true;
+    userFacts = fallbackExtractFacts(userLines);
+  }
+  for (const text of userFacts) {
+    const r = await upsertMemory(env, {
       scope: "public_profile",
       text,
       source: "chat",
-      createdAt,
+      createdAt: cursor,
     });
-    if (pub.item) (pub.duplicate ? duplicate++ : saved++);
+    if (r.item) (r.duplicate ? duplicate++ : saved++);
+  }
 
-    for (const pid of participantPids) {
-      const p = await upsertMemory(env, {
+  // Persona bubble tagged by pid -> only that pid private memory
+  for (const pid of participantPids) {
+    const personaLines = personaLinesByPid[pid] || [];
+    if (!personaLines.length) continue;
+    let personaFacts = await extractFactsWithGemini(personaLines, apiKey, "persona", pid);
+    if (!personaFacts.length) {
+      usedFallback = true;
+      personaFacts = fallbackExtractFacts(personaLines);
+    }
+    for (const text of personaFacts) {
+      const r = await upsertMemory(env, {
         scope: "private_profile",
         owner: pid,
         text,
         source: "chat",
-        createdAt,
+        createdAt: cursor,
       });
-      if (p.item) (p.duplicate ? duplicate++ : saved++);
+      if (r.item) (r.duplicate ? duplicate++ : saved++);
     }
   }
 
   if (sessionId) {
     await setSessionMeta(env, sessionId, {
-      lastExtractedAt: createdAt,
+      lastExtractedAt: cursor,
       lastOptimizedAt: sessionMeta.lastOptimizedAt || 0,
     });
   }
-  return { saved, duplicate, processed: lines.length, cursor: createdAt, usedFallback };
+
+  return { saved, duplicate, processed, cursor, usedFallback };
 }
 
 export async function optimizeMemories(
@@ -430,13 +499,14 @@ export async function optimizeMemories(
   args: { participantPids?: string[]; sessionId?: string },
 ): Promise<{ ok: boolean; optimized: number; removed: number }> {
   const participantPids = Array.isArray(args.participantPids) ? [...new Set(args.participantPids.filter(Boolean))] : [];
-  const targets: Array<{ scope: MemoryScope; owner: string }> = [
-    { scope: "public_profile", owner: "global" },
-    ...participantPids.map((pid) => ({ scope: "private_profile" as MemoryScope, owner: pid })),
+  const targets: Array<{ scope: MemoryScope; owner: string; mode: "user" | "persona"; pid?: string }> = [
+    { scope: "public_profile", owner: "global", mode: "user" },
+    ...participantPids.map((pid) => ({ scope: "private_profile" as MemoryScope, owner: pid, mode: "persona" as const, pid })),
   ];
 
   let optimized = 0;
   let removed = 0;
+  const apiKey = env.GEMINI_KEY || "";
 
   for (const t of targets) {
     const items = await listMemories(env, t.scope, t.owner, 200);
@@ -444,7 +514,12 @@ export async function optimizeMemories(
     const chat = items.filter((x) => x.source !== "manual");
     if (chat.length < 2) continue;
 
-    const consolidated = await extractFactsWithGemini(chat.map((x) => x.text), env.GEMINI_KEY || "");
+    const consolidated = await extractFactsWithGemini(
+      chat.map((x) => x.text),
+      apiKey,
+      t.mode,
+      t.pid || "",
+    );
     if (!consolidated.length) continue;
 
     for (const it of chat) {
@@ -476,6 +551,7 @@ export async function optimizeMemories(
   const now = nowTs();
   const globalMeta = await getGlobalMeta(env);
   await setGlobalMeta(env, { ...globalMeta, lastOptimizedAt: now });
+
   const sessionId = String(args.sessionId || "").trim();
   if (sessionId) {
     const meta = await getSessionMeta(env, sessionId);
@@ -508,14 +584,14 @@ export async function buildMemorySystemPrompt(
   lines.push("- Prefer newer memory when similar facts conflict.");
 
   if (pubProfile.length) {
-    lines.push("Public profile memory:");
+    lines.push("Public user profile memory:");
     pubProfile.forEach((m) => lines.push(`- ${m.text}`));
   }
 
   for (const pid of pids) {
     const pp = privateProfileByPid[pid] || [];
     if (!pp.length) continue;
-    lines.push(`Private memory for ${pid}:`);
+    lines.push(`Private persona memory for ${pid}:`);
     pp.forEach((m) => lines.push(`- ${m.text}`));
   }
 
