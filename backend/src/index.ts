@@ -38,17 +38,22 @@ const CORS: CorsHeaders = {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
-    const url = new URL(request.url);
+    try {
+      if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
+      const url = new URL(request.url);
 
-    if (url.pathname === "/chat" && request.method === "POST") {
-      const reqBody = await request.json();
-      return await handleChat(reqBody, env, CORS);
+      if (url.pathname === "/chat" && request.method === "POST") {
+        const reqBody = await request.json();
+        return await handleChat(reqBody, env, CORS);
+      }
+
+      const apiResponse = await handleApiRoute(request, env, url, CORS);
+      if (apiResponse) return apiResponse;
+
+      return new Response("Not Found", { status: 404, headers: CORS });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error || "unknown_error");
+      return Response.json({ ok: false, error: message }, { status: 500, headers: CORS });
     }
-
-    const apiResponse = await handleApiRoute(request, env, url, CORS);
-    if (apiResponse) return apiResponse;
-
-    return new Response("Not Found", { status: 404, headers: CORS });
   },
 };
