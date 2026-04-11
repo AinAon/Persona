@@ -640,11 +640,13 @@ async function deleteMemoryApi({ scope, owner = '', id = '' } = {}) {
   }
 }
 
-async function extractSessionMemories(session) {
+async function extractSessionMemories(session, { forceFull = false } = {}) {
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-  if (!wUrl || !session) return { ok: false, saved: 0, duplicate: 0 };
+  if (!wUrl || !session) return { ok: false, saved: 0, duplicate: 0, processed: 0, cursor: 0 };
   try {
     const payload = {
+      sessionId: session.id,
+      forceFull: !!forceFull,
       participantPids: Array.from(new Set(session.participantPids || [])),
       history: (session.history || []).map(m => ({
         role: m.role,
@@ -659,7 +661,37 @@ async function extractSessionMemories(session) {
     });
     return await res.json();
   } catch {
-    return { ok: false, saved: 0, duplicate: 0 };
+    return { ok: false, saved: 0, duplicate: 0, processed: 0, cursor: 0 };
+  }
+}
+
+async function optimizeMemoriesApi({ sessionId = '', participantPids = [] } = {}) {
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) return { ok: false, optimized: 0, removed: 0 };
+  try {
+    const res = await fetch(`${wUrl}/memory/optimize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: String(sessionId || ''),
+        participantPids: Array.from(new Set(participantPids || []))
+      })
+    });
+    return await res.json();
+  } catch {
+    return { ok: false, optimized: 0, removed: 0 };
+  }
+}
+
+async function getMemoryMetaApi(sessionId = '') {
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) return { ok: false, session: { lastExtractedAt: 0, lastOptimizedAt: 0 }, global: { lastOptimizedAt: 0 } };
+  try {
+    const qs = new URLSearchParams({ sessionId: String(sessionId || '') });
+    const res = await fetch(`${wUrl}/memory/meta?${qs.toString()}`);
+    return await res.json();
+  } catch {
+    return { ok: false, session: { lastExtractedAt: 0, lastOptimizedAt: 0 }, global: { lastOptimizedAt: 0 } };
   }
 }
 

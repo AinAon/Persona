@@ -2,8 +2,10 @@ import type { CorsHeaders, Env } from "./index";
 import {
   deleteMemory,
   extractAndStoreMemories,
+  getMemoryMeta,
   listMemories,
   normalizeScopeOwner,
+  optimizeMemories,
   parseScope,
   upsertMemory,
 } from "./memory";
@@ -65,12 +67,31 @@ export async function handleApiRoute(
     const body = await request.json() as {
       history?: Array<{ role?: string; content?: unknown; createdAt?: number }>;
       participantPids?: string[];
+      sessionId?: string;
+      forceFull?: boolean;
     };
     const outcome = await extractAndStoreMemories(env, {
       history: Array.isArray(body.history) ? body.history : [],
       participantPids: Array.isArray(body.participantPids) ? body.participantPids : [],
+      sessionId: String(body.sessionId || ""),
+      forceFull: !!body.forceFull,
     });
     return Response.json({ ok: true, ...outcome }, { headers: cors });
+  }
+
+  if (url.pathname === "/memory/optimize" && request.method === "POST") {
+    const body = await request.json() as { participantPids?: string[]; sessionId?: string };
+    const outcome = await optimizeMemories(env, {
+      participantPids: Array.isArray(body.participantPids) ? body.participantPids : [],
+      sessionId: String(body.sessionId || ""),
+    });
+    return Response.json(outcome, { headers: cors });
+  }
+
+  if (url.pathname === "/memory/meta" && request.method === "GET") {
+    const sessionId = String(url.searchParams.get("sessionId") || "");
+    const meta = await getMemoryMeta(env, sessionId || undefined);
+    return Response.json({ ok: true, ...meta }, { headers: cors });
   }
 
   if (url.pathname === "/memory/delete" && request.method === "POST") {

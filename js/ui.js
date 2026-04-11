@@ -686,6 +686,7 @@ function renderSettingsPane() {
   if (avStyleEl) avStyleEl.value = userProfile.chatAvatarStyle || 'square';
   ensureSettingsMemoryPanel();
   renderPublicMemoryList();
+  renderMemoryMeta();
 }
 
 function previewFontSize(val) {
@@ -3172,9 +3173,13 @@ function ensureSettingsMemoryPanel() {
   block.style.borderTop = '1px solid var(--border)';
   block.innerHTML = `
     <div class="field-label" style="margin-bottom:10px">Public Memory</div>
+    <div id="memoryMetaLine" style="font-size:11px;color:var(--muted);margin:-2px 0 8px 0">Loading memory status...</div>
     <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px">
       <textarea id="publicMemoryInput" class="edit-input" placeholder="Rememberable user fact..." style="flex:1;height:72px;resize:none;line-height:1.5"></textarea>
       <button onclick="addPublicMemoryManual()" style="padding:10px 12px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;font-family:'Pretendard',sans-serif">Save</button>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+      <button onclick="optimizeMemoryNow()" style="padding:8px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;font-family:'Pretendard',sans-serif">메모리최적화</button>
     </div>
     <div id="publicMemoryList" style="display:flex;flex-direction:column;gap:8px"></div>
   `;
@@ -3195,11 +3200,8 @@ function memoryItemRowHTML(item, onDelete) {
 async function renderPublicMemoryList() {
   const wrap = document.getElementById('publicMemoryList');
   if (!wrap) return;
-  const [profile, chronicle] = await Promise.all([
-    listMemoriesApi('public_profile', 'global', 120),
-    listMemoriesApi('public_chronicle', 'global', 120)
-  ]);
-  const items = [...profile, ...chronicle].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  const items = (await listMemoriesApi('public_profile', 'global', 120))
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   if (!items.length) {
     wrap.innerHTML = `<div style="font-size:11px;color:var(--muted);padding:4px 2px">No public memory yet.</div>`;
     return;
@@ -3236,6 +3238,7 @@ async function deletePublicMemoryItem(id, scope = 'public_profile', owner = 'glo
   if (res?.ok) {
     showToast('Public memory deleted.');
     renderPublicMemoryList();
+    renderMemoryMeta();
   } else {
     showToast('Delete failed.');
   }
@@ -3262,11 +3265,8 @@ function ensureEditPrivateMemoryPanel(pid) {
 async function renderPrivateMemoryList(pid) {
   const wrap = document.getElementById('privateMemoryList');
   if (!wrap || !pid) return;
-  const [profile, chronicle] = await Promise.all([
-    listMemoriesApi('private_profile', pid, 120),
-    listMemoriesApi('private_chronicle', pid, 120)
-  ]);
-  const items = [...profile, ...chronicle].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  const items = (await listMemoriesApi('private_profile', pid, 120))
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   if (!items.length) {
     wrap.innerHTML = `<div style="font-size:11px;color:var(--muted);padding:4px 2px">No private memory yet.</div>`;
     return;
@@ -3313,11 +3313,60 @@ async function saveMemoryFromCurrentChat() {
   const s = getActiveSession(); if (!s) return;
   const res = await extractSessionMemories(s);
   if (res?.ok) {
-    showToast(`Memory saved: ${res.saved || 0}, duplicates: ${res.duplicate || 0}`);
+    showToast(`Memory saved: ${res.saved || 0}, duplicates: ${res.duplicate || 0}, processed: ${res.processed || 0}`);
     renderPublicMemoryList();
     if (editingPid) renderPrivateMemoryList(editingPid);
+    renderMemoryMeta();
     closeDrawer();
   } else {
     showToast('Memory save failed.');
+  }
+}
+
+function formatMemoryMetaTime(ts) {
+  if (!ts) return '-';
+  try {
+    return new Intl.DateTimeFormat('ko-KR', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).format(new Date(ts));
+  } catch {
+    return '-';
+  }
+}
+
+async function renderMemoryMeta() {
+  const line = document.getElementById('memoryMetaLine');
+  if (!line) return;
+  const sessionId = activeChatId || '';
+  const meta = await getMemoryMetaApi(sessionId);
+  if (!meta?.ok) {
+    line.textContent = '메모리 상태를 불러오지 못했습니다.';
+    return;
+  }
+  const lastExtract = formatMemoryMetaTime(meta?.session?.lastExtractedAt || 0);
+  const lastOptimize = formatMemoryMetaTime(meta?.global?.lastOptimizedAt || 0);
+  line.textContent = `최근 정리: ${lastExtract} / 최근 최적화: ${lastOptimize}`;
+}
+
+async function optimizeMemoryNow() {
+  if (!confirm('메모리를 최적화할까요? 중복/유사 항목을 정리합니다.')) return;
+  const session = getActiveSession();
+  const participantPids = Array.from(new Set((personas || []).map(p => p.pid).filter(Boolean)));
+  const res = await optimizeMemoriesApi({
+    sessionId: session?.id || '',
+    participantPids
+  });
+  if (res?.ok) {
+    showToast(`최적화 완료: ${res.optimized || 0}개 정리, ${res.removed || 0}개 제거`);
+    renderPublicMemoryList();
+    if (editingPid) renderPrivateMemoryList(editingPid);
+    renderMemoryMeta();
+  } else {
+    showToast('메모리 최적화 실패');
   }
 }
