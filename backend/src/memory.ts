@@ -53,6 +53,11 @@ function nowTs(): number {
   return Date.now();
 }
 
+function isKvWriteLimitError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error || "");
+  return /kv\s+put\(\)\s+limit\s+exceeded/i.test(msg) || /limit exceeded/i.test(msg);
+}
+
 function safeJsonParse<T>(raw: string | null, fallback: T): T {
   if (!raw) return fallback;
   try {
@@ -806,16 +811,24 @@ export async function optimizeMemories(
     }
 
     const now = nowTs();
-    const globalMeta = await getGlobalMeta(env);
-    await setGlobalMeta(env, { ...globalMeta, lastOptimizedAt: now });
+    try {
+      const globalMeta = await getGlobalMeta(env);
+      await setGlobalMeta(env, { ...globalMeta, lastOptimizedAt: now });
+    } catch (e) {
+      if (!isKvWriteLimitError(e)) throw e;
+    }
 
     const sessionId = String(args.sessionId || "").trim();
     if (sessionId) {
-      const meta = await getSessionMeta(env, sessionId);
-      await setSessionMeta(env, sessionId, {
-        lastExtractedAt: meta.lastExtractedAt,
-        lastOptimizedAt: now,
-      });
+      try {
+        const meta = await getSessionMeta(env, sessionId);
+        await setSessionMeta(env, sessionId, {
+          lastExtractedAt: meta.lastExtractedAt,
+          lastOptimizedAt: now,
+        });
+      } catch (e) {
+        if (!isKvWriteLimitError(e)) throw e;
+      }
     }
 
     return { ok: true, optimized, removed };
