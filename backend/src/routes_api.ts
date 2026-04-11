@@ -306,6 +306,25 @@ export async function handleApiRoute(
     return Response.json({ ok: true, session: recovered.session }, { headers: cors });
   }
 
+  if (url.pathname === "/session/purge" && request.method === "POST") {
+    const { id } = (await request.json()) as { id?: string };
+    const sessionId = String(id || "").trim();
+    if (!sessionId) return Response.json({ ok: false, error: "id required" }, { status: 400, headers: cors });
+
+    await env.KV.delete(`session:${sessionId}`);
+    await env.KV.delete(`deleted:session:${sessionId}`);
+
+    const idxData = await env.KV.get(SESSION_INDEX_KEY);
+    const index: SessionMeta[] = idxData ? JSON.parse(idxData) : [];
+    await env.KV.put(SESSION_INDEX_KEY, JSON.stringify(index.filter((s) => s.id !== sessionId)));
+
+    const deletedIdxData = await env.KV.get(DELETED_SESSION_INDEX_KEY);
+    const deletedIndex: DeletedSessionMeta[] = deletedIdxData ? JSON.parse(deletedIdxData) : [];
+    await env.KV.put(DELETED_SESSION_INDEX_KEY, JSON.stringify(deletedIndex.filter((s) => s.id !== sessionId)));
+
+    return Response.json({ ok: true }, { headers: cors });
+  }
+
   if (url.pathname.startsWith("/session/")) {
     return await handleSessionRoute(request, env, url.pathname.slice(9), cors);
   }

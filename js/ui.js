@@ -1825,7 +1825,10 @@ async function renderRestoreList() {
           <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(names)}</div>
           <div style="font-size:11px;color:var(--muted)">발견: ${timeLabel(s.deletedAt || s.updatedAt || Date.now())}</div>
         </div>
-        <button onclick="restoreDeletedChat('${s.id}')" style="padding:7px 10px;border-radius:9px;border:1px solid var(--border2);background:transparent;color:var(--text);font-size:12px;cursor:pointer">강제복구</button>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button onclick="restoreDeletedChat('${s.id}')" style="padding:7px 10px;border-radius:9px;border:1px solid var(--border2);background:transparent;color:var(--text);font-size:12px;cursor:pointer">강제복구</button>
+          <button onclick="purgeDeletedChat('${s.id}')" style="padding:7px 10px;border-radius:9px;border:1px solid hsl(0,30%,24%);background:hsl(0,20%,12%);color:hsl(0,70%,68%);font-size:12px;cursor:pointer">영구삭제</button>
+        </div>
       </div>
     `;
   }).join('');
@@ -1842,6 +1845,21 @@ async function restoreDeletedChat(id) {
   await renderRestoreList();
   renderChatList();
   showToast('채팅이 복원되었습니다.');
+}
+
+async function purgeDeletedChat(id) {
+  if (!id) return;
+  if (!confirm('이 채팅 찌꺼기를 KV에서 영구삭제할까요? 복구할 수 없습니다.')) return;
+  const res = await purgeSessionRemote(id);
+  if (!res?.ok) {
+    showToast('영구삭제 실패');
+    return;
+  }
+  sessions = sessions.filter(s => s.id !== id);
+  removeLocalSession(id);
+  await renderRestoreList();
+  renderChatList();
+  showToast('KV에서 영구삭제했습니다.');
 }
 
 let _selectedPersonaPid = null;

@@ -734,3 +734,18 @@ async function restoreDeletedSessionRemote(id) {
     return { ok: false };
   }
 }
+
+async function purgeSessionRemote(id) {
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl || !id) return { ok: false };
+  try {
+    const res = await fetch(`${wUrl}/session/purge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    });
+    return await res.json();
+  } catch {
+    return { ok: false };
+  }
+}
