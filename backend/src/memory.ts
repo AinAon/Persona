@@ -330,6 +330,7 @@ async function extractFactsWithGemini(
     "- Keep each fact under 120 chars.",
     "- Max 40 facts.",
     "- Prefer concise Korean if source is Korean.",
+    ...(mode === "persona" ? ["- Do not mention any other persona id/name."] : []),
     "",
     "Conversation lines:",
     ...lines.map((line, idx) => `${idx + 1}. ${line}`),
@@ -346,6 +347,23 @@ async function extractFactsWithGemini(
     .map((x) => clampText(`Profile: ${String(x || "").trim()}`))
     .filter((x) => x.length > 12)
     .slice(0, 40);
+}
+
+function filterPersonaFactsByPid(
+  facts: string[],
+  targetPid: string,
+  allPids: string[],
+): string[] {
+  const target = normalizeText(targetPid);
+  const others = allPids
+    .map((p) => normalizeText(p))
+    .filter((p) => p && p !== target);
+  if (!others.length) return facts;
+
+  return facts.filter((fact) => {
+    const t = normalizeText(fact);
+    return !others.some((pid) => t.includes(pid));
+  });
 }
 
 function parsePersonaTaggedText(raw: string, participantPids: string[]): Record<string, string[]> {
@@ -472,6 +490,7 @@ export async function extractAndStoreMemories(
       usedFallback = true;
       personaFacts = fallbackExtractFacts(personaLines);
     }
+    personaFacts = filterPersonaFactsByPid(personaFacts, pid, participantPids);
     for (const text of personaFacts) {
       const r = await upsertMemory(env, {
         scope: "private_profile",
