@@ -49,6 +49,9 @@
 .gallery-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
 .gallery-title{font-family:var(--font-display);font-size:14px;font-weight:800}
 .gallery-stats{font-size:10px;color:var(--muted)}
+.cat-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.cat-tab{padding:7px 10px;border-radius:999px;border:1px solid var(--border2);background:transparent;color:var(--muted);font:11px var(--font-mono);font-weight:700;cursor:pointer}
+.cat-tab.active{background:var(--card);color:var(--text);border-color:var(--accent)}
 .cat{margin-bottom:18px}
 .cat-head{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:10px}
 .cat-head strong{font-size:11px;text-transform:uppercase;letter-spacing:.12em}
@@ -113,6 +116,11 @@
         <div class="gallery-stats" id="galleryStats">neutral_a first, then emotion slots a-e</div>
       </div>
       <div class="gallery-stats" id="cacheStats"></div>
+    </div>
+    <div class="cat-tabs" id="catTabs">
+      <button class="cat-tab active" data-cat="basic">Basic</button>
+      <button class="cat-tab" data-cat="premium">Premium</button>
+      <button class="cat-tab" data-cat="custom">Custom</button>
     </div>
     <div id="emotionGallery"></div>
     <div class="status" id="statusBox">Ready.</div>
@@ -180,6 +188,10 @@ const EMOTION_PROMPTS = {
   worry:'Change to worried expression.',
   pain:'Change to painful expression.',
 };
+const BUILTIN_BY_CAT = {
+  basic: ['neutral','subtlesmile','happy','sad','angry','surprise'],
+  premium: ['arousal','confusion','cry','disgust','contempt','horror','laugh','orgasm','playful','relief','shy','worry','pain','ecstasy'],
+};
 
 const state = {
   personas: JSON.parse(localStorage.getItem('em_personas') || '[]'),
@@ -187,6 +199,7 @@ const state = {
   githubBase: DEFAULT_GITHUB_BASE,
   gasUrl: DEFAULT_GAS_URL,
   activePid: null,
+  activeCat: 'basic',
   images: {},
   busy: false,
   pendingAbort: null,
@@ -332,22 +345,23 @@ async function loadPersonasFromBackend(){
 
 function getPersonaImage(pid){
   const slots = state.images[pid]?.neutral?.a || state.images[pid]?.neutral_a || null;
-  return slots?.full || slots?.hd || slots?.md || slots?.ld || slots?.thumb || '';
+  return slots?.full || '';
 }
 function getEmotionImage(pid, eid, slot){
   const s = state.images[pid]?.[eid]?.[slot];
-  return s?.md || s?.ld || s?.thumb || s?.full || '';
+  return s?.full || '';
 }
 function getBestBase64ForPush(pid, eid, slot){
   const s = state.images[pid]?.[eid]?.[slot];
-  return s?.hd || s?.md || s?.ld || s?.thumb || s?.full || '';
+  return s?.full || '';
 }
 function githubPath(pid, eid, slot){ return `${state.githubBase}/profile/${pid}/${pid}_${eid}_${slot}.png`; }
 function render(){
   els.personaCount.textContent = String(state.personas.length);
   els.galleryTitle.textContent = state.activePid ? (state.personas.find(p=>p.pid===state.activePid)?.name || state.activePid) : 'Select a persona';
-  els.galleryStats.textContent = state.activePid ? 'Rows = emotions, columns = slots a-e.' : 'neutral_a is the primary reference image.';
+  els.galleryStats.textContent = state.activePid ? `Category: ${state.activeCat} / Rows = emotions, columns = slots a-e.` : 'neutral_a is the primary reference image.';
   els.cacheStats.textContent = state.activePid ? `${state.activePid}` : '';
+  document.querySelectorAll('.cat-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.cat === state.activeCat));
 
   els.personaGrid.innerHTML = '';
   for (const p of state.personas) {
@@ -366,13 +380,11 @@ function render(){
     els.emotionGallery.innerHTML = '<div class="section-note">Choose a persona on the left.</div>';
     return;
   }
-  const groups = [
-    ['basic', 'Basic'],
-    ['premium', 'Premium'],
-    ['adult', 'Adult'],
-  ];
+  const groups = [[state.activeCat, state.activeCat.charAt(0).toUpperCase() + state.activeCat.slice(1)]];
   for (const [cat, title] of groups) {
-    const items = state.emotions.filter(e => e.category === cat);
+    const items = state.activeCat === 'custom'
+      ? state.emotions.filter(e => e.category === 'custom')
+      : state.emotions.filter(e => e.category === cat && BUILTIN_BY_CAT[cat]?.includes(e.id));
     if (!items.length) continue;
     const wrap = document.createElement('section');
     wrap.className = 'cat';
@@ -400,9 +412,35 @@ function render(){
         grid.appendChild(card);
       }
     }
-    wrap.appendChild(grid);
-    els.emotionGallery.appendChild(wrap);
+      wrap.appendChild(grid);
+      els.emotionGallery.appendChild(wrap);
+    }
+    if (state.activeCat === 'custom' && !els.emotionGallery.children.length) {
+      els.emotionGallery.innerHTML = `
+        <div class="cat">
+          <div class="cat-head">
+            <strong>Custom</strong>
+            <button class="btn btn-ghost btn-sm" onclick="addCustomEmotion()">Add emotion</button>
+          </div>
+          <div class="section-note">No custom emotions yet.</div>
+        </div>`;
+    }
   }
+
+function addCustomEmotion() {
+  const rawId = prompt('Custom emotion id');
+  if (!rawId) return;
+  const id = String(rawId).trim().toLowerCase().replace(/[^a-z0-9_]+/g, '_');
+  if (!id) return;
+  if (state.emotions.some(e => e.id === id)) {
+    showStatus('That emotion already exists.');
+    return;
+  }
+  const label = prompt('Custom emotion label', id.replace(/_/g, ' ')) || id;
+  state.emotions.push({ id, label, category: 'custom' });
+  saveState();
+  render();
+  showStatus(`Custom emotion added: ${id}`);
 }
 
 function openViewer(src){
@@ -541,7 +579,7 @@ async function loadFromGithub(){
     }
   }
   render();
-  showStatus(`Loaded ${loaded} images from GitHub.`);
+  if (loaded > 0) showStatus(`Loaded ${loaded} images.`);
 }
 
 function init(){
@@ -551,6 +589,7 @@ function init(){
   els.stopBtn.onclick = () => { state.pendingAbort?.abort?.(); showStatus('Stopped.'); setBusy(false); };
   els.viewerClose.onclick = closeViewer;
   els.viewer.onclick = (e) => { if (e.target === els.viewer) closeViewer(); };
+  document.querySelectorAll('.cat-tab').forEach(btn => btn.onclick = () => { state.activeCat = btn.dataset.cat; render(); });
   els.cardFileInput.onchange = async () => {
     const file = els.cardFileInput.files?.[0];
     if (file) await uploadCurrentCard(file);
