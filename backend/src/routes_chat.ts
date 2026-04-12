@@ -17,6 +17,13 @@ const RATIO_TO_SIZE: Record<string, string> = {
   "9:21": "1024x1536",
 };
 
+const RESPONSE_VARIANCE_PROMPT = [
+  "Vary response length naturally.",
+  "Do not always answer in the same length, rhythm, or structure.",
+  "Short reactions, medium replies, long explanations, or multiple short lines are all allowed when they fit the situation.",
+  "Keep the persona consistent, but let the delivery feel alive and irregular.",
+].join(" ");
+
 type ChatBody = {
   messages?: any[];
   model?: string;
@@ -59,7 +66,11 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       ? ""
       : await buildMemorySystemPrompt(env, { participantPids: participant_pids });
     const effectiveMessages = (!isImageReq && memPrompt)
-      ? [{ role: "system", content: memPrompt }, ...messages]
+      ? [
+          { role: "system", content: RESPONSE_VARIANCE_PROMPT },
+          { role: "system", content: memPrompt },
+          ...messages
+        ]
       : messages;
 
     let reply = "";
