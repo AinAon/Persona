@@ -131,6 +131,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@panzoom/panzoom@4.6.1/dist/panzoom.min.js"></script>
 <script>
 const GAS_SECRET = 'persona_chat_2025';
+const WORKER_URL = 'https://persona-worker.persona-worker.workers.dev';
 const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbwc2pNBmXpeDLHqc7tGff4kVByDbcG1ijLRzxNTiKjSklSo4dcm61R5XNOAghaAGozz/exec';
 const DEFAULT_GITHUB_BASE = 'https://raw.githubusercontent.com/AinAon/PersonaChat/main';
 const DEFAULT_EMOTIONS = [
@@ -293,6 +294,21 @@ async function loadImagesFromIDB(){
     if (!obj.ld) obj.ld = obj.md || obj.hd || obj.full;
     if (!obj.md) obj.md = obj.ld || obj.hd || obj.full;
     if (!obj.hd) obj.hd = obj.md || obj.full;
+  }
+}
+
+async function loadPersonasFromBackend(){
+  try {
+    const res = await fetch(`${WORKER_URL}/personas`, { method: 'GET' });
+    if (!res.ok) return false;
+    const data = await res.json();
+    if (!Array.isArray(data?.personas) || !data.personas.length) return false;
+    const seen = new Set();
+    state.personas = data.personas.filter(p => p && p.pid && !seen.has(p.pid) && seen.add(p.pid));
+    saveState();
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -522,10 +538,21 @@ function init(){
     if (file) await uploadCurrentCard(file);
   };
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeViewer(); });
-  loadImagesFromIDB().finally(() => {
+  (async () => {
+    await loadPersonasFromBackend();
+    await loadImagesFromIDB();
+    if (!state.personas.length) {
+      const cached = JSON.parse(localStorage.getItem('em_personas') || '[]');
+      const seen = new Set();
+      state.personas = Array.isArray(cached) ? cached.filter(p => p && p.pid && !seen.has(p.pid) && seen.add(p.pid)) : [];
+    }
     if (state.personas.length) state.activePid = state.personas[0].pid;
     render();
-  });
+    if (state.activePid) {
+      await loadFromGithub().catch(() => {});
+      render();
+    }
+  })();
 }
 
 init();
