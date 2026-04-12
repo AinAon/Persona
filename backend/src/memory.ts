@@ -1,5 +1,5 @@
 import type { Env } from "./index";
-import { generateGeminiText } from "./model_gemini";
+import { generateGrokText } from "./model_grok";
 
 export type MemoryScope = "public_profile" | "private_profile";
 
@@ -25,7 +25,7 @@ type GlobalMemoryMeta = {
   lastOptimizedAt: number;
 };
 
-const MEMORY_MODEL = "gemini-3.1-flash-lite-preview";
+const MEMORY_MODEL = "grok-4.20-non-reasoning";
 const MAX_ITEM_LEN = 220;
 
 const EXPLICIT_MARKERS = [
@@ -546,7 +546,7 @@ function tryParseJsonObject(raw: string): any | null {
   }
 }
 
-async function extractFactsWithGemini(
+async function extractFactsWithGrok(
   lines: string[],
   apiKey: string,
   mode: "user" | "persona",
@@ -577,7 +577,7 @@ async function extractFactsWithGemini(
     ...lines.map((line, idx) => `${idx + 1}. ${line}`),
   ].join("\n");
 
-  const raw = await generateGeminiText({
+  const raw = await generateGrokText({
     model: MEMORY_MODEL,
     apiKey,
     messages: [{ role: "user", content: prompt }],
@@ -666,7 +666,7 @@ export async function extractAndStoreMemories(
   const participantPids = Array.isArray(args.participantPids) ? [...new Set(args.participantPids.filter(Boolean))] : [];
   const sessionId = String(args.sessionId || "").trim();
   const forceFull = !!args.forceFull;
-  const apiKey = env.GEMINI_KEY || "";
+  const apiKey = env.GROK_KEY || "";
 
   const sessionMeta = sessionId ? await getSessionMeta(env, sessionId) : { lastExtractedAt: 0, lastOptimizedAt: 0 };
   const cursorStart = forceFull ? 0 : sessionMeta.lastExtractedAt;
@@ -709,7 +709,7 @@ export async function extractAndStoreMemories(
   // User bubble -> only public user memory
   let userFacts: string[] = [];
   try {
-    userFacts = await extractFactsWithGemini(userLines, apiKey, "user");
+    userFacts = await extractFactsWithGrok(userLines, apiKey, "user");
   } catch {
     userFacts = [];
   }
@@ -747,7 +747,7 @@ export async function extractAndStoreMemories(
     if (!personaLines.length) continue;
     let personaFacts: string[] = [];
     try {
-      personaFacts = await extractFactsWithGemini(personaLines, apiKey, "persona", pid);
+      personaFacts = await extractFactsWithGrok(personaLines, apiKey, "persona", pid);
     } catch {
       personaFacts = [];
     }
@@ -796,7 +796,7 @@ export async function optimizeMemories(
 
     let optimized = 0;
     let removed = 0;
-    const apiKey = env.GEMINI_KEY || "";
+    const apiKey = env.GROK_KEY || "";
 
     for (const t of targets) {
       try {
@@ -807,7 +807,7 @@ export async function optimizeMemories(
 
         let consolidated: string[] = [];
         try {
-          consolidated = await extractFactsWithGemini(
+          consolidated = await extractFactsWithGrok(
             chat.map((x) => x.text),
             apiKey,
             t.mode,
