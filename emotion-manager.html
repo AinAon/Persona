@@ -291,7 +291,10 @@ function resizeImage(dataUrl, maxPx, quality = 0.88){
 }
 async function makeVariants(dataUrl){
   const full = await resizeImage(dataUrl, 2400, 0.92);
-  return { full };
+  const md = await resizeImage(dataUrl, 600, 0.9);
+  const ld = await resizeImage(dataUrl, 300, 0.86);
+  const thumb = await resizeImage(dataUrl, 150, 0.84);
+  return { full, md, ld, thumb };
 }
 function baseKey(pid, eid, slot){ return `emotion_${pid}_${eid}_${slot}`; }
 function fullKey(pid, eid, slot){ return `em_full_${pid}_${eid}_${slot}`; }
@@ -301,13 +304,21 @@ async function saveSlotImage(pid, eid, slot, dataUrl){
   state.images[pid][eid] ||= {};
   state.images[pid][eid][slot] = v;
   await Promise.all([
+    idbSet(baseKey(pid,eid,slot), v.md),
     idbSet(fullKey(pid,eid,slot), v.full),
+    idbSet(`${baseKey(pid,eid,slot)}_hd`, v.full),
+    idbSet(`${baseKey(pid,eid,slot)}_ld`, v.ld),
+    idbSet(`${baseKey(pid,eid,slot)}_thumb`, v.thumb),
   ]);
 }
 async function clearSlotImage(pid, eid, slot){
   delete state.images[pid]?.[eid]?.[slot];
   await Promise.allSettled([
+    idbDelete(baseKey(pid,eid,slot)),
     idbDelete(fullKey(pid,eid,slot)),
+    idbDelete(`${baseKey(pid,eid,slot)}_hd`),
+    idbDelete(`${baseKey(pid,eid,slot)}_ld`),
+    idbDelete(`${baseKey(pid,eid,slot)}_thumb`),
   ]);
 }
 async function loadImagesFromIDB(){
