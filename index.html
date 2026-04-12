@@ -71,16 +71,52 @@ body {
 
 /* 타이틀바 */
 .main-titlebar {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  padding: 18px 18px 14px;
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  flex-shrink: 0;
-  color: var(--text);
-}
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 18px 18px 14px;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .persona-title-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .persona-title-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    border: 1px solid var(--border2);
+    background: transparent;
+    color: var(--muted);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .persona-title-icon:hover {
+    color: var(--text);
+    border-color: var(--muted);
+    background: rgba(255,255,255,.03);
+  }
+  .persona-title-icon svg {
+    width: 17px;
+    height: 17px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
 
 /* 검색바 */
 .search-wrap {
@@ -839,8 +875,15 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 
 <div class="screen active" id="mainScreen">
 
-  <div id="personaPane" style="display:flex;flex-direction:column;flex:1;overflow:hidden;position:relative;">
-    <div class="main-titlebar">Persona</div>
+    <div id="personaPane" style="display:flex;flex-direction:column;flex:1;overflow:hidden;position:relative;">
+    <div class="main-titlebar">
+      <span>Persona</span>
+      <div class="persona-title-actions">
+        <button class="persona-title-icon" onclick="openEmotionManager()" title="Open emotion manager" aria-label="Open emotion manager">
+          <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h16"/><path d="M17 9l3 3-3 3"/></svg>
+        </button>
+      </div>
+    </div>
     <div class="persona-pane" id="personaPane_body">
       <div class="persona-grid" id="personaGrid"></div>
     </div>

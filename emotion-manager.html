@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Emotion Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@panzoom/panzoom@4.6.1/dist/panzoom.min.css">
+<style>
+:root{
+  --bg:#080809; --surface:#0f0f13; --card:#14141a; --border:#20202a; --border2:#2c2c39;
+  --text:#efeff6; --muted:#68687b; --accent:#7c6af7; --accent2:#a89bff;
+  --good:#4ade80; --warn:#f59e0b; --danger:#f43f5e;
+  --font-mono:'JetBrains Mono', monospace; --font-display:'Syne', sans-serif;
+}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-mono);min-height:100vh;-webkit-font-smoothing:antialiased}
+.header,.toolbar{background:rgba(15,15,19,.92);backdrop-filter:blur(12px)}
+.header{position:sticky;top:0;z-index:30;display:flex;justify-content:space-between;align-items:center;padding:18px 24px;border-bottom:1px solid var(--border)}
+.brand{display:flex;gap:12px;align-items:center}
+.brand-mark{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;font-family:var(--font-display);font-weight:800;color:#fff}
+.brand-title{font-family:var(--font-display);font-size:16px;font-weight:800}
+.brand-sub{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.14em}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 24px;border-bottom:1px solid var(--border)}
+.field{display:flex;align-items:center;gap:8px}
+.label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.12em}
+.input{background:var(--card);color:var(--text);border:1px solid var(--border2);border-radius:8px;padding:8px 12px;font:11px var(--font-mono);min-width:260px;outline:none}
+.input:focus{border-color:var(--accent)}
+.btn{border:1px solid transparent;border-radius:8px;padding:8px 14px;font:11px var(--font-mono);font-weight:700;letter-spacing:.04em;cursor:pointer;transition:.15s}
+.btn-ghost{background:transparent;color:var(--muted);border-color:var(--border2)}
+.btn-ghost:hover{color:var(--text);border-color:var(--muted)}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent2)}
+.btn-danger{background:transparent;color:var(--danger);border-color:rgba(244,63,94,.3)}
+.btn-danger:hover{background:rgba(244,63,94,.08)}
+.btn-sm{padding:6px 10px;font-size:10px;border-radius:7px}
+.layout{display:grid;grid-template-columns:340px 1fr;min-height:calc(100vh - 124px)}
+.sidebar{border-right:1px solid var(--border);background:var(--surface);padding:14px;overflow:auto}
+.main{padding:18px 18px 24px;overflow:auto}
+.section-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.section-title h2,.section-title h3{margin:0;font:700 13px var(--font-display);letter-spacing:.02em}
+.section-note{font-size:10px;color:var(--muted)}
+.persona-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.persona-card{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--card);cursor:pointer;transition:.15s}
+.persona-card:hover{transform:translateY(-1px);border-color:var(--border2)}
+.persona-card.active{border-color:var(--accent)}
+.persona-thumb{aspect-ratio:2/3;background:#0b0b10;position:relative;overflow:hidden}
+.persona-thumb img{width:100%;height:100%;object-fit:cover;object-position:top;display:block}
+.persona-name{padding:6px 8px;font-size:10px;text-align:center;font-weight:700;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.badge{font-size:10px;padding:3px 8px;border-radius:999px;border:1px solid var(--border2);color:var(--muted)}
+.gallery-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.gallery-title{font-family:var(--font-display);font-size:14px;font-weight:800}
+.gallery-stats{font-size:10px;color:var(--muted)}
+.cat{margin-bottom:18px}
+.cat-head{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:10px}
+.cat-head strong{font-size:11px;text-transform:uppercase;letter-spacing:.12em}
+.slot-grid{display:grid;grid-template-columns:repeat(5,minmax(150px,1fr));gap:10px}
+.slot-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;min-height:260px}
+.slot-card.has-image{border-color:rgba(124,106,247,.55)}
+.slot-preview{aspect-ratio:1/1;background:#0b0b10;position:relative;overflow:hidden;cursor:pointer}
+.slot-preview img{width:100%;height:100%;object-fit:cover;display:block}
+.slot-empty{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:11px}
+.slot-foot{padding:8px;display:grid;gap:8px}
+.slot-meta{display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--muted)}
+.slot-actions{display:flex;gap:6px}
+.slot-actions .btn{flex:1}
+.slot-actions .btn span{display:block}
+.row-note{font-size:10px;color:var(--muted);margin-top:4px}
+.status{margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:12px;background:rgba(10,10,14,.55);font-size:11px;color:var(--muted);min-height:52px;white-space:pre-wrap}
+.hidden{display:none !important}
+.viewer{
+  position:fixed;inset:0;background:rgba(0,0,0,.86);z-index:100;display:none;align-items:center;justify-content:center;padding:24px
+}
+.viewer.open{display:flex}
+.viewer-shell{position:relative;max-width:min(95vw,1600px);max-height:92vh;display:flex;align-items:center;justify-content:center}
+.viewer-img-wrap{max-width:100%;max-height:92vh;overflow:hidden;border-radius:16px;background:#0a0a0d;box-shadow:0 20px 80px rgba(0,0,0,.45)}
+.viewer-img{display:block;max-width:none;max-height:none;touch-action:none;user-select:none;cursor:grab}
+.viewer-close{position:absolute;top:-12px;right:-12px;width:34px;height:34px;border-radius:999px;border:1px solid var(--border2);background:rgba(18,18,24,.95);color:#fff;font-size:18px;cursor:pointer;display:grid;place-items:center}
+.file-input{display:none}
+@media (max-width: 1280px){.layout{grid-template-columns:280px 1fr}.slot-grid{grid-template-columns:repeat(3,minmax(150px,1fr))}}
+@media (max-width: 900px){.layout{grid-template-columns:1fr}.sidebar{border-right:none;border-bottom:1px solid var(--border)}.slot-grid{grid-template-columns:repeat(2,minmax(140px,1fr))}}
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="brand">
+    <div class="brand-mark">E</div>
+    <div>
+      <div class="brand-title">Emotion Manager</div>
+      <div class="brand-sub">image-only / neutral_a / grok</div>
+    </div>
+  </div>
+  <div class="section-note">Generate with `grok-imagine-image-pro` and `2k`</div>
+</div>
+
+<div class="toolbar">
+  <div class="field">
+    <span class="label">GAS</span>
+    <input id="gasUrl" class="input" placeholder="GAS endpoint">
+  </div>
+  <div class="field">
+    <span class="label">GitHub base</span>
+    <input id="githubBase" class="input" placeholder="https://raw.githubusercontent.com/...">
+  </div>
+  <button class="btn btn-ghost" id="saveSettingsBtn">Save</button>
+  <button class="btn btn-ghost" id="reloadBtn">Reload</button>
+  <button class="btn btn-primary" id="uploadAllBtn">Upload all</button>
+  <button class="btn btn-ghost" id="pushAllBtn">Push all</button>
+  <button class="btn btn-danger" id="stopBtn" style="display:none">Stop</button>
+</div>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="section-title">
+      <h2>Personas</h2>
+      <span class="badge" id="personaCount">0</span>
+    </div>
+    <div class="persona-grid" id="personaGrid"></div>
+  </aside>
+
+  <main class="main">
+    <div class="gallery-head">
+      <div>
+        <div class="gallery-title" id="galleryTitle">Select a persona</div>
+        <div class="gallery-stats" id="galleryStats">neutral_a first, then emotion slots a-e</div>
+      </div>
+      <div class="gallery-stats" id="cacheStats"></div>
+    </div>
+    <div id="emotionGallery"></div>
+    <div class="status" id="statusBox">Ready.</div>
+  </main>
+</div>
+
+<div class="viewer" id="viewer">
+  <div class="viewer-shell">
+    <button class="viewer-close" id="viewerClose" aria-label="Close">×</button>
+    <div class="viewer-img-wrap"><img id="viewerImg" class="viewer-img" alt="preview"></div>
+  </div>
+</div>
+
+<input id="cardFileInput" class="file-input" type="file" accept="image/*">
+
+<script src="https://cdn.jsdelivr.net/npm/@panzoom/panzoom@4.6.1/dist/panzoom.min.js"></script>
+<script>
+const GAS_SECRET = 'persona_chat_2025';
+const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbwc2pNBmXpeDLHqc7tGff4kVByDbcG1ijLRzxNTiKjSklSo4dcm61R5XNOAghaAGozz/exec';
+const DEFAULT_GITHUB_BASE = 'https://raw.githubusercontent.com/AinAon/PersonaChat/main';
+const DEFAULT_EMOTIONS = [
+  { id:'neutral', label:'Neutral', category:'basic' },
+  { id:'happy', label:'Happy', category:'basic' },
+  { id:'sad', label:'Sad', category:'basic' },
+  { id:'angry', label:'Angry', category:'basic' },
+  { id:'surprise', label:'Surprise', category:'basic' },
+  { id:'shy', label:'Shy', category:'basic' },
+  { id:'subtlesmile', label:'Subtle Smile', category:'basic' },
+  { id:'serious', label:'Serious', category:'premium' },
+  { id:'thinking', label:'Thinking', category:'premium' },
+  { id:'ecstasy', label:'Ecstasy', category:'adult' },
+  { id:'orgasm', label:'Orgasm', category:'adult' },
+];
+const SLOT_KEYS = ['a','b','c','d','e'];
+const SLOT_LABELS = { a:'A', b:'B', c:'C', d:'D', e:'E' };
+const EMOTION_PROMPTS = {
+  neutral:'Change to neutral expression.',
+  happy:'Change to happy expression.',
+  sad:'Change to sad expression.',
+  angry:'Change to angry expression.',
+  surprise:'Change to surprised expression.',
+  shy:'Change to shy expression.',
+  subtlesmile:'Change to subtle smile expression.',
+  serious:'Change to serious expression.',
+  thinking:'Change to thoughtful expression.',
+  ecstasy:'Change to ecstatic expression.',
+  orgasm:'Change to orgasmic expression.',
+};
+
+const state = {
+  personas: JSON.parse(localStorage.getItem('em_personas') || '[]'),
+  emotions: JSON.parse(localStorage.getItem('em_emotions') || 'null') || DEFAULT_EMOTIONS.map(x => ({...x})),
+  githubBase: localStorage.getItem('em_githubBase') || DEFAULT_GITHUB_BASE,
+  gasUrl: localStorage.getItem('em_gasUrl') || DEFAULT_GAS_URL,
+  activePid: null,
+  images: {},
+  busy: false,
+  pendingAbort: null,
+  viewer: null,
+  activeUpload: null,
+};
+
+const els = {
+  gasUrl: document.getElementById('gasUrl'),
+  githubBase: document.getElementById('githubBase'),
+  saveSettingsBtn: document.getElementById('saveSettingsBtn'),
+  reloadBtn: document.getElementById('reloadBtn'),
+  uploadAllBtn: document.getElementById('uploadAllBtn'),
+  pushAllBtn: document.getElementById('pushAllBtn'),
+  stopBtn: document.getElementById('stopBtn'),
+  personaGrid: document.getElementById('personaGrid'),
+  personaCount: document.getElementById('personaCount'),
+  galleryTitle: document.getElementById('galleryTitle'),
+  galleryStats: document.getElementById('galleryStats'),
+  cacheStats: document.getElementById('cacheStats'),
+  emotionGallery: document.getElementById('emotionGallery'),
+  statusBox: document.getElementById('statusBox'),
+  viewer: document.getElementById('viewer'),
+  viewerImg: document.getElementById('viewerImg'),
+  viewerClose: document.getElementById('viewerClose'),
+  cardFileInput: document.getElementById('cardFileInput'),
+};
+
+function showStatus(msg){ els.statusBox.textContent = msg; }
+function setBusy(isBusy){ state.busy = isBusy; els.stopBtn.style.display = isBusy ? '' : 'none'; }
+function saveState(){
+  localStorage.setItem('em_personas', JSON.stringify(state.personas));
+  localStorage.setItem('em_emotions', JSON.stringify(state.emotions));
+  localStorage.setItem('em_githubBase', state.githubBase);
+  localStorage.setItem('em_gasUrl', state.gasUrl);
+}
+
+let _db = null;
+function openIDB(){
+  if (_db) return Promise.resolve(_db);
+  return new Promise((resolve,reject)=>{
+    const req = indexedDB.open('personachat_v4', 3);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('images')) db.createObjectStore('images');
+    };
+    req.onsuccess = e => { _db = e.target.result; resolve(_db); };
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbSet(key,val){ const db = await openIDB(); return new Promise((resolve,reject)=>{ const tx=db.transaction('images','readwrite'); tx.objectStore('images').put(val,key); tx.oncomplete=()=>resolve(); tx.onerror=()=>reject(tx.error); }); }
+async function idbGet(key){ const db = await openIDB(); return new Promise((resolve,reject)=>{ const req=db.transaction('images').objectStore('images').get(key); req.onsuccess=()=>resolve(req.result); req.onerror=()=>reject(req.error); }); }
+async function idbDelete(key){ const db = await openIDB(); return new Promise((resolve,reject)=>{ const tx=db.transaction('images','readwrite'); tx.objectStore('images').delete(key); tx.oncomplete=()=>resolve(); tx.onerror=()=>reject(tx.error); }); }
+async function idbKeys(){ const db = await openIDB(); return new Promise((resolve,reject)=>{ const req=db.transaction('images').objectStore('images').getAllKeys(); req.onsuccess=()=>resolve(req.result); req.onerror=()=>reject(req.error); }); }
+
+function resizeImage(dataUrl, maxPx, quality = 0.88){
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(maxPx / img.width, maxPx / img.height, 1);
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const cv = document.createElement('canvas');
+      cv.width = w; cv.height = h;
+      const ctx = cv.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(cv.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+async function makeVariants(dataUrl){
+  const [thumb, ld, md, hd] = await Promise.all([
+    resizeImage(dataUrl, 150, 0.78),
+    resizeImage(dataUrl, 300, 0.82),
+    resizeImage(dataUrl, 600, 0.86),
+    resizeImage(dataUrl, 1200, 0.9),
+  ]);
+  return { thumb, ld, md, hd, full: dataUrl };
+}
+function baseKey(pid, eid, slot){ return `emotion_${pid}_${eid}_${slot}`; }
+function fullKey(pid, eid, slot){ return `em_full_${pid}_${eid}_${slot}`; }
+async function saveSlotImage(pid, eid, slot, dataUrl){
+  const v = await makeVariants(dataUrl);
+  state.images[pid] ||= {};
+  state.images[pid][eid] ||= {};
+  state.images[pid][eid][slot] = v;
+  await Promise.all([
+    idbSet(baseKey(pid,eid,slot), v.md),
+    idbSet(`${baseKey(pid,eid,slot)}_ld`, v.ld),
+    idbSet(`${baseKey(pid,eid,slot)}_hd`, v.hd),
+    idbSet(`${baseKey(pid,eid,slot)}_thumb`, v.thumb),
+    idbSet(fullKey(pid,eid,slot), v.full),
+  ]);
+}
+async function clearSlotImage(pid, eid, slot){
+  delete state.images[pid]?.[eid]?.[slot];
+  await Promise.allSettled([
+    idbDelete(baseKey(pid,eid,slot)),
+    idbDelete(`${baseKey(pid,eid,slot)}_ld`),
+    idbDelete(`${baseKey(pid,eid,slot)}_hd`),
+    idbDelete(`${baseKey(pid,eid,slot)}_thumb`),
+    idbDelete(fullKey(pid,eid,slot)),
+  ]);
+}
+async function loadImagesFromIDB(){
+  state.images = {};
+  const keys = await idbKeys().catch(()=>[]);
+  for (const key of keys) {
+    const m = key.match(/^(?:em_full_|emotion_)(p_[^_]+)_(.+)_(a|b|c|d|e)(?:_(ld|hd|thumb))?$/);
+    if (!m) continue;
+    const [, pid, eid, slot, suffix] = m;
+    const val = await idbGet(key).catch(()=>null);
+    if (!val) continue;
+    state.images[pid] ||= {};
+    state.images[pid][eid] ||= {};
+    state.images[pid][eid][slot] ||= { thumb:'', ld:'', md:'', hd:'', full:'' };
+    const obj = state.images[pid][eid][slot];
+    if (key.startsWith('em_full_')) obj.full = val;
+    else if (suffix === 'ld') obj.ld = val;
+    else if (suffix === 'hd') obj.hd = val;
+    else if (suffix === 'thumb') obj.thumb = val;
+    else obj.md = val;
+    if (!obj.thumb) obj.thumb = obj.md || obj.ld || obj.hd || obj.full;
+    if (!obj.ld) obj.ld = obj.md || obj.hd || obj.full;
+    if (!obj.md) obj.md = obj.ld || obj.hd || obj.full;
+    if (!obj.hd) obj.hd = obj.md || obj.full;
+  }
+}
+
+function getPersonaImage(pid){
+  const slots = state.images[pid]?.neutral?.a || state.images[pid]?.neutral_a || null;
+  return slots?.md || slots?.ld || slots?.thumb || slots?.full || '';
+}
+function getEmotionImage(pid, eid, slot){
+  const s = state.images[pid]?.[eid]?.[slot];
+  return s?.md || s?.ld || s?.thumb || s?.full || '';
+}
+function getBestBase64ForPush(pid, eid, slot){
+  const s = state.images[pid]?.[eid]?.[slot];
+  return s?.hd || s?.md || s?.ld || s?.thumb || s?.full || '';
+}
+function githubPath(pid, eid, slot){ return `${state.githubBase}/profile/${pid}/${pid}_${eid}_${slot}.png`; }
+function render(){
+  els.personaCount.textContent = String(state.personas.length);
+  els.galleryTitle.textContent = state.activePid ? (state.personas.find(p=>p.pid===state.activePid)?.name || state.activePid) : 'Select a persona';
+  els.galleryStats.textContent = state.activePid ? 'Rows = emotions, columns = slots a-e.' : 'neutral_a is the primary reference image.';
+  els.cacheStats.textContent = state.activePid ? `${state.activePid}` : '';
+
+  els.personaGrid.innerHTML = '';
+  for (const p of state.personas) {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'persona-card' + (state.activePid === p.pid ? ' active' : '');
+    card.innerHTML = `
+      <div class="persona-thumb">${getPersonaImage(p.pid) ? `<img src="${getPersonaImage(p.pid)}" alt="">` : '<div class="slot-empty">neutral_a</div>'}</div>
+      <div class="persona-name">${p.name || p.pid}</div>`;
+    card.onclick = () => { state.activePid = p.pid; render(); };
+    els.personaGrid.appendChild(card);
+  }
+
+  els.emotionGallery.innerHTML = '';
+  if (!state.activePid) {
+    els.emotionGallery.innerHTML = '<div class="section-note">Choose a persona on the left.</div>';
+    return;
+  }
+  const groups = [
+    ['basic', 'Basic'],
+    ['premium', 'Premium'],
+    ['adult', 'Adult'],
+  ];
+  for (const [cat, title] of groups) {
+    const items = state.emotions.filter(e => e.category === cat);
+    if (!items.length) continue;
+    const wrap = document.createElement('section');
+    wrap.className = 'cat';
+    wrap.innerHTML = `<div class="cat-head"><strong>${title}</strong><span class="section-note">${items.length} emotions</span></div>`;
+    const grid = document.createElement('div');
+    grid.className = 'slot-grid';
+    for (const emo of items) {
+      for (const slot of SLOT_KEYS) {
+        const img = getEmotionImage(state.activePid, emo.id, slot);
+        const card = document.createElement('article');
+        card.className = 'slot-card' + (img ? ' has-image' : '');
+        card.innerHTML = `
+          <div class="slot-preview">${img ? `<img src="${img}" alt="">` : `<div class="slot-empty">${emo.label}<br>${slot.toUpperCase()}</div>`}</div>
+          <div class="slot-foot">
+            <div class="slot-meta"><span>${emo.id}</span><span>${slot.toUpperCase()}</span></div>
+            <div class="slot-actions">
+              <button class="btn btn-primary btn-sm">Generate</button>
+              <button class="btn btn-ghost btn-sm">Upload</button>
+            </div>
+          </div>`;
+        const preview = card.querySelector('.slot-preview');
+        preview.onclick = () => openViewer(img || getPersonaImage(state.activePid) || '');
+        card.querySelectorAll('.btn')[0].onclick = (ev) => { ev.stopPropagation(); generateEmotion(state.activePid, emo.id, slot); };
+        card.querySelectorAll('.btn')[1].onclick = (ev) => { ev.stopPropagation(); state.activeUpload = { pid: state.activePid, eid: emo.id, slot }; els.cardFileInput.value = ''; els.cardFileInput.click(); };
+        grid.appendChild(card);
+      }
+    }
+    wrap.appendChild(grid);
+    els.emotionGallery.appendChild(wrap);
+  }
+}
+
+function openViewer(src){
+  if (!src) return;
+  els.viewerImg.src = src;
+  els.viewer.classList.add('open');
+  if (state.viewer) state.viewer.destroy();
+  state.viewer = Panzoom(els.viewerImg, { maxScale: 8, contain: 'outside', cursor: 'grab' });
+  els.viewerImg.parentElement.addEventListener('wheel', state.viewer.zoomWithWheel, { passive: false });
+}
+function closeViewer(){
+  els.viewer.classList.remove('open');
+  els.viewerImg.src = '';
+  if (state.viewer) { state.viewer.destroy(); state.viewer = null; }
+}
+
+async function gasCall(payload){
+  if (!state.gasUrl) throw new Error('GAS URL is empty.');
+  const res = await fetch(state.gasUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ secretKey: GAS_SECRET, ...payload }),
+  });
+  return await res.json();
+}
+
+async function generateEmotion(pid, eid, slot){
+  if (state.busy) return;
+  const ref = githubPath(pid, 'neutral', 'a');
+  const prompt = EMOTION_PROMPTS[eid] || `Change to ${eid} expression.`;
+  const body = {
+    action: 'chat',
+    model: 'grok-imagine-image-pro',
+    prompt,
+    images: [ref],
+    aspect_ratio: '1:1',
+    resolution: '2k',
+  };
+  const controller = new AbortController();
+  setBusy(true);
+  showStatus(`Generating ${pid}/${eid}/${slot.toUpperCase()}...`);
+  state.pendingAbort = controller;
+  try {
+    const res = await fetch('https://persona-worker.persona-worker.workers.dev/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    const data = await res.json();
+    const match = String(data.reply || data.content || '').match(/\((https?:\/\/[^)]+)\)|!\[[^\]]*\]\((https?:\/\/[^)]+)\)|https?:\/\/\S+/);
+    const url = match ? (match[1] || match[2] || match[0]) : '';
+    if (!url) throw new Error(data.error || 'No image URL returned.');
+    const blob = await fetch(url).then(r => r.blob());
+    const dataUrl = await new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.readAsDataURL(blob);
+    });
+    await saveSlotImage(pid, eid, slot, dataUrl);
+    render();
+    showStatus(`Saved ${pid}/${eid}/${slot.toUpperCase()}`);
+  } catch (err) {
+    showStatus(`Generate failed: ${err.message}`);
+  } finally {
+    state.pendingAbort = null;
+    setBusy(false);
+  }
+}
+
+async function uploadCurrentCard(file){
+  const target = state.activeUpload;
+  if (!target || !file) return;
+  const dataUrl = await new Promise(resolve => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.readAsDataURL(file);
+  });
+  await saveSlotImage(target.pid, target.eid, target.slot, dataUrl);
+  state.activeUpload = null;
+  render();
+  showStatus(`Uploaded ${target.pid}/${target.eid}/${target.slot.toUpperCase()}`);
+}
+
+async function pushOne(pid, eid, slot){
+  const base64 = getBestBase64ForPush(pid, eid, slot);
+  if (!base64) return;
+  const res = await gasCall({ action:'pushGithub', pid, emotionId:`${eid}_${slot}`, base64 });
+  if (res?.result !== 'success') throw new Error(res?.error || 'push failed');
+}
+async function uploadAll(){
+  if (!state.activePid) return;
+  const pid = state.activePid;
+  const tasks = [];
+  for (const emo of state.emotions) for (const slot of SLOT_KEYS) if (getBestBase64ForPush(pid, emo.id, slot)) tasks.push([emo.id, slot]);
+  if (!tasks.length) return showStatus('Nothing to upload.');
+  setBusy(true);
+  try {
+    for (const [eid, slot] of tasks) await pushOne(pid, eid, slot);
+    showStatus(`Uploaded ${tasks.length} items.`);
+  } catch (err) {
+    showStatus(`Upload failed: ${err.message}`);
+  } finally {
+    setBusy(false);
+  }
+}
+async function pushAll(){
+  if (!state.activePid) return;
+  await uploadAll();
+}
+async function reloadCache(){
+  await loadImagesFromIDB();
+  render();
+  showStatus('Local cache reloaded.');
+}
+
+async function loadFromGithub(){
+  if (!state.activePid) return showStatus('Pick a persona first.');
+  const pid = state.activePid;
+  let loaded = 0;
+  for (const emo of state.emotions) {
+    for (const slot of SLOT_KEYS) {
+      const url = githubPath(pid, emo.id, slot);
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) continue;
+        const blob = await resp.blob();
+        const dataUrl = await new Promise(resolve => {
+          const r = new FileReader();
+          r.onload = () => resolve(r.result);
+          r.readAsDataURL(blob);
+        });
+        await saveSlotImage(pid, emo.id, slot, dataUrl);
+        loaded++;
+      } catch {}
+    }
+  }
+  render();
+  showStatus(`Loaded ${loaded} images from GitHub.`);
+}
+
+function init(){
+  els.gasUrl.value = state.gasUrl;
+  els.githubBase.value = state.githubBase;
+  els.saveSettingsBtn.onclick = () => {
+    state.gasUrl = els.gasUrl.value.trim();
+    state.githubBase = els.githubBase.value.trim() || DEFAULT_GITHUB_BASE;
+    saveState();
+    showStatus('Settings saved.');
+  };
+  els.reloadBtn.onclick = () => state.activePid ? loadFromGithub() : reloadCache();
+  els.uploadAllBtn.onclick = uploadAll;
+  els.pushAllBtn.onclick = pushAll;
+  els.stopBtn.onclick = () => { state.pendingAbort?.abort?.(); showStatus('Stopped.'); setBusy(false); };
+  els.viewerClose.onclick = closeViewer;
+  els.viewer.onclick = (e) => { if (e.target === els.viewer) closeViewer(); };
+  els.cardFileInput.onchange = async () => {
+    const file = els.cardFileInput.files?.[0];
+    if (file) await uploadCurrentCard(file);
+  };
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeViewer(); });
+  loadImagesFromIDB().finally(() => {
+    if (state.personas.length) state.activePid = state.personas[0].pid;
+    render();
+  });
+}
+
+init();
+</script>
+</body>
+</html>

@@ -16,6 +16,10 @@ function startDemoChat() {
   openChat(session.id);
 }
 
+function openEmotionManager() {
+  window.open('./emotion-manager.html', '_blank', 'noopener,noreferrer');
+}
+
 window.getDemoReply = function(session) {
   const pids = session.participantPids;
   
