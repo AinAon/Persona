@@ -141,7 +141,6 @@
 const GAS_SECRET = 'persona_chat_2025';
 const WORKER_URL = 'https://persona-worker.persona-worker.workers.dev';
 const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbwc2pNBmXpeDLHqc7tGff4kVByDbcG1ijLRzxNTiKjSklSo4dcm61R5XNOAghaAGozz/exec';
-const DEFAULT_GITHUB_BASE = 'https://raw.githubusercontent.com/AinAon/PersonaChat/main';
 const DEFAULT_EMOTIONS = [
   { id:'neutral', label:'Neutral', category:'basic' },
   { id:'subtlesmile', label:'Subtle Smile', category:'basic' },
@@ -196,7 +195,6 @@ const BUILTIN_BY_CAT = {
 const state = {
   personas: JSON.parse(localStorage.getItem('em_personas') || '[]'),
   emotions: JSON.parse(localStorage.getItem('em_emotions') || 'null') || DEFAULT_EMOTIONS.map(x => ({...x})),
-  githubBase: DEFAULT_GITHUB_BASE,
   gasUrl: DEFAULT_GAS_URL,
   activePid: null,
   activeCat: 'basic',
@@ -557,7 +555,7 @@ async function reloadCache(){
   showStatus('Local cache reloaded.');
 }
 
-async function loadFromGithub(){
+async function loadFromR2(){
   if (!state.activePid) return showStatus('Pick a persona first.');
   const pid = state.activePid;
   let loaded = 0;
@@ -583,7 +581,7 @@ async function loadFromGithub(){
 }
 
 function init(){
-  els.reloadBtn.onclick = () => state.activePid ? loadFromGithub() : reloadCache();
+  els.reloadBtn.onclick = () => state.activePid ? loadFromR2() : reloadCache();
   els.uploadAllBtn.onclick = uploadAll;
   els.pushAllBtn.onclick = pushAll;
   els.stopBtn.onclick = () => { state.pendingAbort?.abort?.(); showStatus('Stopped.'); setBusy(false); };
@@ -605,7 +603,7 @@ function init(){
     if (state.personas.length) state.activePid = state.personas[0].pid;
     render();
     if (state.activePid) {
-      await loadFromGithub().catch(() => {});
+      await loadFromR2().catch(() => {});
       await loadImagesFromIDB().catch(() => {});
       render();
     }
