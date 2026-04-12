@@ -610,41 +610,49 @@ async function loadFromR2(){
   const pid = state.activePid;
   let loaded = 0;
   const keys = await listR2ProfileKeys(pid);
-  const keySet = new Set(keys);
-  for (const emo of state.emotions) {
-    for (const slot of SLOT_KEYS) {
-      const key = `profile/${pid}/${pid}_${emo.id}_${slot}.jpg`;
-      if (!keySet.has(key)) continue;
-      try {
-        const resp = await fetch(`${WORKER_URL}/image/${key}`);
-        if (!resp.ok) continue;
-        const blob = await resp.blob();
-        if (!blob || !blob.size) continue;
-        const dataUrl = await new Promise(resolve => {
-          const r = new FileReader();
-          r.onload = () => resolve(r.result);
-          r.readAsDataURL(blob);
-        });
-        await saveSlotImage(pid, emo.id, slot, dataUrl);
-        loaded++;
-      } catch {}
-    }
+  const seen = new Set();
+  for (const key of keys) {
+    const match = key.match(new RegExp(`^profile/${pid}/${pid}_([^/]+)_([a-e])\\.jpg$`, 'i'));
+    if (!match) continue;
+    const eid = String(match[1] || '').toLowerCase();
+    const slot = String(match[2] || '').toLowerCase();
+    const cacheKey = `${eid}_${slot}`;
+    if (seen.has(cacheKey)) continue;
+    seen.add(cacheKey);
+    try {
+      const resp = await fetch(`${WORKER_URL}/image/${key}`);
+      if (!resp.ok) continue;
+      const blob = await resp.blob();
+      if (!blob || !blob.size) continue;
+      const dataUrl = await new Promise(resolve => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.readAsDataURL(blob);
+      });
+      await saveSlotImage(pid, eid, slot, dataUrl);
+      loaded++;
+    } catch {}
   }
   render();
   if (loaded > 0) showStatus(`Loaded ${loaded} images.`);
+  return loaded;
 }
 
 async function reloadPersonaFromR2(pid){
   if (!pid) return;
   const existing = state.images[pid] || {};
-  for (const eid of Object.keys(existing)) {
-    for (const slot of Object.keys(existing[eid] || {})) {
-      await clearSlotImage(pid, eid, slot).catch(() => {});
+  const loaded = await loadFromR2();
+  if (loaded) {
+    for (const eid of Object.keys(existing)) {
+      for (const slot of Object.keys(existing[eid] || {})) {
+        const next = state.images[pid]?.[eid]?.[slot];
+        if (!next?.full) await clearSlotImage(pid, eid, slot).catch(() => {});
+      }
     }
+    await loadImagesFromIDB();
   }
-  await loadFromR2();
-  await loadImagesFromIDB();
   render();
+  return loaded;
 }
 
 async function reloadAll(){
@@ -666,7 +674,10 @@ async function reloadAll(){
     setProgress(55);
     if (state.activePid) {
       showStatus(`Refreshing ${state.activePid} from R2 originals...`);
-      await reloadPersonaFromR2(state.activePid);
+      const loaded = await reloadPersonaFromR2(state.activePid);
+      if (!loaded) {
+        showStatus(`Reload finished, but no new R2 originals were found for ${state.activePid}.`);
+      }
       setProgress(90);
     }
     showStatus('Reload completed: R2 originals refreshed and local cache rebuilt.');
