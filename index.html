@@ -267,6 +267,7 @@ body {
 .chat-list-wrap { position: relative; overflow: hidden; }
 .chat-list-item { transition: transform .25s cubic-bezier(.25,.8,.25,1); background: var(--bg); position: relative; z-index: 1; }
 .chat-delete-reveal { position: absolute; right: 0; top: 0; bottom: 0; width: 72px; background: hsl(0,55%,38%); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 22px; cursor: pointer; z-index: 0; }
+.chat-hide-reveal { position: absolute; right: 72px; top: 0; bottom: 0; width: 72px; background: hsl(210,55%,34%); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 20px; cursor: pointer; z-index: 0; }
 
 .pane-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh; gap: 10px; color: var(--muted2); }
 .pane-empty-icon { font-size: 32px; opacity: .3; }
@@ -853,7 +854,10 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
   <div id="chatPane" style="display:none;flex-direction:column;flex:1;overflow:hidden;position:relative;">
     <div class="main-titlebar" style="display:flex;align-items:center;justify-content:space-between;">
       <span>Chat</span>
-      <button class="chat-restore-icon-btn" onclick="openRestoreModal()" title="채팅 복원">↶</button>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="chat-restore-icon-btn" id="chatHiddenToggleBtn" onclick="toggleChatHiddenVisibility()" title="숨긴 채팅 보기">👁</button>
+        <button class="chat-restore-icon-btn" onclick="openRestoreModal()" title="채팅 복원">↶</button>
+      </div>
     </div>
     <div class="search-wrap">
       <div class="search-wrap-inner">

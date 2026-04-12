@@ -175,6 +175,14 @@ function iconEyeClosedSVG() {
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19C5 19 1 12 1 12a21.77 21.77 0 0 1 5.06-6.94"/><path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a21.76 21.76 0 0 1-3.17 4.56"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
 }
 
+function iconTrashSVG() {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>';
+}
+
+function iconEyeToggleSVG(hidden = false) {
+  return hidden ? iconEyeClosedSVG() : iconEyeOpenSVG();
+}
+
 function updateChatHeaderActionButtons() {
   const btn = document.getElementById('chatProfileToggleBtn');
   if (!btn) return;
@@ -186,6 +194,25 @@ function updateChatHeaderActionButtons() {
   btn.innerHTML = on ? iconEyeOpenSVG() : iconEyeClosedSVG();
   btn.title = `프로필 표시 ${on ? 'ON' : 'OFF'} (클릭해서 전환)`;
   if (!override) btn.classList.remove('on');
+}
+
+function getChatHiddenFilterEnabled() {
+  return !!window._showHiddenChats;
+}
+
+function updateChatListVisibilityButton() {
+  const btn = document.getElementById('chatHiddenToggleBtn');
+  if (!btn) return;
+  const on = getChatHiddenFilterEnabled();
+  btn.classList.toggle('on', on);
+  btn.innerHTML = iconEyeToggleSVG(on);
+  btn.title = on ? '숨긴 채팅 숨기기' : '숨긴 채팅 보기';
+}
+
+function toggleChatHiddenVisibility() {
+  window._showHiddenChats = !getChatHiddenFilterEnabled();
+  updateChatListVisibilityButton();
+  renderChatList();
 }
 
 async function refreshCurrentChat() {
@@ -1767,6 +1794,9 @@ async function renderChatList() {
       return name.includes(_chatSearchQuery) || preview.includes(_chatSearchQuery);
     });
   }
+  if (!getChatHiddenFilterEnabled()) {
+    sorted = sorted.filter(s => !s.hidden);
+  }
 
   for (const s of sorted) {
     const pList = (s.participantPids || []).map(pid => getPersona(pid)).filter(Boolean);
@@ -1775,9 +1805,15 @@ async function renderChatList() {
     const wrap = document.createElement('div');
     wrap.className = 'chat-list-wrap';
 
+    const hideBtn = document.createElement('div');
+    hideBtn.className = 'chat-hide-reveal';
+    hideBtn.innerHTML = s.hidden ? iconEyeOpenSVG() : iconEyeClosedSVG();
+    hideBtn.onclick = () => toggleChatHidden(s.id);
+    wrap.appendChild(hideBtn);
+
     const delBtn = document.createElement('div');
     delBtn.className = 'chat-delete-reveal';
-    delBtn.innerHTML = '🗑';
+    delBtn.innerHTML = iconTrashSVG();
     delBtn.onclick = () => deleteChat(s.id);
     wrap.appendChild(delBtn);
 
@@ -1807,6 +1843,7 @@ async function renderChatList() {
     wrap.appendChild(item);
     list.appendChild(wrap);
   }
+  updateChatListVisibilityButton();
 }
 
 let _chatSearchQuery = '';
@@ -2073,7 +2110,7 @@ ensureGlobalEscHandler();
 
 function setupSwipeDelete(item, wrap, id) {
   let startX = 0, startY = 0, currentX = 0, tracking = false, revealed = false;
-  const REVEAL_W = 72, THRESHOLD = 40;
+  const REVEAL_W = 144, THRESHOLD = 40;
   const setTranslate = (x, animate = false) => {
     item.style.transition = animate ? 'transform .25s cubic-bezier(.25,.8,.25,1)' : 'none';
     item.style.transform = `translateX(${x}px)`;
@@ -2118,6 +2155,17 @@ async function deleteChat(id) {
   await deleteSessionRemote(id).catch(() => {});
   showToast('채팅을 휴지통으로 이동했습니다.');
   renderChatList(); saveIndex();
+}
+
+async function toggleChatHidden(id) {
+  const s = sessions.find(x => x.id === id);
+  if (!s) return;
+  s.hidden = !s.hidden;
+  s.updatedAt = Date.now();
+  saveSession(id);
+  saveIndex();
+  await renderChatList();
+  showToast(s.hidden ? '채팅을 숨겼어요.' : '채팅을 다시 보이게 했어요.');
 }
 
 // ══════════════════════════════
@@ -2536,8 +2584,15 @@ function sleep(ms) {
 function setChatBusy(isBusy) {
   const sendBtn = document.getElementById('sendBtn');
   const stopBtn = document.getElementById('stopBtn');
-  if (sendBtn) sendBtn.disabled = !!isBusy;
-  if (stopBtn) stopBtn.disabled = !isBusy;
+  if (sendBtn) {
+    sendBtn.disabled = false;
+    sendBtn.onclick = isBusy ? stopGeneration : sendMessage;
+    sendBtn.title = isBusy ? '응답 중지' : '메시지 보내기';
+    sendBtn.innerHTML = isBusy
+      ? '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>'
+      : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
+  }
+  if (stopBtn) stopBtn.style.display = 'none';
 }
 
 function stopGeneration() {
