@@ -14,14 +14,14 @@
   --good:#4ade80; --warn:#f59e0b; --danger:#f43f5e;
   --font-mono:'Pretendard', sans-serif; --font-display:'Pretendard', sans-serif;
 }
-*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-mono);min-height:100vh;-webkit-font-smoothing:antialiased}
-.header,.toolbar{background:rgba(15,15,19,.92);backdrop-filter:blur(12px)}
-.header{position:sticky;top:0;z-index:30;display:flex;justify-content:space-between;align-items:center;padding:18px 24px;border-bottom:1px solid var(--border)}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-mono);min-height:100vh;-webkit-font-smoothing:antialiased;overflow:hidden;display:flex;flex-direction:column}
+.header,.toolbar,.bottom-status{background:rgba(15,15,19,.92);backdrop-filter:blur(12px)}
+.header{flex:0 0 auto;display:flex;justify-content:space-between;align-items:center;padding:18px 24px;border-bottom:1px solid var(--border)}
 .brand{display:flex;gap:12px;align-items:center}
 .brand-mark{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;font-family:var(--font-display);font-weight:800;color:#fff}
 .brand-title{font-family:var(--font-display);font-size:16px;font-weight:700}
 .brand-sub{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.14em}
-.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 24px;border-bottom:1px solid var(--border)}
+.toolbar{flex:0 0 auto;display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 24px;border-bottom:1px solid var(--border);z-index:25}
 .progress-shell{flex:1 1 auto;min-width:180px;height:10px;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid var(--border);overflow:hidden;margin-left:6px}
 .progress-bar{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:inherit;transition:width .18s ease}
 .field{display:flex;align-items:center;gap:8px}
@@ -34,9 +34,10 @@
 .btn-danger{background:transparent;color:var(--danger);border-color:rgba(244,63,94,.3)}
 .btn-danger:hover{background:rgba(244,63,94,.08)}
 .btn-sm{padding:6px 10px;font-size:10px;border-radius:7px}
-.layout{display:grid;grid-template-columns:340px 1fr;min-height:calc(100vh - 124px)}
-.sidebar{border-right:1px solid var(--border);background:var(--surface);padding:14px;overflow:auto}
-.main{padding:18px 18px 24px;overflow:auto}
+.layout{flex:1 1 auto;display:grid;grid-template-columns:340px 1fr;min-height:0}
+.sidebar{border-right:1px solid var(--border);background:var(--surface);padding:14px;overflow:auto;min-height:0}
+.main{padding:18px 18px 24px;overflow:hidden;min-height:0;display:flex;flex-direction:column}
+.main-scroll{flex:1 1 auto;overflow:auto;min-height:0;padding-right:4px}
 .section-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
 .section-title h2,.section-title h3{margin:0;font:600 13px var(--font-display);letter-spacing:.01em}
 .section-note{font-size:10px;color:var(--muted)}
@@ -69,7 +70,8 @@
 .slot-actions .btn{flex:1}
 .slot-actions .btn span{display:block}
 .row-note{font-size:10px;color:var(--muted);margin-top:4px}
-.status{margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:12px;background:rgba(10,10,14,.55);font-size:11px;color:var(--muted);min-height:52px;white-space:pre-wrap}
+.bottom-status{flex:0 0 auto;padding:10px 24px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);white-space:pre-wrap;min-height:44px}
+.status{display:none}
 .hidden{display:none !important}
 .viewer{
   position:fixed;inset:0;background:rgba(0,0,0,.86);z-index:100;display:none;align-items:center;justify-content:center;padding:24px
@@ -115,6 +117,7 @@
   </aside>
 
   <main class="main">
+    <div class="main-scroll">
     <div class="gallery-head">
       <div>
         <div class="gallery-title" id="galleryTitle">Select a persona</div>
@@ -129,8 +132,11 @@
     </div>
     <div id="emotionGallery"></div>
     <div class="status" id="statusBox">Ready.</div>
+    </div>
   </main>
 </div>
+
+<div class="bottom-status" id="statusBar">Ready.</div>
 
 <div class="viewer" id="viewer">
   <div class="viewer-shell">
@@ -236,6 +242,7 @@ const els = {
   cacheStats: document.getElementById('cacheStats'),
   emotionGallery: document.getElementById('emotionGallery'),
   statusBox: document.getElementById('statusBox'),
+  statusBar: document.getElementById('statusBar'),
   progressBar: document.getElementById('progressBar'),
   viewer: document.getElementById('viewer'),
   viewerImg: document.getElementById('viewerImg'),
@@ -243,7 +250,10 @@ const els = {
   cardFileInput: document.getElementById('cardFileInput'),
 };
 
-function showStatus(msg){ els.statusBox.textContent = msg; }
+function showStatus(msg){
+  if (els.statusBar) els.statusBar.textContent = msg;
+  if (els.statusBox) els.statusBox.textContent = msg;
+}
 function setBusy(isBusy){ state.busy = isBusy; els.stopBtn.style.display = isBusy ? '' : 'none'; }
 function setProgress(pct){ els.progressBar.style.width = `${Math.max(0, Math.min(100, Number(pct) || 0))}%`; }
 function resetProgress(){ setProgress(0); }
