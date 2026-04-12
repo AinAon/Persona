@@ -532,7 +532,11 @@ async function generateEmotion(pid, eid, slot){
       const url = match ? (match[1] || match[2] || match[0]) : '';
       if (!url) throw new Error(data.error || 'No image URL returned.');
       showStatus(`Downloading generated image for ${pid}/${eid}/${slot.toUpperCase()}...`);
-      const blob = await fetch(url).then(r => r.blob());
+      const proxied = `${WORKER_URL}/image-fetch?url=${encodeURIComponent(url)}`;
+      const blob = await fetch(proxied).then(r => {
+        if (!r.ok) throw new Error(`Download proxy failed: ${r.status}`);
+        return r.blob();
+      });
       if (!blob || !blob.size) throw new Error('Downloaded image is empty.');
       const dataUrl = await new Promise(resolve => {
         const reader = new FileReader();

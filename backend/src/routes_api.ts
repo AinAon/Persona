@@ -574,6 +574,37 @@ export async function handleApiRoute(
     return Response.json({ keys }, { headers: cors });
   }
 
+  if (url.pathname === "/image-fetch" && request.method === "GET") {
+    const targetUrl = String(url.searchParams.get("url") || "").trim();
+    if (!targetUrl) return Response.json({ error: "url required" }, { status: 400, headers: cors });
+    let parsed: URL;
+    try {
+      parsed = new URL(targetUrl);
+    } catch {
+      return Response.json({ error: "invalid url" }, { status: 400, headers: cors });
+    }
+    if (!/^https?:$/.test(parsed.protocol)) {
+      return Response.json({ error: "unsupported url protocol" }, { status: 400, headers: cors });
+    }
+    const remote = await fetch(parsed.toString(), {
+      headers: {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "image/*,*/*;q=0.8",
+      },
+    });
+    if (!remote.ok) {
+      return Response.json({ error: `remote fetch failed: ${remote.status}` }, { status: 502, headers: cors });
+    }
+    const contentType = (remote.headers.get("content-type") || "image/png").split(";")[0];
+    return new Response(remote.body, {
+      headers: {
+        ...cors,
+        "Content-Type": contentType,
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
   if (url.pathname === "/image" && request.method === "POST") {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
