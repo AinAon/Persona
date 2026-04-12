@@ -490,7 +490,9 @@ async function gasCall(payload){
 }
 
 async function generateEmotion(pid, eid, slot){
-  if (state.busy) return;
+  if (state.pendingAbort) {
+    try { state.pendingAbort.abort(); } catch {}
+  }
   const ref = originalImagePath(pid, 'neutral', 'a');
   const subject = EMOTION_PROMPTS[eid] || `표정 ${eid}`;
   const prompt = [
@@ -527,6 +529,7 @@ async function generateEmotion(pid, eid, slot){
   setBusy(true);
     showStatus(`Generating ${pid}/${eid}/${slot.toUpperCase()}...`);
     state.pendingAbort = controller;
+    setBusy(true);
     try {
       showStatus(`Sending request for ${pid}/${eid}/${slot.toUpperCase()}...`);
       const res = await fetch('https://persona-worker.persona-worker.workers.dev/chat', {
