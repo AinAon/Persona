@@ -62,6 +62,8 @@ async function getNeutralImage(pid) {
   if (_neutralCache[pid]) return _neutralCache[pid];
   // IDB 시도
   try {
+    const cachedA = await idbGet(`emotion_${pid}_neutral_a`);
+    if (cachedA) { _neutralCache[pid] = cachedA; return cachedA; }
     const cached = await idbGet(`emotion_${pid}_neutral`);
     if (cached) { _neutralCache[pid] = cached; return cached; }
   } catch(e) {}
@@ -71,10 +73,14 @@ async function getNeutralImage(pid) {
 
 async function getNeutralImageThumb(pid) {
   try {
+    const cachedA = await idbGet(`emotion_${pid}_neutral_a_thumb`);
+    if (cachedA) return cachedA;
     const cached = await idbGet(`emotion_${pid}_neutral_thumb`);
     if (cached) return cached;
     const legacyCircle = await idbGet(`emotion_${pid}_neutral_circle`);
     if (legacyCircle) return legacyCircle;
+    const ldA = await idbGet(`emotion_${pid}_neutral_a_ld`);
+    if (ldA) return ldA;
     const ld = await idbGet(`emotion_${pid}_neutral_ld`);
     if (ld) return ld;
   } catch(e) {}
@@ -86,8 +92,14 @@ async function getEmotionImage(pid, emotion) {
   try {
     const cached = await idbGet(key);
     if (cached) return cached;
+    if ((emotion || 'neutral') === 'neutral') {
+      const cachedA = await idbGet(`emotion_${pid}_neutral_a`);
+      if (cachedA) return cachedA;
+    }
     const ld = await idbGet(`${key}_ld`);
     if (ld) return ld;
+    const neutralA = await idbGet(`emotion_${pid}_neutral_a`);
+    if (neutralA) return neutralA;
     return await idbGet(`emotion_${pid}_neutral`) || null;
   } catch(e) { return null; }
 }
@@ -159,7 +171,8 @@ async function resolveMessageSuffixes(rawText, pList, existingSuffixes = null) {
 
 async function getEmotionImageHD(pid, emotion, letter = '') {
   const eid = emotion || 'neutral';
-  const target = letter ? `${eid}_${letter}` : eid;
+  const normalizedBase = (!letter && eid === 'neutral') ? 'neutral_a' : eid;
+  const target = letter ? `${eid}_${letter}` : normalizedBase;
   try {
     const hd = await idbGet(`emotion_${pid}_${target}_hd`);
     if (hd) return hd;
@@ -221,7 +234,7 @@ function loadImageElement(dataUrl) {
   });
 }
 
-async function generateThumbnailSet(fullDataUrl, pid, emotion = 'neutral') {
+async function generateThumbnailSet(fullDataUrl, pid, emotion = 'neutral_a') {
   const img = await loadImageElement(fullDataUrl);
   const W = img.naturalWidth, H = img.naturalHeight;
 
@@ -344,7 +357,7 @@ async function loadNeutralDirect(pid) {
           const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob);
         });
         // square crop + circle crop 생성 후 IDB 저장
-        const { sqMd } = await generateThumbnailSet(dataUrl, pid, 'neutral');
+        const { sqMd } = await generateThumbnailSet(dataUrl, pid, 'neutral_a');
         _neutralCache[pid] = sqMd;
         return sqMd;
       } catch(e) { continue; }

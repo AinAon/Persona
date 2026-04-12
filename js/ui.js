@@ -1290,10 +1290,10 @@ function handleEditImage(input) {
       const p = getPersona(editingPid); if (!p) return;
 
       // 3단계 썸네일 생성
-      idbSet(`em_full_${p.pid}_neutral`, cropped).catch(() => {});
+      idbSet(`em_full_${p.pid}_neutral_a`, cropped).catch(() => {});
       p._pendingImage = cropped;
 
-      const { sqMd, fullHd, circSm } = await generateThumbnailSet(cropped, p.pid, 'neutral');
+      const { sqMd, fullHd, circSm } = await generateThumbnailSet(cropped, p.pid, 'neutral_a');
 
       // 메모리
       p.image = sqMd;
@@ -1345,7 +1345,7 @@ async function handleMultiImageUpload(input) {
           const emotion = parts[0];
           const letter = parts[1] || '';
           if (emotion === 'neutral') {
-            const { sqMd } = await generateThumbnailSet(resized, p.pid, 'neutral').catch(() => ({ sqMd: null }));
+            const { sqMd } = await generateThumbnailSet(resized, p.pid, 'neutral_a').catch(() => ({ sqMd: null }));
             if (sqMd) {
               _neutralCache[p.pid] = sqMd;
               renderPersonaGrid();
@@ -1481,7 +1481,7 @@ async function handleMultiImageFiles_legacy(fileList) {
           const emotion = parts[0];
           const letter = parts[1] || '';
           if (emotion === 'neutral') {
-            const { sqMd } = await generateThumbnailSet(resized, p.pid, 'neutral').catch(() => ({ sqMd: null }));
+            const { sqMd } = await generateThumbnailSet(resized, p.pid, 'neutral_a').catch(() => ({ sqMd: null }));
             if (sqMd) {
               _neutralCache[p.pid] = sqMd;
               renderPersonaGrid();
@@ -1599,7 +1599,7 @@ async function handleMultiImageFiles(fileList) {
           const emotion = parts[0];
           const letter = parts[1] || '';
           if (emotion === 'neutral') {
-            const { sqMd } = await generateThumbnailSet(resized, p.pid, 'neutral').catch(() => ({ sqMd: null }));
+            const { sqMd } = await generateThumbnailSet(resized, p.pid, 'neutral_a').catch(() => ({ sqMd: null }));
             if (sqMd) {
               _neutralCache[p.pid] = sqMd;
               renderPersonaGrid();
@@ -1654,7 +1654,7 @@ async function savePersonaEdit() {
       const b64 = p._pendingImage.split(',')[1];
       const byteArr = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
       const blob = new Blob([byteArr], { type: 'image/jpeg' });
-      const fname = `${p.pid}_neutral.jpg`;
+      const fname = `${p.pid}_neutral_a.jpg`;
       const form = new FormData();
       form.append('file', blob, fname);
       form.append('folder', `profile/${p.pid}`);
@@ -3326,7 +3326,7 @@ async function openProfilePopup(pid, emotion, hue, fallbackSrc, suffix = '') {
 
     // 3. 마지막 수단: 무표정 원본
     if (eid !== 'neutral') {
-      const neutralFull = await idbGet(`em_full_${pid}_neutral`);
+      const neutralFull = await idbGet(`em_full_${pid}_neutral_a`) || await idbGet(`em_full_${pid}_neutral`);
       if (neutralFull && popup.classList.contains('open')) {
         imgEl.innerHTML = `<img src="${neutralFull}">`;
       }

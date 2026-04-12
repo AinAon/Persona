@@ -94,9 +94,9 @@ async function init() {
 
   // neutral 이미지 IDB에서 로드
   for (const [pid] of Object.entries(EMOTION_PROFILE_MAP)) {
-    const key = `emotion_${pid}_neutral`;
+    const key = `emotion_${pid}_neutral_a`;
     try {
-      const cached = await idbGet(key);
+      const cached = await idbGet(key) || await idbGet(`emotion_${pid}_neutral`);
       if (cached) _neutralCache[pid] = cached;
     } catch(e) {}
   }
