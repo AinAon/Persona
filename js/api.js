@@ -414,7 +414,8 @@ function buildIndex() {
     userOverride: s.userOverride || null,
     userProfileMode: s.userProfileMode || 'default',
     overrideModel: s.overrideModel || null,
-    chatProfileOverride: s.chatProfileOverride || null
+    chatProfileOverride: s.chatProfileOverride || null,
+    hidden: !!s.hidden
   }));
 }
 
