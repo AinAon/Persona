@@ -2,10 +2,11 @@ export async function generateGrokImage(params: {
   model: string;
   prompt: string;
   ratio: string;
+  resolution?: string;
   images: string[];
   apiKey: string;
 }): Promise<string> {
-  const { model, prompt, ratio, images = [], apiKey } = params;
+  const { model, prompt, ratio, resolution, images = [], apiKey } = params;
   const hasReferenceImages = images.length > 0;
   const endpoint = hasReferenceImages
     ? "https://api.x.ai/v1/images/edits"
@@ -19,6 +20,9 @@ export async function generateGrokImage(params: {
 
   if (ratio && ratio !== "1:1") {
     body.aspect_ratio = ratio;
+  }
+  if (resolution) {
+    body.resolution = resolution;
   }
 
   if (hasReferenceImages) {

@@ -36,6 +36,7 @@ type ChatBody = {
   prompt?: string;
   aspect_ratio?: string;
   size?: string;
+  resolution?: string;
   images?: string[];
   participant_pids?: string[];
 };
@@ -48,6 +49,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     prompt,
     aspect_ratio,
     size,
+    resolution,
     images = [],
     participant_pids = [],
   } = reqBody;
@@ -86,6 +88,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
           model,
           prompt: userPrompt,
           ratio,
+          resolution,
           images,
           apiKey: apiKeys.grok,
         });
