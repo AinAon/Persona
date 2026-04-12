@@ -73,9 +73,9 @@
   position:fixed;inset:0;background:rgba(0,0,0,.86);z-index:100;display:none;align-items:center;justify-content:center;padding:24px
 }
 .viewer.open{display:flex}
-.viewer-shell{position:relative;max-width:min(95vw,1600px);max-height:92vh;display:flex;align-items:center;justify-content:center}
-.viewer-img-wrap{max-width:100%;max-height:92vh;overflow:hidden;border-radius:16px;background:#0a0a0d;box-shadow:0 20px 80px rgba(0,0,0,.45)}
-.viewer-img{display:block;max-width:none;max-height:none;touch-action:none;user-select:none;cursor:grab}
+.viewer-shell{position:relative;max-width:95vw;max-height:92vh;display:flex;align-items:center;justify-content:center}
+.viewer-img-wrap{max-width:95vw;max-height:92vh;overflow:hidden;border-radius:16px;background:#0a0a0d;box-shadow:0 20px 80px rgba(0,0,0,.45)}
+.viewer-img{display:block;max-width:95vw;max-height:92vh;width:auto;height:auto;object-fit:contain;touch-action:none;user-select:none;cursor:grab}
 .viewer-close{position:absolute;top:-12px;right:-12px;width:34px;height:34px;border-radius:999px;border:1px solid var(--border2);background:rgba(18,18,24,.95);color:#fff;font-size:18px;cursor:pointer;display:grid;place-items:center}
 @media (max-width: 1280px){.layout{grid-template-columns:280px 1fr}.slot-grid{grid-template-columns:repeat(3,minmax(150px,1fr))}}
 @media (max-width: 900px){.layout{grid-template-columns:1fr}.sidebar{border-right:none;border-bottom:1px solid var(--border)}.slot-grid{grid-template-columns:repeat(2,minmax(140px,1fr))}}
@@ -136,7 +136,19 @@
 
 <input id="cardFileInput" style="display:none" type="file" accept="image/*">
 
+<div class="crop-overlay" id="cropOverlay" style="position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;opacity:0;pointer-events:none;transition:opacity .2s;">
+  <div class="crop-title" style="color:#fff;font-size:14px;font-weight:600">Crop image</div>
+  <div class="crop-container" id="cropContainer" style="position:relative;width:min(80vw,53vh);aspect-ratio:2/3;overflow:hidden;border:2px solid rgba(255,255,255,.3);border-radius:14px;cursor:grab;touch-action:none;">
+    <img class="crop-img" id="cropImg" draggable="false" style="position:absolute;transform-origin:0 0;user-select:none;pointer-events:none;">
+  </div>
+  <div style="display:flex;gap:12px">
+    <button class="btn btn-ghost" onclick="closeCropEditor()">Cancel</button>
+    <button class="btn btn-primary" onclick="confirmCrop()">Apply</button>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@panzoom/panzoom@4.6.1/dist/panzoom.min.js"></script>
+<script src="js/ui_crop.js"></script>
 <script>
 const GAS_SECRET = 'persona_chat_2025';
 const WORKER_URL = 'https://persona-worker.persona-worker.workers.dev';
@@ -166,26 +178,26 @@ const DEFAULT_EMOTIONS = [
 const SLOT_KEYS = ['a','b','c','d','e'];
 const SLOT_LABELS = { a:'A', b:'B', c:'C', d:'D', e:'E' };
 const EMOTION_PROMPTS = {
-  neutral:'Change to neutral expression.',
-  subtlesmile:'Change to subtle smile expression.',
-  happy:'Change to happy expression.',
-  sad:'Change to sad expression.',
-  angry:'Change to angry expression.',
-  surprise:'Change to surprised expression.',
-  arousal:'Change to arousal expression.',
-  confusion:'Change to confusion expression.',
-  cry:'Change to crying expression.',
-  disgust:'Change to disgust expression.',
-  contempt:'Change to contempt expression.',
-  horror:'Change to horror expression.',
-  laugh:'Change to laughing expression.',
-  ecstasy:'Change to ecstatic expression.',
-  orgasm:'Change to orgasmic expression.',
-  playful:'Change to playful expression.',
-  relief:'Change to relieved expression.',
-  shy:'Change to shy expression.',
-  worry:'Change to worried expression.',
-  pain:'Change to painful expression.',
+    neutral:'무표정 (Neutral): 감정의 기복 없이 편안하고 자연스러운 기본 표정. 입과 눈에 힘이 들어가지 않은 상태로 변경',
+    subtlesmile:'미묘한 미소 (subtlesmile): 입꼬리를 아주 살짝 올린 절제된 미소. 감정을 크게 드러내지 않으면서도 은은한 호감을 표현하는 표정으로 변경',
+    happy:'행복 (Happy): 치아가 보이는 밝은 미소와 함께 환희에 찬 표정으로 변경',
+    sad:'슬픔 (Sad): 눈꼬리가 아래로 처지고 힘없이 시선을 떨군 채, 감정을 억누르듯 조용히 슬퍼하는 표정으로 변경',
+    angry:'분노 (Anger): 눈썹을 강하게 찌푸리고 이를 악물거나 입을 꽉 다물거나 입술을 깨문 채, 상대를 노려보는 격앙된 표정으로 변경',
+    surprise:'놀람 (surprise): 눈을 크게 뜨고 입을 살짝 벌린 채 예상치 못한 상황에 반응하는 순간적인 표정으로 변경',
+    arousal:'흥분 (Arousal): 거칠게 숨을 내뱉으며 감정이 고조된 상태로, 눈빛이 날카롭고 강한 긴장감이 느껴지는 표정으로 변경. 입김 없음.',
+    confusion:'당혹/번뇌 (Perplexity/Confusion): 미간을 찌푸리고 입술을 깨물거나, 눈이 휘둥그레지는 등 정답을 모를 때의 표정. 인간적인 허당미가 느껴지는 모습으로 변경',
+    cry:'울음 (crying): 엉엉 우는 표정. 얼굴을 과하게 망가트리지 않고 예쁘게 우는, 고개만 살짝 돌린 채 곁눈질로 카메라를 정면 응시하는 눈.',
+    disgust:'혐오 (disgust): 코를 살짝 찡그리거나 턱을 들고 아래로 내려다보며 입술을 뒤집고 이를 꽉 깨무는 등 불쾌감이나 거부감을 드러내는 표정.',
+    contempt:'경멸 (contempt): 한쪽 입꼬리만 올린 비대칭 표정. 캐릭터의 자신감, 오만함, 혹은 상대를 깔보는 표정으로 변경',
+    horror:'공포 (Horror): 공포를 느껴 온 몸이 얼어붙은 듯 경직되고 눈이 커진 긴장된 표정으로 변경',
+    laugh:'웃음 (Laugh): 눈을 반쯤 감고 입을 크게 벌려 자연스럽게 웃는 표정. 상황에 따라 장난스럽거나 시원하게 터지는 웃음으로 변경',
+    orgasm:'극도의 쾌감 (Peak Pleasure): 강한 감정의 절정에 도달한 상태로, 호흡이 거칠어지고 얼굴의 긴장이 풀리며 감각에 몰입한 표정으로 변경 (노골적 묘사는 배제)',
+    playful:'장난기/결의 (playful): 눈을 가늘게 뜨고 입가에 옅은 미소를 띄며 곁눈질하는 귀여운 표정. 무언가 꾸미고 있거나 목표를 향해 집중할 때의 모습으로 변경',
+    relief:'안도 (relief): 긴장이 풀리며 눈을 감고 깊은 숨을 내뱉는 표정. 사건이 일단락되었을 때 캐릭터가 짓는 가장 편안한 얼굴로 변경 (입김 없음)',
+    shy:'부끄러움 (Shy): 눈을 마주치지 못하고 시선을 피하며 얼굴에 약간의 홍조가 도는 수줍은 표정으로 변경',
+    worry:'걱정 (worry): 눈썹을 모으고 시선을 약간 아래로 떨군 채, 불안하거나 고민이 많은 상태를 드러내는 표정으로 변경',
+    pain:'고통 (pain): 입을 앞으로 벌리며 신음하듯 얼굴을 찡그리고, 신체적 혹은 정신적으로 강한 고통을 느끼는 표정으로 변경',
+    ecstasy:'황홀 (Ecstasy): 깊은 만족감이나 강한 감정에 잠긴 상태로, 눈을 감거나 흐릿하게 뜨고 부드럽게 숨을 내쉬는 표정으로 변경',
 };
 const BUILTIN_BY_CAT = {
   basic: ['neutral','subtlesmile','happy','sad','angry','surprise'],
@@ -396,20 +408,30 @@ function render(){
         card.className = 'slot-card' + (img ? ' has-image' : '');
         card.innerHTML = `
           <div class="slot-preview">${img ? `<img src="${img}" alt="">` : `<div class="slot-empty">${emo.label}<br>${slot.toUpperCase()}</div>`}</div>
-          <div class="slot-foot">
-            <div class="slot-meta"><span>${emo.id}</span><span>${slot.toUpperCase()}</span></div>
-            <div class="slot-actions">
-              <button class="btn btn-primary btn-sm">Generate</button>
-              <button class="btn btn-ghost btn-sm">Upload</button>
-            </div>
-          </div>`;
-        const preview = card.querySelector('.slot-preview');
-        preview.onclick = () => openViewer(img || getPersonaImage(state.activePid) || '');
-        card.querySelectorAll('.btn')[0].onclick = (ev) => { ev.stopPropagation(); generateEmotion(state.activePid, emo.id, slot); };
-        card.querySelectorAll('.btn')[1].onclick = (ev) => { ev.stopPropagation(); state.activeUpload = { pid: state.activePid, eid: emo.id, slot }; els.cardFileInput.value = ''; els.cardFileInput.click(); };
-        grid.appendChild(card);
+            <div class="slot-foot">
+              <div class="slot-meta"><span>${emo.id}</span><span>${slot.toUpperCase()}</span></div>
+              <div class="slot-actions">
+                <button class="btn btn-primary btn-sm">Generate</button>
+                <button class="btn btn-ghost btn-sm">Upload</button>
+                <button class="btn btn-ghost btn-sm">Delete</button>
+              </div>
+            </div>`;
+          const preview = card.querySelector('.slot-preview');
+          preview.onclick = () => openViewer(img || getPersonaImage(state.activePid) || '');
+          card.querySelectorAll('.btn')[0].onclick = (ev) => { ev.stopPropagation(); generateEmotion(state.activePid, emo.id, slot); };
+          card.querySelectorAll('.btn')[1].onclick = (ev) => { ev.stopPropagation(); state.activeUpload = { pid: state.activePid, eid: emo.id, slot }; els.cardFileInput.value = ''; els.cardFileInput.click(); };
+          card.querySelectorAll('.btn')[2].onclick = async (ev) => { ev.stopPropagation(); if (confirm(`Delete ${emo.id}/${slot.toUpperCase()}?`)) { await clearSlotImage(state.activePid, emo.id, slot); render(); } };
+          card.ondragover = ev => { ev.preventDefault(); };
+          card.ondrop = ev => {
+            ev.preventDefault();
+            const file = ev.dataTransfer?.files?.[0];
+            if (!file || !file.type.startsWith('image/')) return;
+            state.activeUpload = { pid: state.activePid, eid: emo.id, slot };
+            uploadCurrentCard(file);
+          };
+          grid.appendChild(card);
+        }
       }
-    }
       wrap.appendChild(grid);
       els.emotionGallery.appendChild(wrap);
     }
@@ -444,6 +466,8 @@ function addCustomEmotion() {
 function openViewer(src){
   if (!src) return;
   els.viewerImg.src = src;
+  els.viewerImg.style.width = 'auto';
+  els.viewerImg.style.height = 'auto';
   els.viewer.classList.add('open');
   if (state.viewer) state.viewer.destroy();
   state.viewer = Panzoom(els.viewerImg, { maxScale: 8, contain: 'outside', cursor: 'grab' });
@@ -468,13 +492,35 @@ async function gasCall(payload){
 async function generateEmotion(pid, eid, slot){
   if (state.busy) return;
   const ref = originalImagePath(pid, 'neutral', 'a');
-  const prompt = EMOTION_PROMPTS[eid] || `Change to ${eid} expression.`;
+  const subject = EMOTION_PROMPTS[eid] || `표정 ${eid}`;
+  const prompt = [
+    '[Subject]',
+    subject,
+    '',
+    '[Background]',
+    '이미지1의 배경과 동일하며 카메라 각도에 따라 달라질 수 있다.',
+    '',
+    '[Layout]',
+    '표정에 적합한 자세로 변경, 얼굴 각도 자연스럽게 변경, 자세가 바뀌어도 얼굴은 참조 이미지의 얼굴과 같은 위치에 있음',
+    '',
+    '[Mood]',
+    '밝기, 조명 유지, 피부톤 유지,',
+    '',
+    '[Style]',
+    '손에 든 물건을 놓을 경우, 그 부분의 소품은 제거한다.',
+    '',
+    '[Ratio]',
+    '2:3',
+    '',
+    '[Resolution]',
+    '2K',
+  ].join('\n');
   const body = {
     action: 'chat',
     model: 'grok-imagine-image-pro',
     prompt,
     images: [ref],
-    aspect_ratio: '1:1',
+    aspect_ratio: '2:3',
     resolution: '2k',
   };
   const controller = new AbortController();
@@ -517,10 +563,12 @@ async function uploadCurrentCard(file){
     r.onload = () => resolve(r.result);
     r.readAsDataURL(file);
   });
-  await saveSlotImage(target.pid, target.eid, target.slot, dataUrl);
-  state.activeUpload = null;
-  render();
-  showStatus(`Uploaded ${target.pid}/${target.eid}/${target.slot.toUpperCase()}`);
+  openCropEditor(dataUrl, async (cropped) => {
+    await saveSlotImage(target.pid, target.eid, target.slot, cropped);
+    state.activeUpload = null;
+    render();
+    showStatus(`Uploaded ${target.pid}/${target.eid}/${target.slot.toUpperCase()}`);
+  });
 }
 
 async function pushOne(pid, eid, slot){
@@ -592,6 +640,19 @@ function init(){
     const file = els.cardFileInput.files?.[0];
     if (file) await uploadCurrentCard(file);
   };
+  document.addEventListener('dragover', e => { if (e.dataTransfer?.types?.includes('Files')) e.preventDefault(); });
+  document.addEventListener('drop', e => {
+    if (!e.dataTransfer?.files?.length) return;
+    e.preventDefault();
+    if (!state.activePid) return;
+    const first = e.dataTransfer.files[0];
+    if (!first?.type?.startsWith('image/')) return;
+    const slot = e.target.closest?.('.slot-card')?.querySelector?.('.slot-meta span:last-child')?.textContent?.toLowerCase();
+    const emotionId = e.target.closest?.('.slot-card')?.querySelector?.('.slot-meta span:first-child')?.textContent || '';
+    if (!emotionId || !slot) return;
+    state.activeUpload = { pid: state.activePid, eid: emotionId, slot };
+    uploadCurrentCard(first);
+  });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeViewer(); });
   (async () => {
     await loadPersonasFromBackend();
