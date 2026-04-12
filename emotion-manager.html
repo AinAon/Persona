@@ -5,26 +5,26 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Emotion Manager</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@panzoom/panzoom@4.6.1/dist/panzoom.min.css">
 <style>
 :root{
   --bg:#080809; --surface:#0f0f13; --card:#14141a; --border:#20202a; --border2:#2c2c39;
   --text:#efeff6; --muted:#68687b; --accent:#7c6af7; --accent2:#a89bff;
   --good:#4ade80; --warn:#f59e0b; --danger:#f43f5e;
-  --font-mono:'JetBrains Mono', monospace; --font-display:'Syne', sans-serif;
+  --font-mono:'Pretendard', sans-serif; --font-display:'Pretendard', sans-serif;
 }
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-mono);min-height:100vh;-webkit-font-smoothing:antialiased}
 .header,.toolbar{background:rgba(15,15,19,.92);backdrop-filter:blur(12px)}
 .header{position:sticky;top:0;z-index:30;display:flex;justify-content:space-between;align-items:center;padding:18px 24px;border-bottom:1px solid var(--border)}
 .brand{display:flex;gap:12px;align-items:center}
 .brand-mark{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;font-family:var(--font-display);font-weight:800;color:#fff}
-.brand-title{font-family:var(--font-display);font-size:16px;font-weight:800}
+.brand-title{font-family:var(--font-display);font-size:16px;font-weight:700}
 .brand-sub{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.14em}
 .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 24px;border-bottom:1px solid var(--border)}
 .field{display:flex;align-items:center;gap:8px}
 .label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.12em}
-.btn{border:1px solid transparent;border-radius:8px;padding:8px 14px;font:11px var(--font-mono);font-weight:700;letter-spacing:.04em;cursor:pointer;transition:.15s}
+.btn{border:1px solid transparent;border-radius:8px;padding:8px 14px;font:12px var(--font-mono);font-weight:600;letter-spacing:.02em;cursor:pointer;transition:.15s}
 .btn-ghost{background:transparent;color:var(--muted);border-color:var(--border2)}
 .btn-ghost:hover{color:var(--text);border-color:var(--muted)}
 .btn-primary{background:var(--accent);color:#fff}
@@ -36,7 +36,7 @@
 .sidebar{border-right:1px solid var(--border);background:var(--surface);padding:14px;overflow:auto}
 .main{padding:18px 18px 24px;overflow:auto}
 .section-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
-.section-title h2,.section-title h3{margin:0;font:700 13px var(--font-display);letter-spacing:.02em}
+.section-title h2,.section-title h3{margin:0;font:600 13px var(--font-display);letter-spacing:.01em}
 .section-note{font-size:10px;color:var(--muted)}
 .persona-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .persona-card{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--card);cursor:pointer;transition:.15s}
@@ -47,10 +47,10 @@
 .persona-name{padding:6px 8px;font-size:10px;text-align:center;font-weight:700;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .badge{font-size:10px;padding:3px 8px;border-radius:999px;border:1px solid var(--border2);color:var(--muted)}
 .gallery-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
-.gallery-title{font-family:var(--font-display);font-size:14px;font-weight:800}
+.gallery-title{font-family:var(--font-display);font-size:14px;font-weight:700}
 .gallery-stats{font-size:10px;color:var(--muted)}
 .cat-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
-.cat-tab{padding:7px 10px;border-radius:999px;border:1px solid var(--border2);background:transparent;color:var(--muted);font:11px var(--font-mono);font-weight:700;cursor:pointer}
+.cat-tab{padding:7px 10px;border-radius:999px;border:1px solid var(--border2);background:transparent;color:var(--muted);font:12px var(--font-mono);font-weight:600;cursor:pointer}
 .cat-tab.active{background:var(--card);color:var(--text);border-color:var(--accent)}
 .cat{margin-bottom:18px}
 .cat-head{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:10px}
@@ -355,7 +355,7 @@ function getBestBase64ForPush(pid, eid, slot){
   const s = state.images[pid]?.[eid]?.[slot];
   return s?.full || '';
 }
-function githubPath(pid, eid, slot){ return `${state.githubBase}/profile/${pid}/${pid}_${eid}_${slot}.png`; }
+function originalImagePath(pid, eid, slot){ return `${WORKER_URL}/image/profile/${pid}/${pid}_${eid}_${slot}.png`; }
 function render(){
   els.personaCount.textContent = String(state.personas.length);
   els.galleryTitle.textContent = state.activePid ? (state.personas.find(p=>p.pid===state.activePid)?.name || state.activePid) : 'Select a persona';
@@ -469,7 +469,7 @@ async function gasCall(payload){
 
 async function generateEmotion(pid, eid, slot){
   if (state.busy) return;
-  const ref = githubPath(pid, 'neutral', 'a');
+  const ref = originalImagePath(pid, 'neutral', 'a');
   const prompt = EMOTION_PROMPTS[eid] || `Change to ${eid} expression.`;
   const body = {
     action: 'chat',
@@ -563,7 +563,7 @@ async function loadFromGithub(){
   let loaded = 0;
   for (const emo of state.emotions) {
     for (const slot of SLOT_KEYS) {
-      const url = githubPath(pid, emo.id, slot);
+      const url = originalImagePath(pid, emo.id, slot);
       try {
         const resp = await fetch(url);
         if (!resp.ok) continue;
@@ -597,7 +597,6 @@ function init(){
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeViewer(); });
   (async () => {
     await loadPersonasFromBackend();
-    await loadImagesFromIDB();
     if (!state.personas.length) {
       const cached = JSON.parse(localStorage.getItem('em_personas') || '[]');
       const seen = new Set();
@@ -607,6 +606,7 @@ function init(){
     render();
     if (state.activePid) {
       await loadFromGithub().catch(() => {});
+      await loadImagesFromIDB().catch(() => {});
       render();
     }
   })();
