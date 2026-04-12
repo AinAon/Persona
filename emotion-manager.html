@@ -350,7 +350,7 @@ function getBestBase64ForPush(pid, eid, slot){
 }
 function originalImagePath(pid, eid, slot){ return `${WORKER_URL}/image/persona-images/profile/${pid}/${pid}_${eid}_${slot}.jpg`; }
 async function listR2ProfileKeys(pid) {
-  const res = await fetch(`${WORKER_URL}/image-list/persona-images/profile/${pid}/`, { method: 'GET' });
+  const res = await fetch(`${WORKER_URL}/image-list/persona-images/profile/${pid}`, { method: 'GET' });
   if (!res.ok) return [];
   const data = await res.json().catch(() => null);
   const keys = Array.isArray(data?.keys) ? data.keys : [];
@@ -610,6 +610,7 @@ async function loadFromR2(){
   const pid = state.activePid;
   let loaded = 0;
   const keys = await listR2ProfileKeys(pid);
+  showStatus(`R2 list for ${pid}: ${keys.length} keys found.`);
   const seen = new Set();
   for (const key of keys) {
     const match = key.match(new RegExp(`^persona-images/profile/${pid}/${pid}_([^/]+)_([a-e])\\.jpg$`, 'i'));

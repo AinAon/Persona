@@ -568,8 +568,10 @@ export async function handleApiRoute(
   }
 
   if (url.pathname.startsWith("/image-list/") && request.method === "GET") {
-    const prefix = decodeURIComponent(url.pathname.slice(12));
-    const list = await env.R2.list({ prefix: `${prefix}/` });
+    const rawPrefix = decodeURIComponent(url.pathname.slice(12));
+    const normalizedPrefix = rawPrefix.replace(/^\/+|\/+$/g, "");
+    const listPrefix = normalizedPrefix ? `${normalizedPrefix}/` : "";
+    const list = await env.R2.list({ prefix: listPrefix });
     const keys = (list.objects || []).map((o) => o.key);
     return Response.json({ keys }, { headers: cors });
   }
