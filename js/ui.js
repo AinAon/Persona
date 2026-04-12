@@ -843,7 +843,7 @@ async function renderPersonaGrid() {
     // 새 render 호출이 이미 시작됐으면 이 루프 중단
     if (myVersion !== _personaGridRenderVersion) return;
 
-    const imgSrc = neutral || p.image;
+    const imgSrc = neutral;
     const nametagBg = `hsl(${p.hue},45%,22%)`;
     const isCeleb = p.type === 'celebrity';
     const celebStroke = isCeleb ? `box-shadow: inset 0 0 0 1.5px hsl(${p.hue},70%,60%), 0 0 8px hsl(${p.hue},60%,40%);` : '';
@@ -1154,7 +1154,7 @@ async function openPersonaEdit(pid) {
   editingPid = pid; isNewPersona = false;
   const p = getPersona(pid);
   document.getElementById('editTitle').textContent = p ? p.name || '페르소나 편집' : '새 페르소나';
-  const hdImage = p ? await getEmotionImageHD(p.pid, 'neutral') : null;
+  const hdImage = p ? await getEmotionImageHD(p.pid, 'neutral_a') || await idbGet(`em_full_${p.pid}_neutral_a`) : null;
   renderEditBody(p || { pid, name:'', bio:'', tags:[], hue:200, image:null }, hdImage);
   renderEditFooter(!!p);
   show('editScreen');
