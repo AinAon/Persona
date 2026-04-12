@@ -2432,6 +2432,34 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
   return `<div class="msg-group ai-msgs">${html}</div>`;
 }
 
+async function appendAIReplySequentially(reply, pList, suffixes, createdAt, tgtArea, renderSessionId) {
+  const segments = parseResponse(reply, pList);
+  const delays = segments.length > 1 ? 240 : 0;
+  for (let i = 0; i < segments.length; i++) {
+    if (_chatGeneration?.cancelled || activeChatId !== renderSessionId) return;
+    const seg = segments[i];
+    const segText = seg?.content?.trim?.() ? seg.content : '';
+    if (!segText) continue;
+    const p = pList[seg.idx] || pList[0];
+    if (!p) continue;
+    const segReply = `[${p.pid}][emotion:${seg.emotion || 'neutral'}]${segText}[/${p.pid}]`;
+    const html = await renderAIResponseHTML(segReply, [p], suffixes, createdAt);
+    if (_chatGeneration?.cancelled || activeChatId !== renderSessionId) return;
+    const replyEl = document.createElement('div');
+    replyEl.innerHTML = html;
+    if (replyEl.firstElementChild) {
+      replyEl.firstElementChild.classList.add('msg-enter');
+      enhanceRenderedMessage(replyEl.firstElementChild);
+      attachMessageMeta(replyEl.firstElementChild, createdAt, 'left');
+      tgtArea.appendChild(replyEl.firstElementChild);
+      updateChatBottomAnchor(tgtArea);
+      renderMermaidBlocks(tgtArea);
+      tgtArea.scrollTop = tgtArea.scrollHeight;
+    }
+    if (delays && i < segments.length - 1) await sleep(delays);
+  }
+}
+
 // 콘텐츠에서 모델이 잘못 추가한 태그 제거
 // [worry]...[/worry], [emotion:worry], [p_xxx]...[/p_xxx] 등
 function cleanContent(text) {
@@ -2499,6 +2527,31 @@ function setMode(m) {
 //  입력 탭 (채팅 / 이미지 / 컨텍스트)
 // ══════════════════════════════
 let _inputTab = 'chat'; // 현재 입력 탭
+let _chatGeneration = null;
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function setChatBusy(isBusy) {
+  const sendBtn = document.getElementById('sendBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  if (sendBtn) sendBtn.disabled = !!isBusy;
+  if (stopBtn) stopBtn.disabled = !isBusy;
+}
+
+function stopGeneration() {
+  if (!_chatGeneration) return;
+  _chatGeneration.cancelled = true;
+  try { _chatGeneration.controller?.abort(); } catch {}
+  _chatGeneration = null;
+  const area = document.getElementById('chatArea');
+  const thinkEl = area?.querySelector?.('.thinking-bubble');
+  if (thinkEl) thinkEl.remove();
+  isLoading = false;
+  setChatBusy(false);
+  showToast('응답을 중지했어요.');
+}
 
 function switchInputTab(tab) {
   _inputTab = tab;
@@ -2627,7 +2680,8 @@ async function sendMessage() {
   const sentAttachments = attachments.slice();
 
   isLoading = true;
-  document.getElementById('sendBtn').disabled = true;
+  _chatGeneration = { controller: new AbortController(), cancelled: false, sessionId: renderSessionId };
+  setChatBusy(true);
   input.value = ''; input.style.height = 'auto';
 
   // 이미지 탭 참조 이미지는 채팅에 표시 안 함 — 텍스트 프롬프트만 보여줌
@@ -2751,7 +2805,8 @@ async function sendMessage() {
     session.history.push({ role:'assistant', content:'(감정 테스트)', createdAt: emotionTestCreatedAt, personaSnapshot, _suffixes: {} });
     session.lastPreview = '(감정 테스트)'; session.updatedAt = Date.now();
     isLoading = false;
-    document.getElementById('sendBtn').disabled = false;
+    _chatGeneration = null;
+    setChatBusy(false);
     input.focus();
     if (!session._demo) { saveSession(session.id); saveIndex(); }
     renderChatList();
@@ -2852,7 +2907,8 @@ async function sendMessage() {
         const res = await fetch(wUrl + '/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(reqBody)
+          body: JSON.stringify(reqBody),
+          signal: _chatGeneration.controller.signal
         });
         const data = await res.json();
         if (data.result !== 'success') {
@@ -2861,6 +2917,7 @@ async function sendMessage() {
         } else { reply = data.reply || ''; }
         }
       } catch(e) {
+        if (e?.name === 'AbortError') throw e;
         const pid0 = session.participantPids?.[0] || 'p';
         reply = `[${pid0}]연결 실패: ${e.message}[/${pid0}]`;
       }
@@ -2898,20 +2955,9 @@ async function sendMessage() {
 
     // 사용자가 해당 채팅방을 그대로 보고 있다면 화면에 즉시 렌더링
     if (activeChatId === currentSession.id) {
-      const replyEl = document.createElement('div');
-      replyEl.innerHTML = await renderAIResponseHTML(reply, pList, suffixes, assistantCreatedAt);
-      if (replyEl.firstElementChild) {
-        replyEl.firstElementChild.classList.add('msg-enter');
-        // chatArea로 통일
-        enhanceRenderedMessage(replyEl.firstElementChild);
-        attachMessageMeta(replyEl.firstElementChild, assistantCreatedAt, 'left');
-        const tgtArea = document.getElementById('chatArea');
-        tgtArea.classList.add('has-messages');
-        tgtArea.appendChild(replyEl.firstElementChild);
-        updateChatBottomAnchor(tgtArea);
-        renderMermaidBlocks(tgtArea);
-        tgtArea.scrollTop = tgtArea.scrollHeight;
-      }
+      const tgtArea = document.getElementById('chatArea');
+      tgtArea.classList.add('has-messages');
+      await appendAIReplySequentially(reply, pList, suffixes, assistantCreatedAt, tgtArea, currentSession.id);
     }
 
     if (!currentSession._demo) { saveSession(currentSession.id); saveIndex(); }
@@ -2928,7 +2974,7 @@ async function sendMessage() {
   };
 
   // 이미지/채팅 모두 await — 이미지 생성 중 추가 전송 차단
-  await processApiAndRender();
+  try { await processApiAndRender(); } catch (e) { if (e?.name !== 'AbortError') throw e; } finally { isLoading = false; _chatGeneration = null; setChatBusy(false); }
 }
 
 function handleFileSelect(input) {
