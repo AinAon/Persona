@@ -205,8 +205,8 @@ function updateChatListVisibilityButton() {
   if (!btn) return;
   const on = getChatHiddenFilterEnabled();
   btn.classList.toggle('on', on);
-  btn.innerHTML = iconEyeToggleSVG(on);
-  btn.title = on ? '숨긴 채팅 보기 중' : '숨긴 채팅 숨기기';
+  btn.innerHTML = on ? iconEyeOpenSVG() : iconEyeClosedSVG();
+  btn.title = on ? '숨긴 채팅 표시 중' : '숨긴 채팅 보기';
 }
 
 function toggleChatHiddenVisibility() {
