@@ -353,7 +353,7 @@ function getBestBase64ForPush(pid, eid, slot){
   const s = state.images[pid]?.[eid]?.[slot];
   return s?.full || '';
 }
-function originalImagePath(pid, eid, slot){ return `${WORKER_URL}/image/profile/${pid}/${pid}_${eid}_${slot}.png`; }
+function originalImagePath(pid, eid, slot){ return `${WORKER_URL}/image/profile/${pid}/${pid}_${eid}_${slot}.jpg`; }
 function render(){
   els.personaCount.textContent = String(state.personas.length);
   els.galleryTitle.textContent = state.activePid ? (state.personas.find(p=>p.pid===state.activePid)?.name || state.activePid) : 'Select a persona';
