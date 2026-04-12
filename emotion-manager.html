@@ -53,9 +53,9 @@
 .cat-head{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:10px}
 .cat-head strong{font-size:11px;text-transform:uppercase;letter-spacing:.12em}
 .slot-grid{display:grid;grid-template-columns:repeat(5,minmax(150px,1fr));gap:10px}
-.slot-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;min-height:260px}
+.slot-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;min-height:300px}
 .slot-card.has-image{border-color:rgba(124,106,247,.55)}
-.slot-preview{aspect-ratio:1/1;background:#0b0b10;position:relative;overflow:hidden;cursor:pointer}
+.slot-preview{aspect-ratio:2/3;background:#0b0b10;position:relative;overflow:hidden;cursor:pointer}
 .slot-preview img{width:100%;height:100%;object-fit:cover;display:block}
 .slot-empty{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:11px}
 .slot-foot{padding:8px;display:grid;gap:8px}
@@ -136,31 +136,49 @@ const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbwc2pNBmXpeDLHq
 const DEFAULT_GITHUB_BASE = 'https://raw.githubusercontent.com/AinAon/PersonaChat/main';
 const DEFAULT_EMOTIONS = [
   { id:'neutral', label:'Neutral', category:'basic' },
+  { id:'subtlesmile', label:'Subtle Smile', category:'basic' },
   { id:'happy', label:'Happy', category:'basic' },
   { id:'sad', label:'Sad', category:'basic' },
   { id:'angry', label:'Angry', category:'basic' },
   { id:'surprise', label:'Surprise', category:'basic' },
-  { id:'shy', label:'Shy', category:'basic' },
-  { id:'subtlesmile', label:'Subtle Smile', category:'basic' },
-  { id:'serious', label:'Serious', category:'premium' },
-  { id:'thinking', label:'Thinking', category:'premium' },
-  { id:'ecstasy', label:'Ecstasy', category:'adult' },
-  { id:'orgasm', label:'Orgasm', category:'adult' },
+  { id:'arousal', label:'Arousal', category:'premium' },
+  { id:'confusion', label:'Confusion', category:'premium' },
+  { id:'cry', label:'Cry', category:'premium' },
+  { id:'disgust', label:'Disgust', category:'premium' },
+  { id:'contempt', label:'Contempt', category:'premium' },
+  { id:'horror', label:'Horror', category:'premium' },
+  { id:'laugh', label:'Laugh', category:'premium' },
+  { id:'orgasm', label:'Orgasm', category:'premium' },
+  { id:'playful', label:'Playful', category:'premium' },
+  { id:'relief', label:'Relief', category:'premium' },
+  { id:'shy', label:'Shy', category:'premium' },
+  { id:'worry', label:'Worry', category:'premium' },
+  { id:'pain', label:'Pain', category:'premium' },
+  { id:'ecstasy', label:'Ecstasy', category:'premium' },
 ];
 const SLOT_KEYS = ['a','b','c','d','e'];
 const SLOT_LABELS = { a:'A', b:'B', c:'C', d:'D', e:'E' };
 const EMOTION_PROMPTS = {
   neutral:'Change to neutral expression.',
+  subtlesmile:'Change to subtle smile expression.',
   happy:'Change to happy expression.',
   sad:'Change to sad expression.',
   angry:'Change to angry expression.',
   surprise:'Change to surprised expression.',
-  shy:'Change to shy expression.',
-  subtlesmile:'Change to subtle smile expression.',
-  serious:'Change to serious expression.',
-  thinking:'Change to thoughtful expression.',
+  arousal:'Change to arousal expression.',
+  confusion:'Change to confusion expression.',
+  cry:'Change to crying expression.',
+  disgust:'Change to disgust expression.',
+  contempt:'Change to contempt expression.',
+  horror:'Change to horror expression.',
+  laugh:'Change to laughing expression.',
   ecstasy:'Change to ecstatic expression.',
   orgasm:'Change to orgasmic expression.',
+  playful:'Change to playful expression.',
+  relief:'Change to relieved expression.',
+  shy:'Change to shy expression.',
+  worry:'Change to worried expression.',
+  pain:'Change to painful expression.',
 };
 
 const state = {
@@ -314,7 +332,7 @@ async function loadPersonasFromBackend(){
 
 function getPersonaImage(pid){
   const slots = state.images[pid]?.neutral?.a || state.images[pid]?.neutral_a || null;
-  return slots?.md || slots?.ld || slots?.thumb || slots?.full || '';
+  return slots?.full || slots?.hd || slots?.md || slots?.ld || slots?.thumb || '';
 }
 function getEmotionImage(pid, eid, slot){
   const s = state.images[pid]?.[eid]?.[slot];
