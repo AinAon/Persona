@@ -280,13 +280,7 @@ function resizeImage(dataUrl, maxPx, quality = 0.88){
   });
 }
 async function makeVariants(dataUrl){
-  const [thumb, ld, md, hd] = await Promise.all([
-    resizeImage(dataUrl, 150, 0.78),
-    resizeImage(dataUrl, 300, 0.82),
-    resizeImage(dataUrl, 600, 0.86),
-    resizeImage(dataUrl, 1200, 0.9),
-  ]);
-  return { thumb, ld, md, hd, full: dataUrl };
+  return { full: dataUrl };
 }
 function baseKey(pid, eid, slot){ return `emotion_${pid}_${eid}_${slot}`; }
 function fullKey(pid, eid, slot){ return `em_full_${pid}_${eid}_${slot}`; }
@@ -296,20 +290,12 @@ async function saveSlotImage(pid, eid, slot, dataUrl){
   state.images[pid][eid] ||= {};
   state.images[pid][eid][slot] = v;
   await Promise.all([
-    idbSet(baseKey(pid,eid,slot), v.md),
-    idbSet(`${baseKey(pid,eid,slot)}_ld`, v.ld),
-    idbSet(`${baseKey(pid,eid,slot)}_hd`, v.hd),
-    idbSet(`${baseKey(pid,eid,slot)}_thumb`, v.thumb),
     idbSet(fullKey(pid,eid,slot), v.full),
   ]);
 }
 async function clearSlotImage(pid, eid, slot){
   delete state.images[pid]?.[eid]?.[slot];
   await Promise.allSettled([
-    idbDelete(baseKey(pid,eid,slot)),
-    idbDelete(`${baseKey(pid,eid,slot)}_ld`),
-    idbDelete(`${baseKey(pid,eid,slot)}_hd`),
-    idbDelete(`${baseKey(pid,eid,slot)}_thumb`),
     idbDelete(fullKey(pid,eid,slot)),
   ]);
 }
@@ -317,24 +303,15 @@ async function loadImagesFromIDB(){
   state.images = {};
   const keys = await idbKeys().catch(()=>[]);
   for (const key of keys) {
-    const m = key.match(/^(?:em_full_|emotion_)(p_[^_]+)_(.+)_(a|b|c|d|e)(?:_(ld|hd|thumb))?$/);
+    const m = key.match(/^em_full_(p_[^_]+)_(.+)_(a|b|c|d|e)$/);
     if (!m) continue;
-    const [, pid, eid, slot, suffix] = m;
+    const [, pid, eid, slot] = m;
     const val = await idbGet(key).catch(()=>null);
     if (!val) continue;
     state.images[pid] ||= {};
     state.images[pid][eid] ||= {};
-    state.images[pid][eid][slot] ||= { thumb:'', ld:'', md:'', hd:'', full:'' };
-    const obj = state.images[pid][eid][slot];
-    if (key.startsWith('em_full_')) obj.full = val;
-    else if (suffix === 'ld') obj.ld = val;
-    else if (suffix === 'hd') obj.hd = val;
-    else if (suffix === 'thumb') obj.thumb = val;
-    else obj.md = val;
-    if (!obj.thumb) obj.thumb = obj.md || obj.ld || obj.hd || obj.full;
-    if (!obj.ld) obj.ld = obj.md || obj.hd || obj.full;
-    if (!obj.md) obj.md = obj.ld || obj.hd || obj.full;
-    if (!obj.hd) obj.hd = obj.md || obj.full;
+    state.images[pid][eid][slot] ||= { full:'' };
+    state.images[pid][eid][slot].full = val;
   }
 }
 
@@ -366,6 +343,13 @@ function getBestBase64ForPush(pid, eid, slot){
   return s?.full || '';
 }
 function originalImagePath(pid, eid, slot){ return `${WORKER_URL}/image/profile/${pid}/${pid}_${eid}_${slot}.jpg`; }
+async function listR2ProfileKeys(pid) {
+  const res = await fetch(`${WORKER_URL}/image-list/profile/${pid}/`, { method: 'GET' });
+  if (!res.ok) return [];
+  const data = await res.json().catch(() => null);
+  const keys = Array.isArray(data?.keys) ? data.keys : [];
+  return keys.filter(k => /\/[^/]+_[^/]+_[a-e]\.jpg$/i.test(k));
+}
 function render(){
   els.personaCount.textContent = String(state.personas.length);
   els.galleryTitle.textContent = state.activePid ? (state.personas.find(p=>p.pid===state.activePid)?.name || state.activePid) : 'Select a persona';
@@ -621,13 +605,17 @@ async function loadFromR2(){
   if (!state.activePid) return showStatus('Pick a persona first.');
   const pid = state.activePid;
   let loaded = 0;
+  const keys = await listR2ProfileKeys(pid);
+  const keySet = new Set(keys);
   for (const emo of state.emotions) {
     for (const slot of SLOT_KEYS) {
-      const url = originalImagePath(pid, emo.id, slot);
+      const key = `profile/${pid}/${pid}_${emo.id}_${slot}.jpg`;
+      if (!keySet.has(key)) continue;
       try {
-        const resp = await fetch(url);
+        const resp = await fetch(`${WORKER_URL}/image/${key}`);
         if (!resp.ok) continue;
         const blob = await resp.blob();
+        if (!blob || !blob.size) continue;
         const dataUrl = await new Promise(resolve => {
           const r = new FileReader();
           r.onload = () => resolve(r.result);
