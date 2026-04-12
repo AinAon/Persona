@@ -348,13 +348,43 @@ function getBestBase64ForPush(pid, eid, slot){
   const s = state.images[pid]?.[eid]?.[slot];
   return s?.full || '';
 }
-function originalImagePath(pid, eid, slot){ return `${WORKER_URL}/image/persona-images/profile/${pid}/${pid}_${eid}_${slot}.jpg`; }
+function originalImagePath(pid, eid, slot){ return `${WORKER_URL}/image/profile/${pid}/${pid}_${eid}_${slot}.jpg`; }
 async function listR2ProfileKeys(pid) {
-  const res = await fetch(`${WORKER_URL}/image-list/persona-images/profile/${pid}`, { method: 'GET' });
-  if (!res.ok) return [];
-  const data = await res.json().catch(() => null);
-  const keys = Array.isArray(data?.keys) ? data.keys : [];
-  return keys.filter(k => /\/[^/]+_[^/]+_[a-e]\.jpg$/i.test(k));
+  const prefixes = [
+    `profile/${pid}`,
+    `persona-images/profile/${pid}`,
+  ];
+  const merged = new Set();
+  for (const prefix of prefixes) {
+    try {
+      const res = await fetch(`${WORKER_URL}/image-list/${prefix}`, { method: 'GET' });
+      if (!res.ok) continue;
+      const data = await res.json().catch(() => null);
+      const keys = Array.isArray(data?.keys) ? data.keys : [];
+      for (const key of keys) {
+        if (!/\.jpg$/i.test(String(key || ''))) continue;
+        merged.add(String(key));
+      }
+    } catch {}
+  }
+  return [...merged];
+}
+function parseProfileKey(pid, key) {
+  const normalized = String(key || '').replace(/^\/+/, '');
+  const m = normalized.match(new RegExp(`^(?:persona-images/)?profile/${pid}/${pid}_(.+)\\.jpg$`, 'i'));
+  if (!m) return null;
+  const rawTail = String(m[1] || '').toLowerCase();
+  let emotion = rawTail;
+  let slot = 'a';
+  const suffixMatch = rawTail.match(/^(.*)_([a-z])$/);
+  if (suffixMatch) {
+    emotion = String(suffixMatch[1] || '').toLowerCase();
+    slot = String(suffixMatch[2] || '').toLowerCase();
+  }
+  if (emotion === 'neutral_a' && slot === 'a') {
+    emotion = 'neutral';
+  }
+  return { key: normalized, emotion, slot };
 }
 function render(){
   els.personaCount.textContent = String(state.personas.length);
@@ -371,7 +401,22 @@ function render(){
     card.innerHTML = `
       <div class="persona-thumb">${getPersonaImage(p.pid) ? `<img src="${getPersonaImage(p.pid)}" alt="">` : '<div class="slot-empty">neutral_a</div>'}</div>
       <div class="persona-name">${p.name || p.pid}</div>`;
-    card.onclick = () => { state.activePid = p.pid; render(); };
+    card.onclick = async () => {
+      state.activePid = p.pid;
+      render();
+      setBusy(true);
+      setProgress(20);
+      try {
+        showStatus(`Loading ${p.pid} from R2 originals...`);
+        await loadFromR2();
+        await loadImagesFromIDB();
+        render();
+      } finally {
+        setProgress(100);
+        setTimeout(resetProgress, 250);
+        setBusy(false);
+      }
+    };
     els.personaGrid.appendChild(card);
   }
 
@@ -611,12 +656,13 @@ async function loadFromR2(){
   let loaded = 0;
   const keys = await listR2ProfileKeys(pid);
   showStatus(`R2 list for ${pid}: ${keys.length} keys found.`);
+  const parsed = keys.map(key => parseProfileKey(pid, key)).filter(Boolean);
+  showStatus(`R2 list for ${pid}: ${keys.length} keys found, ${parsed.length} parsed.`);
   const seen = new Set();
-  for (const key of keys) {
-    const match = key.match(new RegExp(`^persona-images/profile/${pid}/${pid}_([^/]+)_([a-e])\\.jpg$`, 'i'));
-    if (!match) continue;
-    const eid = String(match[1] || '').toLowerCase();
-    const slot = String(match[2] || '').toLowerCase();
+  for (const item of parsed) {
+    const key = item.key;
+    const eid = item.emotion;
+    const slot = item.slot;
     const cacheKey = `${eid}_${slot}`;
     if (seen.has(cacheKey)) continue;
     seen.add(cacheKey);
