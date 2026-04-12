@@ -525,33 +525,44 @@ async function generateEmotion(pid, eid, slot){
   };
   const controller = new AbortController();
   setBusy(true);
-  showStatus(`Generating ${pid}/${eid}/${slot.toUpperCase()}...`);
-  state.pendingAbort = controller;
-  try {
-    const res = await fetch('https://persona-worker.persona-worker.workers.dev/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-    const data = await res.json();
-    const match = String(data.reply || data.content || '').match(/\((https?:\/\/[^)]+)\)|!\[[^\]]*\]\((https?:\/\/[^)]+)\)|https?:\/\/\S+/);
-    const url = match ? (match[1] || match[2] || match[0]) : '';
-    if (!url) throw new Error(data.error || 'No image URL returned.');
-    const blob = await fetch(url).then(r => r.blob());
-    const dataUrl = await new Promise(resolve => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.readAsDataURL(blob);
-    });
-    await saveSlotImage(pid, eid, slot, dataUrl);
-    render();
-    showStatus(`Saved ${pid}/${eid}/${slot.toUpperCase()}`);
-  } catch (err) {
-    showStatus(`Generate failed: ${err.message}`);
-  } finally {
-    state.pendingAbort = null;
-    setBusy(false);
+    showStatus(`Generating ${pid}/${eid}/${slot.toUpperCase()}...`);
+    state.pendingAbort = controller;
+    try {
+      showStatus(`Sending request for ${pid}/${eid}/${slot.toUpperCase()}...`);
+      const res = await fetch('https://persona-worker.persona-worker.workers.dev/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const raw = await res.text();
+        throw new Error(raw || `HTTP ${res.status}`);
+      }
+      showStatus(`Received response for ${pid}/${eid}/${slot.toUpperCase()}...`);
+      const data = await res.json();
+      const match = String(data.reply || data.content || '').match(/\((https?:\/\/[^)]+)\)|!\[[^\]]*\]\((https?:\/\/[^)]+)\)|https?:\/\/\S+/);
+      const url = match ? (match[1] || match[2] || match[0]) : '';
+      if (!url) throw new Error(data.error || 'No image URL returned.');
+      showStatus(`Downloading generated image for ${pid}/${eid}/${slot.toUpperCase()}...`);
+      const blob = await fetch(url).then(r => r.blob());
+      if (!blob || !blob.size) throw new Error('Downloaded image is empty.');
+      const dataUrl = await new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+      });
+      showStatus(`Saving ${pid}/${eid}/${slot.toUpperCase()}...`);
+      await saveSlotImage(pid, eid, slot, dataUrl);
+      render();
+      showStatus(`Saved ${pid}/${eid}/${slot.toUpperCase()}`);
+    } catch (err) {
+      const msg = err?.message || String(err || 'unknown error');
+      showStatus(`Generate failed: ${msg}`);
+      console.error('generateEmotion failed', { pid, eid, slot, err });
+    } finally {
+      state.pendingAbort = null;
+      setBusy(false);
   }
 }
 
