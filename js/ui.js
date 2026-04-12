@@ -176,11 +176,11 @@ function iconEyeClosedSVG() {
 }
 
 function iconTrashSVG() {
-  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>';
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>';
 }
 
-function iconEyeToggleSVG(hidden = false) {
-  return hidden ? iconEyeClosedSVG() : iconEyeOpenSVG();
+function iconEyeToggleSVG(showing = false) {
+  return showing ? iconEyeOpenSVG() : iconEyeClosedSVG();
 }
 
 function updateChatHeaderActionButtons() {
@@ -206,7 +206,7 @@ function updateChatListVisibilityButton() {
   const on = getChatHiddenFilterEnabled();
   btn.classList.toggle('on', on);
   btn.innerHTML = iconEyeToggleSVG(on);
-  btn.title = on ? '숨긴 채팅 숨기기' : '숨긴 채팅 보기';
+  btn.title = on ? '숨긴 채팅 보기 중' : '숨긴 채팅 숨기기';
 }
 
 function toggleChatHiddenVisibility() {
