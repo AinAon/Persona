@@ -24,8 +24,6 @@
 .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 24px;border-bottom:1px solid var(--border)}
 .field{display:flex;align-items:center;gap:8px}
 .label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.12em}
-.input{background:var(--card);color:var(--text);border:1px solid var(--border2);border-radius:8px;padding:8px 12px;font:11px var(--font-mono);min-width:260px;outline:none}
-.input:focus{border-color:var(--accent)}
 .btn{border:1px solid transparent;border-radius:8px;padding:8px 14px;font:11px var(--font-mono);font-weight:700;letter-spacing:.04em;cursor:pointer;transition:.15s}
 .btn-ghost{background:transparent;color:var(--muted);border-color:var(--border2)}
 .btn-ghost:hover{color:var(--text);border-color:var(--muted)}
@@ -76,7 +74,6 @@
 .viewer-img-wrap{max-width:100%;max-height:92vh;overflow:hidden;border-radius:16px;background:#0a0a0d;box-shadow:0 20px 80px rgba(0,0,0,.45)}
 .viewer-img{display:block;max-width:none;max-height:none;touch-action:none;user-select:none;cursor:grab}
 .viewer-close{position:absolute;top:-12px;right:-12px;width:34px;height:34px;border-radius:999px;border:1px solid var(--border2);background:rgba(18,18,24,.95);color:#fff;font-size:18px;cursor:pointer;display:grid;place-items:center}
-.file-input{display:none}
 @media (max-width: 1280px){.layout{grid-template-columns:280px 1fr}.slot-grid{grid-template-columns:repeat(3,minmax(150px,1fr))}}
 @media (max-width: 900px){.layout{grid-template-columns:1fr}.sidebar{border-right:none;border-bottom:1px solid var(--border)}.slot-grid{grid-template-columns:repeat(2,minmax(140px,1fr))}}
 </style>
@@ -94,15 +91,6 @@
 </div>
 
 <div class="toolbar">
-  <div class="field">
-    <span class="label">GAS</span>
-    <input id="gasUrl" class="input" placeholder="GAS endpoint">
-  </div>
-  <div class="field">
-    <span class="label">GitHub base</span>
-    <input id="githubBase" class="input" placeholder="https://raw.githubusercontent.com/...">
-  </div>
-  <button class="btn btn-ghost" id="saveSettingsBtn">Save</button>
   <button class="btn btn-ghost" id="reloadBtn">Reload</button>
   <button class="btn btn-primary" id="uploadAllBtn">Upload all</button>
   <button class="btn btn-ghost" id="pushAllBtn">Push all</button>
@@ -138,7 +126,7 @@
   </div>
 </div>
 
-<input id="cardFileInput" class="file-input" type="file" accept="image/*">
+<input id="cardFileInput" style="display:none" type="file" accept="image/*">
 
 <script src="https://cdn.jsdelivr.net/npm/@panzoom/panzoom@4.6.1/dist/panzoom.min.js"></script>
 <script>
@@ -177,8 +165,8 @@ const EMOTION_PROMPTS = {
 const state = {
   personas: JSON.parse(localStorage.getItem('em_personas') || '[]'),
   emotions: JSON.parse(localStorage.getItem('em_emotions') || 'null') || DEFAULT_EMOTIONS.map(x => ({...x})),
-  githubBase: localStorage.getItem('em_githubBase') || DEFAULT_GITHUB_BASE,
-  gasUrl: localStorage.getItem('em_gasUrl') || DEFAULT_GAS_URL,
+  githubBase: DEFAULT_GITHUB_BASE,
+  gasUrl: DEFAULT_GAS_URL,
   activePid: null,
   images: {},
   busy: false,
@@ -188,9 +176,6 @@ const state = {
 };
 
 const els = {
-  gasUrl: document.getElementById('gasUrl'),
-  githubBase: document.getElementById('githubBase'),
-  saveSettingsBtn: document.getElementById('saveSettingsBtn'),
   reloadBtn: document.getElementById('reloadBtn'),
   uploadAllBtn: document.getElementById('uploadAllBtn'),
   pushAllBtn: document.getElementById('pushAllBtn'),
@@ -213,8 +198,6 @@ function setBusy(isBusy){ state.busy = isBusy; els.stopBtn.style.display = isBus
 function saveState(){
   localStorage.setItem('em_personas', JSON.stringify(state.personas));
   localStorage.setItem('em_emotions', JSON.stringify(state.emotions));
-  localStorage.setItem('em_githubBase', state.githubBase);
-  localStorage.setItem('em_gasUrl', state.gasUrl);
 }
 
 let _db = null;
@@ -528,14 +511,6 @@ async function loadFromGithub(){
 }
 
 function init(){
-  els.gasUrl.value = state.gasUrl;
-  els.githubBase.value = state.githubBase;
-  els.saveSettingsBtn.onclick = () => {
-    state.gasUrl = els.gasUrl.value.trim();
-    state.githubBase = els.githubBase.value.trim() || DEFAULT_GITHUB_BASE;
-    saveState();
-    showStatus('Settings saved.');
-  };
   els.reloadBtn.onclick = () => state.activePid ? loadFromGithub() : reloadCache();
   els.uploadAllBtn.onclick = uploadAll;
   els.pushAllBtn.onclick = pushAll;
