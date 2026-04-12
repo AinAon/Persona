@@ -22,6 +22,8 @@
 .brand-title{font-family:var(--font-display);font-size:16px;font-weight:700}
 .brand-sub{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.14em}
 .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 24px;border-bottom:1px solid var(--border)}
+.progress-shell{flex:1 1 auto;min-width:180px;height:10px;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid var(--border);overflow:hidden;margin-left:6px}
+.progress-bar{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:inherit;transition:width .18s ease}
 .field{display:flex;align-items:center;gap:8px}
 .label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.12em}
 .btn{border:1px solid transparent;border-radius:8px;padding:8px 14px;font:12px var(--font-mono);font-weight:600;letter-spacing:.02em;cursor:pointer;transition:.15s}
@@ -98,6 +100,7 @@
   <button class="btn btn-primary" id="uploadAllBtn">Upload all</button>
   <button class="btn btn-ghost" id="pushAllBtn">Push all</button>
   <button class="btn btn-danger" id="stopBtn" style="display:none">Stop</button>
+  <div class="progress-shell" aria-hidden="true"><div class="progress-bar" id="progressBar"></div></div>
 </div>
 
 <div class="layout">
@@ -229,6 +232,7 @@ const els = {
   cacheStats: document.getElementById('cacheStats'),
   emotionGallery: document.getElementById('emotionGallery'),
   statusBox: document.getElementById('statusBox'),
+  progressBar: document.getElementById('progressBar'),
   viewer: document.getElementById('viewer'),
   viewerImg: document.getElementById('viewerImg'),
   viewerClose: document.getElementById('viewerClose'),
@@ -237,6 +241,8 @@ const els = {
 
 function showStatus(msg){ els.statusBox.textContent = msg; }
 function setBusy(isBusy){ state.busy = isBusy; els.stopBtn.style.display = isBusy ? '' : 'none'; }
+function setProgress(pct){ els.progressBar.style.width = `${Math.max(0, Math.min(100, Number(pct) || 0))}%`; }
+function resetProgress(){ setProgress(0); }
 function saveState(){
   localStorage.setItem('em_personas', JSON.stringify(state.personas));
   localStorage.setItem('em_emotions', JSON.stringify(state.emotions));
@@ -599,12 +605,6 @@ async function pushAll(){
   if (!state.activePid) return;
   await uploadAll();
 }
-async function reloadCache(){
-  await loadImagesFromIDB();
-  render();
-  showStatus('Local cache reloaded.');
-}
-
 async function loadFromR2(){
   if (!state.activePid) return showStatus('Pick a persona first.');
   const pid = state.activePid;
@@ -634,8 +634,53 @@ async function loadFromR2(){
   if (loaded > 0) showStatus(`Loaded ${loaded} images.`);
 }
 
+async function reloadPersonaFromR2(pid){
+  if (!pid) return;
+  const existing = state.images[pid] || {};
+  for (const eid of Object.keys(existing)) {
+    for (const slot of Object.keys(existing[eid] || {})) {
+      await clearSlotImage(pid, eid, slot).catch(() => {});
+    }
+  }
+  await loadFromR2();
+  await loadImagesFromIDB();
+  render();
+}
+
+async function reloadAll(){
+  setBusy(true);
+  setProgress(8);
+  showStatus('Reloading personas and cache...');
+  try {
+    await loadPersonasFromBackend();
+    if (!state.personas.length) {
+      const cached = JSON.parse(localStorage.getItem('em_personas') || '[]');
+      const seen = new Set();
+      state.personas = Array.isArray(cached) ? cached.filter(p => p && p.pid && !seen.has(p.pid) && seen.add(p.pid)) : [];
+    }
+    if (state.personas.length && !state.activePid) state.activePid = state.personas[0].pid;
+    render();
+    setProgress(25);
+    await loadImagesFromIDB();
+    render();
+    setProgress(55);
+    if (state.activePid) {
+      showStatus(`Refreshing ${state.activePid} from R2 originals...`);
+      await reloadPersonaFromR2(state.activePid);
+      setProgress(90);
+    }
+    showStatus('Reload completed: R2 originals refreshed and local cache rebuilt.');
+  } catch (err) {
+    showStatus(`Reload failed: ${err?.message || String(err || 'unknown error')}`);
+  } finally {
+    setProgress(100);
+    setTimeout(resetProgress, 350);
+    setBusy(false);
+  }
+}
+
 function init(){
-  els.reloadBtn.onclick = () => state.activePid ? loadFromR2() : reloadCache();
+  els.reloadBtn.onclick = () => reloadAll();
   els.uploadAllBtn.onclick = uploadAll;
   els.pushAllBtn.onclick = pushAll;
   els.stopBtn.onclick = () => { state.pendingAbort?.abort?.(); showStatus('Stopped.'); setBusy(false); };
@@ -674,6 +719,7 @@ function init(){
       await loadImagesFromIDB().catch(() => {});
       render();
     }
+    resetProgress();
   })();
 }
 
