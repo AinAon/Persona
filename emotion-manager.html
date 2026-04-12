@@ -155,9 +155,9 @@
 <script src="https://cdn.jsdelivr.net/npm/@panzoom/panzoom@4.6.1/dist/panzoom.min.js"></script>
 <script src="js/ui_crop.js"></script>
 <script>
-const GAS_SECRET = 'persona_chat_2025';
 const WORKER_URL = 'https://persona-worker.persona-worker.workers.dev';
 const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbwc2pNBmXpeDLHqc7tGff4kVByDbcG1ijLRzxNTiKjSklSo4dcm61R5XNOAghaAGozz/exec';
+const R2_UPLOAD_ENDPOINT = `${WORKER_URL}/image`;
 const DEFAULT_EMOTIONS = [
   { id:'neutral', label:'Neutral', category:'basic' },
   { id:'subtlesmile', label:'Subtle Smile', category:'basic' },
@@ -342,7 +342,7 @@ async function loadPersonasFromBackend(){
 }
 
 function getPersonaImage(pid){
-  const slots = state.images[pid]?.neutral?.a || state.images[pid]?.neutral_a || null;
+  const slots = state.images[pid]?.neutral_a?.a || null;
   return slots?.full || '';
 }
 function getEmotionImage(pid, eid, slot){
@@ -531,11 +531,34 @@ async function gasCall(payload){
   return await res.json();
 }
 
+function dataUrlToBlob(dataUrl){
+  const [meta, b64] = String(dataUrl || '').split(',');
+  const mime = (meta && meta.match(/data:([^;]+);base64/i)?.[1]) || 'image/jpeg';
+  const bin = atob(b64 || '');
+  const len = bin.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
+}
+
+async function uploadBase64ToR2(pid, eid, slot, base64){
+  const fd = new FormData();
+  fd.append('folder', `profile/${pid}`);
+  fd.append('fileName', `${pid}_${eid}_${slot}.jpg`);
+  fd.append('file', dataUrlToBlob(base64), `${pid}_${eid}_${slot}.jpg`);
+  const res = await fetch(R2_UPLOAD_ENDPOINT, { method: 'POST', body: fd });
+  if (!res.ok) {
+    const raw = await res.text().catch(() => '');
+    throw new Error(raw || `HTTP ${res.status}`);
+  }
+  return await res.json();
+}
+
 async function generateEmotion(pid, eid, slot){
   if (state.pendingAbort) {
     try { state.pendingAbort.abort(); } catch {}
   }
-  const ref = originalImagePath(pid, 'neutral', 'a');
+  const ref = originalImagePath(pid, 'neutral_a', 'a');
   const subject = EMOTION_PROMPTS[eid] || `표정 ${eid}`;
   const prompt = [
     '[Subject]',
@@ -586,8 +609,9 @@ async function generateEmotion(pid, eid, slot){
       }
       showStatus(`Received response for ${pid}/${eid}/${slot.toUpperCase()}...`);
       const data = await res.json();
+      const imageUrl = String(data.image_url || '').trim();
       const match = String(data.reply || data.content || '').match(/\((https?:\/\/[^)]+)\)|!\[[^\]]*\]\((https?:\/\/[^)]+)\)|https?:\/\/\S+/);
-      const url = match ? (match[1] || match[2] || match[0]) : '';
+      const url = imageUrl || (match ? (match[1] || match[2] || match[0]) : '');
       if (!url) throw new Error(data.error || 'No image URL returned.');
       showStatus(`Downloading generated image for ${pid}/${eid}/${slot.toUpperCase()}...`);
       const proxied = `${WORKER_URL}/image-fetch?url=${encodeURIComponent(url)}`;
@@ -634,9 +658,9 @@ async function uploadCurrentCard(file){
 async function pushOne(pid, eid, slot){
   const base64 = getBestBase64ForPush(pid, eid, slot);
   if (!base64) return;
-  showStatus(`Pushing ${pid}/${eid}/${slot.toUpperCase()}...`);
-  const res = await gasCall({ action:'pushGithub', pid, emotionId:`${eid}_${slot}`, base64 });
-  if (res?.result !== 'success') throw new Error(res?.error || 'push failed');
+  showStatus(`Uploading ${pid}/${eid}/${slot.toUpperCase()} to R2...`);
+  const res = await uploadBase64ToR2(pid, eid, slot, base64);
+  if (!res?.key) throw new Error(res?.error || 'upload failed');
 }
 async function uploadAll(){
   if (!state.activePid) return;
@@ -647,7 +671,7 @@ async function uploadAll(){
   setBusy(true);
   try {
     for (const [eid, slot] of tasks) await pushOne(pid, eid, slot);
-    showStatus(`Uploaded ${tasks.length} items.`);
+    showStatus(`Uploaded ${tasks.length} items to R2.`);
   } catch (err) {
     showStatus(`Upload failed: ${err.message}`);
   } finally {
