@@ -76,6 +76,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       : messages;
 
     let reply = "";
+    let imageUrlOut = "";
     if (isImageReq) {
       const userPrompt = typeof prompt === "string" && prompt.trim()
         ? prompt
@@ -118,6 +119,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       }
 
       if (!imageUrl) throw new Error("이미지 URL 응답이 없습니다.");
+      imageUrlOut = imageUrl;
       reply = `![generated](${imageUrl})`;
     } else if (model.startsWith("gemini")) {
       reply = await generateGeminiText({
@@ -145,6 +147,9 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       });
     }
 
+    if (imageUrlOut) {
+      return Response.json({ result: "success", reply, image_url: imageUrlOut }, { headers: cors });
+    }
     return Response.json({ result: "success", reply }, { headers: cors });
   } catch (e: any) {
     return Response.json({ result: "error", error: e?.message || "unknown error" }, { status: 500, headers: cors });

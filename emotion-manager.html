@@ -286,7 +286,8 @@ function resizeImage(dataUrl, maxPx, quality = 0.88){
   });
 }
 async function makeVariants(dataUrl){
-  return { full: dataUrl };
+  const full = await resizeImage(dataUrl, 2400, 0.92);
+  return { full };
 }
 function baseKey(pid, eid, slot){ return `emotion_${pid}_${eid}_${slot}`; }
 function fullKey(pid, eid, slot){ return `em_full_${pid}_${eid}_${slot}`; }
@@ -627,6 +628,7 @@ async function uploadCurrentCard(file){
 async function pushOne(pid, eid, slot){
   const base64 = getBestBase64ForPush(pid, eid, slot);
   if (!base64) return;
+  showStatus(`Pushing ${pid}/${eid}/${slot.toUpperCase()}...`);
   const res = await gasCall({ action:'pushGithub', pid, emotionId:`${eid}_${slot}`, base64 });
   if (res?.result !== 'success') throw new Error(res?.error || 'push failed');
 }

@@ -2967,7 +2967,21 @@ async function sendMessage() {
         if (data.result !== 'success') {
           const pid0 = session.participantPids?.[0] || 'p';
           reply = `[${pid0}]생성 오류: ${data.error||'알 수 없는 오류'}[/${pid0}]`;
-        } else { reply = data.reply || ''; }
+        } else {
+          reply = data.reply || '';
+          if (isImageReq) {
+            const rawImageUrl = String(data.image_url || '').trim();
+            const proxiedImageUrl = rawImageUrl ? `${wUrl}/image-fetch?url=${encodeURIComponent(rawImageUrl)}` : '';
+            const safeImageUrl = proxiedImageUrl || rawImageUrl;
+            if (safeImageUrl) {
+              if (/!\[[^\]]*\]\(([^)]*)\)/.test(reply)) {
+                reply = reply.replace(/!\[([^\]]*)\]\(([^)]*)\)/, (_m, alt) => `![${alt || 'generated'}](${safeImageUrl})`);
+              } else {
+                reply = `![generated](${safeImageUrl})`;
+              }
+            }
+          }
+        }
         }
       } catch(e) {
         if (e?.name === 'AbortError') throw e;
