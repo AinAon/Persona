@@ -97,8 +97,10 @@
 
 <div class="toolbar">
   <button class="btn btn-ghost" id="reloadBtn">Reload</button>
-  <button class="btn btn-primary" id="uploadAllBtn">Upload all</button>
+  <button class="btn btn-primary" id="generateAllBtn">Generate all</button>
+  <button class="btn btn-ghost" id="uploadAllBtn">Upload all</button>
   <button class="btn btn-ghost" id="pushAllBtn">Push all</button>
+  <button class="btn btn-danger" id="deleteAllBtn">Delete all</button>
   <button class="btn btn-danger" id="stopBtn" style="display:none">Stop</button>
   <div class="progress-shell" aria-hidden="true"><div class="progress-bar" id="progressBar"></div></div>
 </div>
@@ -224,6 +226,8 @@ const els = {
   reloadBtn: document.getElementById('reloadBtn'),
   uploadAllBtn: document.getElementById('uploadAllBtn'),
   pushAllBtn: document.getElementById('pushAllBtn'),
+  generateAllBtn: document.getElementById('generateAllBtn'),
+  deleteAllBtn: document.getElementById('deleteAllBtn'),
   stopBtn: document.getElementById('stopBtn'),
   personaGrid: document.getElementById('personaGrid'),
   personaCount: document.getElementById('personaCount'),
@@ -449,14 +453,16 @@ function render(){
               <div class="slot-actions">
                 <button class="btn btn-primary btn-sm">Generate</button>
                 <button class="btn btn-ghost btn-sm">Upload</button>
-                <button class="btn btn-ghost btn-sm">Delete</button>
+                <button class="btn btn-ghost btn-sm">Push</button>
+                <button class="btn btn-danger btn-sm">Delete</button>
               </div>
             </div>`;
           const preview = card.querySelector('.slot-preview');
           preview.onclick = () => openViewer(img || getPersonaImage(state.activePid) || '');
           card.querySelectorAll('.btn')[0].onclick = (ev) => { ev.stopPropagation(); generateEmotion(state.activePid, emo.id, slot); };
           card.querySelectorAll('.btn')[1].onclick = (ev) => { ev.stopPropagation(); state.activeUpload = { pid: state.activePid, eid: emo.id, slot }; els.cardFileInput.value = ''; els.cardFileInput.click(); };
-          card.querySelectorAll('.btn')[2].onclick = async (ev) => { ev.stopPropagation(); if (confirm(`Delete ${emo.id}/${slot.toUpperCase()}?`)) { await clearSlotImage(state.activePid, emo.id, slot); render(); } };
+          card.querySelectorAll('.btn')[2].onclick = (ev) => { ev.stopPropagation(); pushOne(state.activePid, emo.id, slot).catch(err => showStatus(`Push failed: ${err?.message || err}`)); };
+          card.querySelectorAll('.btn')[3].onclick = async (ev) => { ev.stopPropagation(); if (confirm(`Delete ${emo.id}/${slot.toUpperCase()}?`)) { await clearSlotImage(state.activePid, emo.id, slot); render(); } };
           card.ondragover = ev => { ev.preventDefault(); };
           card.ondrop = ev => {
             ev.preventDefault();
@@ -652,6 +658,32 @@ async function pushAll(){
   if (!state.activePid) return;
   await uploadAll();
 }
+async function generateAll(){
+  if (!state.activePid) return;
+  const pid = state.activePid;
+  const tasks = [];
+  for (const emo of state.emotions) for (const slot of SLOT_KEYS) if (!getEmotionImage(pid, emo.id, slot)) tasks.push([emo.id, slot]);
+  if (!tasks.length) return showStatus('Nothing to generate.');
+  setBusy(true);
+  try {
+    for (const [eid, slot] of tasks) await generateEmotion(pid, eid, slot);
+    showStatus(`Generated ${tasks.length} items.`);
+  } finally {
+    setBusy(false);
+  }
+}
+async function deleteAll(){
+  if (!state.activePid) return;
+  if (!confirm(`Delete all emotion images for ${state.activePid}?`)) return;
+  const pid = state.activePid;
+  for (const eid of Object.keys(state.images[pid] || {})) {
+    for (const slot of Object.keys(state.images[pid][eid] || {})) {
+      await clearSlotImage(pid, eid, slot).catch(() => {});
+    }
+  }
+  render();
+  showStatus(`Deleted all local images for ${pid}.`);
+}
 async function loadFromR2(){
   if (!state.activePid) return showStatus('Pick a persona first.');
   const pid = state.activePid;
@@ -741,8 +773,10 @@ async function reloadAll(){
 
 function init(){
   els.reloadBtn.onclick = () => reloadAll();
+  els.generateAllBtn.onclick = generateAll;
   els.uploadAllBtn.onclick = uploadAll;
   els.pushAllBtn.onclick = pushAll;
+  els.deleteAllBtn.onclick = deleteAll;
   els.stopBtn.onclick = () => { state.pendingAbort?.abort?.(); showStatus('Stopped.'); setBusy(false); };
   els.viewerClose.onclick = closeViewer;
   els.viewer.onclick = (e) => { if (e.target === els.viewer) closeViewer(); };
