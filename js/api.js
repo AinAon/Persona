@@ -262,6 +262,7 @@ async function getEmotionImageHD(pid, emotion, letter = '') {
   const eid = emotion || 'neutral';
   const normalizedBase = (!letter && eid === 'neutral') ? 'neutral_a' : eid;
   const target = letter ? `${eid}_${letter}` : normalizedBase;
+  const strictBaseOnly = !letter && normalizedBase === 'neutral_a';
   try {
     const bestA = pickClosestStep(PROFILE_FULL_WIDTH_STEPS, IMAGE_CACHE_SIZES.HD * getScreenDpr());
     const fullTier = await idbGet(`emotion_${pid}_${target}_a_${bestA}`);
@@ -288,7 +289,7 @@ async function getEmotionImageHD(pid, emotion, letter = '') {
       url = `${wUrl}/image/profile/${pid}/${pid}_${eid}_${letter}.jpg`;
     } else if (hasBase && !letter) {
       url = `${wUrl}/image/profile/${pid}/${pid}_${eid}.jpg`;
-    } else if (suffixed.length > 0) {
+    } else if (!strictBaseOnly && suffixed.length > 0) {
       const randomLetter = suffixed[Math.floor(Math.random() * suffixed.length)];
       url = `${wUrl}/image/profile/${pid}/${pid}_${eid}_${randomLetter}.jpg`;
     }
