@@ -41,8 +41,15 @@
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  font-size:14px;
-  line-height:1;
+}
+.btn-icon svg{
+  width:14px;
+  height:14px;
+  stroke:currentColor;
+  fill:none;
+  stroke-width:2;
+  stroke-linecap:round;
+  stroke-linejoin:round;
 }
 .layout{flex:1 1 auto;display:grid;grid-template-columns:340px 1fr;min-height:0;overflow:hidden;padding-bottom:52px}
 .sidebar{border-right:1px solid var(--border);background:var(--surface);padding:14px;overflow:auto;min-height:0}
@@ -91,6 +98,7 @@
 .viewer-img-wrap{max-width:95vw;max-height:92vh;overflow:hidden;border-radius:16px;background:#0a0a0d;box-shadow:0 20px 80px rgba(0,0,0,.45)}
 .viewer-img{display:block;max-width:95vw;max-height:92vh;width:auto;height:auto;object-fit:contain;touch-action:none;user-select:none;cursor:grab}
 .viewer-close{position:absolute;top:-12px;right:-12px;width:34px;height:34px;border-radius:999px;border:1px solid var(--border2);background:rgba(18,18,24,.95);color:#fff;font-size:18px;cursor:pointer;display:grid;place-items:center}
+.crop-overlay.open{opacity:1 !important;pointer-events:auto !important;}
 @media (max-width: 1280px){.layout{grid-template-columns:280px 1fr}.slot-grid{grid-template-columns:repeat(3,minmax(150px,1fr))}}
 @media (max-width: 900px){.layout{grid-template-columns:1fr}.sidebar{border-right:none;border-bottom:1px solid var(--border)}.slot-grid{grid-template-columns:repeat(2,minmax(140px,1fr))}}
 </style>
@@ -108,11 +116,10 @@
 </div>
 
 <div class="toolbar">
-  <button class="btn btn-ghost" id="reloadBtn" title="Reload">🔄</button>
-  <button class="btn btn-primary" id="generateAllBtn" title="Generate all">✨</button>
-  <button class="btn btn-ghost" id="uploadAllBtn" title="Upload all">📤</button>
-  <button class="btn btn-ghost" id="pushAllBtn" title="Push all">☁</button>
-  <button class="btn btn-danger" id="deleteAllBtn" title="Delete all">🗑</button>
+  <button class="btn btn-ghost" id="reloadBtn">Reload</button>
+  <button class="btn btn-primary" id="generateAllBtn">Generate all</button>
+  <button class="btn btn-ghost" id="pushAllBtn">Push all</button>
+  <button class="btn btn-danger" id="deleteAllBtn">Delete all</button>
   <button class="btn btn-danger" id="stopBtn" style="display:none">Stop</button>
   <div class="progress-shell" aria-hidden="true"><div class="progress-bar" id="progressBar"></div></div>
 </div>
@@ -240,7 +247,6 @@ const state = {
 
 const els = {
   reloadBtn: document.getElementById('reloadBtn'),
-  uploadAllBtn: document.getElementById('uploadAllBtn'),
   pushAllBtn: document.getElementById('pushAllBtn'),
   generateAllBtn: document.getElementById('generateAllBtn'),
   deleteAllBtn: document.getElementById('deleteAllBtn'),
@@ -258,6 +264,14 @@ const els = {
   viewerImg: document.getElementById('viewerImg'),
   viewerClose: document.getElementById('viewerClose'),
   cardFileInput: document.getElementById('cardFileInput'),
+};
+
+const ICONS = {
+  generate: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v4"/><path d="M12 17v4"/><path d="M3 12h4"/><path d="M17 12h4"/><path d="M6.5 6.5l2.8 2.8"/><path d="M14.7 14.7l2.8 2.8"/><path d="M17.5 6.5l-2.8 2.8"/><path d="M9.3 14.7l-2.8 2.8"/></svg>',
+  upload: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 20h16"/></svg>',
+  push: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18a4 4 0 1 1 1-7.9A6 6 0 0 1 20 12a4 4 0 0 1-1 7.9H7z"/><path d="M12 15V9"/><path d="M9.5 11.5 12 9l2.5 2.5"/></svg>',
+  refresh: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>',
+  delete: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>',
 };
 
 function showStatus(msg){
@@ -289,6 +303,27 @@ async function idbSet(key,val){ const db = await openIDB(); return new Promise((
 async function idbGet(key){ const db = await openIDB(); return new Promise((resolve,reject)=>{ const req=db.transaction('images').objectStore('images').get(key); req.onsuccess=()=>resolve(req.result); req.onerror=()=>reject(req.error); }); }
 async function idbDelete(key){ const db = await openIDB(); return new Promise((resolve,reject)=>{ const tx=db.transaction('images','readwrite'); tx.objectStore('images').delete(key); tx.oncomplete=()=>resolve(); tx.onerror=()=>reject(tx.error); }); }
 async function idbKeys(){ const db = await openIDB(); return new Promise((resolve,reject)=>{ const req=db.transaction('images').objectStore('images').getAllKeys(); req.onsuccess=()=>resolve(req.result); req.onerror=()=>reject(req.error); }); }
+async function clearAllImageCaches(){
+  const keys = await idbKeys().catch(() => []);
+  for (const key of keys) {
+    const k = String(key || '');
+    if (k.startsWith('emotion_') || k.startsWith('em_full_')) {
+      await idbDelete(k).catch(() => {});
+    }
+  }
+  state.images = {};
+}
+
+function fetchNoCache(url, options = {}){
+  const opts = { ...options };
+  const method = String(opts.method || 'GET').toUpperCase();
+  const headers = { ...(opts.headers || {}), 'Cache-Control': 'no-cache', Pragma: 'no-cache' };
+  if (method === 'GET') {
+    const sep = String(url).includes('?') ? '&' : '?';
+    url = `${url}${sep}_ts=${Date.now()}`;
+  }
+  return fetch(url, { ...opts, headers, cache: 'no-store' });
+}
 
 function resizeImage(dataUrl, maxPx, quality = 0.88){
   return new Promise(resolve => {
@@ -372,7 +407,7 @@ async function loadImagesFromIDB(){
 
 async function loadPersonasFromBackend(){
   try {
-    const res = await fetch(`${WORKER_URL}/personas`, { method: 'GET' });
+    const res = await fetchNoCache(`${WORKER_URL}/personas`, { method: 'GET' });
     if (!res.ok) return false;
     const data = await res.json();
     if (!Array.isArray(data?.personas) || !data.personas.length) return false;
@@ -412,7 +447,7 @@ async function listR2ProfileKeys(pid) {
   const merged = new Set();
   for (const prefix of prefixes) {
     try {
-      const res = await fetch(`${WORKER_URL}/image-list/${prefix}`, { method: 'GET' });
+      const res = await fetchNoCache(`${WORKER_URL}/image-list/${prefix}`, { method: 'GET' });
       if (!res.ok) continue;
       const data = await res.json().catch(() => null);
       const keys = Array.isArray(data?.keys) ? data.keys : [];
@@ -475,8 +510,7 @@ function render(){
       setProgress(20);
       try {
         showStatus(`Loading ${p.pid} from R2 originals...`);
-        await loadFromR2();
-        await loadImagesFromIDB();
+        await reloadPersonaFromR2(p.pid);
         render();
       } finally {
         setProgress(100);
@@ -513,11 +547,11 @@ function render(){
             <div class="slot-foot">
               <div class="slot-meta"><span>${emo.id}</span><span>${slot.toUpperCase()}</span></div>
               <div class="slot-actions">
-                <button class="btn btn-primary btn-sm btn-icon" title="Generate" aria-label="Generate">✨</button>
-                <button class="btn btn-ghost btn-sm btn-icon" title="Upload" aria-label="Upload">📤</button>
-                <button class="btn btn-ghost btn-sm btn-icon" title="Push" aria-label="Push">☁</button>
-                <button class="btn btn-ghost btn-sm btn-icon" title="Refresh" aria-label="Refresh">🔄</button>
-                <button class="btn btn-danger btn-sm btn-icon" title="Delete" aria-label="Delete">🗑</button>
+                <button class="btn btn-primary btn-sm btn-icon" title="Generate" aria-label="Generate">${ICONS.generate}</button>
+                <button class="btn btn-ghost btn-sm btn-icon" title="Upload" aria-label="Upload">${ICONS.upload}</button>
+                <button class="btn btn-ghost btn-sm btn-icon" title="Push" aria-label="Push">${ICONS.push}</button>
+                <button class="btn btn-ghost btn-sm btn-icon" title="Refresh" aria-label="Refresh">${ICONS.refresh}</button>
+                <button class="btn btn-danger btn-sm btn-icon" title="Delete" aria-label="Delete">${ICONS.delete}</button>
               </div>
             </div>`;
           const preview = card.querySelector('.slot-preview');
@@ -666,7 +700,7 @@ async function generateEmotion(pid, eid, slot){
     setBusy(true);
     try {
       showStatus(`Sending request for ${pid}/${eid}/${slot.toUpperCase()}...`);
-      const res = await fetch('https://persona-worker.persona-worker.workers.dev/chat', {
+      const res = await fetchNoCache('https://persona-worker.persona-worker.workers.dev/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -684,7 +718,7 @@ async function generateEmotion(pid, eid, slot){
       if (!url) throw new Error(data.error || 'No image URL returned.');
       showStatus(`Downloading generated image for ${pid}/${eid}/${slot.toUpperCase()}...`);
       const proxied = `${WORKER_URL}/image-fetch?url=${encodeURIComponent(url)}`;
-      const blob = await fetch(proxied).then(r => {
+      const blob = await fetchNoCache(proxied).then(r => {
         if (!r.ok) throw new Error(`Download proxy failed: ${r.status}`);
         return r.blob();
       });
@@ -737,7 +771,7 @@ async function refreshSlotFromR2(pid, eid, slot){
   try {
     const key = await resolveRemoteImageKey(pid, eid, slot);
     const url = key ? `${WORKER_URL}/image/${key}` : originalImagePath(pid, eid, slot);
-    const resp = await fetch(url);
+      const resp = await fetchNoCache(url);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const blob = await resp.blob();
     if (!blob || !blob.size) throw new Error('Empty image');
@@ -754,25 +788,21 @@ async function refreshSlotFromR2(pid, eid, slot){
     showStatus(`Refresh failed: ${err?.message || err}`);
   }
 }
-async function uploadAll(){
+async function pushAll(){
   if (!state.activePid) return;
   const pid = state.activePid;
   const tasks = [];
   for (const emo of state.emotions) for (const slot of SLOT_KEYS) if (getBestBase64ForPush(pid, emo.id, slot)) tasks.push([emo.id, slot]);
-  if (!tasks.length) return showStatus('Nothing to upload.');
+  if (!tasks.length) return showStatus('Nothing to push.');
   setBusy(true);
   try {
     for (const [eid, slot] of tasks) await pushOne(pid, eid, slot);
-    showStatus(`Uploaded ${tasks.length} items to R2.`);
+    showStatus(`Pushed ${tasks.length} items to R2.`);
   } catch (err) {
-    showStatus(`Upload failed: ${err.message}`);
+    showStatus(`Push failed: ${err.message}`);
   } finally {
     setBusy(false);
   }
-}
-async function pushAll(){
-  if (!state.activePid) return;
-  await uploadAll();
 }
 async function generateAll(){
   if (!state.activePid) return;
@@ -817,7 +847,7 @@ async function loadFromR2(){
     if (seen.has(cacheKey)) continue;
     seen.add(cacheKey);
     try {
-      const resp = await fetch(`${WORKER_URL}/image/${key}`);
+      const resp = await fetchNoCache(`${WORKER_URL}/image/${key}`);
       if (!resp.ok) continue;
       const blob = await resp.blob();
       if (!blob || !blob.size) continue;
@@ -838,16 +868,13 @@ async function loadFromR2(){
 async function reloadPersonaFromR2(pid){
   if (!pid) return;
   const existing = state.images[pid] || {};
-  const loaded = await loadFromR2();
-  if (loaded) {
-    for (const eid of Object.keys(existing)) {
-      for (const slot of Object.keys(existing[eid] || {})) {
-        const next = state.images[pid]?.[eid]?.[slot];
-        if (!next?.full) await clearSlotImage(pid, eid, slot).catch(() => {});
-      }
+  for (const eid of Object.keys(existing)) {
+    for (const slot of Object.keys(existing[eid] || {})) {
+      await clearSlotImage(pid, eid, slot).catch(() => {});
     }
-    await loadImagesFromIDB();
   }
+  const loaded = await loadFromR2();
+  await loadImagesFromIDB();
   render();
   return loaded;
 }
@@ -855,7 +882,7 @@ async function reloadPersonaFromR2(pid){
 async function reloadAll(){
   setBusy(true);
   setProgress(8);
-  showStatus('Reloading personas and cache...');
+  showStatus('Reloading personas and cache (force no-cache)...');
   try {
     await loadPersonasFromBackend();
     if (!state.personas.length) {
@@ -866,6 +893,7 @@ async function reloadAll(){
     if (state.personas.length && !state.activePid) state.activePid = state.personas[0].pid;
     render();
     setProgress(25);
+    await clearAllImageCaches();
     await loadImagesFromIDB();
     render();
     setProgress(55);
@@ -890,7 +918,6 @@ async function reloadAll(){
 function init(){
   els.reloadBtn.onclick = () => reloadAll();
   els.generateAllBtn.onclick = generateAll;
-  els.uploadAllBtn.onclick = uploadAll;
   els.pushAllBtn.onclick = pushAll;
   els.deleteAllBtn.onclick = deleteAll;
   els.stopBtn.onclick = () => { state.pendingAbort?.abort?.(); showStatus('Stopped.'); setBusy(false); };
