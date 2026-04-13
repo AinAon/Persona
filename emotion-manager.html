@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Emotion Manager</title>
+<link rel="icon" type="image/png" href="icon_emo.png">
+<link rel="apple-touch-icon" href="icon_emo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@panzoom/panzoom@4.6.1/dist/panzoom.min.css">
@@ -471,8 +473,11 @@ async function loadPersonasFromBackend(){
 }
 
 function getPersonaImage(pid){
-  const slots = state.images[pid]?.neutral_a?.a || null;
-  return slots?.full || '';
+  const neutral = state.images[pid]?.neutral?.a?.full || '';
+  if (neutral) return neutral;
+  const neutralA = state.images[pid]?.neutral_a?.a?.full || '';
+  if (neutralA) return neutralA;
+  return '';
 }
 function getEmotionImage(pid, eid, slot){
   const s = state.images[pid]?.[eid]?.[slot];
