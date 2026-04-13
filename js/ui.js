@@ -3431,7 +3431,7 @@ async function openProfilePopup(pid, emotion, hue, fallbackSrc, suffix = '') {
   const imgEl = document.getElementById('profilePopupImg');
   imgEl.style.borderColor = `hsl(${hue},40%,35%)`;
   const avatarSrc = await getPersonaAvatarImage(pid, emotion, suffix);
-  const initialSrc = fallbackSrc || avatarSrc;
+  const initialSrc = avatarSrc || fallbackSrc;
   imgEl.innerHTML = initialSrc ? `<img src="${initialSrc}">` : defaultAvatar(hue);
   popup.classList.add('open');
 
@@ -3442,7 +3442,7 @@ async function openProfilePopup(pid, emotion, hue, fallbackSrc, suffix = '') {
   try {
     // 1. 해당 감정의 HD 이미지 (접미사 포함)
     const hdUrl = await getEmotionImageHD(pid, eid, suffix);
-    if (fallbackSrc && hdUrl && popup.classList.contains('open')) {
+    if (hdUrl && popup.classList.contains('open')) {
       imgEl.innerHTML = `<img src="${hdUrl}">`;
       return;
     }

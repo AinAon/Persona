@@ -186,10 +186,6 @@ async function getEmotionImageHD(pid, emotion, letter = '') {
       await idbSet(`emotion_${pid}_${target}_hd`, resized).catch(() => {});
       return resized;
     }
-    const md = await idbGet(`emotion_${pid}_${target}`);
-    if (md) return md;
-    const ld = await idbGet(`emotion_${pid}_${target}_ld`);
-    if (ld) return ld;
   } catch(e) {}
   
   try {
