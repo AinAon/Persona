@@ -6,6 +6,8 @@ const IMAGE_CACHE_SIZES = {
   MD: 600,
   LD: 300,
   THUMB: 150,
+  AVATAR_W: 240,
+  AVATAR_H: 360,
 };
 
 // ══════════════════════════════
@@ -73,6 +75,8 @@ async function getNeutralImage(pid) {
 
 async function getNeutralImageThumb(pid) {
   try {
+    const cachedAvatar = await idbGet(`emotion_${pid}_neutral_a_avatar`);
+    if (cachedAvatar) return cachedAvatar;
     const cachedA = await idbGet(`emotion_${pid}_neutral_a_thumb`);
     if (cachedA) return cachedA;
     const cached = await idbGet(`emotion_${pid}_neutral_thumb`);
@@ -259,22 +263,30 @@ async function generateThumbnailSet(fullDataUrl, pid, emotion = 'neutral_a') {
   const fullJpg = fullCanvas.toDataURL('image/jpeg', 0.9);
 
   // ── 원형 crop (아바타용) ──
-  const circDiam = cropW;
-  const circCanvas = document.createElement('canvas');
-  circCanvas.width = circDiam; circCanvas.height = circDiam;
-  const cCtx = circCanvas.getContext('2d');
-  cCtx.drawImage(img, cropX, cropY, circDiam, circDiam, 0, 0, circDiam, circDiam);
-  cCtx.globalCompositeOperation = 'destination-in';
-  cCtx.beginPath();
-  cCtx.arc(circDiam / 2, circDiam / 2, circDiam / 2, 0, Math.PI * 2);
-  cCtx.fill();
-  const circPng = circCanvas.toDataURL('image/png');
+  const avatarCanvas = document.createElement('canvas');
+  avatarCanvas.width = IMAGE_CACHE_SIZES.AVATAR_W;
+  avatarCanvas.height = IMAGE_CACHE_SIZES.AVATAR_H;
+  const aCtx = avatarCanvas.getContext('2d');
+  aCtx.imageSmoothingEnabled = true;
+  aCtx.imageSmoothingQuality = 'high';
+  aCtx.drawImage(
+    img,
+    cropX,
+    cropY,
+    cropW,
+    cropH,
+    0,
+    0,
+    IMAGE_CACHE_SIZES.AVATAR_W,
+    IMAGE_CACHE_SIZES.AVATAR_H,
+  );
+  const avatarPng = avatarCanvas.toDataURL('image/png');
 
   // 리사이즈
   const [sqMd, sqLd, thumb] = await Promise.all([
     resizeImage(sqJpg, IMAGE_CACHE_SIZES.MD, 0.88),
     resizeImage(sqJpg, IMAGE_CACHE_SIZES.LD, 0.85),
-    resizeImage(circPng, IMAGE_CACHE_SIZES.THUMB, 0.9),
+    resizeImage(avatarPng, IMAGE_CACHE_SIZES.THUMB, 0.9),
   ]);
 
   // IDB 저장
@@ -284,9 +296,11 @@ async function generateThumbnailSet(fullDataUrl, pid, emotion = 'neutral_a') {
     idbSet(`emotion_${pid}_${emotion}_ld`, sqLd),
     idbSet(`emotion_${pid}_${emotion}_thumb`, thumb),
     idbSet(`emotion_${pid}_${emotion}_circle`, thumb), // legacy key
+    idbSet(`emotion_${pid}_${emotion}_avatar`, avatarPng),
+    idbSet(`emotion_${pid}_${emotion}_circle_thumb`, avatarPng),
   ]);
 
-  return { sqMd, sqLd, thumb, fullHd: fullJpg, circSm: thumb };
+  return { sqMd, sqLd, thumb, fullHd: fullJpg, avatarPng };
 }
 
 // 원형 썸네일 불러오기 (없으면 square MD fallback)
@@ -391,7 +405,7 @@ async function clearImageCache() {
 function savePersonas() {
   // 이미지 데이터 제외 후 저장 (용량 절약)
   const toSave = personas.map(p => {
-    const { neutral_md, neutral_hd, neutral_thumb, image, ...rest } = p;
+    const { neutral_md, neutral_hd, neutral_thumb, neutral_avatar, image, ...rest } = p;
     return rest;
   });
   setLocalPersonas(toSave);

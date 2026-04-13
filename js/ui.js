@@ -679,7 +679,8 @@ function defaultAvatar(h) {
   </svg>`;
 }
 function avatarHTML(p) {
-  return p.image ? `<img src="${p.image}">` : defaultAvatar(p.hue);
+  const src = p.neutral_avatar || p.neutral_thumb || p.image;
+  return src ? `<img src="${src}">` : defaultAvatar(p.hue);
 }
 
 // ══════════════════════════════
@@ -1320,13 +1321,14 @@ function handleEditImage(input) {
       idbSet(`em_full_${p.pid}_neutral_a`, cropped).catch(() => {});
       p._pendingImage = cropped;
 
-      const { sqMd, fullHd, circSm } = await generateThumbnailSet(cropped, p.pid, 'neutral_a');
+      const { sqMd, fullHd, avatarPng } = await generateThumbnailSet(cropped, p.pid, 'neutral_a');
 
       // 메모리
       p.image = sqMd;
       p.neutral_md = sqMd;
       p.neutral_hd = fullHd;
-      p.neutral_thumb = circSm;
+      p.neutral_thumb = avatarPng;
+      p.neutral_avatar = avatarPng;
       _neutralCache[p.pid] = sqMd;
 
       showToast('이미지 선택됨 — 저장 버튼을 눌러줘');
@@ -2418,7 +2420,7 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
     const h = p._ghost ? 0 : p.hue;
     const opacity = p._ghost ? 'opacity:.35;' : '';
     let baseImg = avatarHTML(p);
-    let thumbSrc = p.image || '';
+    let thumbSrc = p.neutral_avatar || p.neutral_thumb || p.image || '';
     const suffix = suffixes[`${p.pid}:${seg.emotion}`] || '';
     const dataUrl = suffix ? await getEmotionImageSuffixed(p.pid, seg.emotion, suffix) : await getEmotionImage(p.pid, seg.emotion);
     
