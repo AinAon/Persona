@@ -648,6 +648,13 @@ export async function handleApiRoute(
     });
   }
 
+  if (url.pathname.startsWith("/image/") && request.method === "DELETE") {
+    const key = decodeURIComponent(url.pathname.slice(7));
+    if (!key) return Response.json({ error: "key required" }, { status: 400, headers: cors });
+    await env.R2.delete(key);
+    return Response.json({ ok: true, key }, { headers: cors });
+  }
+
   return null;
 }
 

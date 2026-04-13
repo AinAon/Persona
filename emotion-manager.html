@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -170,7 +170,7 @@
 
 <div class="viewer" id="viewer">
   <div class="viewer-shell">
-    <button class="viewer-close" id="viewerClose" aria-label="Close">×</button>
+    <button class="viewer-close" id="viewerClose" aria-label="Close">횞</button>
     <div class="viewer-img-wrap"><img id="viewerImg" class="viewer-img" alt="preview"></div>
   </div>
 </div>
@@ -191,6 +191,17 @@
 <script src="https://cdn.jsdelivr.net/npm/@panzoom/panzoom@4.6.1/dist/panzoom.min.js"></script>
 <script src="js/ui_crop.js"></script>
 <script>
+// Hotfix guard: ensure esc exists even on mixed/stale script states.
+globalThis.esc = globalThis.esc || function(s){
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+};
+var esc = globalThis.esc;
+window.__EM_MANAGER_VERSION__ = '2026-04-14-hotfix-esc-1';
+console.log('[EmotionManager]', window.__EM_MANAGER_VERSION__);
+
 const WORKER_URL = 'https://persona-worker.persona-worker.workers.dev';
 const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbwc2pNBmXpeDLHqc7tGff4kVByDbcG1ijLRzxNTiKjSklSo4dcm61R5XNOAghaAGozz/exec';
 const R2_UPLOAD_ENDPOINT = `${WORKER_URL}/image`;
@@ -219,26 +230,26 @@ const DEFAULT_EMOTIONS = [
 const SLOT_KEYS = ['a','b','c','d','e'];
 const SLOT_LABELS = { a:'A', b:'B', c:'C', d:'D', e:'E' };
 const EMOTION_PROMPTS = {
-    neutral:'무표정 (Neutral): 감정의 기복 없이 편안하고 자연스러운 기본 표정. 입과 눈에 힘이 들어가지 않은 상태로 변경',
-    subtlesmile:'미묘한 미소 (subtlesmile): 입꼬리를 아주 살짝 올린 절제된 미소. 감정을 크게 드러내지 않으면서도 은은한 호감을 표현하는 표정으로 변경',
-    happy:'행복 (Happy): 치아가 보이는 밝은 미소와 함께 환희에 찬 표정으로 변경',
-    sad:'슬픔 (Sad): 눈꼬리가 아래로 처지고 힘없이 시선을 떨군 채, 감정을 억누르듯 조용히 슬퍼하는 표정으로 변경',
-    angry:'분노 (Anger): 눈썹을 강하게 찌푸리고 이를 악물거나 입을 꽉 다물거나 입술을 깨문 채, 상대를 노려보는 격앙된 표정으로 변경',
-    surprise:'놀람 (surprise): 눈을 크게 뜨고 입을 살짝 벌린 채 예상치 못한 상황에 반응하는 순간적인 표정으로 변경',
-    arousal:'흥분 (Arousal): 거칠게 숨을 내뱉으며 감정이 고조된 상태로, 눈빛이 날카롭고 강한 긴장감이 느껴지는 표정으로 변경. 입김 없음.',
-    confusion:'당혹/번뇌 (Perplexity/Confusion): 미간을 찌푸리고 입술을 깨물거나, 눈이 휘둥그레지는 등 정답을 모를 때의 표정. 인간적인 허당미가 느껴지는 모습으로 변경',
-    cry:'울음 (crying): 엉엉 우는 표정. 얼굴을 과하게 망가트리지 않고 예쁘게 우는, 고개만 살짝 돌린 채 곁눈질로 카메라를 정면 응시하는 눈.',
-    disgust:'혐오 (disgust): 코를 살짝 찡그리거나 턱을 들고 아래로 내려다보며 입술을 뒤집고 이를 꽉 깨무는 등 불쾌감이나 거부감을 드러내는 표정.',
-    contempt:'경멸 (contempt): 한쪽 입꼬리만 올린 비대칭 표정. 캐릭터의 자신감, 오만함, 혹은 상대를 깔보는 표정으로 변경',
-    horror:'공포 (Horror): 공포를 느껴 온 몸이 얼어붙은 듯 경직되고 눈이 커진 긴장된 표정으로 변경',
-    laugh:'웃음 (Laugh): 눈을 반쯤 감고 입을 크게 벌려 자연스럽게 웃는 표정. 상황에 따라 장난스럽거나 시원하게 터지는 웃음으로 변경',
-    orgasm:'절정 (Orgasm): 최고조의 오르가즘을 느끼는 표정으로 변경. 머리카락이 젖고 헝클어진다. 땀을 흘린다. 의상이 정돈되지 못하다. 눈알이 반쯤 위로 올라간다.',
-    playful:'장난기/결의 (playful): 눈을 가늘게 뜨고 입가에 옅은 미소를 띄며 곁눈질하는 귀여운 표정. 무언가 꾸미고 있거나 목표를 향해 집중할 때의 모습으로 변경',
-    relief:'안도 (relief): 긴장이 풀리며 눈을 감고 깊은 숨을 내뱉는 표정. 사건이 일단락되었을 때 캐릭터가 짓는 가장 편안한 얼굴로 변경 (입김 없음)',
-    shy:'부끄러움 (Shy): 눈을 마주치지 못하고 시선을 피하며 얼굴에 약간의 홍조가 도는 수줍은 표정으로 변경',
-    worry:'걱정 (worry): 눈썹을 모으고 시선을 약간 아래로 떨군 채, 불안하거나 고민이 많은 상태를 드러내는 표정으로 변경',
-    pain:'고통 (pain): 입을 앞으로 벌리며 신음하듯 얼굴을 찡그리고, 신체적 혹은 정신적으로 강한 고통을 느끼는 표정으로 변경',
-    ecstasy:'황홀 (Ecstasy): 깊은 만족감이나 강한 감정에 잠긴 상태로, 눈을 반쯤 감고 턱을 들고 거칠게 숨을 내쉬는 표정으로 변경, 머리카락이 젖어있다. 땀을 흘린다. (입김 없음)',
+    neutral:'臾댄몴??(Neutral): 媛먯젙??湲곕났 ?놁씠 ?몄븞?섍퀬 ?먯뿰?ㅻ윭??湲곕낯 ?쒖젙. ?낃낵 ?덉뿉 ?섏씠 ?ㅼ뼱媛吏 ?딆? ?곹깭濡?蹂寃?,
+    subtlesmile:'誘몃쵖??誘몄냼 (subtlesmile): ?낃섕由щ? ?꾩＜ ?댁쭩 ?щ┛ ?덉젣??誘몄냼. 媛먯젙???ш쾶 ?쒕윭?댁? ?딆쑝硫댁꽌???????멸컧???쒗쁽?섎뒗 ?쒖젙?쇰줈 蹂寃?,
+    happy:'?됰났 (Happy): 移섏븘媛 蹂댁씠??諛앹? 誘몄냼? ?④퍡 ?섑씗??李??쒖젙?쇰줈 蹂寃?,
+    sad:'?ы뵒 (Sad): ?덇섕由ш? ?꾨옒濡?泥섏?怨??섏뾾???쒖꽑???④뎔 梨? 媛먯젙???듬늻瑜대벏 議곗슜???ы띁?섎뒗 ?쒖젙?쇰줈 蹂寃?,
+    angry:'遺꾨끂 (Anger): ?덉뜾??媛뺥븯寃?李뚰뫖由ш퀬 ?대? ?낅Ъ嫄곕굹 ?낆쓣 苑??ㅻЪ嫄곕굹 ?낆닠??源⑤Ц 梨? ?곷?瑜??몃젮蹂대뒗 寃⑹븰???쒖젙?쇰줈 蹂寃?,
+    surprise:'???(surprise): ?덉쓣 ?ш쾶 ?④퀬 ?낆쓣 ?댁쭩 踰뚮┛ 梨??덉긽移?紐삵븳 ?곹솴??諛섏쓳?섎뒗 ?쒓컙?곸씤 ?쒖젙?쇰줈 蹂寃?,
+    arousal:'?λ텇 (Arousal): 嫄곗튌寃??⑥쓣 ?대콍?쇰ŉ 媛먯젙??怨좎“???곹깭濡? ?덈튆???좎뭅濡?퀬 媛뺥븳 湲댁옣媛먯씠 ?먭뺨吏???쒖젙?쇰줈 蹂寃? ?낃? ?놁쓬.',
+    confusion:'?뱁샊/踰덈뇤 (Perplexity/Confusion): 誘멸컙??李뚰뫖由ш퀬 ?낆닠??源⑤Ъ嫄곕굹, ?덉씠 ?섎뫁洹몃젅吏?????뺣떟??紐⑤? ?뚯쓽 ?쒖젙. ?멸컙?곸씤 ?덈떦誘멸? ?먭뺨吏??紐⑥뒿?쇰줈 蹂寃?,
+    cry:'?몄쓬 (crying): ?됱뿁 ?곕뒗 ?쒖젙. ?쇨뎬??怨쇳븯寃?留앷??몃━吏 ?딄퀬 ?덉걯寃??곕뒗, 怨좉컻留??댁쭩 ?뚮┛ 梨?怨곷늿吏덈줈 移대찓?쇰? ?뺣㈃ ?묒떆?섎뒗 ??',
+    disgust:'?먯삤 (disgust): 肄붾? ?댁쭩 李↔렇由ш굅???깆쓣 ?ㅺ퀬 ?꾨옒濡??대젮?ㅻ낫硫??낆닠???ㅼ쭛怨??대? 苑?源⑤Т????遺덉풄媛먯씠??嫄곕?媛먯쓣 ?쒕윭?대뒗 ?쒖젙.',
+    contempt:'寃쎈㈇ (contempt): ?쒖そ ?낃섕由щ쭔 ?щ┛ 鍮꾨?移??쒖젙. 罹먮┃?곗쓽 ?먯떊媛? ?ㅻ쭔?? ?뱀? ?곷?瑜?源붾낫???쒖젙?쇰줈 蹂寃?,
+    horror:'怨듯룷 (Horror): 怨듯룷瑜??먭뺨 ??紐몄씠 ?쇱뼱遺숈? ??寃쎌쭅?섍퀬 ?덉씠 而ㅼ쭊 湲댁옣???쒖젙?쇰줈 蹂寃?,
+    laugh:'?껋쓬 (Laugh): ?덉쓣 諛섏? 媛먭퀬 ?낆쓣 ?ш쾶 踰뚮젮 ?먯뿰?ㅻ읇寃??껊뒗 ?쒖젙. ?곹솴???곕씪 ?λ궃?ㅻ읇嫄곕굹 ?쒖썝?섍쾶 ?곗????껋쓬?쇰줈 蹂寃?,
+    orgasm:'?덉젙 (Orgasm): 理쒓퀬議곗쓽 ?ㅻⅤ媛利섏쓣 ?먮겮???쒖젙?쇰줈 蹂寃? 癒몃━移대씫???뽮퀬 ?앺겢?댁쭊?? ????섎┛?? ?섏긽???뺣룉?섏? 紐삵븯?? ?덉븣??諛섏? ?꾨줈 ?щ씪媛꾨떎.',
+    playful:'?λ궃湲?寃곗쓽 (playful): ?덉쓣 媛?섍쾶 ?④퀬 ?낃????낆? 誘몄냼瑜??꾨ŉ 怨곷늿吏덊븯??洹?ъ슫 ?쒖젙. 臾댁뼵媛 袁몃?怨??덇굅??紐⑺몴瑜??ν빐 吏묒쨷???뚯쓽 紐⑥뒿?쇰줈 蹂寃?,
+    relief:'?덈룄 (relief): 湲댁옣???由щŉ ?덉쓣 媛먭퀬 源딆? ?⑥쓣 ?대콍???쒖젙. ?ш굔???쇰떒?쎈릺?덉쓣 ??罹먮┃?곌? 吏볥뒗 媛???몄븞???쇨뎬濡?蹂寃?(?낃? ?놁쓬)',
+    shy:'遺?꾨윭? (Shy): ?덉쓣 留덉＜移섏? 紐삵븯怨??쒖꽑???쇳븯硫??쇨뎬???쎄컙???띿“媛 ?꾨뒗 ?섏쨳? ?쒖젙?쇰줈 蹂寃?,
+    worry:'嫄깆젙 (worry): ?덉뜾??紐⑥쑝怨??쒖꽑???쎄컙 ?꾨옒濡??④뎔 梨? 遺덉븞?섍굅??怨좊???留롮? ?곹깭瑜??쒕윭?대뒗 ?쒖젙?쇰줈 蹂寃?,
+    pain:'怨좏넻 (pain): ?낆쓣 ?욎쑝濡?踰뚮━硫??좎쓬?섎벏 ?쇨뎬??李↔렇由ш퀬, ?좎껜???뱀? ?뺤떊?곸쑝濡?媛뺥븳 怨좏넻???먮겮???쒖젙?쇰줈 蹂寃?,
+    ecstasy:'?⑺? (Ecstasy): 源딆? 留뚯”媛먯씠??媛뺥븳 媛먯젙???좉릿 ?곹깭濡? ?덉쓣 諛섏? 媛먭퀬 ?깆쓣 ?ㅺ퀬 嫄곗튌寃??⑥쓣 ?댁돩???쒖젙?쇰줈 蹂寃? 癒몃━移대씫???뽰뼱?덈떎. ????섎┛?? (?낃? ?놁쓬)',
 };
 const BUILTIN_BY_CAT = {
   basic: ['neutral','subtlesmile','happy','sad','angry','surprise'],
@@ -295,6 +306,9 @@ function showStatus(msg){
   else if (els.statusBar) els.statusBar.textContent = msg;
   if (els.statusBox) els.statusBox.textContent = msg;
 }
+function esc(s){
+  return window.esc(s);
+}
 let _taskSeq = 0;
 function renderTaskQueue(){
   if (!els.queueList) return;
@@ -302,10 +316,14 @@ function renderTaskQueue(){
     els.queueList.innerHTML = '';
     return;
   }
+  const safe = (v) => String(v ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
   els.queueList.innerHTML = state.taskQueue.map(t => (
     `<div class="queue-item ${t.status}">
       <span class="queue-dot"></span>
-      <span>${esc(t.label)}</span>
+      <span>${safe(t.label)}</span>
     </div>`
   )).join('');
 }
@@ -557,7 +575,7 @@ function render(){
       setProgress(20);
       try {
         showStatus(`Loading ${p.pid} from R2 originals...`);
-        await reloadPersonaFromR2(p.pid);
+        await reloadPersonaFromR2(p.pid, false);
         render();
       } finally {
         setProgress(100);
@@ -610,7 +628,18 @@ function render(){
             ev.stopPropagation();
             await refreshSlotFromR2(state.activePid, emo.id, slot);
           };
-          card.querySelectorAll('.btn')[4].onclick = async (ev) => { ev.stopPropagation(); if (confirm(`Delete ${emo.id}/${slot.toUpperCase()}?`)) { await clearSlotImage(state.activePid, emo.id, slot); render(); } };
+          card.querySelectorAll('.btn')[4].onclick = async (ev) => {
+            ev.stopPropagation();
+            if (!confirm(`Delete ${emo.id}/${slot.toUpperCase()}?`)) return;
+            const pid = state.activePid;
+            try {
+              await deleteRemoteImageVariants(pid, emo.id, slot);
+            } catch {}
+            await clearSlotImage(pid, emo.id, slot).catch(() => {});
+            await loadImagesFromIDB();
+            render();
+            showStatus(`Deleted ${pid}/${emo.id}/${slot.toUpperCase()} (R2 + local)`);
+          };
           card.ondragover = ev => { ev.preventDefault(); };
           card.ondrop = ev => {
             ev.preventDefault();
@@ -701,6 +730,27 @@ async function uploadBase64ToR2(pid, eid, slot, base64){
   }
   return await res.json();
 }
+async function deleteR2Key(keyPath){
+  if (!keyPath) return;
+  const res = await fetchNoCache(`${WORKER_URL}/image/${keyPath}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const raw = await res.text().catch(() => '');
+    throw new Error(raw || `HTTP ${res.status}`);
+  }
+}
+async function deleteRemoteImageVariants(pid, eid, slot){
+  const keys = [
+    `profile/${pid}/${pid}_${eid}_${slot}.jpg`,
+    `persona-images/profile/${pid}/${pid}_${eid}_${slot}.jpg`,
+  ];
+  if (slot === 'a') {
+    keys.push(`profile/${pid}/${pid}_${eid}.jpg`);
+    keys.push(`persona-images/profile/${pid}/${pid}_${eid}.jpg`);
+  }
+  for (const key of [...new Set(keys)]) {
+    try { await deleteR2Key(key); } catch {}
+  }
+}
 
 async function generateEmotion(pid, eid, slot){
   const qid = queueAdd(`Generate ${pid}/${eid}/${slot.toUpperCase()}`);
@@ -711,22 +761,22 @@ async function generateEmotion(pid, eid, slot){
   const refKey = await findNeutralReferenceKey(pid);
   const ref = refKey ? `${WORKER_URL}/image/${refKey}` : '';
   if (!ref) throw new Error(`No neutral_a reference found for ${pid}.`);
-  const subject = EMOTION_PROMPTS[eid] || `표정 ${eid}`;
+  const subject = EMOTION_PROMPTS[eid] || `?쒖젙 ${eid}`;
   const prompt = [
     '[Subject]',
     subject,
     '',
     '[Background]',
-    '이미지1의 배경과 동일하며 카메라 각도에 따라 달라질 수 있다.',
+    '?대?吏1??諛곌꼍怨??숈씪?섎ŉ 移대찓??媛곷룄???곕씪 ?щ씪吏????덈떎.',
     '',
     '[Layout]',
-    '표정에 적합한 자세로 다양하게 변경, 얼굴 각도 자연스럽게 변경, 자세가 바뀌어도 얼굴은 참조 이미지의 얼굴과 같은 위치에 있음',
+    '?쒖젙???곹빀???먯꽭濡??ㅼ뼇?섍쾶 蹂寃? ?쇨뎬 媛곷룄 ?먯뿰?ㅻ읇寃?蹂寃? ?먯꽭媛 諛붾뚯뼱???쇨뎬? 李몄“ ?대?吏???쇨뎬怨?媛숈? ?꾩튂???덉쓬',
     '',
     '[Mood]',
-    '밝기, 조명 유지, 피부톤 유지,',
+    '諛앷린, 議곕챸 ?좎?, ?쇰????좎?,',
     '',
     '[Style]',
-    '참조 이미지 인물의 얼굴 일관성을 유지하고 그림체를 유지한다.',
+    '李몄“ ?대?吏 ?몃Ъ???쇨뎬 ?쇨??깆쓣 ?좎??섍퀬 洹몃┝泥대? ?좎??쒕떎.',
     '',
     '[Ratio]',
     '2:3',
@@ -910,13 +960,17 @@ async function deleteAll(){
   if (!state.activePid) return;
   if (!confirm(`Delete all emotion images for ${state.activePid}?`)) return;
   const pid = state.activePid;
+  setBusy(true);
   for (const eid of Object.keys(state.images[pid] || {})) {
     for (const slot of Object.keys(state.images[pid][eid] || {})) {
+      await deleteRemoteImageVariants(pid, eid, slot).catch(() => {});
       await clearSlotImage(pid, eid, slot).catch(() => {});
     }
   }
+  await loadImagesFromIDB();
   render();
-  showStatus(`Deleted all local images for ${pid}.`);
+  setBusy(false);
+  showStatus(`Deleted all images for ${pid} (R2 + local).`);
 }
 async function loadFromR2(){
   if (!state.activePid) return showStatus('Pick a persona first.');
@@ -1003,12 +1057,14 @@ async function loadFromR2(){
   return loaded;
 }
 
-async function reloadPersonaFromR2(pid){
+async function reloadPersonaFromR2(pid, hard = false){
   if (!pid) return;
-  const existing = state.images[pid] || {};
-  for (const eid of Object.keys(existing)) {
-    for (const slot of Object.keys(existing[eid] || {})) {
-      await clearSlotImage(pid, eid, slot).catch(() => {});
+  if (hard) {
+    const existing = state.images[pid] || {};
+    for (const eid of Object.keys(existing)) {
+      for (const slot of Object.keys(existing[eid] || {})) {
+        await clearSlotImage(pid, eid, slot).catch(() => {});
+      }
     }
   }
   const loaded = await loadFromR2();
@@ -1037,7 +1093,7 @@ async function reloadAll(){
     setProgress(55);
     if (state.activePid) {
       showStatus(`Refreshing ${state.activePid} from R2 originals...`);
-      const loaded = await reloadPersonaFromR2(state.activePid);
+      const loaded = await reloadPersonaFromR2(state.activePid, true);
       if (!loaded) {
         showStatus(`Reload finished, but no new R2 originals were found for ${state.activePid}.`);
       }
@@ -1102,3 +1158,5 @@ init();
 </script>
 </body>
 </html>
+
+
