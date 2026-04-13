@@ -574,7 +574,105 @@ window.addEventListener('load', () => {
   initMarked();
   initMermaid();
   initUserInputGuards();
+  setTimeout(() => { runGlobalCacheWarmup().catch(() => {}); }, 240);
 });
+
+let _chatListRefreshTimer = null;
+function scheduleChatListRefresh(delay = 120) {
+  if (_chatListRefreshTimer) clearTimeout(_chatListRefreshTimer);
+  _chatListRefreshTimer = setTimeout(() => {
+    _chatListRefreshTimer = null;
+    renderChatList().catch(() => {});
+  }, delay);
+}
+
+let _chatAreaRefreshTimer = null;
+function scheduleChatAreaRefresh(delay = 140) {
+  if (!activeChatId) return;
+  if (_chatAreaRefreshTimer) clearTimeout(_chatAreaRefreshTimer);
+  _chatAreaRefreshTimer = setTimeout(() => {
+    _chatAreaRefreshTimer = null;
+    renderChatArea().catch(() => {});
+  }, delay);
+}
+
+let _globalCacheWarmupToken = 0;
+let _activeChatWarmupToken = 0;
+
+async function runGlobalCacheWarmup() {
+  const token = ++_globalCacheWarmupToken;
+
+  // 1) Persona grid priority: neutral_a only
+  for (const p of (personas || [])) {
+    if (token !== _globalCacheWarmupToken) return;
+    await getNeutralABaseImageHD(p.pid).catch(() => null);
+  }
+  scheduleChatListRefresh(60);
+
+  // 2) Chat list priority: by updatedAt desc
+  const sorted = [...(sessions || [])].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  const seen = new Set();
+  for (const s of sorted) {
+    if (token !== _globalCacheWarmupToken) return;
+    const pids = (s.participantPids || []);
+    for (const pid of pids) {
+      if (token !== _globalCacheWarmupToken) return;
+      if (seen.has(pid)) continue;
+      seen.add(pid);
+      await getNeutralImageThumb(pid, 80).catch(() => null);
+    }
+    scheduleChatListRefresh(80);
+  }
+}
+
+async function runActiveChatWarmup(sessionId) {
+  const token = ++_activeChatWarmupToken;
+  const session = (sessions || []).find((x) => x.id === sessionId);
+  if (!session) return;
+
+  // Entered room first: participant avatars immediately.
+  const pList = getSessionPersonas(session);
+  for (const p of pList) {
+    if (token !== _activeChatWarmupToken || activeChatId !== sessionId) return;
+    await Promise.all([
+      getNeutralImageThumb(p.pid, 42).catch(() => null),
+      getNeutralImageThumb(p.pid, 80).catch(() => null),
+    ]);
+  }
+  scheduleChatListRefresh(80);
+  scheduleChatAreaRefresh(80);
+
+  // Then recent assistant messages first.
+  const history = Array.isArray(session.history) ? session.history : [];
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (token !== _activeChatWarmupToken || activeChatId !== sessionId) return;
+    const msg = history[i];
+    if (!msg || msg.role !== 'assistant' || typeof msg.content !== 'string') continue;
+    const renderPersonas = msg.personaSnapshot
+      ? msg.personaSnapshot.map((snap) => getPersona(snap.pid) || { pid: snap.pid, name: snap.name, image: null, hue: 0, _ghost: true })
+      : pList;
+    const segments = parseResponse(msg.content, renderPersonas);
+    for (const seg of segments) {
+      if (token !== _activeChatWarmupToken || activeChatId !== sessionId) return;
+      const persona = renderPersonas[seg.idx];
+      if (!persona || !seg.content?.trim?.()) continue;
+      const suffix = msg._suffixes?.[`${persona.pid}:${seg.emotion}`] || '';
+      if (suffix) {
+        await getEmotionImageSuffixed(persona.pid, seg.emotion, suffix, 200).catch(() => null);
+      } else {
+        await getEmotionImage(persona.pid, seg.emotion, 200).catch(() => null);
+      }
+      await getPersonaCircleThumb(persona.pid, seg.emotion, suffix, 80).catch(() => null);
+    }
+    scheduleChatAreaRefresh(90);
+  }
+}
+
+window.addEventListener('persona-cache-updated', () => {
+  scheduleChatListRefresh(100);
+  scheduleChatAreaRefresh(110);
+});
+
 function show(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
@@ -2249,6 +2347,7 @@ function startNewChat() {
 async function openChat(id) {
   _isDemoMode = false;
   activeChatId = id;
+  runActiveChatWarmup(id).catch(() => {});
   const openToken = ++_chatOpenToken;
   const s = getActiveSession(); if (!s) return;
   const pList = getSessionPersonas(s);

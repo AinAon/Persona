@@ -464,6 +464,14 @@ async function generateThumbnailSet(fullDataUrl, pid, emotion = 'neutral_a') {
     ...records.map((x) => idbSet(x.key, x.url)),
   ]);
 
+  try {
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(new CustomEvent('persona-cache-updated', {
+        detail: { pid, emotion }
+      }));
+    }
+  } catch (e) {}
+
   return { sqMd: rectMd, sqLd: rectLd, thumb: circleMain, fullHd, avatarPng: circleMain };
 }
 
