@@ -3,16 +3,16 @@
 // ══════════════════════════════
 const IMAGE_CACHE_SIZES = {
   HD: 1200,
-  MD: 600,
-  LD: 300,
-  THUMB: 150,
+  MD: 400,
+  LD: 200,
+  THUMB: 100,
   AVATAR_W: 240,
   AVATAR_H: 360,
 };
 
-const PROFILE_RECT_WIDTH_STEPS = [160, 240, 320, 480, 600, 900, 1200];
-const PROFILE_CIRCLE_STEPS = [42, 56, 80, 96, 128, 160, 192];
-const PROFILE_FULL_WIDTH_STEPS = [640, 960, 1200];
+const PROFILE_RECT_WIDTH_STEPS = [200, 400, 800];
+const PROFILE_CIRCLE_STEPS = [100, 200, 300];
+const PROFILE_FULL_WIDTH_STEPS = [1200];
 
 // ══════════════════════════════
 //  IMAGE FETCH & CACHE
