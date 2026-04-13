@@ -42,6 +42,14 @@ Escalate only if one or more conditions are true:
 - At task start, use **TASK_TEMPLATE.md** to keep scope and success criteria explicit.
 - At escalation time, use **ESCALATION_NOTE.md** to send a compact decision-focused summary.
 
+## Library-First Rule
+- Prefer proven libraries over custom implementation.
+- For high-variance browser/device areas (drag-and-drop, virtual scroll, editor, markdown rendering, image processing, animation, gesture, form validation), do not choose custom code by default.
+- Choose custom implementation only when requirements are very simple or library adoption cost is not justified.
+- For new features and bug fixes, first evaluate replacing with an existing proven library and propose that path first when feasible.
+- Especially avoid hand-rolled solutions for mobile touch/selection/scroll/drag/input interactions.
+- Library selection criteria: stability, adoption, maintenance health, bundle impact, and vanilla JS fit.
+
 ## Advisor Request Format (Narrow Scope)
 When escalating, ask for guidance only (not full execution) unless absolutely necessary.
 Advisor output should include:
