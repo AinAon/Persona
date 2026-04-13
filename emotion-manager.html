@@ -416,17 +416,116 @@ function resizeImage(dataUrl, maxPx, quality = 0.88){
     img.src = dataUrl;
   });
 }
-async function makeVariants(dataUrl){
-  const full = await resizeImage(dataUrl, 2400, 0.92);
-  const md = await resizeImage(dataUrl, 600, 0.9);
-  const ld = await resizeImage(dataUrl, 300, 0.86);
-  const thumb = await resizeImage(dataUrl, 150, 0.84);
-  return { full, md, ld, thumb };
+function loadImageElement(dataUrl){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}
+function drawProgressiveScaledCanvas(sourceCanvas, targetW, targetH) {
+  let work = sourceCanvas;
+  while (work.width / 2 > targetW && work.height / 2 > targetH) {
+    const halfW = Math.max(targetW, Math.round(work.width / 2));
+    const halfH = Math.max(targetH, Math.round(work.height / 2));
+    const half = document.createElement('canvas');
+    half.width = halfW;
+    half.height = halfH;
+    const halfCtx = half.getContext('2d');
+    halfCtx.imageSmoothingEnabled = true;
+    halfCtx.imageSmoothingQuality = 'high';
+    halfCtx.drawImage(work, 0, 0, work.width, work.height, 0, 0, halfW, halfH);
+    work = half;
+  }
+  const out = document.createElement('canvas');
+  out.width = targetW;
+  out.height = targetH;
+  const outCtx = out.getContext('2d');
+  outCtx.imageSmoothingEnabled = true;
+  outCtx.imageSmoothingQuality = 'high';
+  outCtx.drawImage(work, 0, 0, work.width, work.height, 0, 0, targetW, targetH);
+  return out;
+}
+async function makeVariants(dataUrl, pid, eid, slot){
+  const img = await loadImageElement(dataUrl);
+  const W = img.naturalWidth;
+  const H = img.naturalHeight;
+  const emotionKey = `${eid}_${slot}`;
+
+  const fullSource = document.createElement('canvas');
+  fullSource.width = W;
+  fullSource.height = H;
+  fullSource.getContext('2d').drawImage(img, 0, 0, W, H);
+
+  const rectW = Math.max(1, W);
+  const rectH = Math.max(1, H);
+  const rectSource = document.createElement('canvas');
+  rectSource.width = rectW;
+  rectSource.height = rectH;
+  rectSource.getContext('2d').drawImage(img, 0, 0, rectW, rectH);
+
+  const circleY = Math.max(0, Math.round(H * 0.05));
+  const circleSide = Math.max(1, Math.min(W, H - circleY));
+  const circleSource = document.createElement('canvas');
+  circleSource.width = circleSide;
+  circleSource.height = circleSide;
+  circleSource.getContext('2d').drawImage(img, 0, circleY, circleSide, circleSide, 0, 0, circleSide, circleSide);
+
+  const aWidths = [Math.min(1200, W)];
+  const bWidths = [...new Set([300, Math.min(200, rectW)].filter((x) => x > 0))];
+  const cSizes = [...new Set([100, 200, 300].map((s) => Math.min(s, circleSide)).filter((x) => x > 0))];
+
+  const records = [];
+  for (const outW of aWidths) {
+    const outH = Math.max(1, Math.round(H * (outW / W)));
+    const cv = drawProgressiveScaledCanvas(fullSource, outW, outH);
+    records.push({ key: `emotion_${pid}_${emotionKey}_a_${outW}`, url: cv.toDataURL('image/jpeg', 0.9) });
+  }
+  for (const outW of bWidths) {
+    const outH = Math.max(1, Math.round(outW * 1.5));
+    const cv = drawProgressiveScaledCanvas(rectSource, outW, outH);
+    records.push({ key: `emotion_${pid}_${emotionKey}_b_${outW}`, url: cv.toDataURL('image/jpeg', 0.9) });
+  }
+  for (const side of cSizes) {
+    const base = drawProgressiveScaledCanvas(circleSource, side, side);
+    const ccv = document.createElement('canvas');
+    ccv.width = side;
+    ccv.height = side;
+    const cctx = ccv.getContext('2d');
+    cctx.drawImage(base, 0, 0, side, side);
+    cctx.globalCompositeOperation = 'destination-in';
+    cctx.beginPath();
+    cctx.arc(side / 2, side / 2, side / 2, 0, Math.PI * 2);
+    cctx.fill();
+    records.push({ key: `emotion_${pid}_${emotionKey}_c_${side}`, url: ccv.toDataURL('image/png') });
+  }
+
+  const rectMd = records.find((x) => x.key === `emotion_${pid}_${emotionKey}_b_300`)?.url
+    || records.find((x) => x.key.startsWith(`emotion_${pid}_${emotionKey}_b_`))?.url
+    || dataUrl;
+  const rectLd = records.find((x) => x.key === `emotion_${pid}_${emotionKey}_b_200`)?.url || rectMd;
+  const fullHd = records.find((x) => x.key.startsWith(`emotion_${pid}_${emotionKey}_a_`))?.url || dataUrl;
+  const circleMain = records.find((x) => x.key === `emotion_${pid}_${emotionKey}_c_200`)?.url
+    || records.find((x) => x.key.startsWith(`emotion_${pid}_${emotionKey}_c_`))?.url
+    || rectMd;
+
+  await Promise.all([
+    idbSet(`emotion_${pid}_${emotionKey}`, rectMd),
+    idbSet(`emotion_${pid}_${emotionKey}_hd`, fullHd),
+    idbSet(`emotion_${pid}_${emotionKey}_ld`, rectLd),
+    idbSet(`emotion_${pid}_${emotionKey}_thumb`, circleMain),
+    idbSet(`emotion_${pid}_${emotionKey}_circle`, circleMain),
+    idbSet(`emotion_${pid}_${emotionKey}_circle_thumb`, circleMain),
+    ...records.map((x) => idbSet(x.key, x.url)),
+  ]);
+
+  return { full: fullHd, md: rectMd, ld: rectLd, thumb: circleMain };
 }
 function baseKey(pid, eid, slot){ return `emotion_${pid}_${eid}_${slot}`; }
 function fullKey(pid, eid, slot){ return `em_full_${pid}_${eid}_${slot}`; }
 async function saveSlotImage(pid, eid, slot, dataUrl){
-  const v = await makeVariants(dataUrl);
+  const v = await makeVariants(dataUrl, pid, eid, slot);
   state.images[pid] ||= {};
   state.images[pid][eid] ||= {};
   state.images[pid][eid][slot] = v;
@@ -440,12 +539,28 @@ async function saveSlotImage(pid, eid, slot, dataUrl){
 }
 async function clearSlotImage(pid, eid, slot){
   delete state.images[pid]?.[eid]?.[slot];
+  const emotionKey = `${eid}_${slot}`;
+  const prefix = `emotion_${pid}_${emotionKey}_`;
+  const dynamicDeletes = [];
+  const allKeys = await idbKeys().catch(() => []);
+  for (const key of allKeys) {
+    const k = String(key || '');
+    if (k.startsWith(prefix)) dynamicDeletes.push(idbDelete(k));
+  }
   await Promise.allSettled([
     idbDelete(baseKey(pid,eid,slot)),
     idbDelete(fullKey(pid,eid,slot)),
     idbDelete(`${baseKey(pid,eid,slot)}_hd`),
     idbDelete(`${baseKey(pid,eid,slot)}_ld`),
     idbDelete(`${baseKey(pid,eid,slot)}_thumb`),
+    idbDelete(`emotion_${pid}_${emotionKey}_circle`),
+    idbDelete(`emotion_${pid}_${emotionKey}_circle_thumb`),
+    idbDelete(`emotion_${pid}_${emotionKey}_b_300`),
+    idbDelete(`emotion_${pid}_${emotionKey}_b_200`),
+    idbDelete(`emotion_${pid}_${emotionKey}_c_100`),
+    idbDelete(`emotion_${pid}_${emotionKey}_c_200`),
+    idbDelete(`emotion_${pid}_${emotionKey}_c_300`),
+    ...dynamicDeletes,
   ]);
 }
 async function loadImagesFromIDB(){
