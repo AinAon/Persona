@@ -88,6 +88,14 @@
 .slot-actions .btn span{display:block}
 .row-note{font-size:10px;color:var(--muted);margin-top:4px}
 .bottom-status{position:fixed;left:0;right:0;bottom:0;z-index:35;padding:10px 24px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);white-space:pre-wrap;min-height:44px}
+.queue-list{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+.queue-item{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;border:1px solid var(--border2);background:rgba(20,20,26,.9);font-size:10px;color:var(--muted)}
+.queue-dot{width:6px;height:6px;border-radius:50%}
+.queue-item.queued .queue-dot{background:var(--muted2)}
+.queue-item.running .queue-dot{background:var(--accent)}
+.queue-item.done .queue-dot{background:var(--good)}
+.queue-item.fail .queue-dot{background:var(--danger)}
+.queue-item.done,.queue-item.fail{opacity:.9}
 .status{display:none}
 .hidden{display:none !important}
 .viewer{
@@ -153,7 +161,10 @@
   </main>
 </div>
 
-<div class="bottom-status" id="statusBar">Ready.</div>
+<div class="bottom-status" id="statusBar">
+  <div class="queue-list" id="queueList"></div>
+  <div id="statusText">Ready.</div>
+</div>
 
 <div class="viewer" id="viewer">
   <div class="viewer-shell">
@@ -243,6 +254,7 @@ const state = {
   pendingAbort: null,
   viewer: null,
   activeUpload: null,
+  taskQueue: [],
 };
 
 const els = {
@@ -259,6 +271,8 @@ const els = {
   emotionGallery: document.getElementById('emotionGallery'),
   statusBox: document.getElementById('statusBox'),
   statusBar: document.getElementById('statusBar'),
+  statusText: document.getElementById('statusText'),
+  queueList: document.getElementById('queueList'),
   progressBar: document.getElementById('progressBar'),
   viewer: document.getElementById('viewer'),
   viewerImg: document.getElementById('viewerImg'),
@@ -275,8 +289,43 @@ const ICONS = {
 };
 
 function showStatus(msg){
-  if (els.statusBar) els.statusBar.textContent = msg;
+  if (els.statusText) els.statusText.textContent = msg;
+  else if (els.statusBar) els.statusBar.textContent = msg;
   if (els.statusBox) els.statusBox.textContent = msg;
+}
+let _taskSeq = 0;
+function renderTaskQueue(){
+  if (!els.queueList) return;
+  if (!state.taskQueue.length) {
+    els.queueList.innerHTML = '';
+    return;
+  }
+  els.queueList.innerHTML = state.taskQueue.map(t => (
+    `<div class="queue-item ${t.status}">
+      <span class="queue-dot"></span>
+      <span>${esc(t.label)}</span>
+    </div>`
+  )).join('');
+}
+function queueAdd(label){
+  const id = `task_${Date.now()}_${++_taskSeq}`;
+  state.taskQueue.push({ id, label, status: 'queued' });
+  renderTaskQueue();
+  return id;
+}
+function queueSet(id, status, nextLabel = ''){
+  const item = state.taskQueue.find(t => t.id === id);
+  if (!item) return;
+  item.status = status;
+  if (nextLabel) item.label = nextLabel;
+  renderTaskQueue();
+  if (status === 'done' || status === 'fail') {
+    const ttl = status === 'done' ? 1200 : 2800;
+    setTimeout(() => {
+      state.taskQueue = state.taskQueue.filter(t => t.id !== id);
+      renderTaskQueue();
+    }, ttl);
+  }
 }
 function setBusy(isBusy){ state.busy = isBusy; els.stopBtn.style.display = isBusy ? '' : 'none'; }
 function setProgress(pct){ els.progressBar.style.width = `${Math.max(0, Math.min(100, Number(pct) || 0))}%`; }
@@ -657,6 +706,8 @@ async function uploadBase64ToR2(pid, eid, slot, base64){
 }
 
 async function generateEmotion(pid, eid, slot){
+  const qid = queueAdd(`Generate ${pid}/${eid}/${slot.toUpperCase()}`);
+  queueSet(qid, 'running');
   if (state.pendingAbort) {
     try { state.pendingAbort.abort(); } catch {}
   }
@@ -672,13 +723,13 @@ async function generateEmotion(pid, eid, slot){
     '이미지1의 배경과 동일하며 카메라 각도에 따라 달라질 수 있다.',
     '',
     '[Layout]',
-    '표정에 적합한 자세로 변경, 얼굴 각도 자연스럽게 변경, 자세가 바뀌어도 얼굴은 참조 이미지의 얼굴과 같은 위치에 있음',
+    '표정에 적합한 자세로 다양하게 변경, 얼굴 각도 자연스럽게 변경, 자세가 바뀌어도 얼굴은 참조 이미지의 얼굴과 같은 위치에 있음',
     '',
     '[Mood]',
     '밝기, 조명 유지, 피부톤 유지,',
     '',
     '[Style]',
-    '참조 이미지의 그림체를 유지한다.',
+    '참조 이미지 인물의 얼굴 일관성을 유지하고 그림체를 유지한다.',
     '',
     '[Ratio]',
     '2:3',
@@ -733,10 +784,12 @@ async function generateEmotion(pid, eid, slot){
       await saveSlotImage(pid, eid, slot, dataUrl);
       render();
       showStatus(`Saved ${pid}/${eid}/${slot.toUpperCase()}`);
+      queueSet(qid, 'done', `Generated ${eid}/${slot.toUpperCase()}`);
     } catch (err) {
       const msg = err?.message || String(err || 'unknown error');
       showStatus(`Generate failed: ${msg}`);
       console.error('generateEmotion failed', { pid, eid, slot, err });
+      queueSet(qid, 'fail', `Generate failed ${eid}/${slot.toUpperCase()}`);
     } finally {
       state.pendingAbort = null;
       setBusy(false);
@@ -746,6 +799,8 @@ async function generateEmotion(pid, eid, slot){
 async function uploadCurrentCard(file){
   const target = state.activeUpload;
   if (!target || !file) return;
+  const qid = queueAdd(`Upload ${target.pid}/${target.eid}/${target.slot.toUpperCase()}`);
+  queueSet(qid, 'running');
   const dataUrl = await new Promise(resolve => {
     const r = new FileReader();
     r.onload = () => resolve(r.result);
@@ -756,18 +811,32 @@ async function uploadCurrentCard(file){
     state.activeUpload = null;
     render();
     showStatus(`Uploaded ${target.pid}/${target.eid}/${target.slot.toUpperCase()}`);
+    queueSet(qid, 'done', `Uploaded ${target.eid}/${target.slot.toUpperCase()}`);
   });
 }
 
 async function pushOne(pid, eid, slot){
+  const qid = queueAdd(`Push ${pid}/${eid}/${slot.toUpperCase()}`);
+  queueSet(qid, 'running');
   const base64 = getBestBase64ForPush(pid, eid, slot);
-  if (!base64) return;
+  if (!base64) {
+    queueSet(qid, 'fail', `No local image ${eid}/${slot.toUpperCase()}`);
+    return;
+  }
   showStatus(`Uploading ${pid}/${eid}/${slot.toUpperCase()} to R2...`);
-  const res = await uploadBase64ToR2(pid, eid, slot, base64);
-  if (!res?.key) throw new Error(res?.error || 'upload failed');
+  try {
+    const res = await uploadBase64ToR2(pid, eid, slot, base64);
+    if (!res?.key) throw new Error(res?.error || 'upload failed');
+    queueSet(qid, 'done', `Pushed ${eid}/${slot.toUpperCase()}`);
+  } catch (err) {
+    queueSet(qid, 'fail', `Push failed ${eid}/${slot.toUpperCase()}`);
+    throw err;
+  }
 }
 async function refreshSlotFromR2(pid, eid, slot){
   if (!pid || !eid || !slot) return;
+  const qid = queueAdd(`Refresh ${pid}/${eid}/${slot.toUpperCase()}`);
+  queueSet(qid, 'running');
   showStatus(`Refreshing ${pid}/${eid}/${slot.toUpperCase()} from R2...`);
   try {
     const key = await resolveRemoteImageKey(pid, eid, slot);
@@ -785,8 +854,10 @@ async function refreshSlotFromR2(pid, eid, slot){
     await loadImagesFromIDB();
     render();
     showStatus(`Refreshed ${pid}/${eid}/${slot.toUpperCase()}`);
+    queueSet(qid, 'done', `Refreshed ${eid}/${slot.toUpperCase()}`);
   } catch (err) {
     showStatus(`Refresh failed: ${err?.message || err}`);
+    queueSet(qid, 'fail', `Refresh failed ${eid}/${slot.toUpperCase()}`);
   }
 }
 async function pushAll(){
