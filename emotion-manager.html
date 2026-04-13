@@ -34,6 +34,16 @@
 .btn-danger{background:transparent;color:var(--danger);border-color:rgba(244,63,94,.3)}
 .btn-danger:hover{background:rgba(244,63,94,.08)}
 .btn-sm{padding:6px 10px;font-size:10px;border-radius:7px}
+.btn-icon{
+  width:30px;
+  height:28px;
+  padding:0;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  font-size:14px;
+  line-height:1;
+}
 .layout{flex:1 1 auto;display:grid;grid-template-columns:340px 1fr;min-height:0;overflow:hidden;padding-bottom:52px}
 .sidebar{border-right:1px solid var(--border);background:var(--surface);padding:14px;overflow:auto;min-height:0}
 .main{padding:18px 18px 0;overflow:hidden;min-height:0;display:flex;flex-direction:column}
@@ -98,11 +108,11 @@
 </div>
 
 <div class="toolbar">
-  <button class="btn btn-ghost" id="reloadBtn">Reload</button>
-  <button class="btn btn-primary" id="generateAllBtn">Generate all</button>
-  <button class="btn btn-ghost" id="uploadAllBtn">Upload all</button>
-  <button class="btn btn-ghost" id="pushAllBtn">Push all</button>
-  <button class="btn btn-danger" id="deleteAllBtn">Delete all</button>
+  <button class="btn btn-ghost" id="reloadBtn" title="Reload">🔄</button>
+  <button class="btn btn-primary" id="generateAllBtn" title="Generate all">✨</button>
+  <button class="btn btn-ghost" id="uploadAllBtn" title="Upload all">📤</button>
+  <button class="btn btn-ghost" id="pushAllBtn" title="Push all">☁</button>
+  <button class="btn btn-danger" id="deleteAllBtn" title="Delete all">🗑</button>
   <button class="btn btn-danger" id="stopBtn" style="display:none">Stop</button>
   <div class="progress-shell" aria-hidden="true"><div class="progress-bar" id="progressBar"></div></div>
 </div>
@@ -334,10 +344,23 @@ async function clearSlotImage(pid, eid, slot){
 async function loadImagesFromIDB(){
   state.images = {};
   const keys = await idbKeys().catch(()=>[]);
+  const knownPids = (state.personas || []).map(p => p?.pid).filter(Boolean).sort((a, b) => b.length - a.length);
   for (const key of keys) {
-    const m = key.match(/^em_full_(p_[^_]+)_(.+)_(a|b|c|d|e)$/);
-    if (!m) continue;
-    const [, pid, eid, slot] = m;
+    if (!String(key).startsWith('em_full_')) continue;
+    const slotMatch = String(key).match(/_(a|b|c|d|e)$/);
+    if (!slotMatch) continue;
+    const slot = slotMatch[1];
+    const body = String(key).slice('em_full_'.length, -2);
+    let pid = '';
+    let eid = '';
+    for (const candidatePid of knownPids) {
+      const prefix = `${candidatePid}_`;
+      if (!body.startsWith(prefix)) continue;
+      pid = candidatePid;
+      eid = body.slice(prefix.length);
+      break;
+    }
+    if (!pid || !eid) continue;
     const val = await idbGet(key).catch(()=>null);
     if (!val) continue;
     state.images[pid] ||= {};
@@ -375,6 +398,12 @@ function getBestBase64ForPush(pid, eid, slot){
   return s?.full || '';
 }
 function originalImagePath(pid, eid, slot){ return `${WORKER_URL}/image/profile/${pid}/${pid}_${eid}_${slot}.jpg`; }
+async function resolveRemoteImageKey(pid, eid, slot){
+  const keys = await listR2ProfileKeys(pid);
+  const parsed = keys.map(key => parseProfileKey(pid, key)).filter(Boolean);
+  const hit = parsed.find(item => item.emotion === eid && item.slot === slot);
+  return hit?.key || '';
+}
 async function listR2ProfileKeys(pid) {
   const prefixes = [
     `profile/${pid}`,
@@ -484,10 +513,11 @@ function render(){
             <div class="slot-foot">
               <div class="slot-meta"><span>${emo.id}</span><span>${slot.toUpperCase()}</span></div>
               <div class="slot-actions">
-                <button class="btn btn-primary btn-sm">Generate</button>
-                <button class="btn btn-ghost btn-sm">Upload</button>
-                <button class="btn btn-ghost btn-sm">Push</button>
-                <button class="btn btn-danger btn-sm">Delete</button>
+                <button class="btn btn-primary btn-sm btn-icon" title="Generate" aria-label="Generate">✨</button>
+                <button class="btn btn-ghost btn-sm btn-icon" title="Upload" aria-label="Upload">📤</button>
+                <button class="btn btn-ghost btn-sm btn-icon" title="Push" aria-label="Push">☁</button>
+                <button class="btn btn-ghost btn-sm btn-icon" title="Refresh" aria-label="Refresh">🔄</button>
+                <button class="btn btn-danger btn-sm btn-icon" title="Delete" aria-label="Delete">🗑</button>
               </div>
             </div>`;
           const preview = card.querySelector('.slot-preview');
@@ -495,7 +525,11 @@ function render(){
           card.querySelectorAll('.btn')[0].onclick = (ev) => { ev.stopPropagation(); generateEmotion(state.activePid, emo.id, slot); };
           card.querySelectorAll('.btn')[1].onclick = (ev) => { ev.stopPropagation(); state.activeUpload = { pid: state.activePid, eid: emo.id, slot }; els.cardFileInput.value = ''; els.cardFileInput.click(); };
           card.querySelectorAll('.btn')[2].onclick = (ev) => { ev.stopPropagation(); pushOne(state.activePid, emo.id, slot).catch(err => showStatus(`Push failed: ${err?.message || err}`)); };
-          card.querySelectorAll('.btn')[3].onclick = async (ev) => { ev.stopPropagation(); if (confirm(`Delete ${emo.id}/${slot.toUpperCase()}?`)) { await clearSlotImage(state.activePid, emo.id, slot); render(); } };
+          card.querySelectorAll('.btn')[3].onclick = async (ev) => {
+            ev.stopPropagation();
+            await refreshSlotFromR2(state.activePid, emo.id, slot);
+          };
+          card.querySelectorAll('.btn')[4].onclick = async (ev) => { ev.stopPropagation(); if (confirm(`Delete ${emo.id}/${slot.toUpperCase()}?`)) { await clearSlotImage(state.activePid, emo.id, slot); render(); } };
           card.ondragover = ev => { ev.preventDefault(); };
           card.ondrop = ev => {
             ev.preventDefault();
@@ -696,6 +730,29 @@ async function pushOne(pid, eid, slot){
   showStatus(`Uploading ${pid}/${eid}/${slot.toUpperCase()} to R2...`);
   const res = await uploadBase64ToR2(pid, eid, slot, base64);
   if (!res?.key) throw new Error(res?.error || 'upload failed');
+}
+async function refreshSlotFromR2(pid, eid, slot){
+  if (!pid || !eid || !slot) return;
+  showStatus(`Refreshing ${pid}/${eid}/${slot.toUpperCase()} from R2...`);
+  try {
+    const key = await resolveRemoteImageKey(pid, eid, slot);
+    const url = key ? `${WORKER_URL}/image/${key}` : originalImagePath(pid, eid, slot);
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const blob = await resp.blob();
+    if (!blob || !blob.size) throw new Error('Empty image');
+    const dataUrl = await new Promise(resolve => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.readAsDataURL(blob);
+    });
+    await saveSlotImage(pid, eid, slot, dataUrl);
+    await loadImagesFromIDB();
+    render();
+    showStatus(`Refreshed ${pid}/${eid}/${slot.toUpperCase()}`);
+  } catch (err) {
+    showStatus(`Refresh failed: ${err?.message || err}`);
+  }
 }
 async function uploadAll(){
   if (!state.activePid) return;
