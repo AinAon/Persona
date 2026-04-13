@@ -90,3 +90,16 @@ After advisor guidance, return implementation to the primary executor.
 - Optimize total cost efficiency across the full task, not single-step quality.
 - Use the stronger model as a strategic reviewer/advisor, not a default worker.
 - Keep execution momentum with the cheaper model once direction is clear.
+
+## Root Cause Communication Protocol (Mandatory)
+- When a user reports a problem, do **not** present a guessed root cause as final.
+- First produce hypotheses, then run a quick validation step before reporting causes.
+- For simple checks, use **gpt-5.4-mini** for fast verification.
+- For complex/high-impact issues, verify directly with code/log/runtime evidence before concluding.
+- After verification, report only high-probability causes with brief evidence and confidence.
+- If evidence is weak, explicitly label it as tentative and request one targeted follow-up check.
+
+## Cache Change Safety Rule
+- Do not introduce force cache-busting/no-store logic as a default fix unless there is evidence that stale cache is the root cause.
+- In image-loading paths, treat cache behavior as a stability-sensitive area; prefer preserving existing cache contract first.
+- If cache behavior must be changed, document expected side effects and add a rollback path.

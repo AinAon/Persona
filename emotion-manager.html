@@ -317,12 +317,13 @@ async function clearAllImageCaches(){
 function fetchNoCache(url, options = {}){
   const opts = { ...options };
   const method = String(opts.method || 'GET').toUpperCase();
-  const headers = { ...(opts.headers || {}), 'Cache-Control': 'no-cache', Pragma: 'no-cache' };
   if (method === 'GET') {
     const sep = String(url).includes('?') ? '&' : '?';
     url = `${url}${sep}_ts=${Date.now()}`;
   }
-  return fetch(url, { ...opts, headers, cache: 'no-store' });
+  // Custom cache headers can trigger CORS preflight on cross-origin GET.
+  // Keep it simple: cache-busting query + no-store only.
+  return fetch(url, { ...opts, cache: 'no-store' });
 }
 
 function resizeImage(dataUrl, maxPx, quality = 0.88){
