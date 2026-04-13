@@ -1788,9 +1788,12 @@ function _showDemoSlide(area) {
   _demoSlideIdx++;
 }
 
+let _chatListRenderVersion = 0;
+
 async function renderChatList() {
   const list = document.getElementById('chatList');
   const empty = document.getElementById('chatEmpty');
+  const myVersion = ++_chatListRenderVersion;
   list.querySelectorAll('.chat-list-wrap').forEach(e => e.remove());
   list.querySelectorAll('.chat-list-item').forEach(e => e.remove());
   if (!sessions.length) { empty.style.display = 'flex'; return; }
@@ -1806,6 +1809,8 @@ async function renderChatList() {
   if (!getChatHiddenFilterEnabled()) {
     sorted = sorted.filter(s => !s.hidden);
   }
+
+  const frag = document.createDocumentFragment();
 
   for (const s of sorted) {
     const pList = (s.participantPids || []).map(pid => getPersona(pid)).filter(Boolean);
@@ -1836,6 +1841,7 @@ async function renderChatList() {
       const imgHTML = imgSrc ? `<img src="${imgSrc}">` : defaultAvatar(p.hue);
       return `<div class="chat-av-item" style="background:hsl(${p.hue},22%,14%);border-color:hsl(${p.hue},30%,26%)">${imgHTML}</div>`;
     }));
+    if (myVersion !== _chatListRenderVersion) return;
     const avWidth = pList.length > 0 ? (80 + (pList.length - 1) * 52) : 80;
 
     item.innerHTML = `
@@ -1850,8 +1856,11 @@ async function renderChatList() {
 
     setupSwipeDelete(item, wrap, s.id);
     wrap.appendChild(item);
-    list.appendChild(wrap);
+    frag.appendChild(wrap);
   }
+  if (myVersion !== _chatListRenderVersion) return;
+  list.querySelectorAll('.chat-list-wrap').forEach(e => e.remove());
+  list.appendChild(frag);
   updateChatListVisibilityButton();
 }
 
