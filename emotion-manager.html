@@ -473,11 +473,7 @@ async function loadPersonasFromBackend(){
 }
 
 function getPersonaImage(pid){
-  const neutral = state.images[pid]?.neutral?.a?.full || '';
-  if (neutral) return neutral;
-  const neutralA = state.images[pid]?.neutral_a?.a?.full || '';
-  if (neutralA) return neutralA;
-  return '';
+  return state.images[pid]?.neutral_a?.a?.full || '';
 }
 function getEmotionImage(pid, eid, slot){
   const s = state.images[pid]?.[eid]?.[slot];
@@ -526,9 +522,6 @@ function parseProfileKey(pid, key) {
     emotion = String(suffixMatch[1] || '').toLowerCase();
     slot = String(suffixMatch[2] || '').toLowerCase();
   }
-  if (emotion === 'neutral_a' && slot === 'a') {
-    emotion = 'neutral';
-  }
   return { key: normalized, emotion, slot };
 }
 
@@ -537,9 +530,8 @@ async function findNeutralReferenceKey(pid) {
   const parsed = keys.map(key => parseProfileKey(pid, key)).filter(Boolean);
   const preferred = parsed.find(item =>
     (item.emotion === 'neutral_a' && item.slot === 'a') ||
-    (item.emotion === 'neutral' && item.slot === 'a') ||
     item.key.endsWith(`/${pid}_neutral_a.jpg`) ||
-    item.key.endsWith(`/${pid}_neutral.jpg`)
+    item.key.endsWith(`/${pid}_neutral_a_a.jpg`)
   );
   return preferred?.key || '';
 }
@@ -811,7 +803,26 @@ async function uploadCurrentCard(file){
     r.onload = () => resolve(r.result);
     r.readAsDataURL(file);
   });
-  openCropEditor(dataUrl, async (cropped) => {
+  const openCropSafely = (src, done) => {
+    if (typeof openCropEditor !== 'function') {
+      showStatus('Cropper not available. Saving original image.');
+      done(src);
+      return;
+    }
+    try {
+      openCropEditor(src, done);
+      const overlay = document.getElementById('cropOverlay');
+      if (overlay) {
+        overlay.classList.add('open');
+        overlay.style.opacity = '1';
+        overlay.style.pointerEvents = 'auto';
+      }
+    } catch (err) {
+      showStatus(`Cropper failed: ${err?.message || err}. Saving original image.`);
+      done(src);
+    }
+  };
+  openCropSafely(dataUrl, async (cropped) => {
     await saveSlotImage(target.pid, target.eid, target.slot, cropped);
     state.activeUpload = null;
     render();
