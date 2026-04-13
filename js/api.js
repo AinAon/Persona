@@ -367,13 +367,11 @@ async function generateThumbnailSet(fullDataUrl, pid, emotion = 'neutral_a') {
   rectSource.height = cropH;
   rectSource.getContext('2d').drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
 
-  const circleSide = Math.max(1, Math.min(cropW, cropH));
-  const circleX = Math.max(0, Math.round((cropW - circleSide) / 2));
-  const circleY = Math.max(0, Math.round((cropH - circleSide) / 2));
+  const circleSide = Math.max(1, Math.min(cropW, H - cropY));
   const circleSource = document.createElement('canvas');
   circleSource.width = circleSide;
   circleSource.height = circleSide;
-  circleSource.getContext('2d').drawImage(rectSource, circleX, circleY, circleSide, circleSide, 0, 0, circleSide, circleSide);
+  circleSource.getContext('2d').drawImage(img, cropX, cropY, circleSide, circleSide, 0, 0, circleSide, circleSide);
 
   const records = [];
 
