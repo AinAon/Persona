@@ -10,6 +10,10 @@ const IMAGE_CACHE_SIZES = {
   AVATAR_H: 360,
 };
 
+const PROFILE_RECT_WIDTH_STEPS = [160, 240, 320, 480, 600, 900, 1200];
+const PROFILE_CIRCLE_STEPS = [42, 56, 80, 96, 128, 160, 192];
+const PROFILE_FULL_WIDTH_STEPS = [640, 960, 1200];
+
 // ══════════════════════════════
 //  IMAGE FETCH & CACHE
 // ══════════════════════════════
@@ -73,10 +77,59 @@ async function getNeutralImage(pid) {
   return await loadNeutralDirect(pid);
 }
 
-async function getNeutralImageThumb(pid) {
+function pickClosestStep(steps, requiredPx) {
+  const target = Math.max(1, Math.round(requiredPx || 1));
+  for (const step of steps) {
+    if (step >= target) return step;
+  }
+  return steps[steps.length - 1];
+}
+
+function getStepCandidates(steps, requiredPx) {
+  const target = pickClosestStep(steps, requiredPx);
+  const sorted = [...steps].sort((a, b) => a - b);
+  const hi = sorted.filter((s) => s >= target);
+  const lo = sorted.filter((s) => s < target).reverse();
+  return [...hi, ...lo];
+}
+
+function getScreenDpr() {
+  if (typeof window === 'undefined') return 1;
+  return Math.max(1, Number(window.devicePixelRatio || 1));
+}
+
+function getEmotionKeyForCache(emotion, letter = '') {
+  const eid = (emotion || 'neutral').toLowerCase();
+  if (letter) return `${eid}_${letter}`;
+  return eid === 'neutral' ? 'neutral_a' : eid;
+}
+
+async function getEmotionCircleThumb(pid, emotion = 'neutral', letter = '', displayPx = 80) {
+  const needed = displayPx * getScreenDpr();
+  const cacheKey = getEmotionKeyForCache(emotion, letter);
   try {
-    const cachedCircle = await idbGet(`emotion_${pid}_neutral_a_circle_thumb`);
-    if (cachedCircle) return cachedCircle;
+    for (const size of getStepCandidates(PROFILE_CIRCLE_STEPS, needed)) {
+      const exact = await idbGet(`emotion_${pid}_${cacheKey}_c_${size}`);
+      if (exact) return exact;
+    }
+    const legacy = await idbGet(`emotion_${pid}_${cacheKey}_circle_thumb`);
+    if (legacy) return legacy;
+    if (!letter && cacheKey !== 'neutral_a') {
+      for (const size of getStepCandidates(PROFILE_CIRCLE_STEPS, needed)) {
+        const neutralExact = await idbGet(`emotion_${pid}_neutral_a_c_${size}`);
+        if (neutralExact) return neutralExact;
+      }
+    }
+    const neutralLegacy = await idbGet(`emotion_${pid}_neutral_a_circle_thumb`);
+    if (neutralLegacy) return neutralLegacy;
+  } catch(e) {}
+  return null;
+}
+
+async function getNeutralImageThumb(pid, displayPx = 80) {
+  const circle = await getEmotionCircleThumb(pid, 'neutral', '', displayPx);
+  if (circle) return circle;
+  try {
     const cachedA = await idbGet(`emotion_${pid}_neutral_a_thumb`);
     if (cachedA) return cachedA;
     const cached = await idbGet(`emotion_${pid}_neutral_thumb`);
@@ -88,11 +141,39 @@ async function getNeutralImageThumb(pid) {
     const ld = await idbGet(`emotion_${pid}_neutral_ld`);
     if (ld) return ld;
   } catch(e) {}
-  return await getNeutralImage(pid); // fallback to MD
+  return await getNeutralImage(pid);
 }
 
-async function getEmotionImage(pid, emotion) {
-  const key = `emotion_${pid}_${emotion || 'neutral'}`;
+async function getEmotionRectImage(pid, emotion = 'neutral', letter = '', displayPx = 200) {
+  const cacheKey = getEmotionKeyForCache(emotion, letter);
+  const needed = displayPx * getScreenDpr();
+  try {
+    for (const width of getStepCandidates(PROFILE_RECT_WIDTH_STEPS, needed)) {
+      const exact = await idbGet(`emotion_${pid}_${cacheKey}_b_${width}`);
+      if (exact) return exact;
+    }
+    const md = await idbGet(`emotion_${pid}_${cacheKey}`);
+    if (md) return md;
+    const ld = await idbGet(`emotion_${pid}_${cacheKey}_ld`);
+    if (ld) return ld;
+
+    if (!letter && cacheKey !== 'neutral_a') {
+      for (const width of getStepCandidates(PROFILE_RECT_WIDTH_STEPS, needed)) {
+        const neutralExact = await idbGet(`emotion_${pid}_neutral_a_b_${width}`);
+        if (neutralExact) return neutralExact;
+      }
+      const neutralMd = await idbGet(`emotion_${pid}_neutral_a`);
+      if (neutralMd) return neutralMd;
+    }
+  } catch(e) {}
+  return null;
+}
+
+async function getEmotionImage(pid, emotion, displayPx = 200) {
+  const tiered = await getEmotionRectImage(pid, emotion || 'neutral', '', displayPx);
+  if (tiered) return tiered;
+  const cacheKey = getEmotionKeyForCache(emotion || 'neutral');
+  const key = `emotion_${pid}_${cacheKey}`;
   try {
     const cached = await idbGet(key);
     if (cached) return cached;
@@ -116,8 +197,10 @@ function pickRandomSuffix() {
   return String.fromCharCode(97 + Math.floor(Math.random() * 26)); // a-z
 }
 
-async function getEmotionImageSuffixed(pid, emotion, letter) {
+async function getEmotionImageSuffixed(pid, emotion, letter, displayPx = 200) {
   if (letter === null || letter === undefined) return null;
+  const cachedTiered = await getEmotionRectImage(pid, emotion, letter, displayPx);
+  if (cachedTiered) return cachedTiered;
   const idbKey = letter
     ? `emotion_${pid}_${emotion}_${letter}`
     : `emotion_${pid}_${emotion}`;
@@ -140,6 +223,8 @@ async function getEmotionImageSuffixed(pid, emotion, letter) {
     });
     const emotionKey = idbKey.replace(`emotion_${pid}_`, '');
     const { sqMd } = await generateThumbnailSet(dataUrl, pid, emotionKey);
+    const tiered = await getEmotionRectImage(pid, emotion, letter, displayPx);
+    if (tiered) return tiered;
     console.log(`[emotion] cached: ${idbKey}`);
     return sqMd;
   } catch(e) {
@@ -178,6 +263,9 @@ async function getEmotionImageHD(pid, emotion, letter = '') {
   const normalizedBase = (!letter && eid === 'neutral') ? 'neutral_a' : eid;
   const target = letter ? `${eid}_${letter}` : normalizedBase;
   try {
+    const bestA = pickClosestStep(PROFILE_FULL_WIDTH_STEPS, IMAGE_CACHE_SIZES.HD * getScreenDpr());
+    const fullTier = await idbGet(`emotion_${pid}_${target}_a_${bestA}`);
+    if (fullTier) return fullTier;
     const hd = await idbGet(`emotion_${pid}_${target}_hd`);
     if (hd) return hd;
     const full = await idbGet(`em_full_${pid}_${target}`);
@@ -234,68 +322,112 @@ function loadImageElement(dataUrl) {
   });
 }
 
+function drawProgressiveScaledCanvas(sourceCanvas, targetW, targetH) {
+  let work = sourceCanvas;
+  while (work.width / 2 > targetW && work.height / 2 > targetH) {
+    const halfW = Math.max(targetW, Math.round(work.width / 2));
+    const halfH = Math.max(targetH, Math.round(work.height / 2));
+    const half = document.createElement('canvas');
+    half.width = halfW;
+    half.height = halfH;
+    const halfCtx = half.getContext('2d');
+    halfCtx.imageSmoothingEnabled = true;
+    halfCtx.imageSmoothingQuality = 'high';
+    halfCtx.drawImage(work, 0, 0, work.width, work.height, 0, 0, halfW, halfH);
+    work = half;
+  }
+
+  const out = document.createElement('canvas');
+  out.width = targetW;
+  out.height = targetH;
+  const outCtx = out.getContext('2d');
+  outCtx.imageSmoothingEnabled = true;
+  outCtx.imageSmoothingQuality = 'high';
+  outCtx.drawImage(work, 0, 0, work.width, work.height, 0, 0, targetW, targetH);
+  return out;
+}
+
 async function generateThumbnailSet(fullDataUrl, pid, emotion = 'neutral_a') {
   const img = await loadImageElement(fullDataUrl);
   const W = img.naturalWidth, H = img.naturalHeight;
 
-  // 크롭 좌표 (사각형 crop용)
+  const fullSource = document.createElement('canvas');
+  fullSource.width = W;
+  fullSource.height = H;
+  fullSource.getContext('2d').drawImage(img, 0, 0, W, H);
+
   const cropX = Math.round(W * 0.17);
   const cropY = Math.round(H * 0.05);
-  const cropW = W - cropX * 2;           // 66% of W
-  const cropH = Math.round(cropW * 1.5); // 2:3 유지
+  const cropW = Math.max(1, W - cropX * 2);
+  const cropH = Math.max(1, Math.min(H - cropY, Math.round(cropW * 1.5)));
 
-  // ── 사각형 crop MD (채팅 말풍선용) ──
-  const sqCanvas = document.createElement('canvas');
-  sqCanvas.width = cropW; sqCanvas.height = cropH;
-  sqCanvas.getContext('2d').drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-  const sqJpg = sqCanvas.toDataURL('image/jpeg', 0.93);
+  const rectSource = document.createElement('canvas');
+  rectSource.width = cropW;
+  rectSource.height = cropH;
+  rectSource.getContext('2d').drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
 
-  // ── FULL 리사이즈 HD (그리드, 편집, 팝업용 - crop 없음) ──
-  const fullCanvas = document.createElement('canvas');
-  const maxW = IMAGE_CACHE_SIZES.HD, scale = Math.min(1, maxW / W);
-  fullCanvas.width = Math.round(W * scale);
-  fullCanvas.height = Math.round(H * scale);
-  fullCanvas.getContext('2d').drawImage(img, 0, 0, fullCanvas.width, fullCanvas.height);
-  const fullJpg = fullCanvas.toDataURL('image/jpeg', 0.9);
+  const circleSide = Math.max(1, Math.min(cropW, cropH));
+  const circleX = Math.max(0, Math.round((cropW - circleSide) / 2));
+  const circleY = Math.max(0, Math.round((cropH - circleSide) / 2));
+  const circleSource = document.createElement('canvas');
+  circleSource.width = circleSide;
+  circleSource.height = circleSide;
+  circleSource.getContext('2d').drawImage(rectSource, circleX, circleY, circleSide, circleSide, 0, 0, circleSide, circleSide);
 
-  // ── 원형 crop (아바타용) ──
-  const avatarCanvas = document.createElement('canvas');
-  avatarCanvas.width = IMAGE_CACHE_SIZES.AVATAR_W;
-  avatarCanvas.height = IMAGE_CACHE_SIZES.AVATAR_H;
-  const aCtx = avatarCanvas.getContext('2d');
-  aCtx.imageSmoothingEnabled = true;
-  aCtx.imageSmoothingQuality = 'high';
-  aCtx.drawImage(
-    img,
-    cropX,
-    cropY,
-    cropW,
-    cropH,
-    0,
-    0,
-    IMAGE_CACHE_SIZES.AVATAR_W,
-    IMAGE_CACHE_SIZES.AVATAR_H,
-  );
-  const avatarPng = avatarCanvas.toDataURL('image/png');
+  const records = [];
 
-  // 리사이즈
-  const [sqMd, sqLd, thumb] = await Promise.all([
-    resizeImage(sqJpg, IMAGE_CACHE_SIZES.MD, 0.88),
-    resizeImage(sqJpg, IMAGE_CACHE_SIZES.LD, 0.85),
-    resizeImage(avatarPng, IMAGE_CACHE_SIZES.THUMB, 0.9),
-  ]);
+  const fullWidths = [...new Set(PROFILE_FULL_WIDTH_STEPS.map((w) => Math.min(w, W)))];
+  for (const outW of fullWidths) {
+    const outH = Math.max(1, Math.round(H * (outW / W)));
+    const cv = drawProgressiveScaledCanvas(fullSource, outW, outH);
+    records.push({ key: `emotion_${pid}_${emotion}_a_${outW}`, url: cv.toDataURL('image/jpeg', 0.9) });
+  }
 
-  // IDB 저장
+  const rectWidths = [...new Set(PROFILE_RECT_WIDTH_STEPS.map((w) => Math.min(w, cropW)))];
+  for (const outW of rectWidths) {
+    const outH = Math.max(1, Math.round(outW * 1.5));
+    const cv = drawProgressiveScaledCanvas(rectSource, outW, outH);
+    records.push({ key: `emotion_${pid}_${emotion}_b_${outW}`, url: cv.toDataURL('image/jpeg', 0.9) });
+  }
+
+  const circleSizes = [...new Set(PROFILE_CIRCLE_STEPS.map((s) => Math.min(s, circleSide)))];
+  for (const side of circleSizes) {
+    const base = drawProgressiveScaledCanvas(circleSource, side, side);
+    const ccv = document.createElement('canvas');
+    ccv.width = side;
+    ccv.height = side;
+    const cctx = ccv.getContext('2d');
+    cctx.drawImage(base, 0, 0, side, side);
+    cctx.globalCompositeOperation = 'destination-in';
+    cctx.beginPath();
+    cctx.arc(side / 2, side / 2, side / 2, 0, Math.PI * 2);
+    cctx.fill();
+    records.push({ key: `emotion_${pid}_${emotion}_c_${side}`, url: ccv.toDataURL('image/png') });
+  }
+
+  const mdW = Math.min(IMAGE_CACHE_SIZES.MD, cropW);
+  const ldW = Math.min(IMAGE_CACHE_SIZES.LD, cropW);
+  const hdW = Math.min(IMAGE_CACHE_SIZES.HD, W);
+  const mainCircleSize = pickClosestStep(PROFILE_CIRCLE_STEPS, 160);
+
+  const rectMd = records.find((x) => x.key === `emotion_${pid}_${emotion}_b_${mdW}`)?.url || fullDataUrl;
+  const rectLd = records.find((x) => x.key === `emotion_${pid}_${emotion}_b_${ldW}`)?.url || rectMd;
+  const fullHd = records.find((x) => x.key === `emotion_${pid}_${emotion}_a_${hdW}`)?.url || fullDataUrl;
+  const circleMain = records.find((x) => x.key === `emotion_${pid}_${emotion}_c_${mainCircleSize}`)?.url
+    || records.find((x) => x.key.startsWith(`emotion_${pid}_${emotion}_c_`))?.url
+    || rectMd;
+
   await Promise.all([
-    idbSet(`emotion_${pid}_${emotion}`, sqMd),        // 말풍선용 square crop
-    idbSet(`emotion_${pid}_${emotion}_hd`, fullJpg),  // 그리드/팝업용 FULL HD
-    idbSet(`emotion_${pid}_${emotion}_ld`, sqLd),
-    idbSet(`emotion_${pid}_${emotion}_thumb`, thumb),
-    idbSet(`emotion_${pid}_${emotion}_circle`, thumb), // legacy key
-    idbSet(`emotion_${pid}_${emotion}_circle_thumb`, avatarPng),
+    idbSet(`emotion_${pid}_${emotion}`, rectMd),
+    idbSet(`emotion_${pid}_${emotion}_hd`, fullHd),
+    idbSet(`emotion_${pid}_${emotion}_ld`, rectLd),
+    idbSet(`emotion_${pid}_${emotion}_thumb`, circleMain),
+    idbSet(`emotion_${pid}_${emotion}_circle`, circleMain),
+    idbSet(`emotion_${pid}_${emotion}_circle_thumb`, circleMain),
+    ...records.map((x) => idbSet(x.key, x.url)),
   ]);
 
-  return { sqMd, sqLd, thumb, fullHd: fullJpg, avatarPng };
+  return { sqMd: rectMd, sqLd: rectLd, thumb: circleMain, fullHd, avatarPng: circleMain };
 }
 
 // 원형 썸네일 불러오기 (없으면 square MD fallback)

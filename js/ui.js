@@ -683,17 +683,12 @@ function avatarHTML(p) {
   return src ? `<img src="${src}">` : defaultAvatar(p.hue);
 }
 
-async function getPersonaCircleThumb(pid, emotion = 'neutral', letter = '') {
-  const target = letter ? `${emotion}_${letter}` : emotion;
+async function getPersonaCircleThumb(pid, emotion = 'neutral', letter = '', displayPx = 80) {
   try {
-    const hit = await idbGet(`emotion_${pid}_${target}_circle_thumb`);
+    const hit = await getEmotionCircleThumb(pid, emotion, letter, displayPx);
     if (hit) return hit;
-    if (!letter) {
-      const neutralCircle = await idbGet(`emotion_${pid}_neutral_a_circle_thumb`);
-      if (neutralCircle) return neutralCircle;
-    }
   } catch {}
-  return await getNeutralImageThumb(pid);
+  return await getNeutralImageThumb(pid, displayPx);
 }
 
 // ══════════════════════════════
@@ -1836,7 +1831,7 @@ async function renderChatList() {
     item.onclick = () => openChat(s.id);
 
     const avEls = await Promise.all(pList.map(async p => {
-      const neutral = await getNeutralImageThumb(p.pid);
+      const neutral = await getNeutralImageThumb(p.pid, 80);
       const imgSrc = neutral || p.image;
       const imgHTML = imgSrc ? `<img src="${imgSrc}">` : defaultAvatar(p.hue);
       return `<div class="chat-av-item" style="background:hsl(${p.hue},22%,14%);border-color:hsl(${p.hue},30%,26%)">${imgHTML}</div>`;
@@ -2275,7 +2270,7 @@ async function openChat(id) {
 
   pList.forEach(async (p, i) => {
     if (openToken !== _chatOpenToken || activeChatId !== id) return;
-    const img = await getNeutralImage(p.pid); // 사각 crop 소스 호출
+    const img = await getNeutralImageThumb(p.pid, 42);
     if (openToken !== _chatOpenToken || activeChatId !== id) return;
     if (img) {
       const avEl = avatarsEl.children[i];
@@ -2295,7 +2290,7 @@ async function openChat(id) {
   }
 
   await Promise.race([
-    Promise.all(pList.map(p => getNeutralImage(p.pid))),
+    Promise.all(pList.map(p => getNeutralImageThumb(p.pid, 42))),
     new Promise(r => setTimeout(r, 2000))
   ]);
   if (openToken !== _chatOpenToken || activeChatId !== id) return;
@@ -2431,11 +2426,18 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
     const p = pList[seg.idx];
     const h = p._ghost ? 0 : p.hue;
     const opacity = p._ghost ? 'opacity:.35;' : '';
+    const avStyle = getChatAvatarStyle();
+    const rectDisplayPx = 200;
+    const circleDisplayPx = 80;
     let baseImg = avatarHTML(p);
     let thumbSrc = p.neutral_thumb || p.image || '';
     const suffix = suffixes[`${p.pid}:${seg.emotion}`] || '';
-    const dataUrl = suffix ? await getEmotionImageSuffixed(p.pid, seg.emotion, suffix) : await getEmotionImage(p.pid, seg.emotion);
-    const circleThumb = await getPersonaCircleThumb(p.pid, seg.emotion, suffix);
+    const dataUrl = avStyle !== 'circle'
+      ? (suffix
+        ? await getEmotionImageSuffixed(p.pid, seg.emotion, suffix, rectDisplayPx)
+        : await getEmotionImage(p.pid, seg.emotion, rectDisplayPx))
+      : null;
+    const circleThumb = await getPersonaCircleThumb(p.pid, seg.emotion, suffix, circleDisplayPx);
     
     if (dataUrl) { 
       baseImg = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;object-position:top;">`; 
@@ -2450,7 +2452,6 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
     const celebStroke = p.type === 'celebrity' ? `box-shadow: inset 0 0 0 1.5px hsl(${h},70%,60%), 0 0 6px hsl(${h},60%,40%);` : '';
     
     // 설정에 따른 스타일 결정
-    const avStyle = getChatAvatarStyle();
     const avDisplay = avStyle === 'hidden' ? 'display:none;' : '';
     const avShape = avStyle === 'circle' ? 'border-radius:50%; width:min(25vw,80px); height:min(25vw,80px); aspect-ratio:1/1; max-height:80px;' : '';
     if (avStyle === 'circle' && circleThumb) {
@@ -3242,7 +3243,7 @@ function kickPersona(pid) {
     }).join('');
     
     pList.forEach(async (p, i) => {
-      const img = await getNeutralImage(p.pid); // 사각 crop 소스 호출
+      const img = await getNeutralImageThumb(p.pid, 42);
       if (img) {
         const avEl = avatarsEl.children[i];
         if (avEl) avEl.innerHTML = `<img src="${img}" style="width:100%;height:100%;object-fit:cover;object-position:top;">`;
