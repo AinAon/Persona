@@ -10,7 +10,8 @@ const IMAGE_CACHE_SIZES = {
   AVATAR_H: 360,
 };
 
-const PROFILE_RECT_WIDTH_STEPS = [200, 400, 800];
+// Keep rectangular chat/profile thumbs fixed at the cropped chat size.
+const PROFILE_RECT_WIDTH_STEPS = [300];
 const PROFILE_CIRCLE_STEPS = [100, 200, 300];
 const PROFILE_FULL_WIDTH_STEPS = [1200];
 
@@ -169,7 +170,10 @@ async function getEmotionRectImage(pid, emotion = 'neutral', letter = '', displa
   const cacheKey = getEmotionKeyForCache(emotion, letter);
   const needed = displayPx * getScreenDpr();
   try {
-    for (const width of getStepCandidates(PROFILE_RECT_WIDTH_STEPS, needed)) {
+    const primaryWidths = getStepCandidates(PROFILE_RECT_WIDTH_STEPS, needed);
+    const legacyWidths = [300, 200];
+    const widths = [...new Set([...primaryWidths, ...legacyWidths])];
+    for (const width of widths) {
       const exact = await idbGet(`emotion_${pid}_${cacheKey}_b_${width}`);
       if (exact) return exact;
     }
@@ -179,7 +183,10 @@ async function getEmotionRectImage(pid, emotion = 'neutral', letter = '', displa
     if (ld) return ld;
 
     if (!letter && cacheKey !== 'neutral_a') {
-      for (const width of getStepCandidates(PROFILE_RECT_WIDTH_STEPS, needed)) {
+      const primaryNeutralWidths = getStepCandidates(PROFILE_RECT_WIDTH_STEPS, needed);
+      const legacyNeutralWidths = [300, 200];
+      const neutralWidths = [...new Set([...primaryNeutralWidths, ...legacyNeutralWidths])];
+      for (const width of neutralWidths) {
         const neutralExact = await idbGet(`emotion_${pid}_neutral_a_b_${width}`);
         if (neutralExact) return neutralExact;
       }
@@ -441,7 +448,8 @@ async function generateThumbnailSet(fullDataUrl, pid, emotion = 'neutral_a') {
     records.push({ key: `emotion_${pid}_${emotion}_a_${outW}`, url: cv.toDataURL('image/jpeg', 0.9) });
   }
 
-  const rectWidths = [...new Set(PROFILE_RECT_WIDTH_STEPS.map((w) => Math.min(w, cropW)))];
+  // Generate fixed rectangular tiers for stable rendering quality across personas.
+  const rectWidths = [...new Set(PROFILE_RECT_WIDTH_STEPS)];
   for (const outW of rectWidths) {
     const outH = Math.max(1, Math.round(outW * 1.5));
     const cv = drawProgressiveScaledCanvas(rectSource, outW, outH);
