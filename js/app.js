@@ -112,11 +112,19 @@ async function init() {
     setLoading(true, `캐시 점검 ${done}/${total} - ${label}${tail}`);
   }).catch(() => null);
 
+  // 진입 전 최소 시각 캐시 로딩(그리드 + 채팅목록)
+  await runStartupVisualWarmup((done, total, label) => {
+    setLoading(true, `시작 준비 ${done}/${total} - ${label}`);
+  }).catch(() => null);
+
   // 페르소나 그리드 + 채팅 목록 렌더링
   renderPersonaGrid();
   renderChatList();
 
   setLoading(false);
+
+  // 백그라운드 워밍업(추가 캐시 보강)
+  setTimeout(() => { runGlobalCacheWarmup().catch(() => {}); }, 200);
 
 
   // 백그라운드: Worker KV에서 페르소나 + 세션 동기화

@@ -574,7 +574,6 @@ window.addEventListener('load', () => {
   initMarked();
   initMermaid();
   initUserInputGuards();
-  setTimeout(() => { runGlobalCacheWarmup().catch(() => {}); }, 240);
 });
 
 let _chatListRefreshTimer = null;
@@ -622,6 +621,43 @@ async function runGlobalCacheWarmup() {
       await getNeutralImageThumb(pid, 80).catch(() => null);
     }
     scheduleChatListRefresh(80);
+  }
+}
+
+async function runStartupVisualWarmup(onProgress) {
+  const token = ++_globalCacheWarmupToken;
+
+  const personaList = Array.isArray(personas) ? personas : [];
+  const sortedSessions = [...(sessions || [])].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  const chatThumbPids = [];
+  const seen = new Set();
+  for (const s of sortedSessions) {
+    for (const pid of (s.participantPids || [])) {
+      if (seen.has(pid)) continue;
+      seen.add(pid);
+      chatThumbPids.push(pid);
+    }
+  }
+
+  const total = Math.max(1, personaList.length + chatThumbPids.length);
+  let done = 0;
+  const tick = (label) => {
+    done += 1;
+    try { onProgress?.(done, total, label); } catch (e) {}
+  };
+
+  // 1) Persona grid image base first (neutral_a)
+  for (const p of personaList) {
+    if (token !== _globalCacheWarmupToken) return;
+    await getNeutralABaseImageHD(p.pid).catch(() => null);
+    tick(`grid ${p.pid}`);
+  }
+
+  // 2) Chat list circle thumbnails
+  for (const pid of chatThumbPids) {
+    if (token !== _globalCacheWarmupToken) return;
+    await getNeutralImageThumb(pid, 80).catch(() => null);
+    tick(`chat ${pid}`);
   }
 }
 
