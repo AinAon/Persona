@@ -85,6 +85,7 @@ function loadSessionsFromCache() {
 }
 
 async function init() {
+  setLoading(true, '캐시 상태 점검 준비...');
   loadUserProfile();
   applyFontSize(userProfile.fontSize || 15);
   switchTab(userProfile.defaultTab || 'persona');
@@ -96,7 +97,7 @@ async function init() {
   // KV에서 프로필 동기화 (name/bio/image — 기기별 설정은 로컬 유지)
   loadUserProfileKV().then(() => renderSettingsPane()).catch(()=>{});
 
-  // neutral 이미지 IDB에서 로드
+  // neutral 이미지 IDB에서 로드 (neutral_a 우선)
   for (const [pid] of Object.entries(EMOTION_PROFILE_MAP)) {
     const key = `emotion_${pid}_neutral_a`;
     try {
@@ -105,31 +106,17 @@ async function init() {
     } catch(e) {}
   }
 
-  // neutral 이미지: loadNeutralDirect로 통일 (IDB 우선, 없으면 URL fetch)
-  const missing = Object.entries(EMOTION_PROFILE_MAP).filter(([pid]) => !_neutralCache[pid]);
-  if (missing.length) {
-    await Promise.allSettled(missing.map(([pid]) => loadNeutralDirect(pid)));
-  }
+  // 앱 시작 시에는 전체 생성 대신 상태 점검만 수행
+  await checkCacheStateWithProgress((done, total, label, isMissing) => {
+    const tail = isMissing ? ' (missing)' : '';
+    setLoading(true, `캐시 점검 ${done}/${total} - ${label}${tail}`);
+  }).catch(() => null);
 
   // 페르소나 그리드 + 채팅 목록 렌더링
   renderPersonaGrid();
   renderChatList();
 
-  // neutral 이미지 있으면 즉시, 없으면 fetch 후 로딩 종료
-  const hasSomeNeutral = Object.values(_neutralCache).some(Boolean);
-  if (hasSomeNeutral) {
-    setLoading(false);
-  } else {
-    // 최대 3초 기다리다가 없으면 그냥 종료
-    const waitForNeutral = async () => {
-      for (let i = 0; i < 30; i++) {
-        await new Promise(r => setTimeout(r, 100));
-        if (Object.values(_neutralCache).some(Boolean)) break;
-      }
-      setLoading(false);
-    };
-    waitForNeutral();
-  }
+  setLoading(false);
 
 
   // 백그라운드: Worker KV에서 페르소나 + 세션 동기화

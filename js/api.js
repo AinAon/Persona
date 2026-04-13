@@ -77,6 +77,27 @@ async function getNeutralImage(pid) {
   return await loadNeutralDirect(pid);
 }
 
+function parseProfileVariantKey(key, pid) {
+  const m = String(key || '').match(new RegExp(`^profile/${pid}/${pid}_([a-z]+)(?:_([a-z]))?\\.jpg$`, 'i'));
+  if (!m) return null;
+  return { emotion: String(m[1] || '').toLowerCase(), letter: String(m[2] || '').toLowerCase() };
+}
+
+function toEmotionCacheKey(emotion, letter = '') {
+  return letter ? `${emotion}_${letter}` : emotion;
+}
+
+async function getPersonaVariants(pid) {
+  const keys = await getImageList(pid);
+  const variants = [];
+  for (const key of keys || []) {
+    const v = parseProfileVariantKey(key, pid);
+    if (!v) continue;
+    variants.push(v);
+  }
+  return variants;
+}
+
 function pickClosestStep(steps, requiredPx) {
   const target = Math.max(1, Math.round(requiredPx || 1));
   for (const step of steps) {
@@ -514,36 +535,26 @@ async function loadNeutralDirect(pid) {
     const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
     if (!wUrl) return null;
 
-    // 1. 파일 목록으로 찾기
+    // 1) neutral_a를 최우선으로 고정
     const keys = await getImageList(pid);
-    const { suffixed, hasBase } = getSuffixesForEmotion(keys, pid, 'neutral');
-    let candidates = [];
-    if (hasBase) candidates.push(`${wUrl}/image/profile/${pid}/${pid}_neutral.jpg`);
-    if (suffixed.length > 0) {
-      const letter = suffixed[Math.floor(Math.random() * suffixed.length)];
-      candidates.push(`${wUrl}/image/profile/${pid}/${pid}_neutral_${letter}.jpg`);
-    }
+    const baseNeutralA = `profile/${pid}/${pid}_neutral_a.jpg`;
+    const hasNeutralA = keys.includes(baseNeutralA);
 
-    // 2. 목록 비어있으면 직접 시도
-    if (!candidates.length) {
-      candidates = [
-        `${wUrl}/image/profile/${pid}/${pid}_neutral.jpg`,
-        ...'abcde'.split('').map(l => `${wUrl}/image/profile/${pid}/${pid}_neutral_${l}.jpg`)
-      ];
-    }
+    const candidates = hasNeutralA
+      ? [{ url: `${wUrl}/image/profile/${pid}/${pid}_neutral_a.jpg`, cacheEmotion: 'neutral_a' }]
+      : [{ url: `${wUrl}/image/profile/${pid}/${pid}_neutral.jpg`, cacheEmotion: 'neutral' }];
 
-    console.log('[neutral] trying candidates for', pid, candidates.slice(0,3));
-    for (const url of candidates) {
+    console.log('[neutral] trying candidates for', pid, candidates.map(c => c.url).slice(0, 2));
+    for (const c of candidates) {
       try {
-        const resp = await fetch(cacheBustUrl(url));
-        console.log('[neutral]', url, resp.status);
+        const resp = await fetch(cacheBustUrl(c.url));
+        console.log('[neutral]', c.url, resp.status);
         if (!resp.ok) continue;
         const blob = await resp.blob();
         const dataUrl = await new Promise(r => {
           const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob);
         });
-        // square crop + circle crop 생성 후 IDB 저장
-        const { sqMd } = await generateThumbnailSet(dataUrl, pid, 'neutral_a');
+        const { sqMd } = await generateThumbnailSet(dataUrl, pid, c.cacheEmotion);
         _neutralCache[pid] = sqMd;
         return sqMd;
       } catch(e) { continue; }
@@ -552,9 +563,80 @@ async function loadNeutralDirect(pid) {
   return null;
 }
 
+async function rebuildAllEmotionCachesWithProgress(onProgress) {
+  const pList = Array.isArray(personas) ? personas : [];
+  const tasks = [];
+
+  for (const p of pList) {
+    const pid = p.pid;
+    tasks.push({ pid, emotion: 'neutral', letter: 'a', priority: 0 }); // neutral_a first
+    const variants = await getPersonaVariants(pid).catch(() => []);
+    for (const v of variants) {
+      tasks.push({ pid, emotion: v.emotion, letter: v.letter || '', priority: 1 });
+    }
+  }
+
+  // dedupe
+  const uniq = [];
+  const seen = new Set();
+  for (const t of tasks.sort((a, b) => a.priority - b.priority)) {
+    const k = `${t.pid}:${t.emotion}:${t.letter || ''}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    uniq.push(t);
+  }
+
+  const total = uniq.length || 1;
+  let done = 0;
+  const tick = (label) => {
+    done += 1;
+    try { onProgress?.(done, total, label); } catch (e) {}
+  };
+
+  for (const t of uniq) {
+    const label = `${t.pid} ${t.emotion}${t.letter ? `_${t.letter}` : ''}`;
+    if (t.emotion === 'neutral' && t.letter === 'a') {
+      await getNeutralABaseImageHD(t.pid).catch(() => null);
+      await getNeutralImageThumb(t.pid, 80).catch(() => null);
+      tick(label);
+      continue;
+    }
+    if (t.letter) {
+      await getEmotionImageSuffixed(t.pid, t.emotion, t.letter, 400).catch(() => null);
+      await getEmotionCircleThumb(t.pid, t.emotion, t.letter, 100).catch(() => null);
+    } else {
+      await getEmotionImage(t.pid, t.emotion, 400).catch(() => null);
+      await getEmotionCircleThumb(t.pid, t.emotion, '', 100).catch(() => null);
+    }
+    tick(label);
+  }
+
+  return { done, total };
+}
+
+async function checkCacheStateWithProgress(onProgress) {
+  const pList = Array.isArray(personas) ? personas : [];
+  const checks = [];
+  for (const p of pList) {
+    checks.push({ pid: p.pid, key: `emotion_${p.pid}_neutral_a_hd`, label: `${p.pid} neutral_a` });
+  }
+
+  const total = checks.length || 1;
+  let done = 0;
+  let missing = 0;
+  for (const c of checks) {
+    const v = await idbGet(c.key).catch(() => null);
+    if (!v) missing += 1;
+    done += 1;
+    try { onProgress?.(done, total, c.label, !v); } catch (e) {}
+  }
+  return { done, total, missing };
+}
+
 async function clearImageCache() {
   if (!confirm('이미지 캐시를 전부 삭제하고 R2에서 다시 받을까요?')) return;
   try {
+    if (typeof setLoading === 'function') setLoading(true, '캐시 초기화 중...');
     // IDB 전체 삭제 (모든 캐시 키)
     await idbClearAll();
 
@@ -566,9 +648,20 @@ async function clearImageCache() {
     // → 다음 로드 시 R2 URL에 ?t= 붙여서 강제 재요청
     setImageCacheBustToken(Date.now().toString());
 
-    showToast('캐시 삭제 완료. 재시작할게요...');
-    setTimeout(() => location.reload(), 800);
-  } catch(e) { showToast('캐시 삭제 실패: ' + e.message); }
+    await rebuildAllEmotionCachesWithProgress((done, total, label) => {
+      if (typeof setLoading === 'function') {
+        setLoading(true, `캐시 생성 ${done}/${total} - ${label}`);
+      }
+    }).catch(() => null);
+
+    if (typeof renderPersonaGrid === 'function') renderPersonaGrid();
+    if (typeof renderChatList === 'function') renderChatList();
+    showToast('캐시 초기화 및 재생성 완료');
+    if (typeof setLoading === 'function') setLoading(false);
+  } catch(e) {
+    if (typeof setLoading === 'function') setLoading(false);
+    showToast('캐시 삭제 실패: ' + e.message);
+  }
 }
 
 // ══════════════════════════════
