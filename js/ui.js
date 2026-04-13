@@ -329,6 +329,39 @@ function getAttachmentStoredUrl(a) {
   return a?.transportUrl || a?.dataUrl || getAttachmentPreviewUrl(a);
 }
 
+function serializeAttachmentForHistory(a) {
+  if (!a) return null;
+  const url = getAttachmentStoredUrl(a);
+  if (!url) return null;
+  return {
+    type: a.type === 'image' ? 'image' : 'file',
+    name: a.name || '',
+    mimeType: a.mimeType || '',
+    url,
+    previewUrl: getAttachmentPreviewUrl(a) || url
+  };
+}
+
+function getMessageAttachments(msg) {
+  if (Array.isArray(msg?.attachments) && msg.attachments.length) {
+    return msg.attachments
+      .map(a => ({
+        type: a?.type === 'image' ? 'image' : 'file',
+        name: a?.name || '',
+        mimeType: a?.mimeType || '',
+        url: a?.url || '',
+        previewUrl: a?.previewUrl || a?.url || ''
+      }))
+      .filter(a => !!a.url);
+  }
+  if (Array.isArray(msg?.content)) {
+    return msg.content
+      .filter(c => c?.type === 'image_url' && c?.image_url?.url)
+      .map(c => ({ type: 'image', name: 'image', mimeType: 'image/jpeg', url: c.image_url.url, previewUrl: c.image_url.url }));
+  }
+  return [];
+}
+
 async function getAttachmentOriginalUrl(a) {
   if (!a) return '';
   if (a.originalDataUrl) return a.originalDataUrl;
@@ -341,7 +374,8 @@ async function getAttachmentOriginalUrl(a) {
 }
 
 async function getAttachmentRequestUrl(a, model, isImageReq) {
-  if (!isImageAttachment(a)) return '';
+  if (!a) return '';
+  if (!isImageAttachment(a)) return getAttachmentStoredUrl(a) || '';
   const original = await getAttachmentOriginalUrl(a);
   const stored = getAttachmentStoredUrl(a);
   if (isImageReq && model.startsWith('gpt-image')) return original || stored;
@@ -358,6 +392,20 @@ function buildUserMessageContent(text, imageUrls) {
   if (!imgs.length) return text || '(파일)';
   const content = [];
   if (text) content.push({ type: 'text', text });
+  imgs.forEach(url => content.push({ type: 'image_url', image_url: { url } }));
+  return content;
+}
+
+function buildUserMessageContentV2(text, imageUrls, fileRefs = []) {
+  const imgs = (imageUrls || []).filter(Boolean);
+  const files = (fileRefs || []).filter(f => f && f.url);
+  if (!imgs.length && !files.length) return text || '(file)';
+  const fileText = files.length
+    ? `\n\nAttached files:\n${files.map(f => `- ${f.name || 'file'}: ${f.url}`).join('\n')}`
+    : '';
+  const content = [];
+  const mergedText = `${text || ''}${fileText}`.trim();
+  if (mergedText) content.push({ type: 'text', text: mergedText });
   imgs.forEach(url => content.push({ type: 'image_url', image_url: { url } }));
   return content;
 }
@@ -450,7 +498,7 @@ async function buildAttachmentRecord(file) {
     previewUrl: dataUrl,
     transportUrl: dataUrl,
     originalCacheKey: null,
-    uploading: !!isImg,
+    uploading: true,
     uploadError: false
   };
 
@@ -466,6 +514,15 @@ async function buildAttachmentRecord(file) {
   return record;
 }
 
+function makeUploadFilenameForAttachment(file, isImg) {
+  if (isImg) return `${makeImageFilename('uploaded')}.jpg`;
+  const rawName = String(file?.name || '').trim();
+  const ext = rawName.includes('.') ? rawName.split('.').pop().toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+  const fallbackExt = 'bin';
+  const safeExt = ext || fallbackExt;
+  return `${makeImageFilename('uploaded_file')}.${safeExt}`;
+}
+
 async function addFilesToAttachments(fileList, source = 'picker') {
   const files = [...(fileList || [])];
   if (!files.length) return 0;
@@ -476,21 +533,21 @@ async function addFilesToAttachments(fileList, source = 'picker') {
     attachments.push(record);
     added++;
     renderAttachmentPreviews();
-    if (record.type === 'image') {
-      const fname = makeImageFilename('uploaded') + '.jpg';
-      uploadToR2(record.previewUrl || record.dataUrl, 'img_uploaded', fname)
-        .then(url => {
-          record.transportUrl = url || record.transportUrl;
-          record.uploading = false;
-          record.uploadError = false;
-          renderAttachmentPreviews();
-        })
-        .catch(() => {
-          record.uploading = false;
-          record.uploadError = true;
-          renderAttachmentPreviews();
-        });
-    }
+    const isImg = record.type === 'image';
+    const uploadSource = isImg ? (record.previewUrl || record.dataUrl) : record.dataUrl;
+    const fname = makeUploadFilenameForAttachment(file, isImg);
+    uploadToR2(uploadSource, 'img_uploaded', fname)
+      .then(url => {
+        record.transportUrl = url || record.transportUrl;
+        record.uploading = false;
+        record.uploadError = false;
+        renderAttachmentPreviews();
+      })
+      .catch(() => {
+        record.uploading = false;
+        record.uploadError = true;
+        renderAttachmentPreviews();
+      });
   }
   return added;
 }
@@ -2505,7 +2562,7 @@ async function renderChatArea() {
     const el = document.createElement('div');
     if (msg.role === 'user') {
   let text = typeof msg.content === 'string' ? msg.content : (Array.isArray(msg.content) ? msg.content.find(c=>c.type==='text')?.text||'(메시지)' : '(메시지)');
-  el.innerHTML = msg._rendered || `<div class="msg-group"><div class="user-msg">${fmt(text)}</div></div>`;
+  el.innerHTML = msg._rendered || renderUserMessageHTML(msg);
 } else {
       const pList = getSessionPersonas(session);
       const renderPersonas = msg.personaSnapshot
@@ -2926,6 +2983,42 @@ function renderUserBubbleHTML(text, atts) {
   return html;
 }
 
+function renderUserBubbleHTMLV2(text, atts) {
+  let html = '';
+  (atts || []).forEach(a => {
+    const isImg = isImageAttachment(a);
+    const viewUrl = isImg ? getAttachmentPreviewUrl(a) : (a?.url || a?.transportUrl || a?.dataUrl || '');
+    const dlUrl = a?.url || getAttachmentStoredUrl(a) || viewUrl;
+    if (!viewUrl) return;
+    const safeViewUrl = String(viewUrl).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const safeDlUrl = String(dlUrl).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const safeName = String(a?.name || (isImg ? 'image' : 'file')).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    if (isImg) {
+      html += `
+      <div class="bubble-img-container">
+        <img class="bubble-img" src="${viewUrl}" onclick="openImagePopup('${safeViewUrl}')">
+        <button class="img-download-btn" onclick="downloadImage('${safeDlUrl}', '${safeName}')">저장</button>
+      </div>`;
+    } else {
+      html += `
+      <div class="bubble-file-container">
+        <a class="bubble-file-link" href="${dlUrl}" target="_blank" rel="noopener">${esc(a?.name || 'file')}</a>
+      </div>`;
+    }
+  });
+  if (text) html += fmt(text);
+  return html;
+}
+
+function renderUserMessageHTML(msg) {
+  const attachmentsForRender = getMessageAttachments(msg);
+  const text = typeof msg?.content === 'string'
+    ? msg.content
+    : (Array.isArray(msg?.content) ? msg.content.find(c => c?.type === 'text')?.text || '' : '');
+  const cleanedText = attachmentsForRender.length ? text.replace(/\n\nAttached files:\n[\s\S]*$/m, '') : text;
+  return `<div class="msg-group"><div class="user-msg">${renderUserBubbleHTMLV2(cleanedText, attachmentsForRender)}</div></div>`;
+}
+
 async function sendMessage() {
   if (isLoading) return;
   const session = getActiveSession(); if (!session) return;
@@ -2952,7 +3045,7 @@ async function sendMessage() {
   input.value = ''; input.style.height = 'auto';
 
   // 이미지 탭 참조 이미지는 채팅에 표시 안 함 — 텍스트 프롬프트만 보여줌
-  const userHTML = renderUserBubbleHTML(text, attachments);
+  const userHTML = renderUserBubbleHTMLV2(text, attachments);
   
   let msgContent = text || '(파일)';
   if (attachments.length > 0) {
@@ -2966,14 +3059,20 @@ async function sendMessage() {
   }
 
   msgContent = attachments.length > 0
-    ? buildUserMessageContent(text, historyImageUrls)
+    ? buildUserMessageContentV2(text, historyImageUrls, attachments.filter(a => !isImageAttachment(a)).map(a => ({ name: a.name || 'file', url: getAttachmentStoredUrl(a) })).filter(f => !!f.url))
     : text || '(?뚯씪)';
+  const requestFileRefs = [];
+  for (const attachment of attachments.filter(a => !isImageAttachment(a))) {
+    const fileUrl = await getAttachmentRequestUrl(attachment, targetModel, isImageReq);
+    if (fileUrl) requestFileRefs.push({ name: attachment.name || 'file', url: fileUrl });
+  }
   const requestMsgContent = attachments.length > 0
-    ? buildUserMessageContent(text, requestImageUrls)
+    ? buildUserMessageContentV2(text, requestImageUrls, requestFileRefs)
     : text || '(?뚯씪)';
 
   const nowTs = Date.now();
-  const userMsg = { role:'user', content: msgContent, createdAt: nowTs, _rendered:`<div class="msg-group"><div class="user-msg">${userHTML}</div></div>` };
+  const persistedAttachments = attachments.map(serializeAttachmentForHistory).filter(Boolean);
+  const userMsg = { role:'user', content: msgContent, attachments: persistedAttachments, createdAt: nowTs, _rendered:`<div class="msg-group"><div class="user-msg">${userHTML}</div></div>` };
   session.history.push(userMsg);
   session.updatedAt = Date.now();
 
@@ -3109,8 +3208,13 @@ async function sendMessage() {
               const imageUrl = await getAttachmentRequestUrl(attachment, getPersonaModel(persona), false);
               if (imageUrl) personaImageUrls.push(imageUrl);
             }
+            const personaFileRefs = [];
+            for (const attachment of sentAttachments.filter(a => !isImageAttachment(a))) {
+              const fileUrl = await getAttachmentRequestUrl(attachment, getPersonaModel(persona), false);
+              if (fileUrl) personaFileRefs.push({ name: attachment.name || 'file', url: fileUrl });
+            }
             const personaRequestMsgContent = sentAttachments.length > 0
-              ? buildUserMessageContent(text, personaImageUrls)
+              ? buildUserMessageContentV2(text, personaImageUrls, personaFileRefs)
               : text || '(?뚯씪)';
             const personaMessages = [
               { role:'system', content: buildSystemPrompt(session, [persona]) },
