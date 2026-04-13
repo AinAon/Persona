@@ -2784,6 +2784,7 @@ function stopGeneration() {
 
 function switchInputTab(tab) {
   _inputTab = tab;
+  const normalized = tab === 'context' ? 'project' : tab;
   // 탭 버튼 active 토글
   ['chat','image','context'].forEach(t => {
     document.getElementById('itab-' + t)?.classList.toggle('active', t === tab);
@@ -2797,7 +2798,44 @@ function switchInputTab(tab) {
       : tab === 'context' ? '질문하거나 분석을 요청해봐...'
       : '메시지를 입력해봐...';
   }
+  // 새 도구 버튼/배지 UI 동기화
+  ['chat','image','project'].forEach(t => {
+    document.getElementById('toolMode_' + t)?.classList.toggle('active', t === normalized);
+  });
+  const chip = document.getElementById('composerModeChip');
+  if (chip) {
+    if (normalized === 'image') {
+      chip.textContent = '이미지 모드';
+      chip.classList.add('show');
+    } else if (normalized === 'project') {
+      chip.textContent = '프로젝트 모드';
+      chip.classList.add('show');
+    } else {
+      chip.classList.remove('show');
+    }
+  }
+  const menu = document.getElementById('composerToolsMenu');
+  if (menu) menu.classList.add('hidden');
   // 영역 분리 제거: 탭과 무관하게 항상 단일 chatArea 유지
+}
+
+function toggleComposerTools() {
+  const menu = document.getElementById('composerToolsMenu');
+  if (!menu) return;
+  menu.classList.toggle('hidden');
+}
+
+function selectToolMode(mode) {
+  if (mode === 'project') {
+    switchInputTab('context');
+    showToast('프로젝트 기능은 준비중이야');
+    return;
+  }
+  if (mode === 'image') {
+    switchInputTab('image');
+    return;
+  }
+  switchInputTab('chat');
 }
 
 function addContextUrl() {
@@ -3696,6 +3734,12 @@ document.addEventListener('click', (e) => {
   const btn = document.getElementById('imgRatioBtn');
   if (popup && !popup.contains(e.target) && btn && !btn.contains(e.target)) {
     popup.classList.add('hidden');
+  }
+
+  const tools = document.getElementById('composerToolsMenu');
+  const toolBtn = document.getElementById('toolBtn');
+  if (tools && !tools.contains(e.target) && toolBtn && !toolBtn.contains(e.target)) {
+    tools.classList.add('hidden');
   }
 });
 

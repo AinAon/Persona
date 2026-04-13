@@ -649,8 +649,7 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 
 /* ── 탭바 행: [모델선택...] [채팅▼][이미지▼][컨텍스트▼] */
 .input-tabbar {
-  display: flex; align-items: flex-end; gap: 0;
-  padding-top: 4px; margin-bottom: 0;
+  display: none;
 }
 /* 모델/옵션 영역 — 왼쪽 flex */
 .input-model-area {
@@ -685,15 +684,76 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 }
 
 /* 입력줄: [첨부] [textarea...] [send] */
-.input-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; background: #232323; border: 1px solid rgba(255,255,255,0.08); border-radius: 999px; padding: 8px 10px; }
+.composer-shell { position: relative; margin-top: 8px; }
+.input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  background: linear-gradient(180deg, #23262d 0%, #1c1f25 100%);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 22px;
+  padding: 10px 10px;
+  min-height: 72px;
+}
 .attach-btn { background: none; border: none; color: rgba(255,255,255,0.78); cursor: pointer; padding: 6px; flex-shrink: 0; -webkit-tap-highlight-color: transparent; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; }
 .attach-btn svg { width: 20px; height: 20px; display: block; }
-#userInput { flex: 1; background: transparent; border: none; border-radius: 0; padding: 6px 2px; color: var(--text); font-family: 'Pretendard', sans-serif; font-size: 16px; outline: none; resize: none; line-height: 1.5; max-height: 120px; overflow-y: auto; min-height: 24px; }
+#userInput { flex: 1; background: transparent; border: none; border-radius: 0; padding: 6px 2px; color: var(--text); font-family: 'Pretendard', sans-serif; font-size: 16px; outline: none; resize: none; line-height: 1.45; max-height: 220px; overflow-y: auto; min-height: 24px; }
 #userInput::placeholder { color: var(--muted); }
 .composer-icon-btn { width: 34px; height: 34px; border-radius: 50%; background: transparent; color: rgba(255,255,255,0.82); border: none; cursor: pointer; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; transition: background .15s, color .15s, opacity .2s; }
 .composer-icon-btn:hover { background: rgba(255,255,255,0.08); }
 .composer-icon-btn.active { background: rgba(37, 99, 235, 0.18); color: #8ec5ff; }
 .composer-icon-btn svg { width: 18px; height: 18px; }
+.composer-mode-chip {
+  display: none;
+  height: 28px;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .01em;
+  color: #cfe1ff;
+  background: rgba(37, 99, 235, 0.28);
+  border: 1px solid rgba(93, 160, 255, 0.45);
+  flex-shrink: 0;
+}
+.composer-mode-chip.show { display: inline-flex; }
+.composer-tools-menu {
+  position: absolute;
+  left: 8px;
+  bottom: calc(100% + 8px);
+  width: min(290px, 82vw);
+  padding: 8px;
+  border-radius: 16px;
+  border: 1px solid var(--border2);
+  background: linear-gradient(180deg, #2c3139, #1f242c);
+  box-shadow: 0 14px 30px rgba(0,0,0,.45);
+  z-index: 40;
+}
+.composer-tools-menu.hidden { display: none; }
+.composer-tools-title {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 6px 8px 8px;
+}
+.composer-tools-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-family: 'Pretendard', sans-serif;
+  font-size: 17px;
+  text-align: left;
+}
+.composer-tools-item:hover { background: rgba(255,255,255,.08); }
+.composer-tools-item.active { background: rgba(255,255,255,.12); }
+.composer-tools-item svg { width: 16px; height: 16px; opacity: .9; }
 .send-btn { width: 38px; height: 38px; border-radius: 50%; background: #0a73e8; color: #fff; border: none; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: opacity .2s, background .15s; }
 .send-btn:disabled { opacity: .3; cursor: not-allowed; }
 .send-btn svg { width: 15px; height: 15px; }
@@ -1110,17 +1170,38 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
     <div class="attachments-row" id="attachmentsRow"></div>
 
     <!-- 입력창 -->
-    <div class="input-row">
-      <button class="attach-btn" onclick="document.getElementById('fileInput').click()" title="파일 첨부">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
-      </button>
-      <textarea id="userInput" rows="1" placeholder="무엇이든 물어보세요" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
-      <button class="composer-icon-btn" id="micBtn" type="button" onclick="toggleMicInput()" title="음성 입력">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z"/><path d="M19 11a7 7 0 0 1-14 0"/><path d="M12 18v3"/><path d="M8 21h8"/></svg>
-      </button>
-      <button class="send-btn" id="sendBtn" onmousedown="event.preventDefault()" onclick="sendMessage()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-      </button>
+    <div class="composer-shell">
+      <div class="composer-tools-menu hidden" id="composerToolsMenu">
+        <div class="composer-tools-title">도구</div>
+        <button class="composer-tools-item active" id="toolMode_chat" onclick="selectToolMode('chat')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+          <span>대화</span>
+        </button>
+        <button class="composer-tools-item" id="toolMode_image" onclick="selectToolMode('image')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          <span>이미지 생성</span>
+        </button>
+        <button class="composer-tools-item" id="toolMode_project" onclick="selectToolMode('project')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18M3 12h18M3 17h18"/></svg>
+          <span>프로젝트 (준비중)</span>
+        </button>
+      </div>
+      <div class="input-row">
+        <button class="attach-btn" onclick="document.getElementById('fileInput').click()" title="파일 첨부">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+        </button>
+        <button class="composer-icon-btn" id="toolBtn" type="button" onclick="toggleComposerTools()" title="도구">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="12" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M8 12h8M16.5 7.5l-8 4.5M16.5 16.5l-8-4.5"/></svg>
+        </button>
+        <textarea id="userInput" rows="1" placeholder="무엇이든 물어보세요" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+        <span class="composer-mode-chip" id="composerModeChip">이미지 모드</span>
+        <button class="composer-icon-btn" id="micBtn" type="button" onclick="toggleMicInput()" title="음성 입력">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z"/><path d="M19 11a7 7 0 0 1-14 0"/><path d="M12 18v3"/><path d="M8 21h8"/></svg>
+        </button>
+        <button class="send-btn" id="sendBtn" onmousedown="event.preventDefault()" onclick="sendMessage()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
     </div>
     <input type="file" id="fileInput" style="display:none" accept="image/*,application/pdf,.txt,.md" multiple onchange="handleFileSelect(this)">
     <input type="file" id="ctxFileInput" style="display:none" accept="application/pdf,.txt,.md,.docx" multiple onchange="handleContextFile(this)">
