@@ -46,25 +46,34 @@ function applyCropTransform() {
 }
 
 function confirmCrop() {
-  const img = document.getElementById('cropImg');
-  const container = document.getElementById('cropContainer');
-  const cw = container.offsetWidth;
-  const ch = container.offsetHeight;
-  const s = _cropState.scale;
-  const sx = -_cropState.x / s;
-  const sy = -_cropState.y / s;
-  const sw = cw / s;
-  const sh = ch / s;
-  const canvas = document.createElement('canvas');
-  canvas.width = 800;
-  canvas.height = 1200;
-  const ctx = canvas.getContext('2d');
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, 800, 1200);
-  const result = canvas.toDataURL('image/jpeg', 0.93);
-  closeCropEditor();
-  if (_cropState.onConfirm) _cropState.onConfirm(result);
+  let result = null;
+  try {
+    const img = document.getElementById('cropImg');
+    const container = document.getElementById('cropContainer');
+    const cw = container.offsetWidth;
+    const ch = container.offsetHeight;
+    const s = _cropState.scale;
+    if (!img || !container || !s || cw <= 0 || ch <= 0) {
+      throw new Error('crop state is not ready');
+    }
+    const sx = -_cropState.x / s;
+    const sy = -_cropState.y / s;
+    const sw = cw / s;
+    const sh = ch / s;
+    const canvas = document.createElement('canvas');
+    canvas.width = 800;
+    canvas.height = 1200;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, 800, 1200);
+    result = canvas.toDataURL('image/jpeg', 0.93);
+  } catch (e) {
+    console.error('[crop] confirm failed:', e);
+  } finally {
+    closeCropEditor();
+  }
+  if (result && _cropState.onConfirm) _cropState.onConfirm(result);
 }
 
 function openAvatarCropEditor(dataUrl, onConfirm) {
