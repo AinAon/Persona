@@ -838,6 +838,24 @@ async function loadFromR2(){
   showStatus(`R2 list for ${pid}: ${keys.length} keys found.`);
   const parsed = keys.map(key => parseProfileKey(pid, key)).filter(Boolean);
   showStatus(`R2 list for ${pid}: ${keys.length} keys found, ${parsed.length} parsed.`);
+  async function tryFetchAndSaveKey(keyPath, eid, slot) {
+    try {
+      const resp = await fetchNoCache(`${WORKER_URL}/image/${keyPath}`);
+      if (!resp.ok) return false;
+      const blob = await resp.blob();
+      if (!blob || !blob.size) return false;
+      const dataUrl = await new Promise(resolve => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.readAsDataURL(blob);
+      });
+      await saveSlotImage(pid, eid, slot, dataUrl);
+      loaded++;
+      return true;
+    } catch {
+      return false;
+    }
+  }
   const seen = new Set();
   for (const item of parsed) {
     const key = item.key;
@@ -860,8 +878,40 @@ async function loadFromR2(){
       loaded++;
     } catch {}
   }
+  if (!loaded) {
+    showStatus(`R2 list empty for ${pid}. Falling back to direct key scan...`);
+    const directSeen = new Set();
+    const baseRoots = ['profile', 'persona-images/profile'];
+    const fallbackTasks = [];
+    fallbackTasks.push({ eid: 'neutral', slot: 'a', names: [`${pid}_neutral_a.jpg`, `${pid}_neutral.jpg`] });
+    for (const emo of state.emotions) {
+      for (const slot of SLOT_KEYS) {
+        const names = [`${pid}_${emo.id}_${slot}.jpg`];
+        if (slot === 'a') names.push(`${pid}_${emo.id}.jpg`);
+        fallbackTasks.push({ eid: emo.id, slot, names });
+      }
+    }
+    for (const task of fallbackTasks) {
+      const dedupe = `${task.eid}_${task.slot}`;
+      if (directSeen.has(dedupe)) continue;
+      let ok = false;
+      for (const root of baseRoots) {
+        for (const fname of task.names) {
+          const keyPath = `${root}/${pid}/${fname}`;
+          const fetched = await tryFetchAndSaveKey(keyPath, task.eid, task.slot);
+          if (fetched) {
+            ok = true;
+            break;
+          }
+        }
+        if (ok) break;
+      }
+      if (ok) directSeen.add(dedupe);
+    }
+  }
   render();
   if (loaded > 0) showStatus(`Loaded ${loaded} images.`);
+  else showStatus(`No images loaded for ${pid}. Check R2 key path/pid.`);
   return loaded;
 }
 
