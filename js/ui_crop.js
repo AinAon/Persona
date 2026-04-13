@@ -22,12 +22,26 @@ function openCropEditor(dataUrl, onConfirm) {
     applyCropTransform();
   };
   img.src = dataUrl;
-  document.getElementById('cropOverlay').classList.add('open');
+  const overlay = document.getElementById('cropOverlay');
+  if (overlay) {
+    overlay.style.display = 'flex';
+    overlay.style.opacity = '1';
+    overlay.style.pointerEvents = 'auto';
+    overlay.classList.add('open');
+  }
   setupCropInteraction();
 }
 
 function closeCropEditor() {
-  document.getElementById('cropOverlay').classList.remove('open');
+  const overlay = document.getElementById('cropOverlay');
+  if (!overlay) return;
+  overlay.classList.remove('open');
+  overlay.style.opacity = '0';
+  overlay.style.pointerEvents = 'none';
+  // Fallback hard-hide in case CSS state gets stuck.
+  setTimeout(() => {
+    if (!overlay.classList.contains('open')) overlay.style.display = 'none';
+  }, 120);
 }
 
 function applyCropTransform() {
@@ -280,4 +294,11 @@ function setupCropInteraction() {
     applyCropTransform();
   };
   container.ontouchend = e => { lastTouches = e.touches; };
+
+  if (!window._cropEscBound) {
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeCropEditor();
+    });
+    window._cropEscBound = true;
+  }
 }
