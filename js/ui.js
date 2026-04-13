@@ -683,6 +683,19 @@ function avatarHTML(p) {
   return src ? `<img src="${src}">` : defaultAvatar(p.hue);
 }
 
+async function getPersonaAvatarImage(pid, emotion = 'neutral', letter = '') {
+  const target = letter ? `${emotion}_${letter}` : emotion;
+  try {
+    const avatar = await idbGet(`emotion_${pid}_${target}_avatar`);
+    if (avatar) return avatar;
+    if (!letter) {
+      const neutralAvatar = await idbGet(`emotion_${pid}_neutral_a_avatar`);
+      if (neutralAvatar) return neutralAvatar;
+    }
+  } catch {}
+  return await getNeutralImageThumb(pid);
+}
+
 // ══════════════════════════════
 //  TAB SWITCHING & SETTINGS
 // ══════════════════════════════
@@ -3417,7 +3430,9 @@ async function openProfilePopup(pid, emotion, hue, fallbackSrc, suffix = '') {
   const popup = document.getElementById('profilePopup');
   const imgEl = document.getElementById('profilePopupImg');
   imgEl.style.borderColor = `hsl(${hue},40%,35%)`;
-  imgEl.innerHTML = fallbackSrc ? `<img src="${fallbackSrc}">` : defaultAvatar(hue);
+  const avatarSrc = await getPersonaAvatarImage(pid, emotion, suffix);
+  const initialSrc = fallbackSrc || avatarSrc;
+  imgEl.innerHTML = initialSrc ? `<img src="${initialSrc}">` : defaultAvatar(hue);
   popup.classList.add('open');
 
   if (!pid) return;
@@ -3427,7 +3442,7 @@ async function openProfilePopup(pid, emotion, hue, fallbackSrc, suffix = '') {
   try {
     // 1. 해당 감정의 HD 이미지 (접미사 포함)
     const hdUrl = await getEmotionImageHD(pid, eid, suffix);
-    if (hdUrl && popup.classList.contains('open')) {
+    if (fallbackSrc && hdUrl && popup.classList.contains('open')) {
       imgEl.innerHTML = `<img src="${hdUrl}">`;
       return;
     }
