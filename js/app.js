@@ -17,7 +17,8 @@ function startDemoChat() {
 }
 
 function openEmotionManager() {
-  window.open('./emotion-manager.html', '_blank', 'noopener,noreferrer');
+  const v = Date.now();
+  window.open(`./emotion-manager.html?v=${v}`, '_blank', 'noopener,noreferrer');
 }
 
 window.getDemoReply = function(session) {
