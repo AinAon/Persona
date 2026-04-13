@@ -309,6 +309,44 @@ async function getEmotionImageHD(pid, emotion, letter = '') {
   } catch(e) { return null; }
 }
 
+async function getNeutralABaseImageHD(pid) {
+  try {
+    const bestA = pickClosestStep(PROFILE_FULL_WIDTH_STEPS, IMAGE_CACHE_SIZES.HD * getScreenDpr());
+    const fullTier = await idbGet(`emotion_${pid}_neutral_a_a_${bestA}`);
+    if (fullTier) return fullTier;
+    const hd = await idbGet(`emotion_${pid}_neutral_a_hd`);
+    if (hd) return hd;
+    const full = await idbGet(`em_full_${pid}_neutral_a`);
+    if (full) {
+      const resized = await resizeImage(full, IMAGE_CACHE_SIZES.HD, 0.9);
+      await idbSet(`emotion_${pid}_neutral_a_hd`, resized).catch(() => {});
+      return resized;
+    }
+  } catch (e) {}
+
+  try {
+    const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+    if (!wUrl) return null;
+    const url = `${wUrl}/image/profile/${pid}/${pid}_neutral_a.jpg`;
+    const resp = await fetch(cacheBustUrl(url));
+    if (!resp.ok) return null;
+    const blob = await resp.blob();
+    const dataUrl = await new Promise((r) => {
+      const rd = new FileReader();
+      rd.onload = () => r(rd.result);
+      rd.readAsDataURL(blob);
+    });
+    await idbSet(`em_full_${pid}_neutral_a`, dataUrl).catch(() => {});
+    const generated = await generateThumbnailSet(dataUrl, pid, 'neutral_a').catch(() => null);
+    if (generated?.fullHd) return generated.fullHd;
+    const hd = await resizeImage(dataUrl, IMAGE_CACHE_SIZES.HD, 0.9);
+    await idbSet(`emotion_${pid}_neutral_a_hd`, hd).catch(() => {});
+    return hd;
+  } catch (e) {
+    return null;
+  }
+}
+
 
 // ══════════════════════════════
 //  3단계 썸네일 생성 (full / square crop / circle crop)
