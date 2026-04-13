@@ -679,18 +679,18 @@ function defaultAvatar(h) {
   </svg>`;
 }
 function avatarHTML(p) {
-  const src = p.neutral_avatar || p.neutral_thumb || p.image;
+  const src = p.neutral_md || p.image;
   return src ? `<img src="${src}">` : defaultAvatar(p.hue);
 }
 
-async function getPersonaAvatarImage(pid, emotion = 'neutral', letter = '') {
+async function getPersonaCircleThumb(pid, emotion = 'neutral', letter = '') {
   const target = letter ? `${emotion}_${letter}` : emotion;
   try {
-    const avatar = await idbGet(`emotion_${pid}_${target}_avatar`);
-    if (avatar) return avatar;
+    const hit = await idbGet(`emotion_${pid}_${target}_circle_thumb`);
+    if (hit) return hit;
     if (!letter) {
-      const neutralAvatar = await idbGet(`emotion_${pid}_neutral_a_avatar`);
-      if (neutralAvatar) return neutralAvatar;
+      const neutralCircle = await idbGet(`emotion_${pid}_neutral_a_circle_thumb`);
+      if (neutralCircle) return neutralCircle;
     }
   } catch {}
   return await getNeutralImageThumb(pid);
@@ -1341,7 +1341,6 @@ function handleEditImage(input) {
       p.neutral_md = sqMd;
       p.neutral_hd = fullHd;
       p.neutral_thumb = avatarPng;
-      p.neutral_avatar = avatarPng;
       _neutralCache[p.pid] = sqMd;
 
       showToast('이미지 선택됨 — 저장 버튼을 눌러줘');
@@ -2433,14 +2432,16 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
     const h = p._ghost ? 0 : p.hue;
     const opacity = p._ghost ? 'opacity:.35;' : '';
     let baseImg = avatarHTML(p);
-    let thumbSrc = p.neutral_avatar || p.neutral_thumb || p.image || '';
+    let thumbSrc = p.neutral_thumb || p.image || '';
     const suffix = suffixes[`${p.pid}:${seg.emotion}`] || '';
     const dataUrl = suffix ? await getEmotionImageSuffixed(p.pid, seg.emotion, suffix) : await getEmotionImage(p.pid, seg.emotion);
+    const circleThumb = await getPersonaCircleThumb(p.pid, seg.emotion, suffix);
     
     if (dataUrl) { 
       baseImg = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;object-position:top;">`; 
       thumbSrc = dataUrl; 
     }
+    if (circleThumb) thumbSrc = circleThumb;
     
     const safePid = p.pid.replace(/'/g, "\\'");
     const safeEmotion = (seg.emotion||'neutral').replace(/'/g, "\\'");
@@ -2452,6 +2453,9 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
     const avStyle = getChatAvatarStyle();
     const avDisplay = avStyle === 'hidden' ? 'display:none;' : '';
     const avShape = avStyle === 'circle' ? 'border-radius:50%; width:min(25vw,80px); height:min(25vw,80px); aspect-ratio:1/1; max-height:80px;' : '';
+    if (avStyle === 'circle' && circleThumb) {
+      baseImg = `<img src="${circleThumb}" style="width:100%;height:100%;object-fit:cover;object-position:top;">`;
+    }
     
     const fmtContent = fmt(seg.content);
 
@@ -3430,8 +3434,8 @@ async function openProfilePopup(pid, emotion, hue, fallbackSrc, suffix = '') {
   const popup = document.getElementById('profilePopup');
   const imgEl = document.getElementById('profilePopupImg');
   imgEl.style.borderColor = `hsl(${hue},40%,35%)`;
-  const avatarSrc = await getPersonaAvatarImage(pid, emotion, suffix);
-  const initialSrc = avatarSrc || fallbackSrc;
+  const circleSrc = await getPersonaCircleThumb(pid, emotion, suffix);
+  const initialSrc = fallbackSrc || circleSrc;
   imgEl.innerHTML = initialSrc ? `<img src="${initialSrc}">` : defaultAvatar(hue);
   popup.classList.add('open');
 

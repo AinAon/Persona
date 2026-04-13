@@ -75,8 +75,8 @@ async function getNeutralImage(pid) {
 
 async function getNeutralImageThumb(pid) {
   try {
-    const cachedAvatar = await idbGet(`emotion_${pid}_neutral_a_avatar`);
-    if (cachedAvatar) return cachedAvatar;
+    const cachedCircle = await idbGet(`emotion_${pid}_neutral_a_circle_thumb`);
+    if (cachedCircle) return cachedCircle;
     const cachedA = await idbGet(`emotion_${pid}_neutral_a_thumb`);
     if (cachedA) return cachedA;
     const cached = await idbGet(`emotion_${pid}_neutral_thumb`);
@@ -292,7 +292,6 @@ async function generateThumbnailSet(fullDataUrl, pid, emotion = 'neutral_a') {
     idbSet(`emotion_${pid}_${emotion}_ld`, sqLd),
     idbSet(`emotion_${pid}_${emotion}_thumb`, thumb),
     idbSet(`emotion_${pid}_${emotion}_circle`, thumb), // legacy key
-    idbSet(`emotion_${pid}_${emotion}_avatar`, avatarPng),
     idbSet(`emotion_${pid}_${emotion}_circle_thumb`, avatarPng),
   ]);
 
@@ -401,7 +400,7 @@ async function clearImageCache() {
 function savePersonas() {
   // 이미지 데이터 제외 후 저장 (용량 절약)
   const toSave = personas.map(p => {
-    const { neutral_md, neutral_hd, neutral_thumb, neutral_avatar, image, ...rest } = p;
+    const { neutral_md, neutral_hd, neutral_thumb, image, ...rest } = p;
     return rest;
   });
   setLocalPersonas(toSave);
