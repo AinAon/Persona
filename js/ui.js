@@ -597,67 +597,78 @@ function scheduleChatAreaRefresh(delay = 140) {
 
 let _globalCacheWarmupToken = 0;
 let _activeChatWarmupToken = 0;
+let _startupWarmupRunning = false;
+let _globalWarmupRunning = false;
 
 async function runGlobalCacheWarmup() {
   const token = ++_globalCacheWarmupToken;
+  _globalWarmupRunning = true;
+  try {
 
-  // 1) Persona grid priority: neutral_a only
-  for (const p of (personas || [])) {
-    if (token !== _globalCacheWarmupToken) return;
-    await getNeutralABaseImageHD(p.pid).catch(() => null);
-  }
-  scheduleChatListRefresh(60);
-
-  // 2) Chat list priority: by updatedAt desc
-  const sorted = [...(sessions || [])].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-  const seen = new Set();
-  for (const s of sorted) {
-    if (token !== _globalCacheWarmupToken) return;
-    const pids = (s.participantPids || []);
-    for (const pid of pids) {
+    // 1) Persona grid priority: neutral_a only
+    for (const p of (personas || [])) {
       if (token !== _globalCacheWarmupToken) return;
-      if (seen.has(pid)) continue;
-      seen.add(pid);
-      await getNeutralImageThumb(pid, 80).catch(() => null);
+      await getNeutralABaseImageHD(p.pid).catch(() => null);
     }
-    scheduleChatListRefresh(80);
+
+    // 2) Chat list priority: by updatedAt desc
+    const sorted = [...(sessions || [])].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    const seen = new Set();
+    for (const s of sorted) {
+      if (token !== _globalCacheWarmupToken) return;
+      const pids = (s.participantPids || []);
+      for (const pid of pids) {
+        if (token !== _globalCacheWarmupToken) return;
+        if (seen.has(pid)) continue;
+        seen.add(pid);
+        await getNeutralImageThumb(pid, 80).catch(() => null);
+      }
+    }
+  } finally {
+    _globalWarmupRunning = false;
+    scheduleChatListRefresh(120);
   }
 }
 
 async function runStartupVisualWarmup(onProgress) {
   const token = ++_globalCacheWarmupToken;
+  _startupWarmupRunning = true;
+  try {
 
-  const personaList = Array.isArray(personas) ? personas : [];
-  const sortedSessions = [...(sessions || [])].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-  const chatThumbPids = [];
-  const seen = new Set();
-  for (const s of sortedSessions) {
-    for (const pid of (s.participantPids || [])) {
-      if (seen.has(pid)) continue;
-      seen.add(pid);
-      chatThumbPids.push(pid);
+    const personaList = Array.isArray(personas) ? personas : [];
+    const sortedSessions = [...(sessions || [])].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    const chatThumbPids = [];
+    const seen = new Set();
+    for (const s of sortedSessions) {
+      for (const pid of (s.participantPids || [])) {
+        if (seen.has(pid)) continue;
+        seen.add(pid);
+        chatThumbPids.push(pid);
+      }
     }
-  }
 
-  const total = Math.max(1, personaList.length + chatThumbPids.length);
-  let done = 0;
-  const tick = (label) => {
-    done += 1;
-    try { onProgress?.(done, total, label); } catch (e) {}
-  };
+    const total = Math.max(1, personaList.length + chatThumbPids.length);
+    let done = 0;
+    const tick = (label) => {
+      done += 1;
+      try { onProgress?.(done, total, label); } catch (e) {}
+    };
 
-  // 1) Persona grid image base first (neutral_a)
-  for (const p of personaList) {
-    if (token !== _globalCacheWarmupToken) return;
-    await getNeutralABaseImageHD(p.pid).catch(() => null);
-    tick(`grid ${p.pid}`);
-  }
+    // 1) Persona grid image base first (neutral_a)
+    for (const p of personaList) {
+      if (token !== _globalCacheWarmupToken) return;
+      await getNeutralABaseImageHD(p.pid).catch(() => null);
+      tick(`grid ${p.pid}`);
+    }
 
-  // 2) Chat list circle thumbnails
-  for (const pid of chatThumbPids) {
-    if (token !== _globalCacheWarmupToken) return;
-    await getNeutralImageThumb(pid, 80).catch(() => null);
-    tick(`chat ${pid}`);
+    // 2) Chat list circle thumbnails
+    for (const pid of chatThumbPids) {
+      if (token !== _globalCacheWarmupToken) return;
+      await getNeutralImageThumb(pid, 80).catch(() => null);
+      tick(`chat ${pid}`);
+    }
+  } finally {
+    _startupWarmupRunning = false;
   }
 }
 
@@ -705,6 +716,7 @@ async function runActiveChatWarmup(sessionId) {
 }
 
 window.addEventListener('persona-cache-updated', () => {
+  if (_startupWarmupRunning || _globalWarmupRunning) return;
   scheduleChatListRefresh(100);
   scheduleChatAreaRefresh(110);
 });
