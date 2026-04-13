@@ -183,8 +183,8 @@
     <img class="crop-img" id="cropImg" draggable="false" style="position:absolute;transform-origin:0 0;user-select:none;pointer-events:none;">
   </div>
   <div style="display:flex;gap:12px">
-    <button class="btn btn-ghost" onclick="closeCropEditor()">Cancel</button>
-    <button class="btn btn-primary" onclick="confirmCrop()">Apply</button>
+    <button class="btn btn-ghost" id="cropCancelBtn">Cancel</button>
+    <button class="btn btn-primary" id="cropApplyBtn">Apply</button>
   </div>
 </div>
 
@@ -291,6 +291,8 @@ const els = {
   viewerImg: document.getElementById('viewerImg'),
   viewerClose: document.getElementById('viewerClose'),
   cardFileInput: document.getElementById('cardFileInput'),
+  cropCancelBtn: document.getElementById('cropCancelBtn'),
+  cropApplyBtn: document.getElementById('cropApplyBtn'),
 };
 
 const ICONS = {
@@ -1117,6 +1119,16 @@ function init(){
   els.stopBtn.onclick = () => { state.pendingAbort?.abort?.(); showStatus('Stopped.'); setBusy(false); };
   els.viewerClose.onclick = closeViewer;
   els.viewer.onclick = (e) => { if (e.target === els.viewer) closeViewer(); };
+  if (els.cropCancelBtn) {
+    els.cropCancelBtn.onclick = () => {
+      if (typeof closeCropEditor === 'function') closeCropEditor();
+    };
+  }
+  if (els.cropApplyBtn) {
+    els.cropApplyBtn.onclick = () => {
+      if (typeof confirmCrop === 'function') confirmCrop();
+    };
+  }
   document.querySelectorAll('.cat-tab').forEach(btn => btn.onclick = () => { state.activeCat = btn.dataset.cat; render(); });
   els.cardFileInput.onchange = async () => {
     const file = els.cardFileInput.files?.[0];
