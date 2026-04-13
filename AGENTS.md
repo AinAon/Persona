@@ -17,6 +17,17 @@ The primary executor should handle, by default:
 - repetitive implementation work
 - running tests and basic verification
 
+## Model Routing Policy
+- Default execution model is fixed to **gpt-5.3-codex**.
+- Escalate to **gpt-5.4** only when one or more of the following are true:
+  - the same issue failed after 2 or more attempts
+  - root cause is still unclear
+  - architecture branching or broad side effects are expected
+- Delegate simple tasks to **gpt-5.2** or **gpt-5.4-mini**:
+  - exploration / grep / log summarization
+  - repetitive substitutions / boilerplate edits
+  - simple data cleanup
+
 ## Escalation Triggers (Advisor Model)
 Escalate only if one or more conditions are true:
 - the same issue remains unresolved after 2 attempts
@@ -26,6 +37,10 @@ Escalate only if one or more conditions are true:
 - integration or migration risk is high
 - parallel findings conflict
 - the task requires deeper reasoning than routine execution
+
+## Task and Escalation Docs
+- At task start, use **TASK_TEMPLATE.md** to keep scope and success criteria explicit.
+- At escalation time, use **ESCALATION_NOTE.md** to send a compact decision-focused summary.
 
 ## Advisor Request Format (Narrow Scope)
 When escalating, ask for guidance only (not full execution) unless absolutely necessary.
@@ -54,6 +69,9 @@ After advisor guidance, return implementation to the primary executor.
 - Prefer targeted patches over broad rewrites.
 - Read only the file sections needed for the current step.
 - Avoid repeated full-file dumps when focused search/context is enough.
+- Keep read scope minimal and only pull required sections.
+- Use lower models in parallel for exploration; reserve higher models for decisions.
+- Never send raw long logs to higher models when a concise summary is sufficient.
 
 ## Reliability Guardrails
 - Do not skip validation for high-risk changes.
@@ -64,4 +82,3 @@ After advisor guidance, return implementation to the primary executor.
 - Optimize total cost efficiency across the full task, not single-step quality.
 - Use the stronger model as a strategic reviewer/advisor, not a default worker.
 - Keep execution momentum with the cheaper model once direction is clear.
-
