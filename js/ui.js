@@ -4174,7 +4174,7 @@ async function deletePrivateMemoryItem(id, scope = 'private_profile', owner = ''
     toggleMemoryItemSelection(scope, pid, id, false);
     renderPrivateMemoryList(pid);
   } else {
-    showToast('삭제 실패. ?좉툑 ?곹깭?몄? ?뺤씤?섏꽭??');
+    showToast('삭제 실패. 잠금 상태인지 확인하세요.');
   }
 }
 
@@ -4193,10 +4193,10 @@ async function toggleMemoryLockItem(id, scope = '', owner = '', locked = false) 
     setMemoryListToCache(scope, cacheOwner, prev);
     if (scope === 'public_profile') renderPublicMemoryList();
     if (scope === 'private_profile') renderPrivateMemoryList(cacheOwner);
-    showToast('?좉툑 蹂寃?실패');
+    showToast('잠금 변경 실패');
     return;
   }
-  showToast(locked ? '硫붾え由??좉툑?? : '硫붾え由??좉툑 ?댁젣');
+  showToast(locked ? '메모리 잠금됨' : '메모리 잠금 해제');
   if (scope === 'public_profile') renderPublicMemoryList();
   if (scope === 'private_profile') renderPrivateMemoryList(cacheOwner);
 }
@@ -4212,11 +4212,11 @@ async function editMemoryItem(id, scope = '', owner = '') {
     return;
   }
 
-  const edited = prompt('硫붾え由??섏젙', String(target.text || ''));
+  const edited = prompt('메모리 수정', String(target.text || ''));
   if (edited === null) return;
   const clean = String(edited || '').replace(/^\s*profile\s*:\s*/i, '').trim();
   if (!clean) {
-    showToast('鍮?硫붾え由щ뒗 ??ν븷 ???놁뒿?덈떎.');
+    showToast('빈 메모리는 저장할 수 없습니다.');
     return;
   }
   if (clean === String(target.text || '').trim()) return;
@@ -4232,10 +4232,10 @@ async function editMemoryItem(id, scope = '', owner = '') {
     setMemoryListToCache(scope, cacheOwner, prev);
     if (scope === 'public_profile') renderPublicMemoryList();
     if (scope === 'private_profile') renderPrivateMemoryList(cacheOwner);
-    showToast('硫붾え由??섏젙 실패');
+    showToast('메모리 수정 실패');
     return;
   }
-  showToast('硫붾え由??섏젙 완료');
+  showToast('메모리 수정 완료');
 }
 
 async function saveMemoryFromCurrentChat() {
