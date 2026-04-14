@@ -1828,7 +1828,7 @@ async function handleMultiImageFiles(fileList) {
     status: 'uploading'
   }));
   renderEditMultiUploadList();
-  showToast(`이미지 ${files.length}???낅줈???쒖옉`);
+  showToast(`이미지 ${files.length}개 업로드 시작`);
 
   let ok = 0, fail = 0;
   for (let i = 0; i < files.length; i++) {
@@ -1879,7 +1879,7 @@ async function handleMultiImageFiles(fileList) {
     renderEditMultiUploadList();
   }
   if (typeof _imageListCache !== 'undefined') delete _imageListCache[p.pid];
-  showToast(`?낅줈??완료: ${ok}??{fail ? `, 실패 ${fail}?? : ''}`);
+  showToast(`업로드 완료: ${ok}${fail ? `, 실패 ${fail}개` : ''}`);
 }
 
 async function savePersonaEdit() {
@@ -1891,7 +1891,7 @@ async function savePersonaEdit() {
     editingPid = newPid;
     personas.push(p);
   }
-  p.name = document.getElementById('editName').value.trim() || '?섎Ⅴ?뚮굹';
+  p.name = document.getElementById('editName').value.trim() || '페르소나';
   p.bio = document.getElementById('editBio').value.trim();
   const selSwatch = document.querySelector('#editBody .hue-swatch.on');
   if (selSwatch?.dataset.hue) p.hue = parseInt(selSwatch.dataset.hue);
@@ -1927,7 +1927,7 @@ async function savePersonaEdit() {
     delete p._pendingImage;
   }
   savePersonas(); renderPersonaGrid(); goMain();
-  showToast('??λ맖 ??);
+  showToast('저장됨 ✓');
 }
 
 // ???????????????
@@ -2553,7 +2553,7 @@ function goMain() {
   _isDemoMode = false;
   activeChatId = null;
   const input = document.getElementById('userInput');
-  if (input) input.placeholder = '硫붿떆吏瑜??낅젰?섏꽭??;
+  if (input) input.placeholder = '메시지를 입력하세요';
   show('mainScreen');
   renderChatList();
 }
@@ -2570,7 +2570,7 @@ async function renderChatArea() {
     [...area.children].forEach(c => { if (c.id !== 'chatEmpty2') c.remove(); });
     empty.style.display = 'flex';
     const pList = (session.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
-    document.getElementById('emptyText').textContent = pList.map(p=>p.name).join(', ') + '?먭쾶 萸먮뱺 ?섏졇遊?;
+    document.getElementById('emptyText').textContent = pList.map(p=>p.name).join(', ') + '님께 메시지를 입력해보세요';
     return;
   }
   area.classList.add('has-messages');
