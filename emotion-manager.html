@@ -119,10 +119,10 @@
     <div class="brand-mark">E</div>
     <div>
       <div class="brand-title">Emotion Manager</div>
-      <div class="brand-sub">image-only / neutral_a / grok</div>
+      <div class="brand-sub">image-only / neutral_a / gemini</div>
     </div>
   </div>
-  <div class="section-note">Generate with `grok-imagine-image-pro` and `2k`</div>
+  <div class="section-note">Generate with `gemini-3.1-flash-image-preview` and `1k`</div>
 </div>
 
 <div class="toolbar">
@@ -568,6 +568,17 @@ async function loadImagesFromIDB(){
   state.images = {};
   const keys = await idbKeys().catch(()=>[]);
   const knownPids = (state.personas || []).map(p => p?.pid).filter(Boolean).sort((a, b) => b.length - a.length);
+  const scoreMap = {};
+  const setSlotFull = (pid, eid, slot, val, score) => {
+    if (!pid || !eid || !slot || !val) return;
+    const sk = `${pid}::${eid}::${slot}`;
+    if ((scoreMap[sk] || -1) > score) return;
+    scoreMap[sk] = score;
+    state.images[pid] ||= {};
+    state.images[pid][eid] ||= {};
+    state.images[pid][eid][slot] ||= { full:'' };
+    state.images[pid][eid][slot].full = val;
+  };
   for (const key of keys) {
     if (!String(key).startsWith('em_full_')) continue;
     const slotMatch = String(key).match(/_(a|b|c|d|e)$/);
@@ -586,10 +597,59 @@ async function loadImagesFromIDB(){
     if (!pid || !eid) continue;
     const val = await idbGet(key).catch(()=>null);
     if (!val) continue;
-    state.images[pid] ||= {};
-    state.images[pid][eid] ||= {};
-    state.images[pid][eid][slot] ||= { full:'' };
-    state.images[pid][eid][slot].full = val;
+    setSlotFull(pid, eid, slot, val, 100);
+  }
+
+  for (const key of keys) {
+    const k = String(key || '');
+    if (!k.startsWith('emotion_')) continue;
+    let pid = '';
+    for (const candidatePid of knownPids) {
+      const prefix = `emotion_${candidatePid}_`;
+      if (!k.startsWith(prefix)) continue;
+      pid = candidatePid;
+      break;
+    }
+    if (!pid) continue;
+    const tail = k.slice(`emotion_${pid}_`.length);
+    const val = await idbGet(k).catch(()=>null);
+    if (!val) continue;
+
+    let m = tail.match(/^(.+)_([a-z])_b_(\d+)$/i);
+    if (m) {
+      const eid = String(m[1] || '').toLowerCase();
+      const slot = String(m[2] || '').toLowerCase();
+      const w = Number(m[3] || 0);
+      setSlotFull(pid, eid, slot, val, w >= 300 ? 90 : 80);
+      continue;
+    }
+    m = tail.match(/^(.+)_([a-z])(?:_(?:hd|ld|thumb|circle|circle_thumb))?$/i);
+    if (m) {
+      const eid = String(m[1] || '').toLowerCase();
+      const slot = String(m[2] || '').toLowerCase();
+      setSlotFull(pid, eid, slot, val, 70);
+      continue;
+    }
+    m = tail.match(/^(.+)_([a-z])_a_(\d+)$/i);
+    if (m) {
+      const eid = String(m[1] || '').toLowerCase();
+      const slot = String(m[2] || '').toLowerCase();
+      setSlotFull(pid, eid, slot, val, 85);
+      continue;
+    }
+    m = tail.match(/^(.+)_([a-z])_c_(\d+)$/i);
+    if (m) {
+      const eid = String(m[1] || '').toLowerCase();
+      const slot = String(m[2] || '').toLowerCase();
+      setSlotFull(pid, eid, slot, val, 65);
+      continue;
+    }
+    m = tail.match(/^(.+)_([a-z])$/i);
+    if (m) {
+      const eid = String(m[1] || '').toLowerCase();
+      const slot = String(m[2] || '').toLowerCase();
+      setSlotFull(pid, eid, slot, val, 75);
+    }
   }
 }
 
@@ -609,7 +669,9 @@ async function loadPersonasFromBackend(){
 }
 
 function getPersonaImage(pid){
-  return state.images[pid]?.neutral_a?.a?.full || '';
+  return state.images[pid]?.neutral_a?.a?.full
+    || state.images[pid]?.neutral?.a?.full
+    || '';
 }
 function getEmotionImage(pid, eid, slot){
   const s = state.images[pid]?.[eid]?.[slot];
@@ -664,6 +726,12 @@ function parseProfileKey(pid, key) {
 async function findNeutralReferenceKey(pid) {
   const keys = await listR2ProfileKeys(pid);
   const parsed = keys.map(key => parseProfileKey(pid, key)).filter(Boolean);
+  const preferredProfile = parsed.find(item =>
+    (item.key.startsWith(`profile/${pid}/`) && item.emotion === 'neutral_a' && item.slot === 'a') ||
+    (item.key.startsWith(`profile/${pid}/`) && item.key.endsWith(`/${pid}_neutral_a.jpg`)) ||
+    (item.key.startsWith(`profile/${pid}/`) && item.key.endsWith(`/${pid}_neutral_a_a.jpg`))
+  );
+  if (preferredProfile?.key) return preferredProfile.key;
   const preferred = parsed.find(item =>
     (item.emotion === 'neutral_a' && item.slot === 'a') ||
     item.key.endsWith(`/${pid}_neutral_a.jpg`) ||
@@ -686,20 +754,10 @@ function render(){
     card.innerHTML = `
       <div class="persona-thumb">${getPersonaImage(p.pid) ? `<img src="${getPersonaImage(p.pid)}" alt="">` : '<div class="slot-empty">neutral_a</div>'}</div>
       <div class="persona-name">${p.name || p.pid}</div>`;
-    card.onclick = async () => {
+    card.onclick = () => {
       state.activePid = p.pid;
       render();
-      setBusy(true);
-      setProgress(20);
-      try {
-        showStatus(`Loading ${p.pid} from R2 originals...`);
-        await reloadPersonaFromR2(p.pid, false);
-        render();
-      } finally {
-        setProgress(100);
-        setTimeout(resetProgress, 250);
-        setBusy(false);
-      }
+      showStatus(`Selected ${p.pid} (IDB cache)`); 
     };
     els.personaGrid.appendChild(card);
   }
@@ -904,11 +962,11 @@ async function generateEmotion(pid, eid, slot){
   ].join('\n');
   const body = {
     action: 'chat',
-    model: 'grok-imagine-image-pro',
+    model: 'gemini-3.1-flash-image-preview',
     prompt,
     images: [ref],
     aspect_ratio: '2:3',
-    resolution: '2k',
+    resolution: '1k',
   };
   const controller = new AbortController();
   setBusy(true);
@@ -1273,11 +1331,8 @@ function init(){
     }
     if (state.personas.length) state.activePid = state.personas[0].pid;
     render();
-    if (state.activePid) {
-      await loadFromR2().catch(() => {});
-      await loadImagesFromIDB().catch(() => {});
-      render();
-    }
+    await loadImagesFromIDB().catch(() => {});
+    render();
     resetProgress();
   })();
 }
