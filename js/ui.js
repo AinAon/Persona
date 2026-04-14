@@ -26,9 +26,9 @@ function buildModelSelect(id, selectedValue, style = '') {
   return `<select class="edit-input" id="${id}" style="width:100%;${style}">${opts}</select>`;
 }
 
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 //  UTILS (UI)
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 // 留덊겕?ㅼ슫 ?뚮뜑??珥덇린??
@@ -632,7 +632,7 @@ function initUserInputGuards() {
     setComposerDragActive(false);
     const added = await addFilesToAttachments(files, 'drop');
     if (added > 0) {
-      showToast(`${added}媛?파일??泥⑤??덉뼱??`);
+      showToast(`${added}개 파일을 첨부했어요.`);
       input.focus();
     }
   };
@@ -645,7 +645,7 @@ function initUserInputGuards() {
   });
 }
 
-// ?쇱씠釉뚮윭由?珥덇린??(?ㅽ겕由쏀듃 濡쒕뱶 ??
+// 라이브러리 초기화 (스크립트 로드 후)
 window.addEventListener('load', () => {
   initMarked();
   initMermaid();
@@ -803,15 +803,15 @@ function show(id) {
 }
 function timeLabel(ts) {
   const diff = Date.now() - ts;
-  if (diff < 60000) return '諛⑷툑';
-  if (diff < 3600000) return `${Math.floor(diff/60000)}遺???;
-  if (diff < 86400000) return `${Math.floor(diff/3600000)}?쒓컙 ??;
-  return `${Math.floor(diff/86400000)}????;
+  if (diff < 60000) return '방금';
+  if (diff < 3600000) return `${Math.floor(diff/60000)}분 전';
+  if (diff < 86400000) return `${Math.floor(diff/3600000)}시간 전';
+  return `${Math.floor(diff/86400000)}일 전';
 }
 
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 //  TOAST / LOADING
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 let toastTimer = null;
 let _speechRecognition = null;
 let _speechListening = false;
@@ -834,7 +834,7 @@ function updateMicButtonState(active) {
   if (!btn) return;
   btn.classList.toggle('active', !!active);
   btn.setAttribute('aria-pressed', active ? 'true' : 'false');
-  btn.title = active ? '?뚯꽦 ?낅젰 以묒?' : '?뚯꽦 ?낅젰';
+  btn.title = active ? '음성 입력 중지' : '음성 입력';
 }
 
 function stopMicInput() {
@@ -848,7 +848,7 @@ function stopMicInput() {
 function toggleMicInput() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
-    showToast('??釉뚮씪?곗????뚯꽦 ?낅젰??吏?먰븯吏 ?딆뒿?덈떎.');
+    showToast('이 브라우저는 음성 입력을 지원하지 않습니다.');
     return;
   }
   if (_speechListening) {
@@ -867,7 +867,7 @@ function toggleMicInput() {
   recognition.onstart = () => {
     _speechListening = true;
     updateMicButtonState(true);
-    showToast('?뚯꽦 ?낅젰???ｋ뒗 以묒엯?덈떎.', 1200);
+    showToast('음성 입력을 듣는 중입니다.', 1200);
   };
   recognition.onresult = (event) => {
     let transcript = '';
@@ -882,7 +882,7 @@ function toggleMicInput() {
   recognition.onerror = () => {
     _speechListening = false;
     updateMicButtonState(false);
-    showToast('?뚯꽦 ?낅젰??泥섎━?섏? 紐삵뻽?듬땲??');
+    showToast('음성 입력을 처리하지 못했습니다.');
   };
   recognition.onend = () => {
     _speechListening = false;
@@ -891,9 +891,9 @@ function toggleMicInput() {
   recognition.start();
 }
 
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 //  AVATAR HTML
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 function defaultAvatar(h) {
   return `<svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">
     <circle cx="18" cy="14" r="7" fill="hsl(${h},40%,35%)"/>
@@ -913,21 +913,21 @@ async function getPersonaCircleThumb(pid, emotion = 'neutral', letter = '', disp
   return await getNeutralImageThumb(pid, displayPx);
 }
 
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 //  TAB SWITCHING & SETTINGS
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 function switchTab(tab) {
   activeTab = tab;
-  // ?섎떒 ???쒖꽦??
+  // 하단 탭 활성화
   document.getElementById('btabPersona').classList.toggle('active', tab === 'persona');
   document.getElementById('btabChat').classList.toggle('active', tab === 'chat');
   document.getElementById('btabSettings').classList.toggle('active', tab === 'settings');
-  // ?⑤꼸 ?쒖떆
+  // 패널 표시
   document.getElementById('personaPane').style.display = tab === 'persona' ? 'flex' : 'none';
   document.getElementById('chatPane').style.display = tab === 'chat' ? 'flex' : 'none';
   document.getElementById('settingsPane').style.display = tab === 'settings' ? 'flex' : 'none';
   if (tab === 'settings') renderSettingsPane();
-  // ?섎Ⅴ?뚮굹 ?좏깮 珥덇린??
+  // 페르소나 선택 초기화
   if (tab !== 'persona') clearPersonaSelection();
 }
 
@@ -936,7 +936,7 @@ function renderSettingsPane() {
   if (av) av.innerHTML = userProfile.image
     ? `<img src="${userProfile.image}" style="width:100%;height:100%;object-fit:cover;">`
     : `<svg viewBox="0 0 36 36" style="width:100%;height:100%"><circle cx="18" cy="14" r="7" fill="hsl(220,30%,35%)"/><ellipse cx="18" cy="30" rx="11" ry="7" fill="hsl(220,30%,28%)"/></svg>`;
-  // ??젣 踰꾪듉 ?쒖떆/?④?
+  // 삭제 버튼 표시/숨김
   const delBtn = document.getElementById('settingsDelAvBtn');
   if (delBtn) delBtn.style.display = userProfile.image ? 'block' : 'none';
   const nameEl = document.getElementById('settingsUserName');
@@ -944,18 +944,18 @@ function renderSettingsPane() {
   if (nameEl) nameEl.value = userProfile.name || '';
   if (bioEl) bioEl.value = userProfile.bio || '';
   
-  // ?쒖옉 ?붾㈃ ?ㅼ젙
+  // 시작 화면 설정
   const tabEl = document.getElementById('settingsDefaultTab');
   if (tabEl) tabEl.value = userProfile.defaultTab || 'persona';
 
-  // 湲???ш린 ?щ씪?대뜑
+  // 글씨 크기 슬라이더
   const fs = userProfile.fontSize || 15;
   const fsEl = document.getElementById('settingsFontSize');
   const fsLabel = document.getElementById('settingsFontSizeLabel');
   if (fsEl) fsEl.value = fs;
   if (fsLabel) fsLabel.textContent = fs + 'px';
 
-  // ?몃꽕???ㅽ????ㅼ젙 異붽?
+  // 썸네일 스타일 설정 추가
   const avStyleEl = document.getElementById('settingsAvatarStyle');
   if (avStyleEl) avStyleEl.value = userProfile.chatAvatarStyle || 'square';
   ensureSettingsMemoryPanel();
@@ -983,7 +983,7 @@ function saveSettingsUserProfile() {
   applyFontSize(userProfile.fontSize);
   saveUserProfile();
   saveUserProfileKV();
-  showToast('?ㅼ젙 ??λ맖 ??);
+  showToast('설정 저장됨 ✓');
 }
 
 function handleSettingsUserImage(input) {
@@ -1002,16 +1002,16 @@ function handleSettingsUserImage(input) {
 }
 
 function deleteSettingsUserImage() {
-  if (!confirm('?꾨줈??이미지瑜???젣?좉퉴??')) return;
+  if (!confirm('프로필 이미지를 삭제할까요?')) return;
   userProfile.image = null;
   saveUserProfile();
   renderSettingsPane();
   idbSet('user_profile_hd', null).catch(()=>{});
 }
 
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 //  PERSONA GRID
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 let _personaGridRenderVersion = 0;
 let _suppressPersonaTapUntil = 0;
 let _chatOpenToken = 0;
@@ -1071,7 +1071,7 @@ async function renderPersonaGrid() {
 
     const neutral = await getNeutralABaseImageHD(p.pid) || await idbGet(`em_full_${p.pid}_neutral_a`);
 
-    // ??render ?몄텧???대? ?쒖옉?먯쑝硫???猷⑦봽 以묐떒
+    // 새 render 호출이 이미 시작됐으면 이 루프 중단
     if (myVersion !== _personaGridRenderVersion) return;
 
     const imgSrc = neutral;
@@ -1128,7 +1128,7 @@ function setupPersonaGridBlankTapClear(grid) {
 
   grid.addEventListener('click', e => {
     if (Date.now() < _suppressPersonaTapUntil) return;
-    if (e.target !== grid) return; // 移대뱶媛 ?꾨땶, 鍮?怨듦컙 ?곗튂/?대┃留?泥섎━
+    if (e.target !== grid) return; // 카드가 아닌, 빈 공간 터치/클릭만 처리
     if (!_selectedPersonaPid) return;
     clearPersonaSelection();
   });
@@ -1376,9 +1376,9 @@ function setupTouchDrag(grid) {
   });
 }
 
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 //  PERSONA EDIT
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 let isNewPersona = false;
 
 async function openPersonaEdit(pid) {
@@ -1930,14 +1930,14 @@ async function savePersonaEdit() {
   showToast('??λ맖 ??);
 }
 
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 //  CHAT LIST & SWIPE DELETE
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 
 
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 //  留덊겕?ㅼ슫 ?뚮뜑留??곕え
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 const _DEMO_SLIDES = [
   { label: "??(Table)", text: "| ??ぉ | 湲덉븸 | 鍮꾧퀬 |\n|---|---:|---|\n| 留ㅼ텧 | 12,500,000 | 1遺꾧린 |\n| 留ㅼ엯 | 8,200,000 | ?먯옄??|\n| **?곸뾽?댁씡** | **4,300,000** | 34.4% |" },
   { label: "肄붾뱶 釉붾줉", text: "```python\ndef greet(name):\n    return '?덈뀞, ' + name\n\nprint(greet('Riley'))\n```" },
@@ -2408,9 +2408,9 @@ async function toggleChatHidden(id) {
   showToast(s.hidden ? '梨꾪똿???④꼈?댁슂.' : '梨꾪똿???ㅼ떆 蹂댁씠寃??덉뼱??');
 }
 
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 //  NEW CHAT MODAL
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 function openNewChatModal() {
   selectedPids = []; newChatMode = 'auto';
   ['auto','all','random'].forEach(m => document.getElementById(`newMode_${m}`).classList.toggle('on', m === 'auto'));
@@ -2465,9 +2465,9 @@ function startNewChat() {
   closeNewChatModal(); saveIndex(); renderChatList(); openChat(session.id);
 }
 
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 //  CHAT AREA & MESSAGES
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 async function openChat(id) {
   _isDemoMode = false;
   activeChatId = id;
@@ -2814,18 +2814,18 @@ function parseResponse(text, pList) {
   return parts;
 }
 
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 //  INPUT BAR & SEND
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 function setMode(m) {
   currentMode = m;
   const selectEl = document.getElementById('chatModeSelect');
   if (selectEl && selectEl.value !== m) selectEl.value = m;
 }
 
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 //  ?낅젰 ??(梨꾪똿 / 이미지 / 而⑦뀓?ㅽ듃)
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 let _inputTab = 'chat'; // ?꾩옱 ?낅젰 ??let _chatGeneration = null;
 
 function sleep(ms) {
@@ -3425,9 +3425,9 @@ async function removeAttachment(i) {
   renderAttachmentPreviews();
 }
 
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 //  SETTINGS DRAWER & PROMPT MODAL
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 function openDrawer() {
   const s = getActiveSession(); if (!s) return;
   const el = document.getElementById('chatDrawer');
@@ -3743,9 +3743,9 @@ async function compressChat() {
   } catch(e) { alert('?뺤텞 ?ㅽ뙣: ' + e.message); }
 }
 
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 //  PROFILE POPUP
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 async function openProfilePopup(pid, emotion, hue, fallbackSrc, suffix = '') {
   const popup = document.getElementById('profilePopup');
   const imgEl = document.getElementById('profilePopupImg');
@@ -3788,9 +3788,9 @@ async function openProfilePopup(pid, emotion, hue, fallbackSrc, suffix = '') {
 
 function closeProfilePopup() { document.getElementById('profilePopup').classList.remove('open'); }
 
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 //  IMAGE POPUP & DOWNLOAD
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 let _popupImgUrl = '';
 
 function openImagePopup(url) {
@@ -3823,9 +3823,9 @@ async function downloadImage(url, filename = 'generated.jpg') {
   }
 }
 
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 //  RATIO MODAL (UI)
-// ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
+// ═══════════════
 let _selectedRatio = '1:1';
 
 function openRatioModal() { document.getElementById('ratioModal')?.classList.add('open'); }
