@@ -1,6 +1,6 @@
-﻿// ?? 梨꾪똿 紐⑤뜽 紐⑸줉 (?섎Ⅴ?뚮굹 ?몄쭛 + ?쒕줈?댁뿉??怨듭쑀) ??
+// ── 채팅 모델 목록 (페르소나 편집 + 드로어에서 공유) ──
 const CHAT_MODELS = [
-  { value: '', label: '湲곕낯 (梨꾪똿諛??ㅼ젙 ?곕쫫)' },
+  { value: '', label: '기본 (채팅방 설정 따름)' },
   { group: 'Google' },
   { value: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Lite' },
   { value: 'gemini-3.1-pro-preview',    label: 'Gemini 3.1 Pro' },
@@ -26,16 +26,16 @@ function buildModelSelect(id, selectedValue, style = '') {
   return `<select class="edit-input" id="${id}" style="width:100%;${style}">${opts}</select>`;
 }
 
-// ═══════════════
+// ══════════════════════════════
 //  UTILS (UI)
-// ═══════════════
+// ══════════════════════════════
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-// 留덊겕?ㅼ슫 ?뚮뜑??珥덇린??
+// 마크다운 렌더러 초기화
 function initMarked() {
   if (typeof marked === 'undefined') return;
   marked.setOptions({
-    breaks: true,       // 以꾨컮轅???<br>
+    breaks: true,       // 줄바꿈 → <br>
     gfm: true,          // GitHub Flavored Markdown
     highlight: (code, lang) => {
       if (typeof hljs !== 'undefined' && lang && hljs.getLanguage(lang)) {
@@ -46,20 +46,20 @@ function initMarked() {
   });
 }
 
-// mermaid 珥덇린??
+// mermaid 초기화
 function initMermaid() {
   if (typeof mermaid !== 'undefined') {
     mermaid.initialize({ startOnLoad: false, theme: 'dark', darkMode: true });
   }
 }
 
-// 留덊겕?ㅼ슫 ??HTML 蹂??(mermaid 釉붾줉 ?ы븿)
+// 마크다운 → HTML 변환 (mermaid 블록 포함)
 function mdRender(text) {
   if (typeof marked === 'undefined') {
-    // fallback: 湲곗〈 fmt
+    // fallback: 기존 fmt
     return esc(text).replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>');
   }
-  // mermaid 釉붾줉 ?꾩떆 移섑솚
+  // mermaid 블록 임시 치환
   const mermaidBlocks = [];
   const replaced = text.replace(/```mermaid\n([\s\S]*?)```/g, (_, code) => {
     const idx = mermaidBlocks.length;
@@ -70,7 +70,7 @@ function mdRender(text) {
   return html;
 }
 
-// mermaid 釉붾줉 ?ㅼ젣 ?뚮뜑留?(DOM ?쎌엯 ???몄텧)
+// mermaid 블록 실제 렌더링 (DOM 삽입 후 호출)
 async function renderMermaidBlocks(container) {
   if (typeof mermaid === 'undefined') return;
   const placeholders = container.querySelectorAll('.mermaid-placeholder');
@@ -105,7 +105,7 @@ function formatMessageTime(ts) {
       hour12: false
     }).formatToParts(new Date(ts));
     const pick = t => parts.find(p => p.type === t)?.value || '';
-    return `${pick('year')}??${pick('month')}??${pick('day')}??${pick('hour')}:${pick('minute')}`;
+    return `${pick('year')}년 ${pick('month')}월 ${pick('day')}일 ${pick('hour')}:${pick('minute')}`;;
   } catch {
     return '';
   }
@@ -804,14 +804,14 @@ function show(id) {
 function timeLabel(ts) {
   const diff = Date.now() - ts;
   if (diff < 60000) return '방금';
-  if (diff < 3600000) return `${Math.floor(diff/60000)}분 전';
-  if (diff < 86400000) return `${Math.floor(diff/3600000)}시간 전';
-  return `${Math.floor(diff/86400000)}일 전';
+  if (diff < 3600000) return `${Math.floor(diff/60000)}분 전`;
+  if (diff < 86400000) return `${Math.floor(diff/3600000)}시간 전`;
+  return `${Math.floor(diff/86400000)}일 전`;
 }
 
-// ═══════════════
+// ══════════════════════════════
 //  TOAST / LOADING
-// ═══════════════
+// ══════════════════════════════
 let toastTimer = null;
 let _speechRecognition = null;
 let _speechListening = false;
@@ -891,9 +891,9 @@ function toggleMicInput() {
   recognition.start();
 }
 
-// ═══════════════
+// ???????????????
 //  AVATAR HTML
-// ═══════════════
+// ???????????????
 function defaultAvatar(h) {
   return `<svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">
     <circle cx="18" cy="14" r="7" fill="hsl(${h},40%,35%)"/>
@@ -913,9 +913,9 @@ async function getPersonaCircleThumb(pid, emotion = 'neutral', letter = '', disp
   return await getNeutralImageThumb(pid, displayPx);
 }
 
-// ═══════════════
+// ???????????????
 //  TAB SWITCHING & SETTINGS
-// ═══════════════
+// ???????????????
 function switchTab(tab) {
   activeTab = tab;
   // 하단 탭 활성화
@@ -983,7 +983,7 @@ function saveSettingsUserProfile() {
   applyFontSize(userProfile.fontSize);
   saveUserProfile();
   saveUserProfileKV();
-  showToast('설정 저장됨 ✓');
+  showToast('설정 저장됨 ?');
 }
 
 function handleSettingsUserImage(input) {
@@ -1009,9 +1009,9 @@ function deleteSettingsUserImage() {
   idbSet('user_profile_hd', null).catch(()=>{});
 }
 
-// ═══════════════
+// ???????????????
 //  PERSONA GRID
-// ═══════════════
+// ???????????????
 let _personaGridRenderVersion = 0;
 let _suppressPersonaTapUntil = 0;
 let _chatOpenToken = 0;
@@ -1376,9 +1376,9 @@ function setupTouchDrag(grid) {
   });
 }
 
-// ═══════════════
+// ???????????????
 //  PERSONA EDIT
-// ═══════════════
+// ???????????????
 let isNewPersona = false;
 
 async function openPersonaEdit(pid) {
@@ -1441,7 +1441,7 @@ function renderEditBody(p, hdImage = null) {
     <input type="file" id="editImgInput" style="display:none" accept="image/*" onchange="handleEditImage(this)">
     <input type="file" id="editMultiImgInput" style="display:none" accept="image/*" multiple onchange="handleMultiImageUpload(this)">
     <button onclick="document.getElementById('editMultiImgInput').click()" style="width:100%;padding:9px;border-radius:10px;border:1px solid var(--border2);background:transparent;color:var(--muted);font-family:'Pretendard',sans-serif;font-size:12px;cursor:pointer;margin-top:6px">
-      📁 감정 이미지 일괄 업로드 (파일명 그대로 저장)
+      ?? 감정 이미지 일괄 업로드 (파일명 그대로 저장)
     </button>
     <div id="editMultiDropzone" class="edit-multi-dropzone" role="button" tabindex="0" onclick="document.getElementById('editMultiImgInput').click()">
       <div class="edit-multi-dropzone-icon">
@@ -1560,7 +1560,7 @@ function handleEditImage(input) {
       p.neutral_thumb = avatarPng;
       _neutralCache[p.pid] = sqMd;
 
-      showToast('이미지 선택됨 — 저장 버튼을 눌러줘');
+      showToast('이미지 선택됨 ? 저장 버튼을 눌러줘');
     });
   };
   reader.readAsDataURL(file);
@@ -1577,7 +1577,7 @@ async function handleMultiImageUpload(input) {
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl) { alert('Worker URL 없음'); return; }
 
-  showToast(`⏳ ${files.length}개 업로드 중...`, 10000);
+  showToast(`? ${files.length}개 업로드 중...`, 10000);
   let ok = 0, fail = 0;
   for (const file of files) {
     try {
@@ -1617,7 +1617,7 @@ async function handleMultiImageUpload(input) {
     } catch(e) { fail++; }
   }
   if (typeof _imageListCache !== 'undefined') delete _imageListCache[p.pid];
-  showToast(`✓ ${ok}개 완료${fail ? ` / ${fail}개 실패` : ''}`);
+  showToast(`? ${ok}개 완료${fail ? ` / ${fail}개 실패` : ''}`);
   input.value = '';
 }
 
@@ -1930,14 +1930,14 @@ async function savePersonaEdit() {
   showToast('??λ맖 ??);
 }
 
-// ═══════════════
+// ???????????????
 //  CHAT LIST & SWIPE DELETE
-// ═══════════════
+// ???????????????
 
 
-// ═══════════════
+// ???????????????
 //  留덊겕?ㅼ슫 ?뚮뜑留??곕え
-// ═══════════════
+// ???????????????
 const _DEMO_SLIDES = [
   { label: "??(Table)", text: "| ??ぉ | 湲덉븸 | 鍮꾧퀬 |\n|---|---:|---|\n| 留ㅼ텧 | 12,500,000 | 1遺꾧린 |\n| 留ㅼ엯 | 8,200,000 | ?먯옄??|\n| **?곸뾽?댁씡** | **4,300,000** | 34.4% |" },
   { label: "肄붾뱶 釉붾줉", text: "```python\ndef greet(name):\n    return '?덈뀞, ' + name\n\nprint(greet('Riley'))\n```" },
@@ -1988,10 +1988,10 @@ function openMarkdownDemo() {
 function _showDemoSlide(area) {
   if (_demoSlideIdx >= _DEMO_SLIDES.length) {
     const el = document.createElement('div');
-    el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--muted);font-size:13px">???곕え ????br><br><span style="font-size:11px;opacity:.6">吏꾩쭨 梨꾪똿???쒖옉?대킄</span></div>`;
+    el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--muted);font-size:13px">— 데모 끝 —<br><br><span style="font-size:11px;opacity:.6">진짜 채팅을 시작해봐</span></div>`;
     area.appendChild(el);
     area.scrollTop = area.scrollHeight;
-    document.getElementById('userInput').placeholder = '硫붿떆吏瑜??낅젰?섏꽭??;
+    document.getElementById('userInput').placeholder = '메시지를 입력하세요';
     return;
   }
   const slide = _DEMO_SLIDES[_demoSlideIdx];
@@ -2408,9 +2408,9 @@ async function toggleChatHidden(id) {
   showToast(s.hidden ? '梨꾪똿???④꼈?댁슂.' : '梨꾪똿???ㅼ떆 蹂댁씠寃??덉뼱??');
 }
 
-// ═══════════════
+// ???????????????
 //  NEW CHAT MODAL
-// ═══════════════
+// ???????????????
 function openNewChatModal() {
   selectedPids = []; newChatMode = 'auto';
   ['auto','all','random'].forEach(m => document.getElementById(`newMode_${m}`).classList.toggle('on', m === 'auto'));
@@ -2465,9 +2465,9 @@ function startNewChat() {
   closeNewChatModal(); saveIndex(); renderChatList(); openChat(session.id);
 }
 
-// ═══════════════
+// ???????????????
 //  CHAT AREA & MESSAGES
-// ═══════════════
+// ???????????????
 async function openChat(id) {
   _isDemoMode = false;
   activeChatId = id;
@@ -2814,18 +2814,18 @@ function parseResponse(text, pList) {
   return parts;
 }
 
-// ═══════════════
+// ???????????????
 //  INPUT BAR & SEND
-// ═══════════════
+// ???????????????
 function setMode(m) {
   currentMode = m;
   const selectEl = document.getElementById('chatModeSelect');
   if (selectEl && selectEl.value !== m) selectEl.value = m;
 }
 
-// ═══════════════
+// ???????????????
 //  ?낅젰 ??(梨꾪똿 / 이미지 / 而⑦뀓?ㅽ듃)
-// ═══════════════
+// ???????????????
 let _inputTab = 'chat'; // ?꾩옱 ?낅젰 ??let _chatGeneration = null;
 
 function sleep(ms) {
@@ -3425,9 +3425,9 @@ async function removeAttachment(i) {
   renderAttachmentPreviews();
 }
 
-// ═══════════════
+// ???????????????
 //  SETTINGS DRAWER & PROMPT MODAL
-// ═══════════════
+// ???????????????
 function openDrawer() {
   const s = getActiveSession(); if (!s) return;
   const el = document.getElementById('chatDrawer');
@@ -3743,9 +3743,9 @@ async function compressChat() {
   } catch(e) { alert('?뺤텞 실패: ' + e.message); }
 }
 
-// ═══════════════
+// ???????????????
 //  PROFILE POPUP
-// ═══════════════
+// ???????????????
 async function openProfilePopup(pid, emotion, hue, fallbackSrc, suffix = '') {
   const popup = document.getElementById('profilePopup');
   const imgEl = document.getElementById('profilePopupImg');
@@ -3788,9 +3788,9 @@ async function openProfilePopup(pid, emotion, hue, fallbackSrc, suffix = '') {
 
 function closeProfilePopup() { document.getElementById('profilePopup').classList.remove('open'); }
 
-// ═══════════════
+// ???????????????
 //  IMAGE POPUP & DOWNLOAD
-// ═══════════════
+// ???????????????
 let _popupImgUrl = '';
 
 function openImagePopup(url) {
@@ -3823,9 +3823,9 @@ async function downloadImage(url, filename = 'generated.jpg') {
   }
 }
 
-// ═══════════════
+// ???????????????
 //  RATIO MODAL (UI)
-// ═══════════════
+// ???????????????
 let _selectedRatio = '1:1';
 
 function openRatioModal() { document.getElementById('ratioModal')?.classList.add('open'); }
