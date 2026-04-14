@@ -3356,7 +3356,8 @@ async function sendMessage() {
     currentSession.lastPreview = sanitizeChatListPreview(buildChatPreviewText(firstContent));
     currentSession.updatedAt = Date.now();
 
-    // ?ъ슜?먭? ?대떦 梨꾪똿諛⑹쓣 洹몃?濡?蹂닿퀬 ?덈떎硫??붾㈃??利됱떆 ?뚮뜑留?    if (activeChatId === currentSession.id) {
+    // 사용자가 해당 채팅방을 그대로 보고 있다면 화면에 즉시 렌더링
+      if (activeChatId === currentSession.id) {
       const tgtArea = document.getElementById('chatArea');
       tgtArea.classList.add('has-messages');
       await appendAIReplySequentially(reply, pList, suffixes, assistantCreatedAt, tgtArea, currentSession.id);
@@ -3369,13 +3370,13 @@ async function sendMessage() {
     }
     await cleanupAttachmentCaches(sentAttachments);
     
-    // 완료 ????긽 ???댁젣 (이미지/梨꾪똿 怨듯넻)
+    // 완료 후 항상 락 해제 (이미지/채팅 공통)
     isLoading = false;
     document.getElementById('sendBtn').disabled = false;
     setTimeout(() => input.focus(), 10);
   };
 
-  // 이미지/梨꾪똿 紐⑤몢 await ??이미지 ?앹꽦 以?異붽? ?꾩넚 李⑤떒
+  // 이미지/채팅 모두 await — 이미지 생성 중 추가 전송 차단
   try { await processApiAndRender(); } catch (e) { if (e?.name !== 'AbortError') throw e; } finally { isLoading = false; _chatGeneration = null; setChatBusy(false); }
 }
 
@@ -3389,7 +3390,7 @@ function handleFileSelect(input) {
       const dataUrl = e.target.result;
       const isImg = file.type.startsWith('image/');
       let finalUrl = dataUrl;
-      // 이미지??利됱떆 R2???낅줈??
+      // 이미지는 즉시 R2에 업로드
       if (isImg) {
         const fname = makeImageFilename('uploaded') + '.jpg';
         finalUrl = await uploadToR2(dataUrl, 'img_uploaded', fname).catch(() => dataUrl);
