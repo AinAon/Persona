@@ -211,7 +211,7 @@ function updateChatHeaderActionButtons() {
   const on = effective !== 'hidden';
   btn.classList.toggle('on', on);
   btn.innerHTML = on ? iconEyeOpenSVG() : iconEyeClosedSVG();
-  btn.title = `?꾨줈???쒖떆 ${on ? 'ON' : 'OFF'} (?대┃?댁꽌 ?꾪솚)`;
+  btn.title = `프로필 표시 ${on ? 'ON' : 'OFF'} (클릭해서 전환)`;
   if (!override) btn.classList.remove('on');
 }
 
@@ -225,7 +225,7 @@ function updateChatListVisibilityButton() {
   const on = getChatHiddenFilterEnabled();
   btn.classList.toggle('on', on);
   btn.innerHTML = on ? iconEyeOpenSVG() : iconEyeClosedSVG();
-  btn.title = on ? '?④릿 梨꾪똿 ?쒖떆 以? : '?④릿 梨꾪똿 蹂닿린';
+  btn.title = on ? '숨긴 채팅 보기 중' : '숨긴 채팅 숨기기';
 }
 
 function toggleChatHiddenVisibility() {
@@ -238,12 +238,12 @@ async function refreshCurrentChat() {
   const session = getActiveSession();
   if (!session || !activeChatId) return;
   if (session._demo) {
-    showToast('?곕え 梨꾪똿? ?덈줈怨좎묠 ??곸씠 ?꾨땲??);
+    showToast('데모 채팅은 새로고침 대상이 아니야');
     return;
   }
   await loadSession(activeChatId);
   renderChatArea();
-  showToast('??붾? ?덈줈怨좎묠?덉뼱');
+  showToast('대화를 새로고침했어');
 }
 
 function toggleChatProfileOverride() {
@@ -266,7 +266,7 @@ function enhanceRenderedMessage(container) {
       const btn = document.createElement('button');
       btn.className = 'copy-btn user-copy-btn';
       btn.type = 'button';
-      btn.title = '蹂듭궗';
+      btn.title = '복사';
       btn.dataset.copyText = encodeCopyPayload(userMsg.innerText || '');
       btn.innerHTML = '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="10" height="11" rx="2"/><path d="M13 5V3.5A1.5 1.5 0 0 0 11.5 2h-7A1.5 1.5 0 0 0 3 3.5v10A1.5 1.5 0 0 0 4.5 15H5"/></svg>';
       btn.onclick = () => copyBubble(btn, btn.dataset.copyText, true);
@@ -286,7 +286,7 @@ function enhanceRenderedMessage(container) {
         btn.innerHTML = '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="10" height="11" rx="2"/><path d="M13 5V3.5A1.5 1.5 0 0 0 11.5 2h-7A1.5 1.5 0 0 0 3 3.5v10A1.5 1.5 0 0 0 4.5 15H5"/></svg>';
         nameRow.appendChild(btn);
       }
-      btn.title = '蹂듭궗';
+      btn.title = '복사';
       btn.onclick = () => copyBubble(btn, btn.dataset.copyText, true);
       btn.dataset.copyText = encodeCopyPayload(bubble.innerText || '');
     });
@@ -299,7 +299,7 @@ function enhanceRenderedMessage(container) {
     btn.className = 'code-copy-btn';
     btn.type = 'button';
     btn.dataset.copyText = encodeCopyPayload(text);
-    btn.textContent = '蹂듭궗';
+    btn.textContent = '복사';
     btn.onclick = () => copyBubble(btn, btn.dataset.copyText, true);
     pre.classList.add('code-copy-wrap');
     pre.appendChild(btn);
@@ -408,7 +408,7 @@ async function cleanupAttachmentCaches(items) {
 
 function buildUserMessageContent(text, imageUrls) {
   const imgs = (imageUrls || []).filter(Boolean);
-  if (!imgs.length) return text || '(?뚯씪)';
+  if (!imgs.length) return text || '(파일)';
   const content = [];
   if (text) content.push({ type: 'text', text });
   imgs.forEach(url => content.push({ type: 'image_url', image_url: { url } }));
@@ -446,8 +446,8 @@ function getTargetModelForRequest(session, isImageReq) {
 function buildChatPreviewText(text) {
   const raw = String(text || '').replace(/\n/g, ' ').trim();
   if (!raw) return '';
-  if (/(^|\s)(?앹꽦 ?ㅻ쪟|?곌껐 ?ㅽ뙣)\s*:/.test(raw) || /API Error:|NOT_FOUND|INVALID_ARGUMENT|Gemini Image Error:/i.test(raw)) {
-    return '[?ㅻ쪟] ?대?吏 ?앹꽦 ?ㅽ뙣';
+  if (/(^|\s)(생성 오류|연결 실패)\s*:/.test(raw) || /API Error:|NOT_FOUND|INVALID_ARGUMENT|Gemini Image Error:/i.test(raw)) {
+    return '[오류] 이미지 생성 실패';
   }
   return raw.slice(0, 120);
 }
@@ -459,7 +459,7 @@ function getPersonaModel(persona) {
 function sanitizeChatListPreview(text) {
   const raw = String(text || '').trim();
   if (/!\[[^\]]*\]\((data:image\/[^)]+|https?:\/\/[^)\s]+)\)/i.test(raw)) {
-    return '[?대?吏]';
+    return '[이미지]';
   }
   return raw;
 }
@@ -594,7 +594,7 @@ function initUserInputGuards() {
     const hasImage = items.some(item => item.kind === 'file' && item.type.startsWith('image/'));
     if (hasImage) {
       e.preventDefault();
-      showToast('?대┰蹂대뱶 ?대?吏 遺숈뿬?ｊ린???꾩쭅 吏?먰븯吏 ?딆븘?? ?뚯씪 泥⑤? 踰꾪듉???ъ슜??二쇱꽭??');
+      showToast('클립보드 이미지 붙여넣기는 아직 지원하지 않아요. 파일 첨부 버튼을 사용해 주세요.');
       return;
     }
     requestAnimationFrame(() => autoResize(input));
@@ -632,7 +632,7 @@ function initUserInputGuards() {
     setComposerDragActive(false);
     const added = await addFilesToAttachments(files, 'drop');
     if (added > 0) {
-      showToast(`${added}媛??뚯씪??泥⑤??덉뼱??`);
+      showToast(`${added}媛?파일??泥⑤??덉뼱??`);
       input.focus();
     }
   };
@@ -1002,7 +1002,7 @@ function handleSettingsUserImage(input) {
 }
 
 function deleteSettingsUserImage() {
-  if (!confirm('?꾨줈???대?吏瑜???젣?좉퉴??')) return;
+  if (!confirm('?꾨줈??이미지瑜???젣?좉퉴??')) return;
   userProfile.image = null;
   saveUserProfile();
   renderSettingsPane();
@@ -1441,14 +1441,14 @@ function renderEditBody(p, hdImage = null) {
     <input type="file" id="editImgInput" style="display:none" accept="image/*" onchange="handleEditImage(this)">
     <input type="file" id="editMultiImgInput" style="display:none" accept="image/*" multiple onchange="handleMultiImageUpload(this)">
     <button onclick="document.getElementById('editMultiImgInput').click()" style="width:100%;padding:9px;border-radius:10px;border:1px solid var(--border2);background:transparent;color:var(--muted);font-family:'Pretendard',sans-serif;font-size:12px;cursor:pointer;margin-top:6px">
-      ?뱚 媛먯젙 ?대?吏 ?쇨큵 ?낅줈??(?뚯씪紐?洹몃?濡????
+      ?뱚 媛먯젙 이미지 ?쇨큵 ?낅줈??(파일紐?洹몃?濡????
     </button>
     <div id="editMultiDropzone" class="edit-multi-dropzone" role="button" tabindex="0" onclick="document.getElementById('editMultiImgInput').click()">
       <div class="edit-multi-dropzone-icon">
         <svg viewBox="0 0 24 24"><path d="M12 16V6"/><path d="M8.5 9.5L12 6l3.5 3.5"/><path d="M20 16.5V18a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-1.5"/><path d="M7 12.5a4 4 0 0 1 7.4-2.1A3.5 3.5 0 1 1 17 17"/></svg>
       </div>
-      <div class="edit-multi-dropzone-title">媛먯젙 ?대?吏 ?щ윭 ???낅줈??/div>
-      <div class="edit-multi-dropzone-sub">?뚯씪???쒕옒洹명빐???볤굅???대┃???좏깮</div>
+      <div class="edit-multi-dropzone-title">媛먯젙 이미지 ?щ윭 ???낅줈??/div>
+      <div class="edit-multi-dropzone-sub">파일???쒕옒洹명빐???볤굅???대┃???좏깮</div>
     </div>
     <div id="editMultiUploadList" class="edit-upload-list"></div>
 
@@ -1560,7 +1560,7 @@ function handleEditImage(input) {
       p.neutral_thumb = avatarPng;
       _neutralCache[p.pid] = sqMd;
 
-      showToast('?대?吏 ?좏깮???????踰꾪듉???뚮윭以?);
+      showToast('이미지 ?좏깮???????踰꾪듉???뚮윭以?);
     });
   };
   reader.readAsDataURL(file);
@@ -1695,11 +1695,11 @@ function initEditMultiDropzone_legacy() {
     mark(false);
     const files = [...(e.dataTransfer?.files || [])].filter(f => (f?.type || '').startsWith('image/'));
     if (!files.length) {
-      showToast('?대?吏 ?뚯씪留??낅줈?쒗븷 ???덉뼱??');
+      showToast('이미지 파일留??낅줈?쒗븷 ???덉뼱??');
       return;
     }
     if (!files.length) {
-      showToast('?대?吏 ?뚯씪留??낅줈?쒗븷 ???덉뼱');
+      showToast('이미지 파일留??낅줈?쒗븷 ???덉뼱');
       return;
     }
     await handleMultiImageFiles(files);
@@ -1807,7 +1807,7 @@ function initEditMultiDropzone() {
     mark(false);
     const files = [...(e.dataTransfer?.files || [])].filter(f => (f?.type || '').startsWith('image/'));
     if (!files.length) {
-      showToast('?대?吏 ?뚯씪留??낅줈?쒗븷 ???덉뼱??');
+      showToast('이미지 파일留??낅줈?쒗븷 ???덉뼱??');
       return;
     }
     await handleMultiImageFiles(files);
@@ -1828,7 +1828,7 @@ async function handleMultiImageFiles(fileList) {
     status: 'uploading'
   }));
   renderEditMultiUploadList();
-  showToast(`?대?吏 ${files.length}???낅줈???쒖옉`);
+  showToast(`이미지 ${files.length}???낅줈???쒖옉`);
 
   let ok = 0, fail = 0;
   for (let i = 0; i < files.length; i++) {
@@ -1905,7 +1905,7 @@ async function savePersonaEdit() {
   isNewPersona = false;
 
   if (p._pendingImage) {
-    showToast('???대?吏 ???以?..', 5000);
+    showToast('??이미지 ???以?..', 5000);
     try {
       const workerUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
       if (!workerUrl) throw new Error('Worker URL ?놁쓬');
@@ -1921,7 +1921,7 @@ async function savePersonaEdit() {
       if (!data.url) throw new Error(data.error || '?낅줈???ㅽ뙣');
       p.imageUrl = data.url;
     } catch(e) {
-      alert('?대?吏 ????ㅽ뙣: ' + e.message);
+      alert('이미지 ????ㅽ뙣: ' + e.message);
       return;
     }
     delete p._pendingImage;
@@ -1942,8 +1942,8 @@ const _DEMO_SLIDES = [
   { label: "??(Table)", text: "| ??ぉ | 湲덉븸 | 鍮꾧퀬 |\n|---|---:|---|\n| 留ㅼ텧 | 12,500,000 | 1遺꾧린 |\n| 留ㅼ엯 | 8,200,000 | ?먯옄??|\n| **?곸뾽?댁씡** | **4,300,000** | 34.4% |" },
   { label: "肄붾뱶 釉붾줉", text: "```python\ndef greet(name):\n    return '?덈뀞, ' + name\n\nprint(greet('Riley'))\n```" },
   { label: "紐⑸줉 & ?몄슜", text: "**?ㅻ뒛 ????*\n\n1. 湲고쉷???묒꽦\n2. ?붿옄??由щ럭\n3. 諛고룷 ?뺤씤\n\n> ?꾨꼍??肄붾뱶蹂대떎 ?숈옉?섎뒗 肄붾뱶媛 ?ル떎" },
-  { label: "Mermaid", text: "```mermaid\nflowchart LR\n  A[?ъ슜?? --> B{?뚯떛}\n  B --> C[?섎Ⅴ?뚮굹]\n  B --> D[留덊겕?ㅼ슫]\n  C --> E[媛먯젙?대?吏]\n  D --> F[?뚮뜑留?\n```" },
-  { label: "紐⑤뜽 鍮꾧탳", text: "| 紐⑤뜽 | ?띾룄 | 鍮꾩쟾 | ?대?吏?앹꽦 |\n|---|:---:|:---:|:---:|\n| grok-4-1-fast-non-reasoning | ?△슒??| ??| ??|\n| grok-3-mini | ?△슒 | ??| ??|\n| claude-sonnet | ?△슒 | ??| ??|\n| gemini-2.5-pro | ??| ??| ??|\n| gpt-4o | ?△슒 | ??| ??|" }
+  { label: "Mermaid", text: "```mermaid\nflowchart LR\n  A[?ъ슜?? --> B{?뚯떛}\n  B --> C[?섎Ⅴ?뚮굹]\n  B --> D[留덊겕?ㅼ슫]\n  C --> E[媛먯젙이미지]\n  D --> F[?뚮뜑留?\n```" },
+  { label: "紐⑤뜽 鍮꾧탳", text: "| 紐⑤뜽 | ?띾룄 | 鍮꾩쟾 | 이미지?앹꽦 |\n|---|:---:|:---:|:---:|\n| grok-4-1-fast-non-reasoning | ?△슒??| ??| ??|\n| grok-3-mini | ?△슒 | ??| ??|\n| claude-sonnet | ?△슒 | ??| ??|\n| gemini-2.5-pro | ??| ??| ??|\n| gpt-4o | ?△슒 | ??| ??|" }
 ];
 
 let _demoSlideIdx = 0;
@@ -2642,7 +2642,7 @@ function copyBubble(btn, text, encoded = false) {
     btn.querySelector('svg')?.style && (btn.querySelector('svg').style.display = 'none');
     btn.dataset.orig = btn.innerHTML;
     btn.innerHTML = '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 9 7 13 15 5"/></svg>';
-    showToast('?대┰蹂대뱶??蹂듭궗?먯뒿?덈떎', 1200);
+    showToast('?대┰蹂대뱶??복사?먯뒿?덈떎', 1200);
     setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = btn.dataset.orig; }, 1500);
   };
   if (navigator.clipboard?.writeText) {
@@ -2692,14 +2692,14 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
     
     const fmtContent = fmt(seg.content);
 
-    // AI ?앹꽦 ?대?吏 媛먯? (留덊겕?ㅼ슫 ![](url) ?먮뒗 plain URL)
+    // AI ?앹꽦 이미지 媛먯? (留덊겕?ㅼ슫 ![](url) ?먮뒗 plain URL)
     const imgUrlRe = /https?:\/\/[^\s"')]+\.(?:jpg|jpeg|png|gif|webp)(?:[?#][^\s"')]*)?/gi;
     const imageUrls = [...(seg.content.matchAll(imgUrlRe))].map(m => m[0]);
     const hasImg = imageUrls.length > 0 || /<img/i.test(fmtContent);
     const bubbleWrapClass = hasImg ? 'bubble-wrap has-img' : 'bubble-wrap';
     const bubbleClass = hasImg ? 'ai-bubble md-content has-img' : 'ai-bubble md-content';
 
-    // ?대┃ ???앹뾽 ?곌껐 (?대?吏??onclick 二쇱엯)
+    // ?대┃ ???앹뾽 ?곌껐 (이미지??onclick 二쇱엯)
     let renderedContent = fmtContent;
     if (hasImg && imageUrls.length > 0) {
       renderedContent = fmtContent.replace(
@@ -2719,7 +2719,7 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
       <div class="bubble-col">
         <div class="msg-pname" style="color:hsl(${h},65%,72%)">
           <span class="msg-pname-text">${esc(p.name)}${p._ghost?`<span style="font-size:9px;opacity:.5">(??젣??</span>`:''}</span>
-          ${hasImg ? '' : `<button class="copy-btn" type="button" title="蹂듭궗">
+          ${hasImg ? '' : `<button class="copy-btn" type="button" title="복사">
             <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="10" height="11" rx="2"/><path d="M13 5V3.5A1.5 1.5 0 0 0 11.5 2h-7A1.5 1.5 0 0 0 3 3.5v10A1.5 1.5 0 0 0 4.5 15H5"/></svg>
           </button>`}
         </div>
@@ -2824,7 +2824,7 @@ function setMode(m) {
 }
 
 // ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
-//  ?낅젰 ??(梨꾪똿 / ?대?吏 / 而⑦뀓?ㅽ듃)
+//  ?낅젰 ??(梨꾪똿 / 이미지 / 而⑦뀓?ㅽ듃)
 // ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧
 let _inputTab = 'chat'; // ?꾩옱 ?낅젰 ??let _chatGeneration = null;
 
@@ -2869,7 +2869,7 @@ function switchInputTab(tab) {
   // placeholder
   const input = document.getElementById('userInput');
   if (input) {
-    input.placeholder = tab === 'image' ? '?대?吏 ?앹꽦 ?꾨＼?꾪듃...'
+    input.placeholder = tab === 'image' ? '이미지 ?앹꽦 ?꾨＼?꾪듃...'
       : tab === 'context' ? '吏덈Ц?섍굅??遺꾩꽍???붿껌?대킄...'
       : '硫붿떆吏瑜??낅젰?대킄...';
   }
@@ -2879,7 +2879,7 @@ function switchInputTab(tab) {
   const chip = document.getElementById('composerModeChip');
   if (chip) {
     if (normalized === 'image') {
-      chip.textContent = '?대?吏 紐⑤뱶';
+      chip.textContent = '이미지 紐⑤뱶';
       chip.classList.add('show');
     } else if (normalized === 'project') {
       chip.textContent = '?꾨줈?앺듃 紐⑤뱶';
@@ -2920,7 +2920,7 @@ function addContextUrl() {
 
 function handleContextFile(input) {
   const files = [...input.files]; if (!files.length) return;
-  showToast(`${files.length}媛??뚯씪 異붽???(湲곕뒫 以鍮꾩쨷)`);
+  showToast(`${files.length}媛?파일 異붽???(湲곕뒫 以鍮꾩쨷)`);
   input.value = '';
 }
 function handleKey(e) {
@@ -3061,10 +3061,10 @@ async function sendMessage() {
   setChatBusy(true);
   input.value = ''; input.style.height = 'auto';
 
-  // ?대?吏 ??李몄“ ?대?吏??梨꾪똿???쒖떆 ???????띿뒪???꾨＼?꾪듃留?蹂댁뿬以?
+  // 이미지 ??李몄“ 이미지??梨꾪똿???쒖떆 ???????띿뒪???꾨＼?꾪듃留?蹂댁뿬以?
   const userHTML = renderUserBubbleHTMLV2(text, attachments);
   
-  let msgContent = text || '(?뚯씪)';
+  let msgContent = text || '(파일)';
   if (attachments.length > 0) {
     msgContent = [];
     if (text) msgContent.push({ type: 'text', text: text });
@@ -3093,7 +3093,7 @@ async function sendMessage() {
   session.history.push(userMsg);
   session.updatedAt = Date.now();
 
-  // ?대?吏 ?몄쭛??李몄“ ?대?吏: attachments ?대━???꾩뿉 誘몃━ 罹≪쿂
+  // 이미지 ?몄쭛??李몄“ 이미지: attachments ?대━???꾩뿉 誘몃━ 罹≪쿂
   const refImages = [...requestImageUrls];
 
   attachments = [];
@@ -3128,7 +3128,7 @@ async function sendMessage() {
           <rect x="28" y="11" width="24" height="10" rx="3" stroke="currentColor" stroke-width="2"/>
           <circle cx="62" cy="27" r="3" fill="currentColor" opacity=".6"/>
         </svg>
-        <span class="img-gen-label">?대?吏 ?앹꽦 以?/span>
+        <span class="img-gen-label">이미지 ?앹꽦 以?/span>
         <div class="img-gen-dots"><span></span><span></span><span></span></div>
       </div>
     </div>`;
@@ -3270,7 +3270,7 @@ async function sendMessage() {
 
         let reqBody;
         if (isImageReq) {
-          // ?대?吏 ?앹꽦/?몄쭛: API??messages 諛곗뿴???꾨땶 prompt 臾몄옄??湲곕?
+          // 이미지 ?앹꽦/?몄쭛: API??messages 諛곗뿴???꾨땶 prompt 臾몄옄??湲곕?
           const promptText = text || '(image)';
           reqBody = {
             model: targetModel,
@@ -3331,7 +3331,7 @@ async function sendMessage() {
     const currentSession = sessions.find(s => s.id === session.id);
     if (!currentSession) return;
 
-    // ?앹꽦???대?吏??data URL / ?먭꺽 URL 紐⑤몢 R2???낅줈????援먯껜
+    // ?앹꽦??이미지??data URL / ?먭꺽 URL 紐⑤몢 R2???낅줈????援먯껜
     if (isImageReq && /!\[.*?\]\((data:image\/[^)]+|https?:\/\/[^)\s]+)\)/i.test(reply)) {
       const dataUrlRe = /!\[.*?\]\((data:image\/[^)]+|https?:\/\/[^)\s]+)\)/g;
       let m;
@@ -3368,13 +3368,13 @@ async function sendMessage() {
     }
     await cleanupAttachmentCaches(sentAttachments);
     
-    // ?꾨즺 ????긽 ???댁젣 (?대?吏/梨꾪똿 怨듯넻)
+    // ?꾨즺 ????긽 ???댁젣 (이미지/梨꾪똿 怨듯넻)
     isLoading = false;
     document.getElementById('sendBtn').disabled = false;
     setTimeout(() => input.focus(), 10);
   };
 
-  // ?대?吏/梨꾪똿 紐⑤몢 await ???대?吏 ?앹꽦 以?異붽? ?꾩넚 李⑤떒
+  // 이미지/梨꾪똿 紐⑤몢 await ??이미지 ?앹꽦 以?異붽? ?꾩넚 李⑤떒
   try { await processApiAndRender(); } catch (e) { if (e?.name !== 'AbortError') throw e; } finally { isLoading = false; _chatGeneration = null; setChatBusy(false); }
 }
 
@@ -3388,7 +3388,7 @@ function handleFileSelect(input) {
       const dataUrl = e.target.result;
       const isImg = file.type.startsWith('image/');
       let finalUrl = dataUrl;
-      // ?대?吏??利됱떆 R2???낅줈??
+      // 이미지??利됱떆 R2???낅줈??
       if (isImg) {
         const fname = makeImageFilename('uploaded') + '.jpg';
         finalUrl = await uploadToR2(dataUrl, 'img_uploaded', fname).catch(() => dataUrl);
@@ -3409,7 +3409,7 @@ function renderAttachmentPreviews() {
     if (a.uploadError) div.classList.add('upload-error');
     const media = a.type === 'image'
       ? `<img src="${a.dataUrl}">`
-      : `<div class="attachment-file">${a.name || '?뚯씪'}</div>`;
+      : `<div class="attachment-file">${a.name || '파일'}</div>`;
     const status = a.uploading
       ? `<div class="attachment-status"><div class="attachment-spinner"></div></div>`
       : a.uploadError
@@ -3760,14 +3760,14 @@ async function openProfilePopup(pid, emotion, hue, fallbackSrc, suffix = '') {
   const target = suffix ? `${eid}_${suffix}` : eid;
 
   try {
-    // 1. ?대떦 媛먯젙??HD ?대?吏 (?묐????ы븿)
+    // 1. ?대떦 媛먯젙??HD 이미지 (?묐????ы븿)
     const hdUrl = await getEmotionImageHD(pid, eid, suffix);
     if (hdUrl && popup.classList.contains('open')) {
       imgEl.innerHTML = `<img src="${hdUrl}">`;
       return;
     }
 
-    // 2. ?대떦 媛먯젙???먮낯 ?꾩껜 ?대?吏 (em_full_)
+    // 2. ?대떦 媛먯젙???먮낯 ?꾩껜 이미지 (em_full_)
     const full = await idbGet(`em_full_${pid}_${target}`);
     if (full && popup.classList.contains('open')) {
       imgEl.innerHTML = `<img src="${full}">`;
