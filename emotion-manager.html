@@ -935,9 +935,13 @@ async function generateEmotion(pid, eid, slot){
     try { state.pendingAbort.abort(); } catch {}
   }
   
-  const refKey = await findNeutralReferenceKey(pid);
-  const ref = refKey ? `${WORKER_URL}/image/${refKey}` : '';
-  if (!ref) throw new Error(`No neutral_a reference found for ${pid}.`);
+// 1. Worker 자기 참조 에러 및 메모리 초과를 방지하기 위해 로컬 캐시에서 원본 호출
+  let rawDataUrl = await idbGet(`em_full_${pid}_neutral_a`) || await idbGet(`em_full_${pid}_neutral`);
+  if (!rawDataUrl) throw new Error(`로컬 캐시에 ${pid}의 neutral 이미지가 없습니다.`);
+  
+  // 2. Worker 서버가 뻗지 않도록 1024px로 압축(리사이징)하여 Base64 텍스트로 전송
+  const ref = await resizeImage(rawDataUrl, 1024, 0.9);
+  
   const subject = EMOTION_PROMPTS[eid] || `표정 ${eid}`;
   const prompt = [
     '[Subject]',
