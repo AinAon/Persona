@@ -3045,7 +3045,7 @@ async function sendMessage() {
   const input = document.getElementById('userInput');
   const text = sanitizeUserInputValue(input.value).trim();
   if (!text && !attachments.length) return;
-  const shouldAutoMemorySave = /(湲곗뼲??湲곗뼲?댁쨾|remember this|note this|硫붾え??湲곕줉??/i.test(text);
+  const shouldAutoMemorySave = /(기억해|기억해줘|remember this|note this|메모해|기록해)/i.test(text);
 
   const isImageReq = (_inputTab === 'image');
   const targetModel = getTargetModelForRequest(session, isImageReq);
