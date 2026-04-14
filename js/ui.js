@@ -3417,7 +3417,7 @@ function renderAttachmentPreviews() {
       : a.uploadError
         ? `<div class="attachment-status attachment-status-error">!</div>`
         : '';
-    div.innerHTML = `${media}${status}<button class="remove-btn" onclick="removeAttachment(${i})">횞</button>`;
+    div.innerHTML = `${media}${status}<button class="remove-btn" onclick="removeAttachment(${i})">x</button>`;
     row.appendChild(div);
   });
 }
@@ -3444,108 +3444,108 @@ async function renderDrawerBody(s) {
   const canInvite = pList.length < MAX_PARTICIPANTS;
 
   const personaCards = await Promise.all(pList.map(async p => {
-    const neutral = await getNeutralImage(p.pid); // ?ш컖 crop ?뚯뒪 ?몄텧
-    const imgSrc = neutral || p.image;
-    const imgHTML = imgSrc
-      ? `<img src="${imgSrc}" style="width:100%;height:100%;object-fit:cover;object-position:top;display:block">`
-      : `<div style="width:100%;height:100%">${defaultAvatar(p.hue)}</div>`;
-    const kickable = isGroup ? `onclick="kickPersona('${p.pid}')"` : '';
-    return `
-    <div style="display:flex;flex-direction:column;align-items:center;gap:5px">
-      <div id="kickWrap_${p.pid}" style="position:relative;width:60px;height:60px;border-radius:50%;overflow:hidden;border:1.5px solid hsl(${p.hue},28%,22%);cursor:${isGroup?'pointer':'default'};flex-shrink:0" ${kickable}>
-        ${imgHTML}
-        <div id="kickOverlay_${p.pid}" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,.55);align-items:center;justify-content:center;font-size:22px">?뿊</div>
-      </div>
-      <div style="font-size:10px;color:var(--muted);text-align:center;width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</div>
-    </div>`;
-  }));
+const neutral = await getNeutralImage(p.pid); // 사각 crop 소스 호출
+const imgSrc = neutral || p.image;
+const imgHTML = imgSrc
+? `<img src="${imgSrc}" style="width:100%;height:100%;object-fit:cover;object-position:top;display:block">`
+: `<div style="width:100%;height:100%">${defaultAvatar(p.hue)}</div>`;
+const kickable = isGroup ? `onclick="kickPersona('${p.pid}')"` : '';
+return `
+   <div style="display:flex;flex-direction:column;align-items:center;gap:5px">
+     <div id="kickWrap_${p.pid}" style="position:relative;width:60px;height:60px;border-radius:50%;overflow:hidden;border:1.5px solid hsl(${p.hue},28%,22%);cursor:${isGroup?'pointer':'default'};flex-shrink:0" ${kickable}>
+       ${imgHTML}
+       <div id="kickOverlay_${p.pid}" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,.55);align-items:center;justify-content:center;font-size:22px">🗑</div>
+     </div>
+     <div style="font-size:10px;color:var(--muted);text-align:center;width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</div>
+   </div>`;
+}));
 
-  const inviteBtn = canInvite ? `
-    <div style="display:flex;flex-direction:column;align-items:center;gap:5px">
-      <div onclick="openInviteModal()" style="width:60px;height:60px;border-radius:50%;border:1.5px dashed var(--border2);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:border-color .15s"
-        onmouseover="this.style.borderColor='var(--muted)'" onmouseout="this.style.borderColor='var(--border2)'">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2.5" stroke-linecap="round">
-          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-        </svg>
-      </div>
-      <div style="font-size:10px;color:var(--muted2);text-align:center">珥덈?</div>
-    </div>` : '';
+const inviteBtn = canInvite ? `
+   <div style="display:flex;flex-direction:column;align-items:center;gap:5px">
+     <div onclick="openInviteModal()" style="width:60px;height:60px;border-radius:50%;border:1.5px dashed var(--border2);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:border-color .15s"
+       onmouseover="this.style.borderColor='var(--muted)'" onmouseout="this.style.borderColor='var(--border2)'">
+       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2.5" stroke-linecap="round">
+         <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+       </svg>
+     </div>
+     <div style="font-size:10px;color:var(--muted2);text-align:center">초대</div>
+   </div>` : '';
 
-  const uMode = s.userProfileMode || 'default';
-  const showCustom = uMode === 'custom';
+const uMode = s.userProfileMode || 'default';
+const showCustom = uMode === 'custom';
 
-  body.innerHTML = `
-    <div>
-      <div class="field-label">??붾갑 ?대쫫</div>
-      <div style="display:flex;gap:7px">
-        <input class="edit-input" id="drawerRoomName" value="${esc(s.roomName||'')}" placeholder="${esc(pList.map(p=>p.name).join(', '))}" style="font-size:13px;padding:8px 12px;flex:1">
-        <button onclick="saveRoomName()" style="padding:8px 14px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-family:'Pretendard',sans-serif;font-size:12px;cursor:pointer;white-space:nowrap">???/button>
-      </div>
-    </div>
-    <div>
-      <div class="field-label" style="margin-bottom:6px">??梨꾪똿諛??묐떟 紐⑤뜽</div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <div style="flex:1;display:flex;flex-direction:column;gap:6px">${pList.map(p => `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid var(--border2);border-radius:10px;background:var(--card)"><span style="font-size:12px;color:var(--text)">${esc(p.name)}</span><span style="font-size:11px;color:var(--muted)">${esc(p.defaultModel || '誘몄꽕??')}</span></div>`).join('') || `<div style="font-size:11px;color:var(--muted)">李몄뿬 以묒씤 ?섎Ⅴ?뚮굹媛€ ?놁뼱</div>`}</div>
-        <button onclick="applyDrawerModel()" style="padding:7px 12px;border-radius:9px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-family:'Pretendard',sans-serif;font-size:11px;cursor:pointer;white-space:nowrap;flex-shrink:0">?곸슜</button>
-      </div>
-      <div style="font-size:10px;color:var(--muted);margin-top:4px">鍮꾩썙?먮㈃ ?섎Ⅴ?뚮굹 湲곕낯 紐⑤뜽 ?ъ슜</div>
-    </div>
-    <div>
-      <div class="field-label" style="margin-bottom:8px">???꾨줈??/div>
-      <div class="mode-btns" style="margin-bottom:${showCustom?'10px':'0'}">
-        <button class="mode-btn ${uMode==='default'?'on':''}" onclick="setUserProfileMode('default')">湲곕낯 ?꾨줈??/button>
-        <button class="mode-btn ${uMode==='none'?'on':''}" onclick="setUserProfileMode('none')">?뺥븯吏 ?딆쓬</button>
-        <button class="mode-btn ${uMode==='custom'?'on':''}" onclick="setUserProfileMode('custom')">吏곸젒 ?낅젰</button>
-      </div>
-      ${showCustom ? `
-      <input type="file" id="drawerUserImgInput" style="display:none" accept="image/*" onchange="handleDrawerUserImage(this)">
-      <div style="display:flex;gap:10px;align-items:flex-start">
-        <div style="width:48px;height:48px;border-radius:50%;overflow:hidden;border:1.5px solid var(--border2);flex-shrink:0;cursor:pointer" onclick="document.getElementById('drawerUserImgInput').click()">
-          ${getUserAvatarHTML(s)}
-        </div>
-        <div style="flex:1;display:flex;flex-direction:column;gap:6px">
-          <input class="edit-input" id="drawerUserName" value="${esc(s.userOverride?.name||'')}" placeholder="?대쫫" style="font-size:13px;padding:7px 10px">
-          <textarea class="edit-input" id="drawerUserBio" placeholder="??梨꾪똿諛⑹뿉?쒖쓽 ??.." style="font-size:12px;padding:7px 10px;resize:none;height:56px;border-radius:10px;line-height:1.5">${esc(s.userOverride?.bio||'')}</textarea>
-        </div>
-      </div>
-      <button onclick="saveDrawerUserProfile()" style="width:100%;margin-top:8px;padding:8px;border-radius:9px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-family:'Pretendard',sans-serif;font-size:12px;cursor:pointer">???/button>
-      ` : ''}
-    </div>
-    ${isGroup ? `
-    <div>
-      <div class="field-label">?묐떟 諛⑹떇</div>
-      <div class="mode-btns">
-        <button class="mode-btn ${s.responseMode==='auto'?'on':''}" onclick="setDrawerMode('auto')">?렡 ?곹솴??留욊쾶</button>
-        <button class="mode-btn ${s.responseMode==='all'?'on':''}" onclick="setDrawerMode('all')">?뫁 ?꾩썝</button>
-        <button class="mode-btn ${s.responseMode==='random'?'on':''}" onclick="setDrawerMode('random')">?렞 臾댁옉??/button>
-      </div>
-    </div>` : ''}
-    <div>
-      <div class="field-label">?멸퀎愿 / 怨듯넻 吏移?/div>
-      <textarea class="world-input" oninput="syncWorldContext(this.value)" placeholder="紐⑤뱺 ?섎Ⅴ?뚮굹?먭쾶 ?곸슜???ㅼ젙?대굹 ?멸퀎愿???낅젰?섏꽭??..">${esc(s.worldContext||'')}</textarea>
-    </div>
-    <div>
-      <div class="field-label">李몄뿬 ?섎Ⅴ?뚮굹${isGroup ? ' 쨌 ??븯硫?異붾갑' : ''}</div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap">${personaCards.join('')}${inviteBtn}</div>
-    </div>`;
+body.innerHTML = `
+   <div>
+     <div class="field-label">대화방 이름</div>
+     <div style="display:flex;gap:7px">
+       <input class="edit-input" id="drawerRoomName" value="${esc(s.roomName||'')}" placeholder="${esc(pList.map(p=>p.name).join(', '))}" style="font-size:13px;padding:8px 12px;flex:1">
+       <button onclick="saveRoomName()" style="padding:8px 14px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-family:'Pretendard',sans-serif;font-size:12px;cursor:pointer;white-space:nowrap">저장</button>
+     </div>
+   </div>
+   <div>
+     <div class="field-label" style="margin-bottom:6px">이 채팅방 응답 모델</div>
+     <div style="display:flex;gap:6px;align-items:center">
+       <div style="flex:1;display:flex;flex-direction:column;gap:6px">${pList.map(p => `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid var(--border2);border-radius:10px;background:var(--card)"><span style="font-size:12px;color:var(--text)">${esc(p.name)}</span><span style="font-size:11px;color:var(--muted)">${esc(p.defaultModel || '미설정')}</span></div>`).join('') || `<div style="font-size:11px;color:var(--muted)">참여 중인 페르소나가 없어</div>`}</div>
+       <button onclick="applyDrawerModel()" style="padding:7px 12px;border-radius:9px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-family:'Pretendard',sans-serif;font-size:11px;cursor:pointer;white-space:nowrap;flex-shrink:0">적용</button>
+     </div>
+     <div style="font-size:10px;color:var(--muted);margin-top:4px">비워두면 페르소나 기본 모델 사용</div>
+   </div>
+   <div>
+     <div class="field-label" style="margin-bottom:8px">내 프로필</div>
+     <div class="mode-btns" style="margin-bottom:${showCustom?'10px':'0'}">
+       <button class="mode-btn ${uMode==='default'?'on':''}" onclick="setUserProfileMode('default')">기본 프로필</button>
+       <button class="mode-btn ${uMode==='none'?'on':''}" onclick="setUserProfileMode('none')">정하지 않음</button>
+       <button class="mode-btn ${uMode==='custom'?'on':''}" onclick="setUserProfileMode('custom')">직접 입력</button>
+     </div>
+     ${showCustom ? `
+     <input type="file" id="drawerUserImgInput" style="display:none" accept="image/*" onchange="handleDrawerUserImage(this)">
+     <div style="display:flex;gap:10px;align-items:flex-start">
+       <div style="width:48px;height:48px;border-radius:50%;overflow:hidden;border:1.5px solid var(--border2);flex-shrink:0;cursor:pointer" onclick="document.getElementById('drawerUserImgInput').click()">
+         ${getUserAvatarHTML(s)}
+       </div>
+       <div style="flex:1;display:flex;flex-direction:column;gap:6px">
+         <input class="edit-input" id="drawerUserName" value="${esc(s.userOverride?.name||'')}" placeholder="이름" style="font-size:13px;padding:7px 10px">
+         <textarea class="edit-input" id="drawerUserBio" placeholder="이 채팅방에서의 나..." style="font-size:12px;padding:7px 10px;resize:none;height:56px;border-radius:10px;line-height:1.5">${esc(s.userOverride?.bio||'')}</textarea>
+       </div>
+     </div>
+     <button onclick="saveDrawerUserProfile()" style="width:100%;margin-top:8px;padding:8px;border-radius:9px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-family:'Pretendard',sans-serif;font-size:12px;cursor:pointer">저장</button>
+     ` : ''}
+   </div>
+   ${isGroup ? `
+   <div>
+     <div class="field-label">응답 방식</div>
+     <div class="mode-btns">
+       <button class="mode-btn ${s.responseMode==='auto'?'on':''}" onclick="setDrawerMode('auto')">🎲 상황에 맞게</button>
+       <button class="mode-btn ${s.responseMode==='all'?'on':''}" onclick="setDrawerMode('all')">👥 전원</button>
+       <button class="mode-btn ${s.responseMode==='random'?'on':''}" onclick="setDrawerMode('random')">🎯 무작위</button>
+     </div>
+   </div>` : ''}
+   <div>
+     <div class="field-label">세계관 / 공통 지침</div>
+     <textarea class="world-input" oninput="syncWorldContext(this.value)" placeholder="모든 페르소나에게 적용할 설정이나 세계관을 입력하세요...">${esc(s.worldContext||'')}</textarea>
+   </div>
+   <div>
+     <div class="field-label">참여 페르소나${isGroup ? ' · 탭하면 추방' : ''}</div>
+     <div style="display:flex;gap:10px;flex-wrap:wrap">${personaCards.join('')}${inviteBtn}</div>
+   </div>`;
 }
 
 function toggleKickOverlay(pid, el) {
-  const overlay = document.getElementById(`kickOverlay_${pid}`);
-  if (!overlay) return;
-  if (overlay.style.display === 'flex') {
-    if (confirm(`${getPersona(pid)?.name || pid}瑜?異붾갑?좉퉴?\n???湲곕줉? ?좎???`)) { kickPersona(pid); } else { overlay.style.display = 'none'; }
-  } else {
-    document.querySelectorAll('[id^="kickOverlay_"]').forEach(o => o.style.display = 'none');
-    overlay.style.display = 'flex';
-  }
+const overlay = document.getElementById(`kickOverlay_${pid}`);
+if (!overlay) return;
+if (overlay.style.display === 'flex') {
+if (confirm(`${getPersona(pid)?.name || pid}를 추방할까?\n대화 기록은 유지돼.`)) { kickPersona(pid); } else { overlay.style.display = 'none'; }
+} else {
+document.querySelectorAll('[id^="kickOverlay_"]').forEach(o => o.style.display = 'none');
+overlay.style.display = 'flex';
+}
 }
 
 function kickPersona(pid) {
-  const s = getActiveSession(); if (!s) return;
-  if (s.participantPids.length <= 1) { showToast('留덉?留??섎Ⅴ?뚮굹??異붾갑?????놁뼱'); return; }
-  const p = getPersona(pid);
-  if (!confirm(`${p?.name || pid}瑜???梨꾪똿諛⑹뿉??異붾갑?좉퉴?\n???湲곕줉? ?좎???`)) return;
+const s = getActiveSession(); if (!s) return;
+if (s.participantPids.length <= 1) { showToast('마지막 페르소나는 추방할 수 없어'); return; }
+const p = getPersona(pid);
+if (!confirm(`${p?.name || pid}를 이 채팅방에서 추방할까?\n대화 기록은 유지돼.`)) return;
   s.participantPids = s.participantPids.filter(id => id !== pid);
   s.updatedAt = Date.now();
   saveIndex(); renderDrawerBody(s);
