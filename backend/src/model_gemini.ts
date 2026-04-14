@@ -82,7 +82,8 @@ export async function generateGeminiImage(params: {
   const parts = data.candidates?.[0]?.content?.parts || [];
   const inlinePart = parts.find((p: any) => p?.inlineData?.data || p?.inline_data?.data);
   const b64 = inlinePart?.inlineData?.data || inlinePart?.inline_data?.data;
-  return b64 ? `data:image/png;base64,${b64}` : "";
+  const mimeType = inlinePart?.inlineData?.mimeType || inlinePart?.inline_data?.mime_type || "image/jpeg";
+  return b64 ? `data:${mimeType};base64,${b64}` : "";
 }
 
 export async function generateImagenImage(params: {
@@ -107,7 +108,8 @@ export async function generateImagenImage(params: {
   if (!res.ok) throw new Error(`Imagen Error: ${text}`);
   const data = JSON.parse(text);
   const pred = data.predictions?.[0];
-  if (pred?.bytesBase64Encoded) return `data:image/png;base64,${pred.bytesBase64Encoded}`;
+  const mimeType = pred?.mimeType || "image/jpeg";
+  if (pred?.bytesBase64Encoded) return `data:${mimeType};base64,${pred.bytesBase64Encoded}`;
   return pred?.url || "";
 }
 
