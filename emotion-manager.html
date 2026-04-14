@@ -935,15 +935,8 @@ async function generateEmotion(pid, eid, slot){
     try { state.pendingAbort.abort(); } catch {}
   }
   
-  // 1순위: 로컬 IDB 캐시에서 Base64 원본을 직접 가져와 API로 직행 (네트워크/R2 다운로드 오류 원천 차단)
-  let ref = await idbGet(`em_full_${pid}_neutral_a`) || await idbGet(`em_full_${pid}_neutral`);
-  
-  // 2순위: 로컬에 없는 경우에만 기존 R2 URL 방식으로 폴백
-  if (!ref) {
-    const refKey = await findNeutralReferenceKey(pid);
-    ref = refKey ? `${WORKER_URL}/image/${refKey}` : '';
-  }
-  
+  const refKey = await findNeutralReferenceKey(pid);
+  const ref = refKey ? `${WORKER_URL}/image/${refKey}` : '';
   if (!ref) throw new Error(`No neutral_a reference found for ${pid}.`);
   const subject = EMOTION_PROMPTS[eid] || `표정 ${eid}`;
   const prompt = [
