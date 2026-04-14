@@ -2467,7 +2467,8 @@ async function openChat(id) {
 
   const avatarsEl = document.getElementById('chatHeaderAvatars');
   avatarsEl.innerHTML = pList.map(p => {
-    const img = p.image ? `<img src="${p.image}" style="width:100%;height:100%;object-fit:cover;object-position:top;">` : defaultAvatar(p.hue);
+    const headSrc = p.neutral_thumb || '';
+    const img = headSrc ? `<img src="${headSrc}" style="width:100%;height:100%;object-fit:cover;object-position:top;">` : defaultAvatar(p.hue);
     return `<div class="chat-header-av" style="background:hsl(${p.hue},22%,14%);border-color:hsl(${p.hue},30%,26%);width:42px;height:42px;border-radius:50%;overflow:hidden;flex-shrink:0;">${img}</div>`;
   }).join('');
   document.getElementById('chatHeaderNames').textContent = s.roomName || pList.map(p=>p.name).join(', ');
@@ -3536,7 +3537,8 @@ function kickPersona(pid) {
   const avatarsEl = document.getElementById('chatHeaderAvatars');
   if (avatarsEl) {
     avatarsEl.innerHTML = pList.map(p => {
-      const img = p.image ? `<img src="${p.image}" style="width:100%;height:100%;object-fit:cover;object-position:top;">` : defaultAvatar(p.hue);
+      const headSrc = p.neutral_thumb || '';
+      const img = headSrc ? `<img src="${headSrc}" style="width:100%;height:100%;object-fit:cover;object-position:top;">` : defaultAvatar(p.hue);
       return `<div class="chat-header-av" style="background:hsl(${p.hue},22%,14%);border-color:hsl(${p.hue},30%,26%);width:42px;height:42px;border-radius:50%;overflow:hidden;flex-shrink:0;">${img}</div>`;
     }).join('');
     
