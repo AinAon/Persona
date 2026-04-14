@@ -940,7 +940,7 @@ async function generateEmotion(pid, eid, slot){
   if (!rawDataUrl) throw new Error(`로컬 캐시에 ${pid}의 neutral 이미지가 없습니다.`);
   
   // 2. Worker 서버가 뻗지 않도록 1024px로 압축(리사이징)하여 Base64 텍스트로 전송
-  const ref = await resizeImage(rawDataUrl, 1024, 0.9);
+  const ref = await resizeImage(rawDataUrl, 2048, 0.9);
   
   const subject = EMOTION_PROMPTS[eid] || `표정 ${eid}`;
   const prompt = [
