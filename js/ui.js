@@ -1384,7 +1384,7 @@ let isNewPersona = false;
 async function openPersonaEdit(pid) {
   editingPid = pid; isNewPersona = false;
   const p = getPersona(pid);
-  document.getElementById('editTitle').textContent = p ? p.name || '?섎Ⅴ?뚮굹 ?몄쭛' : '???섎Ⅴ?뚮굹';
+  document.getElementById('editTitle').textContent = p ? p.name || '페르소나 편집' : '새 페르소나';
     const hdImage = p ? await getEmotionImageHD(p.pid, 'neutral_a') || await idbGet(`em_full_${p.pid}_neutral_a`) : null;
   renderEditBody(p || { pid, name:'', bio:'', tags:[], hue:200, image:null }, hdImage);
   renderEditFooter(!!p);
@@ -1395,7 +1395,7 @@ function createNewPersona() {
   const p = { pid: nextPid(), name: '', bio: '', tags: [], hue: 200, image: null };
   isNewPersona = true; editingPid = p.pid;
   personas.push(p);
-  document.getElementById('editTitle').textContent = '???섎Ⅴ?뚮굹';
+  document.getElementById('editTitle').textContent = '새 페르소나';
   renderEditBody(p, null); renderEditFooter(false);
   show('editScreen');
 }
@@ -1405,13 +1405,13 @@ function renderEditFooter(isExisting) {
   const p = getPersona(editingPid);
   if (isExisting) {
     footer.innerHTML = `
-      <button class="edit-delete-btn" onclick="deletePersonaFromEdit()">??젣</button>
-      <button class="edit-cancel-btn" onclick="cancelPersonaEdit()">痍⑥냼</button>
-      <button class="edit-save-btn" onclick="savePersonaEdit()">???/button>`;
+      <button class="edit-delete-btn" onclick="deletePersonaFromEdit()">삭제</button>
+      <button class="edit-cancel-btn" onclick="cancelPersonaEdit()">취소</button>
+      <button class="edit-save-btn" onclick="savePersonaEdit()">저장</button>`;
   } else {
     footer.innerHTML = `
-      <button class="edit-cancel-btn" onclick="cancelPersonaEdit()">痍⑥냼</button>
-      <button class="edit-save-btn" onclick="savePersonaEdit()">?앹꽦</button>`;
+      <button class="edit-cancel-btn" onclick="cancelPersonaEdit()">취소</button>
+      <button class="edit-save-btn" onclick="savePersonaEdit()">생성</button>`;
   }
 }
 
@@ -1421,8 +1421,8 @@ function cancelPersonaEdit() {
 }
 
 function deletePersonaFromEdit() {
-  if (personas.length <= 1) { showToast('留덉?留??섎Ⅴ?뚮굹????젣?????놁뼱'); return; }
-  if (!confirm('???섎Ⅴ?뚮굹瑜???젣?좉퉴?')) return;
+  if (personas.length <= 1) { showToast('마지막 페르소나는 삭제할 수 없어'); return; }
+  if (!confirm('이 페르소나를 삭제할까?')) return;
   personas = personas.filter(p => p.pid !== editingPid);
   savePersonas(); renderPersonaGrid(); goMain();
 }
@@ -1441,31 +1441,31 @@ function renderEditBody(p, hdImage = null) {
     <input type="file" id="editImgInput" style="display:none" accept="image/*" onchange="handleEditImage(this)">
     <input type="file" id="editMultiImgInput" style="display:none" accept="image/*" multiple onchange="handleMultiImageUpload(this)">
     <button onclick="document.getElementById('editMultiImgInput').click()" style="width:100%;padding:9px;border-radius:10px;border:1px solid var(--border2);background:transparent;color:var(--muted);font-family:'Pretendard',sans-serif;font-size:12px;cursor:pointer;margin-top:6px">
-      ?뱚 媛먯젙 이미지 ?쇨큵 ?낅줈??(파일紐?洹몃?濡????
+      📁 감정 이미지 일괄 업로드 (파일명 그대로 저장)
     </button>
     <div id="editMultiDropzone" class="edit-multi-dropzone" role="button" tabindex="0" onclick="document.getElementById('editMultiImgInput').click()">
       <div class="edit-multi-dropzone-icon">
         <svg viewBox="0 0 24 24"><path d="M12 16V6"/><path d="M8.5 9.5L12 6l3.5 3.5"/><path d="M20 16.5V18a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-1.5"/><path d="M7 12.5a4 4 0 0 1 7.4-2.1A3.5 3.5 0 1 1 17 17"/></svg>
       </div>
-      <div class="edit-multi-dropzone-title">媛먯젙 이미지 ?щ윭 ???낅줈??/div>
-      <div class="edit-multi-dropzone-sub">파일???쒕옒洹명빐???볤굅???대┃???좏깮</div>
+      <div class="edit-multi-dropzone-title">감정 이미지 여러 장 업로드</div>
+      <div class="edit-multi-dropzone-sub">파일을 드래그해서 놓거나 클릭해 선택</div>
     </div>
     <div id="editMultiUploadList" class="edit-upload-list"></div>
 
     <div>
       <div class="edit-section-title">Identity Details</div>
 
-      <div class="edit-field-label">PID ${isNewPersona?'<span style="font-size:9px;color:var(--muted)">(蹂寃?媛??</span>':'<span style="font-size:9px;color:var(--muted)">(?쎄린 ?꾩슜)</span>'}</div>
+      <div class="edit-field-label">PID ${isNewPersona?'<span style="font-size:9px;color:var(--muted)">(변경 가능</span>':'<span style="font-size:9px;color:var(--muted)">(읽기 전용)</span>'}</div>
       <input class="edit-input" id="editPid" value="${esc(p.pid)}" placeholder="p_riley" ${isNewPersona?'':'readonly'} style="width:100%;font-family:monospace;font-size:12px;color:var(--muted);${isNewPersona?'':'opacity:.6;cursor:default'}">
 
       <div class="edit-field-label">NAME</div>
-      <input class="edit-input" id="editName" value="${esc(p.name)}" placeholder="?대쫫" style="width:100%">
+      <input class="edit-input" id="editName" value="${esc(p.name)}" placeholder="이름" style="width:100%">
 
       <div class="edit-field-row" style="margin-top:0">
         <div>
           <div class="edit-field-label">GENDER</div>
           <select class="edit-input" id="editGender" style="width:100%">
-            <option value="" ${!p.gender?'selected':''}>?좏깮 ????/option>
+            <option value="" ${!p.gender?'selected':''}>선택 안 함</option>
             <option value="male" ${p.gender==='male'?'selected':''}>Male</option>
             <option value="female" ${p.gender==='female'?'selected':''}>Female</option>
             <option value="nonbinary" ${p.gender==='nonbinary'?'selected':''}>Non-binary</option>
@@ -1483,12 +1483,12 @@ function renderEditBody(p, hdImage = null) {
 
       <div class="edit-field-row">
         <div>
-          <div class="edit-field-label">NICKNAME (?쇳몴 援щ텇)</div>
-          <input class="edit-input" id="editNicknames" value="${esc((p.nicknames||[]).join(', '))}" placeholder="?됰꽕?? style="width:100%">
+          <div class="edit-field-label">NICKNAME (쉼표 구분)</div>
+          <input class="edit-input" id="editNicknames" value="${esc((p.nicknames||[]).join(', '))}" placeholder="닉네임" style="width:100%">
         </div>
         <div>
-          <div class="edit-field-label">?섎? 遺瑜대뒗 ?몄묶</div>
-          <input class="edit-input" id="editUserTitle" value="${esc(p.userTitle||'')}" placeholder="?? ?좎깮?? style="width:100%">
+          <div class="edit-field-label">나를 부르는 호칭</div>
+          <input class="edit-input" id="editUserTitle" value="${esc(p.userTitle||'')}" placeholder="예: 선생님" style="width:100%">
         </div>
       </div>
     </div>
@@ -1496,7 +1496,7 @@ function renderEditBody(p, hdImage = null) {
     <div>
       <div class="edit-section-title">Personality</div>
 
-      <div class="edit-field-label">PERSONALITY TRAITS (理쒕? 6媛?</div>
+      <div class="edit-field-label">PERSONALITY TRAITS (최대 6개?</div>
       <div class="tags-wrap">
         ${TRAIT_OPTIONS.map(t => `<div class="tag ${(p.tags||[]).includes(t)?'on':''}" onclick="toggleEditTrait('${t}',this)">${t}</div>`).join('')}
       </div>
@@ -1510,12 +1510,12 @@ function renderEditBody(p, hdImage = null) {
     <div>
       <div class="edit-section-title">Description</div>
       <div class="edit-field-label">ROLE / INTRODUCTION</div>
-      <textarea class="edit-textarea" id="editBio" placeholder="?대뼡 ??븷?몄? 吏㏐쾶 ?곸뼱以? style="height:90px">${esc(p.bio)}</textarea>
+      <textarea class="edit-textarea" id="editBio" placeholder="어떤 역할인지 짧게 적어줘" style="height:90px">${esc(p.bio)}</textarea>
     </div>
 
     <div>
       <div class="edit-section-title">Model</div>
-      <div class="edit-field-label">湲곕낯 ?묐떟 紐⑤뜽 (???섎Ⅴ?뚮굹媛 李몄뿬??梨꾪똿??湲곕낯媛?</div>
+      <div class="edit-field-label">기본 응답 모델 (이 페르소나가 참여한 채팅의 기본값)</div>
       ${buildModelSelect('editDefaultModel', p.defaultModel || '')}
     </div>`;
   _editMultiUploadQueue = [];
@@ -1541,26 +1541,26 @@ function handleEditImage(input) {
   reader.onload = e => {
     const originalDataUrl = e.target.result;
     openCropEditor(originalDataUrl, async (cropped) => {
-      // ?붾㈃ 利됱떆 諛섏쁺
+      // 화면 즉시 반영
       const av = document.querySelector('#editBody .edit-big-img-wrap');
       if (av) av.innerHTML = `<img src="${cropped}" style="width:100%;height:100%;object-fit:cover;object-position:top;display:block"><div class="edit-big-img-overlay"><svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg></div>`;
 
       const p = getPersona(editingPid); if (!p) return;
 
-      // 3?④퀎 ?몃꽕???앹꽦
+      // 3단계 썸네일 생성
       idbSet(`em_full_${p.pid}_neutral_a`, cropped).catch(() => {});
       p._pendingImage = cropped;
 
       const { sqMd, fullHd, avatarPng } = await generateThumbnailSet(cropped, p.pid, 'neutral_a');
 
-      // 硫붾え由?
+      // 메모리
       p.image = sqMd;
       p.neutral_md = sqMd;
       p.neutral_hd = fullHd;
       p.neutral_thumb = avatarPng;
       _neutralCache[p.pid] = sqMd;
 
-      showToast('이미지 ?좏깮???????踰꾪듉???뚮윭以?);
+      showToast('이미지 선택됨 — 저장 버튼을 눌러줘');
     });
   };
   reader.readAsDataURL(file);
@@ -1575,9 +1575,9 @@ async function handleMultiImageUpload(input) {
   const p = getPersona(editingPid); if (!p) return;
   const filesLegacy = [...input.files]; if (!filesLegacy.length) return;
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-  if (!wUrl) { alert('Worker URL ?놁쓬'); return; }
+  if (!wUrl) { alert('Worker URL 없음'); return; }
 
-  showToast(`??${files.length}媛??낅줈??以?..`, 10000);
+  showToast(`⏳ ${files.length}개 업로드 중...`, 10000);
   let ok = 0, fail = 0;
   for (const file of files) {
     try {
@@ -1617,7 +1617,7 @@ async function handleMultiImageUpload(input) {
     } catch(e) { fail++; }
   }
   if (typeof _imageListCache !== 'undefined') delete _imageListCache[p.pid];
-  showToast(`??${ok}媛??꾨즺${fail ? ` / ${fail}媛??ㅽ뙣` : ''}`);
+  showToast(`✓ ${ok}개 완료${fail ? ` / ${fail}개 실패` : ''}`);
   input.value = '';
 }
 
@@ -1636,9 +1636,9 @@ function renderEditMultiUploadList() {
       : `<div class="edit-upload-file">${esc((item.name || '').slice(0, 12) || 'file')}</div>`;
     const stateClass = item.status === 'done' ? 'is-done' : (item.status === 'fail' ? 'is-fail' : 'is-uploading');
     const stateBadge = item.status === 'done'
-      ? `<div class="edit-upload-state done">?꾨즺</div>`
+      ? `<div class="edit-upload-state done">완료</div>`
       : item.status === 'fail'
-        ? `<div class="edit-upload-state fail">?ㅽ뙣</div>`
+        ? `<div class="edit-upload-state fail">실패</div>`
         : `<div class="edit-upload-state"><div class="attachment-spinner"></div></div>`;
     return `<div class="edit-upload-thumb ${stateClass}">${thumb}${stateBadge}</div>`;
   }).join('');
@@ -1695,11 +1695,11 @@ function initEditMultiDropzone_legacy() {
     mark(false);
     const files = [...(e.dataTransfer?.files || [])].filter(f => (f?.type || '').startsWith('image/'));
     if (!files.length) {
-      showToast('이미지 파일留??낅줈?쒗븷 ???덉뼱??');
+      showToast('이미지 파일만 업로드할 수 있어요.');
       return;
     }
     if (!files.length) {
-      showToast('이미지 파일留??낅줈?쒗븷 ???덉뼱');
+      showToast('이미지 파일만 업로드할 수 있어');
       return;
     }
     await handleMultiImageFiles(files);
@@ -1819,7 +1819,7 @@ async function handleMultiImageFiles(fileList) {
   const files = [...(fileList || [])].filter(f => (f?.type || '').startsWith('image/'));
   if (!files.length) return;
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-  if (!wUrl) { alert('Worker URL ?놁쓬'); return; }
+  if (!wUrl) { alert('Worker URL 없음'); return; }
 
   _editMultiUploadQueue = files.map((file, idx) => ({
     id: `upload_${Date.now()}_${idx}`,
@@ -1879,7 +1879,7 @@ async function handleMultiImageFiles(fileList) {
     renderEditMultiUploadList();
   }
   if (typeof _imageListCache !== 'undefined') delete _imageListCache[p.pid];
-  showToast(`?낅줈???꾨즺: ${ok}??{fail ? `, ?ㅽ뙣 ${fail}?? : ''}`);
+  showToast(`?낅줈??완료: ${ok}??{fail ? `, 실패 ${fail}?? : ''}`);
 }
 
 async function savePersonaEdit() {
@@ -1908,7 +1908,7 @@ async function savePersonaEdit() {
     showToast('??이미지 ???以?..', 5000);
     try {
       const workerUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-      if (!workerUrl) throw new Error('Worker URL ?놁쓬');
+      if (!workerUrl) throw new Error('Worker URL 없음');
       const b64 = p._pendingImage.split(',')[1];
       const byteArr = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
       const blob = new Blob([byteArr], { type: 'image/jpeg' });
@@ -1918,10 +1918,10 @@ async function savePersonaEdit() {
       form.append('folder', `profile/${p.pid}`);
       const res = await fetch(workerUrl + '/image', { method: 'POST', body: form });
       const data = await res.json();
-      if (!data.url) throw new Error(data.error || '?낅줈???ㅽ뙣');
+      if (!data.url) throw new Error(data.error || '?낅줈??실패');
       p.imageUrl = data.url;
     } catch(e) {
-      alert('이미지 ????ㅽ뙣: ' + e.message);
+      alert('이미지 ???실패: ' + e.message);
       return;
     }
     delete p._pendingImage;
@@ -2124,7 +2124,7 @@ async function renderRestoreList() {
         </div>
         <div style="display:flex;gap:6px;align-items:center">
           <button onclick="restoreDeletedChat('${s.id}')" style="padding:7px 10px;border-radius:9px;border:1px solid var(--border2);background:transparent;color:var(--text);font-size:12px;cursor:pointer">媛뺤젣蹂듦뎄</button>
-          <button onclick="purgeDeletedChat('${s.id}')" style="padding:7px 10px;border-radius:9px;border:1px solid hsl(0,30%,24%);background:hsl(0,20%,12%);color:hsl(0,70%,68%);font-size:12px;cursor:pointer">?곴뎄??젣</button>
+          <button onclick="purgeDeletedChat('${s.id}')" style="padding:7px 10px;border-radius:9px;border:1px solid hsl(0,30%,24%);background:hsl(0,20%,12%);color:hsl(0,70%,68%);font-size:12px;cursor:pointer">?곴뎄삭제</button>
         </div>
       </div>
     `;
@@ -2135,7 +2135,7 @@ async function restoreDeletedChat(id) {
   if (!id) return;
   const res = await restoreDeletedSessionRemote(id);
   if (!res?.ok) {
-    showToast('梨꾪똿 蹂듭썝 ?ㅽ뙣');
+    showToast('梨꾪똿 蹂듭썝 실패');
     return;
   }
   await loadIndex();
@@ -2146,17 +2146,17 @@ async function restoreDeletedChat(id) {
 
 async function purgeDeletedChat(id) {
   if (!id) return;
-  if (!confirm('??梨꾪똿 李뚭볼湲곕? KV?먯꽌 ?곴뎄??젣?좉퉴?? 蹂듦뎄?????놁뒿?덈떎.')) return;
+  if (!confirm('??梨꾪똿 李뚭볼湲곕? KV?먯꽌 ?곴뎄삭제?좉퉴?? 蹂듦뎄?????놁뒿?덈떎.')) return;
   const res = await purgeSessionRemote(id);
   if (!res?.ok) {
-    showToast('?곴뎄??젣 ?ㅽ뙣');
+    showToast('?곴뎄삭제 실패');
     return;
   }
   sessions = sessions.filter(s => s.id !== id);
   removeLocalSession(id);
   await renderRestoreList();
   renderChatList();
-  showToast('KV?먯꽌 ?곴뎄??젣?덉뒿?덈떎.');
+  showToast('KV?먯꽌 ?곴뎄삭제?덉뒿?덈떎.');
 }
 
 let _selectedPersonaPid = null;
@@ -2379,7 +2379,7 @@ function setupSwipeDelete(item, wrap, id) {
 }
 
 async function deleteChatFromDrawer() {
-  if (!confirm('??梨꾪똿諛⑹쓣 ??젣?좉퉴? ????댁슜??紐⑤몢 ?щ씪??')) return;
+  if (!confirm('??梨꾪똿諛⑹쓣 삭제?좉퉴? ????댁슜??紐⑤몢 ?щ씪??')) return;
   const id = activeChatId;
   sessions = sessions.filter(s => s.id !== id);
   removeLocalSession(id);
@@ -2389,7 +2389,7 @@ async function deleteChatFromDrawer() {
 }
 
 async function deleteChat(id) {
-  if (!confirm('??梨꾪똿????젣?좉퉴?')) return;
+  if (!confirm('??梨꾪똿??삭제?좉퉴?')) return;
   sessions = sessions.filter(s => s.id !== id);
   removeLocalSession(id);
   await deleteSessionRemote(id).catch(() => {});
@@ -2718,7 +2718,7 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
       <div class="msg-av" style="background:hsl(${h},20%,11%);border-color:hsl(${h},28%,22%);${celebStroke};${avDisplay}${avShape}" onclick="openProfilePopup('${safePid}','${safeEmotion}',${h},'${safeThumb}','${safeSuffix}')">${baseImg}</div>
       <div class="bubble-col">
         <div class="msg-pname" style="color:hsl(${h},65%,72%)">
-          <span class="msg-pname-text">${esc(p.name)}${p._ghost?`<span style="font-size:9px;opacity:.5">(??젣??</span>`:''}</span>
+          <span class="msg-pname-text">${esc(p.name)}${p._ghost?`<span style="font-size:9px;opacity:.5">(삭제??</span>`:''}</span>
           ${hasImg ? '' : `<button class="copy-btn" type="button" title="복사">
             <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="10" height="11" rx="2"/><path d="M13 5V3.5A1.5 1.5 0 0 0 11.5 2h-7A1.5 1.5 0 0 0 3 3.5v10A1.5 1.5 0 0 0 4.5 15H5"/></svg>
           </button>`}
@@ -3291,7 +3291,7 @@ async function sendMessage() {
           };
         }
 
-        // 釉뚮씪?곗? ??꾩븘???놁쓬 (Worker 30s ?쒓퀎 二쇱쓽)
+        // 釉뚮씪?곗? ??꾩븘??없음 (Worker 30s ?쒓퀎 二쇱쓽)
         const res = await fetch(wUrl + '/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -3321,7 +3321,7 @@ async function sendMessage() {
       } catch(e) {
         if (e?.name === 'AbortError') throw e;
         const pid0 = session.participantPids?.[0] || 'p';
-        reply = `[${pid0}]?곌껐 ?ㅽ뙣: ${e.message}[/${pid0}]`;
+        reply = `[${pid0}]?곌껐 실패: ${e.message}[/${pid0}]`;
       }
     }
 
@@ -3368,7 +3368,7 @@ async function sendMessage() {
     }
     await cleanupAttachmentCaches(sentAttachments);
     
-    // ?꾨즺 ????긽 ???댁젣 (이미지/梨꾪똿 怨듯넻)
+    // 완료 ????긽 ???댁젣 (이미지/梨꾪똿 怨듯넻)
     isLoading = false;
     document.getElementById('sendBtn').disabled = false;
     setTimeout(() => input.focus(), 10);
@@ -3715,7 +3715,7 @@ async function compressChat() {
   const histText = s.history.map(m=>`${m.role==='user'?'?ъ슜??:'AI'}: ${typeof m.content==='string'?m.content:'(硫붿떆吏)'}`).join('\n');
   try {
     const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-    if (!wUrl) { alert('Worker URL ?놁쓬'); return; }
+    if (!wUrl) { alert('Worker URL 없음'); return; }
     const pList = (s.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
     const compressModel = s.overrideModel
       || pList.find(p=>p.defaultModel)?.defaultModel
@@ -3739,8 +3739,8 @@ async function compressChat() {
         personaSnapshot:(s.participantPids||[]).map(pid=>({pid,name:getPersona(pid)?.name||pid})) }];
       s.updatedAt = Date.now(); s.lastPreview = '[?뺤텞??';
       closeDrawer(); renderChatArea(); saveSession(s.id); saveIndex();
-    } else { alert('?뺤텞 ?ㅽ뙣: ' + (data?.error || '?????녿뒗 ?ㅻ쪟')); }
-  } catch(e) { alert('?뺤텞 ?ㅽ뙣: ' + e.message); }
+    } else { alert('?뺤텞 실패: ' + (data?.error || '?????녿뒗 ?ㅻ쪟')); }
+  } catch(e) { alert('?뺤텞 실패: ' + e.message); }
 }
 
 // ═══════════════
@@ -3818,7 +3818,7 @@ async function downloadImage(url, filename = 'generated.jpg') {
     a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   } catch(e) {
-    // fetch ?ㅽ뙣(CORS ??硫?????쑝濡??닿린
+    // fetch 실패(CORS ??硫?????쑝濡??닿린
     window.open(url, '_blank');
   }
 }
@@ -3886,7 +3886,7 @@ function ensureSettingsMemoryPanel() {
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:10px">
       <button onclick="toggleMemorySelectAll('public_profile','global',true); renderPublicMemoryList();" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">?꾩껜?좏깮</button>
       <button onclick="clearMemorySelection('public_profile','global'); renderPublicMemoryList();" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">?좏깮?댁젣</button>
-      <button onclick="deleteSelectedMemories('public_profile','global')" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:#3a1f24;color:#ffd7dd;font-size:11px;cursor:pointer">?좏깮??젣</button>
+      <button onclick="deleteSelectedMemories('public_profile','global')" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:#3a1f24;color:#ffd7dd;font-size:11px;cursor:pointer">?좏깮삭제</button>
     </div>
     <div id="publicMemoryList" style="display:flex;flex-direction:column;gap:8px"></div>
   `;
@@ -3977,7 +3977,7 @@ function memoryItemRowHTML(item, onDelete) {
     </div>
     <button onclick="toggleMemoryLockItem('${item.id}','${item.scope || ''}','${item.owner || ''}',${lockNext})" title="${lockTitle}" style="flex-shrink:0;width:28px;height:28px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:${locked ? 'hsl(45,80%,68%)' : 'var(--muted)'};display:inline-flex;align-items:center;justify-content:center;cursor:pointer">${memoryLockIconSVG(locked)}</button>
     <button onclick="editMemoryItem('${item.id}','${item.scope || ''}','${item.owner || ''}')" title="Edit" ${editDisabled} style="flex-shrink:0;width:28px;height:28px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--muted);display:inline-flex;align-items:center;justify-content:center;${editOpacity}">${memoryEditIconSVG()}</button>
-    <button onclick="${onDelete}('${item.id}','${item.scope || ''}','${item.owner || ''}')" title="??젣" ${deleteDisabled} style="flex-shrink:0;width:28px;height:28px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--muted);display:inline-flex;align-items:center;justify-content:center;${deleteOpacity}">${memoryTrashIconSVG()}</button>
+    <button onclick="${onDelete}('${item.id}','${item.scope || ''}','${item.owner || ''}')" title="삭제" ${deleteDisabled} style="flex-shrink:0;width:28px;height:28px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--muted);display:inline-flex;align-items:center;justify-content:center;${deleteOpacity}">${memoryTrashIconSVG()}</button>
   </div>`;
 }
 
@@ -4026,14 +4026,14 @@ async function deleteSelectedMemories(scope = '', owner = '') {
   }
   const res = await deleteMemoryBatchApi({ scope, owner, ids });
   if (!res?.ok) {
-    showToast('?좏깮??젣 ?ㅽ뙣');
+    showToast('?좏깮삭제 실패');
     return;
   }
   const current = getMemoryListFromCache(scope, owner) || [];
   const idSet = new Set(ids);
   setMemoryListToCache(scope, owner, current.filter(it => !idSet.has(it.id)));
   clearMemorySelection(scope, owner);
-  showToast(`?좏깮??젣 ?꾨즺 (${res.deleted || 0}/${ids.length})`);
+  showToast(`?좏깮삭제 완료 (${res.deleted || 0}/${ids.length})`);
   if (scope === 'public_profile') {
     renderPublicMemoryList();
     renderMemoryMeta();
@@ -4057,7 +4057,7 @@ async function deletePublicMemoryItem(id, scope = 'public_profile', owner = 'glo
     renderPublicMemoryList();
     renderMemoryMeta();
   } else {
-    showToast('??젣 ?ㅽ뙣. ?좉툑 ?곹깭?몄? ?뺤씤?섏꽭??');
+    showToast('삭제 실패. ?좉툑 ?곹깭?몄? ?뺤씤?섏꽭??');
   }
 }
 
@@ -4080,7 +4080,7 @@ function ensureEditPrivateMemoryPanel(pid) {
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:10px">
       <button onclick="toggleMemorySelectAll('private_profile','${esc(pid)}',true); renderPrivateMemoryList('${esc(pid)}');" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">?꾩껜?좏깮</button>
       <button onclick="clearMemorySelection('private_profile','${esc(pid)}'); renderPrivateMemoryList('${esc(pid)}');" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">?좏깮?댁젣</button>
-      <button onclick="deleteSelectedMemories('private_profile','${esc(pid)}')" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:#3a1f24;color:#ffd7dd;font-size:11px;cursor:pointer">?좏깮??젣</button>
+      <button onclick="deleteSelectedMemories('private_profile','${esc(pid)}')" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:#3a1f24;color:#ffd7dd;font-size:11px;cursor:pointer">?좏깮삭제</button>
     </div>
     <div id="privateMemoryList" style="display:flex;flex-direction:column;gap:8px"></div>
   `;
@@ -4170,7 +4170,7 @@ async function deletePrivateMemoryItem(id, scope = 'private_profile', owner = ''
     toggleMemoryItemSelection(scope, pid, id, false);
     renderPrivateMemoryList(pid);
   } else {
-    showToast('??젣 ?ㅽ뙣. ?좉툑 ?곹깭?몄? ?뺤씤?섏꽭??');
+    showToast('삭제 실패. ?좉툑 ?곹깭?몄? ?뺤씤?섏꽭??');
   }
 }
 
@@ -4189,7 +4189,7 @@ async function toggleMemoryLockItem(id, scope = '', owner = '', locked = false) 
     setMemoryListToCache(scope, cacheOwner, prev);
     if (scope === 'public_profile') renderPublicMemoryList();
     if (scope === 'private_profile') renderPrivateMemoryList(cacheOwner);
-    showToast('?좉툑 蹂寃??ㅽ뙣');
+    showToast('?좉툑 蹂寃?실패');
     return;
   }
   showToast(locked ? '硫붾え由??좉툑?? : '硫붾え由??좉툑 ?댁젣');
@@ -4228,10 +4228,10 @@ async function editMemoryItem(id, scope = '', owner = '') {
     setMemoryListToCache(scope, cacheOwner, prev);
     if (scope === 'public_profile') renderPublicMemoryList();
     if (scope === 'private_profile') renderPrivateMemoryList(cacheOwner);
-    showToast('硫붾え由??섏젙 ?ㅽ뙣');
+    showToast('硫붾え由??섏젙 실패');
     return;
   }
-  showToast('硫붾え由??섏젙 ?꾨즺');
+  showToast('硫붾え由??섏젙 완료');
 }
 
 async function saveMemoryFromCurrentChat() {
