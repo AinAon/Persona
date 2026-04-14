@@ -170,7 +170,7 @@
 
 <div class="viewer" id="viewer">
   <div class="viewer-shell">
-    <button class="viewer-close" id="viewerClose" aria-label="Close">횞</button>
+    <button class="viewer-close" id="viewerClose" aria-label="Close">×</button>
     <div class="viewer-img-wrap"><img id="viewerImg" class="viewer-img" alt="preview"></div>
   </div>
 </div>
@@ -937,22 +937,22 @@ async function generateEmotion(pid, eid, slot){
   const refKey = await findNeutralReferenceKey(pid);
   const ref = refKey ? `${WORKER_URL}/image/${refKey}` : '';
   if (!ref) throw new Error(`No neutral_a reference found for ${pid}.`);
-  const subject = EMOTION_PROMPTS[eid] || `?쒖젙 ${eid}`;
+  const subject = EMOTION_PROMPTS[eid] || `표정 ${eid}`;
   const prompt = [
     '[Subject]',
     subject,
     '',
     '[Background]',
-    '?대?吏1??諛곌꼍怨??숈씪?섎ŉ 移대찓??媛곷룄???곕씪 ?щ씪吏????덈떎.',
+    '이미지1의 배경과 동일하며 카메라 각도에 따라 달라질 수 있다.',
     '',
     '[Layout]',
-    '?쒖젙???곹빀???먯꽭濡??ㅼ뼇?섍쾶 蹂寃? ?쇨뎬 媛곷룄 ?먯뿰?ㅻ읇寃?蹂寃? ?먯꽭媛 諛붾뚯뼱???쇨뎬? 李몄“ ?대?吏???쇨뎬怨?媛숈? ?꾩튂???덉쓬',
+    '표정에 적합한 자세로 다양하게 변경, 얼굴 각도 자연스럽게 변경, 자세가 바뀌어도 얼굴은 참조 이미지의 얼굴과 같은 위치에 있음',
     '',
     '[Mood]',
-    '諛앷린, 議곕챸 ?좎?, ?쇰????좎?,',
+    '밝기, 조명 유지, 피부톤 유지,',
     '',
     '[Style]',
-    '李몄“ ?대?吏 ?몃Ъ???쇨뎬 ?쇨??깆쓣 ?좎??섍퀬 洹몃┝泥대? ?좎??쒕떎.',
+    '참조 이미지 인물의 얼굴 일관성을 유지하고 그림체를 유지한다.',
     '',
     '[Ratio]',
     '2:3',
