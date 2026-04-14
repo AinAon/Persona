@@ -1807,7 +1807,7 @@ function initEditMultiDropzone() {
     mark(false);
     const files = [...(e.dataTransfer?.files || [])].filter(f => (f?.type || '').startsWith('image/'));
     if (!files.length) {
-      showToast('이미지 파일留??낅줈?쒗븷 ???덉뼱??');
+      showToast('이미지 파일만 업로드할 수 있어요.');
       return;
     }
     await handleMultiImageFiles(files);
@@ -2760,18 +2760,18 @@ async function appendAIReplySequentially(reply, pList, suffixes, createdAt, tgtA
   }
 }
 
-// 肄섑뀗痢좎뿉??紐⑤뜽???섎せ 異붽????쒓렇 ?쒓굅
-// [worry]...[/worry], [emotion:worry], [p_xxx]...[/p_xxx] ??
+// 콘텐츠에서 모델이 잘못 추가한 태그 제거
+// [worry]...[/worry], [emotion:worry], [p_xxx]...[/p_xxx] 등
 function cleanContent(text) {
   const emotionPat = EMOTIONS.join('|');
   return text
-    // [emotionName]...[/emotionName] 媛먯떥湲????댁슜留??④?
+    // [emotionName]...[/emotionName] 감싸기 → 내용만 남김
     .replace(new RegExp(`\\[(${emotionPat})\\]([\\s\\S]*?)\\[\\/(${emotionPat})\\]`, 'gi'), '$2')
-    // ?⑤룆 [emotionName] ?먮뒗 [/emotionName]
+    // 단독 [emotionName] 또는 [/emotionName]
     .replace(new RegExp(`\\[\\/?(?:${emotionPat})\\]`, 'gi'), '')
-    // [emotion:xxx] ?쒓렇
+    // [emotion:xxx] 태그
     .replace(/\[emotion:\s*\w+\s*\]/gi, '')
-    // ?대쫫: ?쇰줈 ?쒖옉?섎뒗 ?묐몢??(pid ?쒓렇 ?놁씠 ?대쫫留?遺숇뒗 寃쎌슦)
+    // 이름: 으로 시작하는 접두어 (pid 태그 없이 이름만 붙는 경우)
     .replace(/^\s*\w+\s*:\s*/, '')
     .trim();
 }
@@ -2801,7 +2801,7 @@ function parseResponse(text, pList) {
     if (idx !== -1) {
       const namePrefix = new RegExp(`^${pList[idx].name}\\s*:\\s*`, 'i');
       content = content.replace(namePrefix, '').trim();
-      content = cleanContent(content); // ?붿뿬 媛먯젙?쒓렇 ?쒓굅
+      content = cleanContent(content); // 잔여 감정태그 제거
       if (content) parts.push({ idx, content, emotion });
     }
   }
@@ -2837,7 +2837,7 @@ function setChatBusy(isBusy) {
   if (sendBtn) {
     sendBtn.disabled = false;
     sendBtn.onclick = isBusy ? stopGeneration : sendMessage;
-    sendBtn.title = isBusy ? '?묐떟 以묒?' : '硫붿떆吏 蹂대궡湲?;
+    sendBtn.title = isBusy ? '응답 중지' : '메시지 보내기';
     sendBtn.innerHTML = isBusy
       ? '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>'
       : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
@@ -2854,13 +2854,13 @@ function stopGeneration() {
   if (thinkEl) thinkEl.remove();
   isLoading = false;
   setChatBusy(false);
-  showToast('?묐떟??以묒??덉뼱??');
+  showToast('응답을 중지했어요.');
 }
 
 function switchInputTab(tab) {
   _inputTab = tab;
   const normalized = tab === 'context' ? 'project' : tab;
-  // ??踰꾪듉 active ?좉?
+  // 탭 버튼 active 토글
   ['chat','image','context'].forEach(t => {
     document.getElementById('itab-' + t)?.classList.toggle('active', t === tab);
     const opts = document.getElementById('itab-opts-' + t);
@@ -2869,9 +2869,9 @@ function switchInputTab(tab) {
   // placeholder
   const input = document.getElementById('userInput');
   if (input) {
-    input.placeholder = tab === 'image' ? '이미지 ?앹꽦 ?꾨＼?꾪듃...'
-      : tab === 'context' ? '吏덈Ц?섍굅??遺꾩꽍???붿껌?대킄...'
-      : '硫붿떆吏瑜??낅젰?대킄...';
+    input.placeholder = tab === 'image' ? '이미지 생성 프롬프트...'
+      : tab === 'context' ? '질문하거나 분석을 요청해봐...'
+      : '메시지를 입력해봐...';
   }
   // ???꾧뎄 踰꾪듉/諛곗? UI ?숆린??  ['chat','image','project'].forEach(t => {
     document.getElementById('toolMode_' + t)?.classList.toggle('active', t === normalized);
@@ -2879,10 +2879,10 @@ function switchInputTab(tab) {
   const chip = document.getElementById('composerModeChip');
   if (chip) {
     if (normalized === 'image') {
-      chip.textContent = '이미지 紐⑤뱶';
+      chip.textContent = '이미지 생성';
       chip.classList.add('show');
     } else if (normalized === 'project') {
-      chip.textContent = '?꾨줈?앺듃 紐⑤뱶';
+      chip.textContent = '프로젝트 파일';
       chip.classList.add('show');
     } else {
       chip.classList.remove('show');
@@ -2913,14 +2913,14 @@ function selectToolMode(mode) {
 }
 
 function addContextUrl() {
-  const url = prompt('URL???낅젰?댁쨾:');
+  const url = prompt('URL을 입력해줘:');
   if (!url) return;
-  showToast('URL 異붽???(湲곕뒫 以鍮꾩쨷)');
+  showToast('URL 추가됨 (기능 준비중)');
 }
 
 function handleContextFile(input) {
   const files = [...input.files]; if (!files.length) return;
-  showToast(`${files.length}媛?파일 異붽???(湲곕뒫 以鍮꾩쨷)`);
+  showToast(`${files.length}개 파일 추가됨 (기능 준비중)`);
   input.value = '';
 }
 function handleKey(e) {
@@ -2959,7 +2959,7 @@ function buildSystemPrompt(session, pListOverride = null) {
   if (uMode !== 'none') {
     const u = uMode === 'custom' && session.userOverride ? session.userOverride : userProfile;
     if (u.name || u.bio) {
-      userPart = `[?ъ슜?? ${u.name||'?ъ슜??}`;
+      userPart = `[사용자] ${u.name||'사용자'}`;
       if (u.bio) userPart += `: ${u.bio}`;
       userPart += '\n\n';
     }
@@ -2967,21 +2967,21 @@ function buildSystemPrompt(session, pListOverride = null) {
 
   const isGroup = pList.length > 1;
   const modeInstr = !isGroup ? '' :
-    session.responseMode === 'all' ? '?꾩썝 ?묐떟.' :
-    session.responseMode === 'random' ? '??紐낅쭔 ?묐떟.' :
-    '??紐? ?ъ떎吏덈Ц/?⑥닚?뺤씤. ?꾩썝: ?섏궗寃곗젙/鍮꾧탳/?쇱웳/?대┛吏덈Ц.';
+	session.responseMode === 'all' ? '전원 응답.' :
+	session.responseMode === 'random' ? '한 명만 응답.' :
+	'한 명: 사실질문/단순확인. 전원: 의사결정/비교/논쟁/열린질문.';
 
   const personaPart = pList.map(p => {
-    let desc = `[${p.pid}] ?대쫫:${p.name}`;
-    if (p.age) desc += `, ?섏씠/?앸뀈:${p.age}`;
-    if (p.bio) desc += `\n?뚭컻: ${p.bio}`;
-    if (p.tags && p.tags.length) desc += `\n?깃꺽/留먰닾: ${p.tags.join(', ')}`;
-    if (p.userTitle) desc += `\n?섎? 遺瑜대뒗 ?몄묶: ${p.userTitle} (?먯뿰?ㅻ윭??留λ씫?먯꽌留?媛???ъ슜. 留?諛쒗솕留덈떎 遺숈씠吏 留?寃?`;
-    if (p.nicknames && p.nicknames.length) desc += `\n?좎묶: ${p.nicknames.join(', ')}`;
+    let desc = `[${p.pid}] 이름:${p.name}`;
+    if (p.age) desc += `, 나이/생년:${p.age}`;
+    if (p.bio) desc += `\n소개: ${p.bio}`;
+    if (p.tags && p.tags.length) desc += `\n성격/말투: ${p.tags.join(', ')}`;
+    if (p.userTitle) desc += `\n나를 부르는 호칭: ${p.userTitle} (자연스러운 맥락에서만 가끔 사용. 매 발화마다 붙이지 말 것)`;
+    if (p.nicknames && p.nicknames.length) desc += `\n애칭: ${p.nicknames.join(', ')}`;
     return desc;
   }).join('\n\n');
 
-  const formatEx = pList.map(p => `[${p.pid}][emotion:媛먯젙]?댁슜[/${p.pid}]`).join('\n');
+  const formatEx = pList.map(p => `[${p.pid}][emotion:감정]내용[/${p.pid}]`).join('\n');
 
   return `${worldPart}${userPart}${personaPart}\n\n?뺤떇:\n${formatEx}\nemotion: ${EMOTIONS.join('/')}\n洹쒖튃: emotion ?쒓렇??諛섎뱶??pid ?쒓렇 諛붾줈 ?ㅼ뿉 ??踰덈쭔. ?댁슜 ?덉뿉 [媛먯젙紐? ?쒓렇 ?덈? 湲덉?. ?대쫫: ?묐몢??湲덉?.${modeInstr ? '\n'+modeInstr : ''}\n?몄묶? ?먯뿰?ㅻ윭??留λ씫?먯꽌留?媛???ъ슜. 留?諛쒗솕 ?쒖옉??遺숈씠吏 留?寃?\n?꾩슂???쒓렇 ?댁슜??留덊겕?ㅼ슫(?? 肄붾뱶釉붾줉, 紐⑸줉 ?? ?ъ슜 媛??`;
 }
@@ -2993,7 +2993,7 @@ function renderUserBubbleHTML(text, atts) {
     html += `
     <div class="bubble-img-container">
       <img class="bubble-img" src="${url}" onclick="openImagePopup('${url}')">
-      <button class="img-download-btn" onclick="downloadImage('${url}', '${esc(a.name)}')">???/button>
+      <button class="img-download-btn" onclick="downloadImage('${url}', '${esc(a.name)}')">저장</button>
     </div>`;
   });
   if (text) html += fmt(text);
@@ -3014,7 +3014,7 @@ function renderUserBubbleHTMLV2(text, atts) {
       html += `
       <div class="bubble-img-container">
         <img class="bubble-img" src="${viewUrl}" onclick="openImagePopup('${safeViewUrl}')">
-        <button class="img-download-btn" onclick="downloadImage('${safeDlUrl}', '${safeName}')">???/button>
+        <button class="img-download-btn" onclick="downloadImage('${safeDlUrl}', '${safeName}')">저장</button>
       </div>`;
     } else {
       html += `
@@ -3061,7 +3061,7 @@ async function sendMessage() {
   setChatBusy(true);
   input.value = ''; input.style.height = 'auto';
 
-  // 이미지 ??李몄“ 이미지??梨꾪똿???쒖떆 ???????띿뒪???꾨＼?꾪듃留?蹂댁뿬以?
+  // 이미지 편집용 참조 이미지: attachments 클리어 전에 미리 캡처
   const userHTML = renderUserBubbleHTMLV2(text, attachments);
   
   let msgContent = text || '(파일)';
@@ -3093,7 +3093,7 @@ async function sendMessage() {
   session.history.push(userMsg);
   session.updatedAt = Date.now();
 
-  // 이미지 ?몄쭛??李몄“ 이미지: attachments ?대━???꾩뿉 誘몃━ 罹≪쿂
+  // 이미지 편집용 참조 이미지: attachments 클리어 전에 미리 캡처
   const refImages = [...requestImageUrls];
 
   attachments = [];
