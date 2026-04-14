@@ -3697,7 +3697,7 @@ function showPromptModal() {
   const prompt = buildSystemPrompt(s);
   const est = Math.round(prompt.length / 3.5);
   document.getElementById('promptModalBody').textContent = prompt;
-  document.getElementById('promptTokenEst').textContent = `??{est} 토큰`;
+  document.getElementById('promptTokenEst').textContent = `≈${est} 토큰`;
   document.getElementById('promptModal').classList.add('open');
   closeDrawer();
 }
