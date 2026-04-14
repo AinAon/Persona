@@ -144,9 +144,28 @@ function buildCurrentTimeSystemMessage() {
     minute: '2-digit',
     hour12: false
   }).format(now);
+  const abs = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).format(now).replace(',', '');
+  const weekday = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Seoul',
+    weekday: 'long'
+  }).format(now);
   return {
     role: 'system',
-    content: `Seoul time: ${text}. Use only if relevant.`
+    content:
+      `Reference clock (fixed): Asia/Seoul (KST, UTC+09:00). ` +
+      `Current Seoul time: ${text} (${abs}, ${weekday}). ` +
+      `When answering any time/date question, always use Asia/Seoul. ` +
+      `For relative words (today/tomorrow/yesterday), include exact absolute date (YYYY-MM-DD). ` +
+      `If user wording conflicts with date context, explicitly clarify with absolute date.`
   };
 }
 
