@@ -3697,7 +3697,7 @@ function showPromptModal() {
   const prompt = buildSystemPrompt(s);
   const est = Math.round(prompt.length / 3.5);
   document.getElementById('promptModalBody').textContent = prompt;
-  document.getElementById('promptTokenEst').textContent = `??{est} ?좏겙`;
+  document.getElementById('promptTokenEst').textContent = `??{est} 토큰`;
   document.getElementById('promptModal').classList.add('open');
   closeDrawer();
 }
@@ -3709,14 +3709,14 @@ async function refreshChat() {
 }
 function resetChat() {
   const s = getActiveSession(); if (!s) return;
-  if (!confirm('???湲곕줉??吏?멸퉴? ?섎Ⅴ?뚮굹 ?ㅼ젙? ?좎???')) return;
+  if (!confirm('대화 기록을 지울까? 페르소나 설정은 유지돼.')) return;
   s.history = []; s._loaded = true; s.lastPreview = ''; s.updatedAt = Date.now();
   closeDrawer(); renderChatArea(); saveSession(s.id); saveIndex();
 }
 async function compressChat() {
-  const s = getActiveSession(); if (!s || s.history.length < 4) { alert('?뺤텞????붽? 遺議깊빐.'); return; }
-  if (!confirm('??붾? ?붿빟 ?뺤텞?좉퉴?')) return;
-  const histText = s.history.map(m=>`${m.role==='user'?'?ъ슜??:'AI'}: ${typeof m.content==='string'?m.content:'(硫붿떆吏)'}`).join('\n');
+  const s = getActiveSession(); if (!s || s.history.length < 4) { alert('압축할 대화가 부족해.'); return; }
+  if (!confirm('대화를 요약 압축할까?')) return;
+  const histText = s.history.map(m=>`${m.role==='user'?'사용자':'AI'}: ${typeof m.content==='string'?m.content:'(메시지)'}`).join('\n');
   try {
     const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
     if (!wUrl) { alert('Worker URL 없음'); return; }
@@ -3732,19 +3732,19 @@ async function compressChat() {
         model: compressModel,
         participant_pids: Array.from(new Set(s.participantPids || [])),
         messages: [
-          { role:'system', content:'??붾? ?듭떖留??④꺼 媛꾧껐?섍쾶 ?붿빟?댁쨾. ?쒓뎅?대줈.' },
-          { role:'user',   content:`?꾨옒 ??붾? ?붿빟?댁쨾.\n\n${histText}` }
+		{ role:'system', content:'대화를 핵심만 남겨 간결하게 요약해줘. 한국어로.' },
+		{ role:'user',   content:`아래 대화를 요약해줘.\n\n${histText}` }
         ]
       })
     });
-    const data = await res.json();
-    if (data?.result === 'success') {
-      s.history = [{ role:'assistant', content:`[?댁쟾 ????붿빟]\n${data.reply}`,
-        personaSnapshot:(s.participantPids||[]).map(pid=>({pid,name:getPersona(pid)?.name||pid})) }];
-      s.updatedAt = Date.now(); s.lastPreview = '[?뺤텞??';
-      closeDrawer(); renderChatArea(); saveSession(s.id); saveIndex();
-    } else { alert('?뺤텞 실패: ' + (data?.error || '?????녿뒗 ?ㅻ쪟')); }
-  } catch(e) { alert('?뺤텞 실패: ' + e.message); }
+	const data = await res.json();
+		if (data?.result === 'success') {
+		s.history = [{ role:'assistant', content:`[이전 대화 요약]\n${data.reply}`,
+		personaSnapshot:(s.participantPids||[]).map(pid=>({pid,name:getPersona(pid)?.name||pid})) }];
+		s.updatedAt = Date.now(); s.lastPreview = '[압축됨]';
+		closeDrawer(); renderChatArea(); saveSession(s.id); saveIndex();
+		} else { alert('압축 실패: ' + (data?.error || '알 수 없는 오류')); }
+	} catch(e) { alert('압축 실패: ' + e.message); }
 }
 
 // ???????????????
