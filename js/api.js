@@ -538,36 +538,61 @@ async function preloadEmotionImages() {
 
 // neutral 이미지: 파일 목록 기반 → 없으면 직접 URL 시도
 async function loadNeutralDirect(pid) {
+  // 삭제되었거나 존재하지 않는 페르소나는 즉시 중단
+  try {
+    if (typeof getPersona === 'function' && !getPersona(pid)) {
+      console.warn('[neutral] skip missing persona:', pid);
+      return null;
+    }
+  } catch (e) {
+    return null;
+  }
+
   if (_neutralCache[pid]) return _neutralCache[pid];
+
   try {
     const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
     if (!wUrl) return null;
 
-    // 1) neutral_a를 최우선으로 고정
+    // 1) neutral_a 우선
     const keys = await getImageList(pid);
     const baseNeutralA = `profile/${pid}/${pid}_neutral_a.jpg`;
     const hasNeutralA = keys.includes(baseNeutralA);
+
+    // 목록에 아무것도 없으면 불필요한 직접 fetch 자체를 하지 않음
+    if (!Array.isArray(keys) || keys.length === 0) {
+      console.warn('[neutral] skip empty image list:', pid);
+      return null;
+    }
 
     const candidates = hasNeutralA
       ? [{ url: `${wUrl}/image/profile/${pid}/${pid}_neutral_a.jpg`, cacheEmotion: 'neutral_a' }]
       : [{ url: `${wUrl}/image/profile/${pid}/${pid}_neutral.jpg`, cacheEmotion: 'neutral' }];
 
     console.log('[neutral] trying candidates for', pid, candidates.map(c => c.url).slice(0, 2));
+
     for (const c of candidates) {
       try {
         const resp = await fetch(cacheBustUrl(c.url));
         console.log('[neutral]', c.url, resp.status);
         if (!resp.ok) continue;
+
         const blob = await resp.blob();
         const dataUrl = await new Promise(r => {
-          const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob);
+          const rd = new FileReader();
+          rd.onload = () => r(rd.result);
+          rd.readAsDataURL(blob);
         });
+
         const { sqMd } = await generateThumbnailSet(dataUrl, pid, c.cacheEmotion);
         _neutralCache[pid] = sqMd;
         return sqMd;
-      } catch(e) { continue; }
+      } catch (e) {
+        continue;
+      }
     }
-  } catch(e) {}
+  } catch (e) {}
+
   return null;
 }
 
