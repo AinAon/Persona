@@ -3660,7 +3660,7 @@ function toggleInvitePid(pid, card, s) {
     selectedPids.splice(idx, 1); card.classList.remove('selected');
     card.querySelector('.check').style.display = 'none';
   } else {
-    if (cur >= MAX_PARTICIPANTS) { showToast(`理쒕? ${MAX_PARTICIPANTS}紐낃퉴吏 媛?ν빐`); return; }
+    if (cur >= MAX_PARTICIPANTS) { showToast(`최대 ${MAX_PARTICIPANTS}명까지 가능해`); return; }
     selectedPids.push(pid); card.classList.add('selected');
     card.querySelector('.check').style.display = 'flex';
   }
@@ -3671,7 +3671,7 @@ function confirmInvite() {
   const s = getActiveSession(); if (!s) return;
   s.participantPids = Array.from(new Set([...(s.participantPids || []), ...selectedPids]));
   s.updatedAt = Date.now();
-  saveIndex(); closeInviteModal(); closeDrawer(); openChat(s.id); showToast(`${selectedPids.length}紐?珥덈???);
+  saveIndex(); closeInviteModal(); closeDrawer(); openChat(s.id); showToast(`${selectedPids.length}명 초대됨`);
 }
 
 function applyDrawerModel() {
@@ -3680,7 +3680,7 @@ function applyDrawerModel() {
   const effective = pList.find(p => p.defaultModel)?.defaultModel || document.getElementById('chatModeSelect')?.value || '';
   const sel = document.getElementById('chatModeSelect');
   if (sel && effective) sel.value = effective;
-  showToast('?댁젣 梨꾪똿諛?怨듯넻 紐⑤뜽 ???媛??섎Ⅴ?뚮굹 湲곕낯 紐⑤뜽???ъ슜?댁슂.');
+  showToast('이제 채팅방 공통 모델 대신 각 페르소나 기본 모델을 사용해요.');
 }
 
 function setDrawerMode(m) {
