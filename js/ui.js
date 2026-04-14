@@ -105,7 +105,7 @@ function formatMessageTime(ts) {
       hour12: false
     }).formatToParts(new Date(ts));
     const pick = t => parts.find(p => p.type === t)?.value || '';
-    return `${pick('year')}년 ${pick('month')}월 ${pick('day')}일 ${pick('hour')}:${pick('minute')}`;;
+    return `${pick('year')}년 ${pick('month')}월 ${pick('day')}일 ${pick('hour')}:${pick('minute')}`;
   } catch {
     return '';
   }
@@ -891,9 +891,9 @@ function toggleMicInput() {
   recognition.start();
 }
 
-// ???????????????
+// ══════════════════════════════
 //  AVATAR HTML
-// ???????????????
+// ══════════════════════════════
 function defaultAvatar(h) {
   return `<svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">
     <circle cx="18" cy="14" r="7" fill="hsl(${h},40%,35%)"/>
@@ -913,9 +913,9 @@ async function getPersonaCircleThumb(pid, emotion = 'neutral', letter = '', disp
   return await getNeutralImageThumb(pid, displayPx);
 }
 
-// ???????????????
+// ══════════════════════════════
 //  TAB SWITCHING & SETTINGS
-// ???????????????
+// ══════════════════════════════
 function switchTab(tab) {
   activeTab = tab;
   // 하단 탭 활성화
@@ -983,7 +983,7 @@ function saveSettingsUserProfile() {
   applyFontSize(userProfile.fontSize);
   saveUserProfile();
   saveUserProfileKV();
-  showToast('설정 저장됨 ?');
+  showToast('설정 저장됨 ✓');
 }
 
 function handleSettingsUserImage(input) {
@@ -1009,9 +1009,9 @@ function deleteSettingsUserImage() {
   idbSet('user_profile_hd', null).catch(()=>{});
 }
 
-// ???????????????
+// ══════════════════════════════
 //  PERSONA GRID
-// ???????????????
+// ══════════════════════════════
 let _personaGridRenderVersion = 0;
 let _suppressPersonaTapUntil = 0;
 let _chatOpenToken = 0;
@@ -1376,9 +1376,9 @@ function setupTouchDrag(grid) {
   });
 }
 
-// ???????????????
+// ══════════════════════════════
 //  PERSONA EDIT
-// ???????????????
+// ══════════════════════════════
 let isNewPersona = false;
 
 async function openPersonaEdit(pid) {
@@ -1441,7 +1441,7 @@ function renderEditBody(p, hdImage = null) {
     <input type="file" id="editImgInput" style="display:none" accept="image/*" onchange="handleEditImage(this)">
     <input type="file" id="editMultiImgInput" style="display:none" accept="image/*" multiple onchange="handleMultiImageUpload(this)">
     <button onclick="document.getElementById('editMultiImgInput').click()" style="width:100%;padding:9px;border-radius:10px;border:1px solid var(--border2);background:transparent;color:var(--muted);font-family:'Pretendard',sans-serif;font-size:12px;cursor:pointer;margin-top:6px">
-      ?? 감정 이미지 일괄 업로드 (파일명 그대로 저장)
+     📁 감정 이미지 일괄 업로드 (파일명 그대로 저장)
     </button>
     <div id="editMultiDropzone" class="edit-multi-dropzone" role="button" tabindex="0" onclick="document.getElementById('editMultiImgInput').click()">
       <div class="edit-multi-dropzone-icon">
@@ -1455,7 +1455,7 @@ function renderEditBody(p, hdImage = null) {
     <div>
       <div class="edit-section-title">Identity Details</div>
 
-      <div class="edit-field-label">PID ${isNewPersona?'<span style="font-size:9px;color:var(--muted)">(변경 가능</span>':'<span style="font-size:9px;color:var(--muted)">(읽기 전용)</span>'}</div>
+      <div class="edit-field-label">PID ${isNewPersona?'<span style="font-size:9px;color:var(--muted)">(변경 가능)</span>':'<span style="font-size:9px;color:var(--muted)">(읽기 전용)</span>'}</div>
       <input class="edit-input" id="editPid" value="${esc(p.pid)}" placeholder="p_riley" ${isNewPersona?'':'readonly'} style="width:100%;font-family:monospace;font-size:12px;color:var(--muted);${isNewPersona?'':'opacity:.6;cursor:default'}">
 
       <div class="edit-field-label">NAME</div>
@@ -1474,12 +1474,12 @@ function renderEditBody(p, hdImage = null) {
         </div>
         <div>
           <div class="edit-field-label">AGE / BIRTH YEAR</div>
-          <input class="edit-input" id="editAge" value="${esc(p.age||'')}" placeholder="?? 28, 1996" style="width:100%">
+          <input class="edit-input" id="editAge" value="${esc(p.age||'')}" placeholder="예: 28, 1996" style="width:100%">
         </div>
       </div>
 
       <div class="edit-field-label">MBTI TYPE</div>
-      <input class="edit-input" id="editMbti" value="${esc(p.mbti||'')}" placeholder="?? INTJ-A" style="width:100%">
+      <input class="edit-input" id="editMbti" value="${esc(p.mbti||'')}" placeholder="예: INTJ-A" style="width:100%">
 
       <div class="edit-field-row">
         <div>
@@ -1496,7 +1496,7 @@ function renderEditBody(p, hdImage = null) {
     <div>
       <div class="edit-section-title">Personality</div>
 
-      <div class="edit-field-label">PERSONALITY TRAITS (최대 6개?</div>
+      <div class="edit-field-label">PERSONALITY TRAITS (최대 6개)</div>
       <div class="tags-wrap">
         ${TRAIT_OPTIONS.map(t => `<div class="tag ${(p.tags||[]).includes(t)?'on':''}" onclick="toggleEditTrait('${t}',this)">${t}</div>`).join('')}
       </div>
@@ -1560,7 +1560,7 @@ function handleEditImage(input) {
       p.neutral_thumb = avatarPng;
       _neutralCache[p.pid] = sqMd;
 
-      showToast('이미지 선택됨 ? 저장 버튼을 눌러줘');
+      showToast('이미지 선택됨 - 저장 버튼을 눌러줘');
     });
   };
   reader.readAsDataURL(file);
@@ -1577,7 +1577,7 @@ async function handleMultiImageUpload(input) {
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl) { alert('Worker URL 없음'); return; }
 
-  showToast(`? ${files.length}개 업로드 중...`, 10000);
+  showToast(`⏳ ${files.length}개 업로드 중...`, 10000);
   let ok = 0, fail = 0;
   for (const file of files) {
     try {
@@ -1617,7 +1617,7 @@ async function handleMultiImageUpload(input) {
     } catch(e) { fail++; }
   }
   if (typeof _imageListCache !== 'undefined') delete _imageListCache[p.pid];
-  showToast(`? ${ok}개 완료${fail ? ` / ${fail}개 실패` : ''}`);
+  showToast(`✓ ${ok}개 완료${fail ? ` / ${fail}개 실패` : ''}`);
   input.value = '';
 }
 
