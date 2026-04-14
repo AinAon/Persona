@@ -84,10 +84,27 @@ function loadSessionsFromCache() {
   try {
     const cached = getLocalSessionIndex();
     if (cached) {
-      const index = cached;
-      sessions = (index||[]).map(item=>({...item, history:[], _loaded:false}));
+      const validPids = new Set((personas || []).map(p => p.pid));
+
+      const cleaned = (cached || [])
+        .map(item => {
+          const participantPids = Array.from(
+            new Set((item.participantPids || []).filter(pid => validPids.has(pid)))
+          );
+
+          return {
+            ...item,
+            participantPids
+          };
+        })
+        .filter(item => (item.participantPids || []).length > 0);
+
+      sessions = cleaned.map(item => ({ ...item, history: [], _loaded: false }));
+
+      // 로컬 인덱스도 정리본으로 덮어씀
+      setLocalSessionIndex(cleaned);
     }
-  } catch(e) {}
+  } catch (e) {}
 }
 
 async function init() {
