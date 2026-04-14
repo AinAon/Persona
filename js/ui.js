@@ -2873,7 +2873,8 @@ function switchInputTab(tab) {
       : tab === 'context' ? '질문하거나 분석을 요청해봐...'
       : '메시지를 입력해봐...';
   }
-  // ???꾧뎄 踰꾪듉/諛곗? UI ?숆린??  ['chat','image','project'].forEach(t => {
+  // 도구 버튼/배지 UI 동기화
+  ['chat','image','project'].forEach(t => {
     document.getElementById('toolMode_' + t)?.classList.toggle('active', t === normalized);
   });
   const chip = document.getElementById('composerModeChip');
@@ -3099,7 +3100,7 @@ async function sendMessage() {
   attachments = [];
   renderAttachmentPreviews();
 
-  // imageArea??display:none ????臾닿??섍쾶 ??긽 chatArea ?ъ슜
+  // imageArea는 display:none — 탭 무관하게 항상 chatArea 사용
   const area = document.getElementById('chatArea');
   area.classList.add('has-messages');
   document.getElementById('chatEmpty2').style.display = 'none';
@@ -3114,7 +3115,7 @@ async function sendMessage() {
     updateChatBottomAnchor(area);
   }
 
-  // 濡쒕뵫 ?뚮젅?댁뒪???
+  // 로딩 플레이스홀더
   const thinkEl = document.createElement('div');
   thinkEl.className = 'thinking-bubble';
   if (isImageReq) {
@@ -3128,7 +3129,7 @@ async function sendMessage() {
           <rect x="28" y="11" width="24" height="10" rx="3" stroke="currentColor" stroke-width="2"/>
           <circle cx="62" cy="27" r="3" fill="currentColor" opacity=".6"/>
         </svg>
-        <span class="img-gen-label">이미지 ?앹꽦 以?/span>
+        <span class="img-gen-label">이미지 생성 중</span>
         <div class="img-gen-dots"><span></span><span></span><span></span></div>
       </div>
     </div>`;
@@ -3141,7 +3142,7 @@ async function sendMessage() {
 
   const pListAll = getSessionPersonas(session);
 
-  if (text === '/媛먯젙') {
+  if (text === '/감정') {
     thinkEl.remove();
     const personaSnapshot = pListAll.map(p=>({pid:p.pid, name:p.name}));
     let html = '<div class="msg-group ai-msgs">';
@@ -3185,8 +3186,8 @@ async function sendMessage() {
     }
     area.scrollTop = area.scrollHeight;
 
-    session.history.push({ role:'assistant', content:'(媛먯젙 ?뚯뒪??', createdAt: emotionTestCreatedAt, personaSnapshot, _suffixes: {} });
-    session.lastPreview = '(媛먯젙 ?뚯뒪??'; session.updatedAt = Date.now();
+    session.history.push({ role:'assistant', content:'(감정 테스트)', createdAt: emotionTestCreatedAt, personaSnapshot, _suffixes: {} });
+    session.lastPreview = '(감정 테스트)'; session.updatedAt = Date.now();
     isLoading = false;
     _chatGeneration = null;
     setChatBusy(false);
@@ -3197,12 +3198,12 @@ async function sendMessage() {
     return;
   }
 
-  // 諛깃렇?쇱슫??泥섎━瑜??꾪븳 遺꾨━??鍮꾨룞湲??⑥닔
+  // 백그라운드 처리를 위한 분리된 비동기 함수
   const processApiAndRender = async () => {
     let reply = '';
     if (session._demo) {
       await new Promise(r => setTimeout(r, 600));
-      reply = window.getDemoReply ? window.getDemoReply(session) : '?곕え ?묐떟 ?ㅻ쪟';
+      reply = window.getDemoReply ? window.getDemoReply(session) : '데모 응답 오류';
     } else {
       try {
         const apiMessages = [
@@ -3260,7 +3261,7 @@ async function sendMessage() {
         } else {
         const ratio = typeof _selectedRatio !== 'undefined' ? _selectedRatio : "1:1";
 
-        // 紐⑤뜽蹂??뚮씪誘명꽣 遺꾧린
+        // 모델별 파라미터 분기
         const RATIO_TO_OPENAI_SIZE = {
           '1:1':'1024x1024', '16:9':'1536x1024', '9:16':'1024x1536',
           '4:3':'1536x1152', '3:4':'1152x1536', '3:2':'1536x1024',
