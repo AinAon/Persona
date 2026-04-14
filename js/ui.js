@@ -3569,7 +3569,7 @@ if (!confirm(`${p?.name || pid}를 이 채팅방에서 추방할까?\n대화 기
   }
   const namesEl = document.getElementById('chatHeaderNames');
   if (namesEl) namesEl.textContent = pList.map(p=>p.name).join(', ');
-  showToast(`${p?.name || '?섎Ⅴ?뚮굹'} 異붾갑??);
+  showToast(`${p?.name || '페르소나'} 추방됨`);
 }
 
 function setUserProfileMode(mode) {
@@ -3580,9 +3580,11 @@ function setUserProfileMode(mode) {
 }
 
 function getUserAvatarHTML(session) {
-  const img = session.userOverride?.image || userProfile.image;
-  return img
-    ? `<img src="${img}" style="width:100%;height:100%;object-fit:cover;object-position:top">`
+  const img = session?.userOverride?.image || userProfile?.image || '';
+  const safeImg = String(img).replace(/"/g, '&quot;');
+
+  return safeImg
+    ? `<img src="${safeImg}" style="width:100%;height:100%;object-fit:cover;object-position:top">`
     : `<svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%"><circle cx="18" cy="14" r="7" fill="hsl(220,30%,35%)"/><ellipse cx="18" cy="30" rx="11" ry="7" fill="hsl(220,30%,28%)"/></svg>`;
 }
 
@@ -3600,7 +3602,7 @@ function saveDrawerUserProfile() {
 function resetDrawerUserProfile() {
   const s = getActiveSession(); if (!s) return;
   delete s.userOverride;
-  saveIndex(); showToast('湲곕낯 ?꾨줈?꾨줈 ?섎룎由?); renderDrawerBody(s);
+  saveIndex(); showToast('기본 프로필로 되돌림'); renderDrawerBody(s);
 }
 
 function handleDrawerUserImage(input) {
