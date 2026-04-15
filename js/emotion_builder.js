@@ -76,13 +76,13 @@ async function generateEmotionBatch() {
   }
   const pid = (document.getElementById('pidInput')?.value || '').trim() || 'p_unknown';
   const prompt = (document.getElementById('promptInput')?.value || '').trim() || 'neutral';
-  setEmotionBuilderStatus('Grok 이미지 생성 요청 중...');
+  setEmotionBuilderStatus('이미지 생성 요청 중...');
   const reply = await requestGrokEmotionImage(prompt, _emotionBuilderNeutralAUrl, pid);
   const match = reply.match(/!\[.*?\]\((https?:\/\/[^)\s]+)\)/);
   const url = match ? match[1] : '';
   if (url) {
     showPreview('resultPreview', url);
-    setEmotionBuilderStatus('Grok 이미지 생성 완료');
+    setEmotionBuilderStatus('이미지 생성 완료');
   } else {
     setEmotionBuilderStatus('결과 URL을 찾지 못했습니다.');
   }
