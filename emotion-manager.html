@@ -225,7 +225,7 @@ const DEFAULT_EMOTIONS = [
   { id:'shy', label:'Shy', category:'premium' },
   { id:'worry', label:'Worry', category:'premium' },
   { id:'pain', label:'Pain', category:'premium' },
-  { id:'ecstasy', label:'Ecstasy', category:'premium' },
+  { id:'sleepy', label:'Sleepy', category:'premium' },
 ];
 const SLOT_KEYS = ['a','b','c','d','e'];
 const SLOT_LABELS = { a:'A', b:'B', c:'C', d:'D', e:'E' };
@@ -249,11 +249,11 @@ const EMOTION_PROMPTS = {
     shy:'부끄러움 (Shy): 눈을 마주치지 못하고 시선을 피하며 얼굴에 약간의 홍조가 도는 수줍은 표정으로 변경',
     worry:'걱정 (worry): 눈썹을 모으고 시선을 약간 아래로 떨군 채, 불안하거나 고민이 많은 상태를 드러내는 표정으로 변경',
     pain:'고통 (pain): 입을 앞으로 벌리며 신음하듯 얼굴을 찡그리고, 신체적 혹은 정신적으로 강한 고통을 느끼는 표정으로 변경',
-    ecstasy:'황홀 (Ecstasy): 깊은 만족감이나 강한 감정에 잠긴 상태로, 눈을 반쯤 감고 턱을 들고 거칠게 숨을 내쉬는 표정으로 변경, 머리카락이 젖어있다. 땀을 흘린다. (입김 없음)',
+    drowsy:'졸림 (Sleepy): 눈이 반쯤 감기고 눈꺼풀이 무겁게 내려앉은 채로 시선이 흐릿하게 풀리는 표정. 입술이 살짝 벌어지고 얼굴 전체가 나른하게 늘어진 얼굴로 변경(종종 하품으로 변경)',
 };
 const BUILTIN_BY_CAT = {
   basic: ['neutral','subtlesmile','happy','sad','angry','surprise'],
-  premium: ['arousal','confusion','cry','disgust','contempt','horror','laugh','orgasm','playful','relief','shy','worry','pain','ecstasy'],
+  premium: ['arousal','confusion','cry','disgust','contempt','horror','laugh','orgasm','playful','relief','shy','worry','pain','sleepy'],
 };
 
 const state = {
