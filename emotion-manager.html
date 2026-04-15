@@ -582,13 +582,19 @@ async function clearSlotImage(pid, eid, slot){
 async function loadImagesFromIDB(){
   state.images = {};
   const keys = await idbKeys().catch(()=>[]);
-  const knownPids = (state.personas || []).map(p => p?.pid).filter(Boolean).sort((a, b) => b.length - a.length);
+  const knownPids = (state.personas || [])
+    .map(p => p?.pid)
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+
   const scoreMap = {};
 
   const ensureSlot = (pid, eid, slot) => {
     state.images[pid] ||= {};
     state.images[pid][eid] ||= {};
-    state.images[pid][eid][slot] ||= { raw:'', full:'', md:'', ld:'', thumb:'' };
+    state.images[pid][eid][slot] ||= {
+      raw:'', full:'', md:'', ld:'', thumb:''
+    };
     return state.images[pid][eid][slot];
   };
 
@@ -610,6 +616,7 @@ async function loadImagesFromIDB(){
     ensureSlot(pid, eid, slot)[field] = val;
   };
 
+  // 1️⃣ RAW (원본)
   for (const key of keys) {
     const k = String(key || '');
     if (!k.startsWith('em_full_')) continue;
@@ -618,7 +625,7 @@ async function loadImagesFromIDB(){
     if (!raw) continue;
 
     const rest = k.slice('em_full_'.length);
-    const pid = knownPids.find((cand) => rest.startsWith(`${cand}_`));
+    const pid = knownPids.find(cand => rest.startsWith(`${cand}_`));
     if (!pid) continue;
 
     const emotionKey = rest.slice(pid.length + 1);
@@ -627,13 +634,17 @@ async function loadImagesFromIDB(){
 
     const slot = parts.pop();
     const eid = parts.join('_');
+
     setSlotRaw(pid, eid, slot, raw);
   }
 
+  // 2️⃣ 파생 캐시
   for (const key of keys) {
     const k = String(key || '');
 
-    let m = k.match(/^emotion_(.+?)_([a-z0-9]+)_([a-z])_hd$/i);
+    let m;
+
+    m = k.match(/^emotion_(.+?)_([a-z0-9]+)_([a-z])_hd$/i);
     if (m) {
       const [, pid, eid, slot] = m;
       const val = await idbGet(k).catch(() => null);
