@@ -1724,7 +1724,7 @@ async function handleMultiImageFiles_legacy(fileList) {
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl) { alert('Worker URL 없음'); return; }
 
-  showToast(`??${files.length}개 업로드 중...`, 10000);
+  showToast(`총${files.length}개 업로드 중...`, 10000);
   let ok = 0, fail = 0;
   for (const file of files) {
     try {
