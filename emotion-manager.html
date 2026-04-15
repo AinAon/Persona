@@ -583,6 +583,7 @@ async function clearSlotImage(pid, eid, slot){
 }
 async function loadImagesFromIDB() {
   state.images = {};
+
   const keys = await idbKeys().catch(() => []);
   const knownPids = (state.personas || [])
     .map(p => p?.pid)
@@ -594,7 +595,9 @@ async function loadImagesFromIDB() {
   const ensureSlot = (pid, eid, slot) => {
     state.images[pid] = state.images[pid] || {};
     state.images[pid][eid] = state.images[pid][eid] || {};
-    state.images[pid][eid][slot] = state.images[pid][eid][slot] || { raw: '', full: '', md: '', ld: '', thumb: '' };
+    state.images[pid][eid][slot] = state.images[pid][eid][slot] || {
+      raw: '', full: '', md: '', ld: '', thumb: ''
+    };
     return state.images[pid][eid][slot];
   };
 
@@ -614,21 +617,20 @@ async function loadImagesFromIDB() {
     const val = await idbGet(k).catch(() => null);
     if (!val) continue;
 
-    // 1. 원본 이미지 처리 (em_full_...)
+    // 1. 원본 이미지 캐시 처리
     if (k.startsWith('em_full_')) {
       const rest = k.slice(8);
       const pid = knownPids.find(p => rest.startsWith(p + '_'));
       if (!pid) continue;
       const tail = rest.slice(pid.length + 1);
       const parts = tail.split('_');
-      if (parts.length < 1) continue;
       const slot = parts.pop();
       const eid = parts.join('_');
       setSlotField(pid, eid, slot, 'raw', val);
       continue;
     }
 
-    // 2. 가공된 이미지 처리 (emotion_...)
+    // 2. 가공된 이미지 캐시 처리
     if (k.startsWith('emotion_')) {
       const pid = knownPids.find(p => k.startsWith(`emotion_${p}_`));
       if (!pid) continue;
@@ -643,7 +645,7 @@ async function loadImagesFromIDB() {
         setSlotField(pid, m[1], m[2], 'thumb', val);
       } else if ((m = tail.match(/^(.+)_([a-z])$/i))) {
         setSlotField(pid, m[1], m[2], 'md', val);
-        setSlotField(pid, m[1], m[2], 'full', val, 50); // HD가 없을 경우 대비
+        setSlotField(pid, m[1], m[2], 'full', val, 50); // HD가 없을 때 기본값
       }
     }
   }
