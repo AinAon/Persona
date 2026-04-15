@@ -521,21 +521,36 @@ async function makeVariants(dataUrl, pid, eid, slot){
     ...records.map((x) => idbSet(x.key, x.url)),
   ]);
 
-  return { full: fullHd, md: rectMd, ld: rectLd, thumb: circleMain };
+  return {
+    raw: dataUrl,
+    full: fullHd,
+    md: rectMd,
+    ld: rectLd,
+    thumb: circleMain,
+  };
 }
 function baseKey(pid, eid, slot){ return `emotion_${pid}_${eid}_${slot}`; }
 function fullKey(pid, eid, slot){ return `em_full_${pid}_${eid}_${slot}`; }
+
 async function saveSlotImage(pid, eid, slot, dataUrl){
   const v = await makeVariants(dataUrl, pid, eid, slot);
+
   state.images[pid] ||= {};
   state.images[pid][eid] ||= {};
-  state.images[pid][eid][slot] = v;
+  state.images[pid][eid][slot] = {
+    raw: v.raw,
+    full: v.full,
+    md: v.md,
+    ld: v.ld,
+    thumb: v.thumb,
+  };
+
   await Promise.all([
-    idbSet(baseKey(pid,eid,slot), v.md),
-    idbSet(fullKey(pid,eid,slot), v.full),
-    idbSet(`${baseKey(pid,eid,slot)}_hd`, v.full),
-    idbSet(`${baseKey(pid,eid,slot)}_ld`, v.ld),
-    idbSet(`${baseKey(pid,eid,slot)}_thumb`, v.thumb),
+    idbSet(fullKey(pid, eid, slot), v.raw),
+    idbSet(baseKey(pid, eid, slot), v.md),
+    idbSet(`${baseKey(pid, eid, slot)}_hd`, v.full),
+    idbSet(`${baseKey(pid, eid, slot)}_ld`, v.ld),
+    idbSet(`${baseKey(pid, eid, slot)}_thumb`, v.thumb),
   ]);
 }
 async function clearSlotImage(pid, eid, slot){
@@ -569,18 +584,87 @@ async function loadImagesFromIDB(){
   const keys = await idbKeys().catch(()=>[]);
   const knownPids = (state.personas || []).map(p => p?.pid).filter(Boolean).sort((a, b) => b.length - a.length);
   const scoreMap = {};
+
+  const ensureSlot = (pid, eid, slot) => {
+    state.images[pid] ||= {};
+    state.images[pid][eid] ||= {};
+    state.images[pid][eid][slot] ||= { raw:'', full:'', md:'', ld:'', thumb:'' };
+    return state.images[pid][eid][slot];
+  };
+
+  const setSlotRaw = (pid, eid, slot, val) => {
+    if (!pid || !eid || !slot || !val) return;
+    ensureSlot(pid, eid, slot).raw = val;
+  };
+
   const setSlotFull = (pid, eid, slot, val, score) => {
     if (!pid || !eid || !slot || !val) return;
     const sk = `${pid}::${eid}::${slot}`;
     if ((scoreMap[sk] || -1) > score) return;
     scoreMap[sk] = score;
-    state.images[pid] ||= {};
-    state.images[pid][eid] ||= {};
-    state.images[pid][eid][slot] ||= { full:'' };
-    state.images[pid][eid][slot].full = val;
+    ensureSlot(pid, eid, slot).full = val;
   };
+
+  const setSlotField = (pid, eid, slot, field, val) => {
+    if (!pid || !eid || !slot || !field || !val) return;
+    ensureSlot(pid, eid, slot)[field] = val;
+  };
+
   for (const key of keys) {
-    if (!String(key).startsWith('em_full_')) continue;
+    const k = String(key || '');
+    if (!k.startsWith('em_full_')) continue;
+
+    const raw = await idbGet(k).catch(() => null);
+    if (!raw) continue;
+
+    const rest = k.slice('em_full_'.length);
+    const pid = knownPids.find((cand) => rest.startsWith(`${cand}_`));
+    if (!pid) continue;
+
+    const emotionKey = rest.slice(pid.length + 1);
+    const parts = emotionKey.split('_');
+    if (parts.length < 2) continue;
+
+    const slot = parts.pop();
+    const eid = parts.join('_');
+    setSlotRaw(pid, eid, slot, raw);
+  }
+
+  for (const key of keys) {
+    const k = String(key || '');
+
+    let m = k.match(/^emotion_(.+?)_([a-z0-9]+)_([a-z])_hd$/i);
+    if (m) {
+      const [, pid, eid, slot] = m;
+      const val = await idbGet(k).catch(() => null);
+      if (val) setSlotFull(pid, eid, slot, val, 100);
+      continue;
+    }
+
+    m = k.match(/^emotion_(.+?)_([a-z0-9]+)_([a-z])_ld$/i);
+    if (m) {
+      const [, pid, eid, slot] = m;
+      const val = await idbGet(k).catch(() => null);
+      if (val) setSlotField(pid, eid, slot, 'ld', val);
+      continue;
+    }
+
+    m = k.match(/^emotion_(.+?)_([a-z0-9]+)_([a-z])_thumb$/i);
+    if (m) {
+      const [, pid, eid, slot] = m;
+      const val = await idbGet(k).catch(() => null);
+      if (val) setSlotField(pid, eid, slot, 'thumb', val);
+      continue;
+    }
+
+    m = k.match(/^emotion_(.+?)_([a-z0-9]+)_([a-z])$/i);
+    if (m) {
+      const [, pid, eid, slot] = m;
+      const val = await idbGet(k).catch(() => null);
+      if (val) setSlotField(pid, eid, slot, 'md', val);
+    }
+  }
+}
     const slotMatch = String(key).match(/_(a|b|c|d|e)$/);
     if (!slotMatch) continue;
     const slot = slotMatch[1];
@@ -929,35 +1013,51 @@ async function deleteRemoteImageVariants(pid, eid, slot){
 }
 
 async function generateEmotion(pid, eid, slot){
-  const qid = queueAdd(`Generate ${pid}/${eid}/${slot.toUpperCase()}`);
+  if (state.busy) return;
+
+  const qid = queueAdd(`Generating ${eid}/${slot.toUpperCase()}`);
   queueSet(qid, 'running');
-  if (state.pendingAbort) {
-    try { state.pendingAbort.abort(); } catch {}
+
+  const rawNeutralKey = fullKey(pid, 'neutral', 'a');
+  const neutralKey = `emotion_${pid}_neutral_a`;
+  const fallbackNeutralKey = `emotion_${pid}_neutral`;
+
+  const rawDataUrl =
+    await idbGet(rawNeutralKey) ||
+    await idbGet(`${neutralKey}_hd`) ||
+    await idbGet(neutralKey) ||
+    await idbGet(fallbackNeutralKey);
+
+  if (!rawDataUrl) {
+    queueSet(qid, 'fail', `Missing neutral_a for ${pid}`);
+    showStatus(`Missing neutral_a cache for ${pid}. Upload or generate neutral first.`);
+    return;
   }
-  
-// 1. Worker 자기 참조 에러 및 메모리 초과를 방지하기 위해 로컬 캐시에서 원본 호출
-  let rawDataUrl = await idbGet(`em_full_${pid}_neutral_a`) || await idbGet(`em_full_${pid}_neutral`);
-  if (!rawDataUrl) throw new Error(`로컬 캐시에 ${pid}의 neutral 이미지가 없습니다.`);
-  
-  // 2. Worker 서버가 뻗지 않도록 1024px로 압축(리사이징)하여 Base64 텍스트로 전송
-  const ref = await resizeImage(rawDataUrl, 2048, 0.9);
-  
-  const subject = EMOTION_PROMPTS[eid] || `표정 ${eid}`;
+
+  const ref = rawDataUrl;
+
   const prompt = [
-    '[Subject]',
-    subject,
+    '[Character]',
+    `${pid}`,
     '',
-    '[Background]',
-    '이미지1의 배경과 동일하며 카메라 각도에 따라 달라질 수 있다.',
+    '[Reference]',
+    'Use the attached reference image as the single source of identity.',
+    'Keep the exact same person, face, hairstyle, proportions, skin tone, camera angle, framing, body crop, outfit category, and overall visual style.',
+    'Do not change the identity.',
     '',
-    '[Layout]',
-    '표정에 적합한 자세로 다양하게 변경, 얼굴 각도 자연스럽게 변경, 자세가 바뀌어도 얼굴은 참조 이미지의 얼굴과 같은 위치에 있음',
+    '[Task]',
+    EMOTION_PROMPTS[eid] || `${eid} expression`,
     '',
-    '[Mood]',
-    '밝기, 조명 유지, 피부톤 유지,',
+    '[Output]',
+    'One portrait image only.',
+    'Keep 2:3 framing, same composition, and same person.',
     '',
-    '[Style]',
-    '참조 이미지 인물의 얼굴 일관성을 유지하고 그림체를 유지한다.',
+    '[Variation]',
+    `Create a distinct variant for slot ${slot.toUpperCase()}.`,
+    'Make it different from other slots of the same emotion while keeping identity and composition stable.',
+    '',
+    '[Quality]',
+    'Photorealistic, highly detailed skin and hair, clean eyes, natural lighting, no blur, no artifacts.',
     '',
     '[Ratio]',
     '2:3',
@@ -965,6 +1065,7 @@ async function generateEmotion(pid, eid, slot){
     '[Resolution]',
     '1K',
   ].join('\n');
+
   const body = {
     action: 'chat',
     model: 'gemini-3.1-flash-image-preview',
@@ -973,61 +1074,66 @@ async function generateEmotion(pid, eid, slot){
     aspect_ratio: '2:3',
     resolution: '2k',
   };
+
   const controller = new AbortController();
+  state.pendingAbort = controller;
   setBusy(true);
-    showStatus(`Generating ${pid}/${eid}/${slot.toUpperCase()}...`);
-    state.pendingAbort = controller;
-    setBusy(true);
-    try {
-      showStatus(`Sending request for ${pid}/${eid}/${slot.toUpperCase()}...`);
-      const res = await fetchNoCache('https://persona-worker.persona-worker.workers.dev/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: controller.signal,
+  showStatus(`Generating ${pid}/${eid}/${slot.toUpperCase()}.`);
+
+  try {
+    showStatus(`Sending request for ${pid}/${eid}/${slot.toUpperCase()}.`);
+    const res = await fetchNoCache(`${WORKER_URL}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      const raw = await res.text();
+      throw new Error(raw || `HTTP ${res.status}`);
+    }
+
+    showStatus(`Received response for ${pid}/${eid}/${slot.toUpperCase()}.`);
+    const data = await res.json();
+    const imageUrl = String(data.image_url || '').trim();
+    const match = String(data.reply || data.content || '').match(/\((https?:\/\/[^)]+)\)|!\[[^\]]*\]\((https?:\/\/[^)]+)\)|https?:\/\/\S+/);
+    const url = imageUrl || (match ? (match[1] || match[2] || match[0]) : '');
+    if (!url) throw new Error(data.error || 'No image URL returned.');
+
+    showStatus(`Processing generated image for ${pid}/${eid}/${slot.toUpperCase()}...`);
+
+    let dataUrl = '';
+    if (url.startsWith('data:image/')) {
+      dataUrl = url;
+    } else {
+      const proxied = `${WORKER_URL}/image-fetch?url=${encodeURIComponent(url)}`;
+      const blob = await fetchNoCache(proxied).then(r => {
+        if (!r.ok) throw new Error(`Download proxy failed: ${r.status}`);
+        return r.blob();
       });
-      if (!res.ok) {
-        const raw = await res.text();
-        throw new Error(raw || `HTTP ${res.status}`);
-      }
-      showStatus(`Received response for ${pid}/${eid}/${slot.toUpperCase()}...`);
-      const data = await res.json();
-      const imageUrl = String(data.image_url || '').trim();
-      const match = String(data.reply || data.content || '').match(/\((https?:\/\/[^)]+)\)|!\[[^\]]*\]\((https?:\/\/[^)]+)\)|https?:\/\/\S+/);
-      const url = imageUrl || (match ? (match[1] || match[2] || match[0]) : '');
-      if (!url) throw new Error(data.error || 'No image URL returned.');
-      showStatus(`Processing generated image for ${pid}/${eid}/${slot.toUpperCase()}...`);
-      
-      let dataUrl = '';
-      if (url.startsWith('data:image/')) {
-        // Gemini API 등이 base64를 직접 반환한 경우 프록시 다운로드 생략
-        dataUrl = url;
-      } else {
-        const proxied = `${WORKER_URL}/image-fetch?url=${encodeURIComponent(url)}`;
-        const blob = await fetchNoCache(proxied).then(r => {
-          if (!r.ok) throw new Error(`Download proxy failed: ${r.status}`);
-          return r.blob();
-        });
-        if (!blob || !blob.size) throw new Error('Downloaded image is empty.');
-        dataUrl = await new Promise(resolve => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.readAsDataURL(blob);
-        });
-      }
-      showStatus(`Saving ${pid}/${eid}/${slot.toUpperCase()}...`);
-      await saveSlotImage(pid, eid, slot, dataUrl);
-      render();
-      showStatus(`Saved ${pid}/${eid}/${slot.toUpperCase()}`);
-      queueSet(qid, 'done', `Generated ${eid}/${slot.toUpperCase()}`);
-    } catch (err) {
-      const msg = err?.message || String(err || 'unknown error');
-      showStatus(`Generate failed: ${msg}`);
-      console.error('generateEmotion failed', { pid, eid, slot, err });
-      queueSet(qid, 'fail', `Generate failed ${eid}/${slot.toUpperCase()}`);
-    } finally {
-      state.pendingAbort = null;
-      setBusy(false);
+      if (!blob || !blob.size) throw new Error('Downloaded image is empty.');
+
+      dataUrl = await new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    showStatus(`Saving ${pid}/${eid}/${slot.toUpperCase()}.`);
+    await saveSlotImage(pid, eid, slot, dataUrl);
+    render();
+    showStatus(`Saved ${pid}/${eid}/${slot.toUpperCase()}`);
+    queueSet(qid, 'done', `Generated ${eid}/${slot.toUpperCase()}`);
+  } catch (err) {
+    const msg = err?.message || String(err || 'unknown error');
+    showStatus(`Generate failed: ${msg}`);
+    console.error('generateEmotion failed', { pid, eid, slot, err });
+    queueSet(qid, 'fail', `Generate failed ${eid}/${slot.toUpperCase()}`);
+  } finally {
+    state.pendingAbort = null;
+    setBusy(false);
   }
 }
 
