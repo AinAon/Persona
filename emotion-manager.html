@@ -581,9 +581,8 @@ async function clearSlotImage(pid, eid, slot){
     ...dynamicDeletes,
   ]);
 }
-async function loadImagesFromIDB(){
+async function loadImagesFromIDB() {
   state.images = {};
-
   const keys = await idbKeys().catch(() => []);
   const knownPids = (state.personas || [])
     .map(p => p?.pid)
@@ -593,129 +592,59 @@ async function loadImagesFromIDB(){
   const scoreMap = {};
 
   const ensureSlot = (pid, eid, slot) => {
-    state.images[pid] ||= {};
-    state.images[pid][eid] ||= {};
-    state.images[pid][eid][slot] ||= {
-      raw: '',
-      full: '',
-      md: '',
-      ld: '',
-      thumb: '',
-    };
+    state.images[pid] = state.images[pid] || {};
+    state.images[pid][eid] = state.images[pid][eid] || {};
+    state.images[pid][eid][slot] = state.images[pid][eid][slot] || { raw: '', full: '', md: '', ld: '', thumb: '' };
     return state.images[pid][eid][slot];
   };
 
-  const setSlotRaw = (pid, eid, slot, val) => {
+  const setSlotField = (pid, eid, slot, field, val, score = 0) => {
     if (!pid || !eid || !slot || !val) return;
-    ensureSlot(pid, eid, slot).raw = val;
-  };
-
-  const setSlotFull = (pid, eid, slot, val, score) => {
-    if (!pid || !eid || !slot || !val) return;
-    const sk = `${pid}::${eid}::${slot}`;
-    if ((scoreMap[sk] || -1) > score) return;
-    scoreMap[sk] = score;
-    ensureSlot(pid, eid, slot).full = val;
-  };
-
-  const setSlotField = (pid, eid, slot, field, val) => {
-    if (!pid || !eid || !slot || !field || !val) return;
-    ensureSlot(pid, eid, slot)[field] = val;
-  };
-
-  for (const key of keys) {
-    const k = String(key || '');
-    if (!k.startsWith('em_full_')) continue;
-
-    const raw = await idbGet(k).catch(() => null);
-    if (!raw) continue;
-
-    const rest = k.slice('em_full_'.length);
-    const pid = knownPids.find(candidatePid => rest.startsWith(`${candidatePid}_`));
-    if (!pid) continue;
-
-    const emotionKey = rest.slice(pid.length + 1);
-    const parts = emotionKey.split('_');
-    if (parts.length < 2) continue;
-
-    const slot = parts.pop();
-    const eid = parts.join('_');
-
-    setSlotRaw(pid, eid, slot, raw);
-  }
-
-  for (const key of keys) {
-    const k = String(key || '');
-    if (!k.startsWith('emotion_')) continue;
-
-    let pid = '';
-    for (const candidatePid of knownPids) {
-      const prefix = `emotion_${candidatePid}_`;
-      if (!k.startsWith(prefix)) continue;
-      pid = candidatePid;
-      break;
+    const obj = ensureSlot(pid, eid, slot);
+    if (field === 'full') {
+      const sk = `${pid}::${eid}::${slot}`;
+      if ((scoreMap[sk] || -1) > score) return;
+      scoreMap[sk] = score;
     }
-    if (!pid) continue;
+    obj[field] = val;
+  };
 
-    const tail = k.slice(`emotion_${pid}_`.length);
+  for (const key of keys) {
+    const k = String(key || '');
     const val = await idbGet(k).catch(() => null);
     if (!val) continue;
 
-    let m = tail.match(/^(.+)_([a-z])_hd$/i);
-    if (m) {
-      const eid = String(m[1] || '').toLowerCase();
-      const slot = String(m[2] || '').toLowerCase();
-      setSlotFull(pid, eid, slot, val, 100);
+    // 1. 원본 이미지 처리 (em_full_...)
+    if (k.startsWith('em_full_')) {
+      const rest = k.slice(8);
+      const pid = knownPids.find(p => rest.startsWith(p + '_'));
+      if (!pid) continue;
+      const tail = rest.slice(pid.length + 1);
+      const parts = tail.split('_');
+      if (parts.length < 1) continue;
+      const slot = parts.pop();
+      const eid = parts.join('_');
+      setSlotField(pid, eid, slot, 'raw', val);
       continue;
     }
 
-    m = tail.match(/^(.+)_([a-z])_ld$/i);
-    if (m) {
-      const eid = String(m[1] || '').toLowerCase();
-      const slot = String(m[2] || '').toLowerCase();
-      setSlotField(pid, eid, slot, 'ld', val);
-      continue;
-    }
+    // 2. 가공된 이미지 처리 (emotion_...)
+    if (k.startsWith('emotion_')) {
+      const pid = knownPids.find(p => k.startsWith(`emotion_${p}_`));
+      if (!pid) continue;
+      const tail = k.slice(`emotion_${pid}_`.length);
 
-    m = tail.match(/^(.+)_([a-z])_thumb$/i);
-    if (m) {
-      const eid = String(m[1] || '').toLowerCase();
-      const slot = String(m[2] || '').toLowerCase();
-      setSlotField(pid, eid, slot, 'thumb', val);
-      continue;
-    }
-
-    m = tail.match(/^(.+)_([a-z])$/i);
-    if (m) {
-      const eid = String(m[1] || '').toLowerCase();
-      const slot = String(m[2] || '').toLowerCase();
-      setSlotField(pid, eid, slot, 'md', val);
-      continue;
-    }
-
-    m = tail.match(/^(.+)_([a-z])_a_(\d+)$/i);
-    if (m) {
-      const eid = String(m[1] || '').toLowerCase();
-      const slot = String(m[2] || '').toLowerCase();
-      setSlotFull(pid, eid, slot, val, 85);
-      continue;
-    }
-
-    m = tail.match(/^(.+)_([a-z])_b_(\d+)$/i);
-    if (m) {
-      const eid = String(m[1] || '').toLowerCase();
-      const slot = String(m[2] || '').toLowerCase();
-      const w = Number(m[3] || 0);
-      setSlotFull(pid, eid, slot, val, w >= 300 ? 90 : 80);
-      continue;
-    }
-
-    m = tail.match(/^(.+)_([a-z])_c_(\d+)$/i);
-    if (m) {
-      const eid = String(m[1] || '').toLowerCase();
-      const slot = String(m[2] || '').toLowerCase();
-      setSlotFull(pid, eid, slot, val, 65);
-      continue;
+      let m;
+      if ((m = tail.match(/^(.+)_([a-z])_hd$/i))) {
+        setSlotField(pid, m[1], m[2], 'full', val, 100);
+      } else if ((m = tail.match(/^(.+)_([a-z])_ld$/i))) {
+        setSlotField(pid, m[1], m[2], 'ld', val);
+      } else if ((m = tail.match(/^(.+)_([a-z])_thumb$/i))) {
+        setSlotField(pid, m[1], m[2], 'thumb', val);
+      } else if ((m = tail.match(/^(.+)_([a-z])$/i))) {
+        setSlotField(pid, m[1], m[2], 'md', val);
+        setSlotField(pid, m[1], m[2], 'full', val, 50); // HD가 없을 경우 대비
+      }
     }
   }
 }
