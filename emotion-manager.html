@@ -671,6 +671,77 @@ async function loadPersonasFromBackend(){
     return false;
   }
 }
+    const slotMatch = String(key).match(/_(a|b|c|d|e)$/);
+    if (!slotMatch) continue;
+    const slot = slotMatch[1];
+    const body = String(key).slice('em_full_'.length, -2);
+    let pid = '';
+    let eid = '';
+    for (const candidatePid of knownPids) {
+      const prefix = `${candidatePid}_`;
+      if (!body.startsWith(prefix)) continue;
+      pid = candidatePid;
+      eid = body.slice(prefix.length);
+      break;
+    }
+    if (!pid || !eid) continue;
+    const val = await idbGet(key).catch(()=>null);
+    if (!val) continue;
+    setSlotFull(pid, eid, slot, val, 100);
+  }
+
+  for (const key of keys) {
+    const k = String(key || '');
+    if (!k.startsWith('emotion_')) continue;
+    let pid = '';
+    for (const candidatePid of knownPids) {
+      const prefix = `emotion_${candidatePid}_`;
+      if (!k.startsWith(prefix)) continue;
+      pid = candidatePid;
+      break;
+    }
+    if (!pid) continue;
+    const tail = k.slice(`emotion_${pid}_`.length);
+    const val = await idbGet(k).catch(()=>null);
+    if (!val) continue;
+
+    let m = tail.match(/^(.+)_([a-z])_b_(\d+)$/i);
+    if (m) {
+      const eid = String(m[1] || '').toLowerCase();
+      const slot = String(m[2] || '').toLowerCase();
+      const w = Number(m[3] || 0);
+      setSlotFull(pid, eid, slot, val, w >= 300 ? 90 : 80);
+      continue;
+    }
+    m = tail.match(/^(.+)_([a-z])(?:_(?:hd|ld|thumb|circle|circle_thumb))?$/i);
+    if (m) {
+      const eid = String(m[1] || '').toLowerCase();
+      const slot = String(m[2] || '').toLowerCase();
+      setSlotFull(pid, eid, slot, val, 70);
+      continue;
+    }
+    m = tail.match(/^(.+)_([a-z])_a_(\d+)$/i);
+    if (m) {
+      const eid = String(m[1] || '').toLowerCase();
+      const slot = String(m[2] || '').toLowerCase();
+      setSlotFull(pid, eid, slot, val, 85);
+      continue;
+    }
+    m = tail.match(/^(.+)_([a-z])_c_(\d+)$/i);
+    if (m) {
+      const eid = String(m[1] || '').toLowerCase();
+      const slot = String(m[2] || '').toLowerCase();
+      setSlotFull(pid, eid, slot, val, 65);
+      continue;
+    }
+    m = tail.match(/^(.+)_([a-z])$/i);
+    if (m) {
+      const eid = String(m[1] || '').toLowerCase();
+      const slot = String(m[2] || '').toLowerCase();
+      setSlotFull(pid, eid, slot, val, 75);
+    }
+  }
+}
 
 function getPersonaImage(pid){
   return state.images[pid]?.neutral_a?.a?.full
@@ -959,22 +1030,29 @@ async function generateEmotion(pid, eid, slot){
   const prompt = [
     '[Character]',
     `${pid}`,
+    'Preserve the exact identity: face structure, hairstyle, skin tone, and overall appearance from the reference.',
+    'Do not change who the person is.',
     '',
-    '[Reference]',
-    'Use the attached reference image as the single source of identity.',
-    'Keep the exact same person, face, hairstyle, proportions, skin tone, camera angle, framing, body crop, outfit category, and overall visual style.',
-    'Do not change the identity.',
+    '[Background]',
+    'Use the same background concept as the reference (indoor/outdoor, lighting mood, color palette).',
+    'If the camera angle or body pose changes, the background may rotate or extend naturally to fit.',
+    'Do not introduce new background elements or drastically change the lighting.',
+    '',
+    '[Pose]',
+    'Freely change the body pose and gesture to match the emotion.',
+    'Try to vary the pose at least slightly from the reference — avoid copying it exactly.',
+    'Natural, expressive body language is encouraged.',
     '',
     '[Task]',
     EMOTION_PROMPTS[eid] || `${eid} expression`,
     '',
-    '[Output]',
-    'One portrait image only.',
-    'Keep 2:3 framing, same composition, and same person.',
+    '[Layout]',
+    'Even if the pose or body angle changes, keep the face at roughly the same screen position and size as in the reference.',
+    'Do not zoom in or out significantly. Maintain 2:3 portrait framing.',
     '',
     '[Variation]',
-    `Create a distinct variant for slot ${slot.toUpperCase()}.`,
-    'Make it different from other slots of the same emotion while keeping identity and composition stable.',
+    `This is slot ${slot.toUpperCase()}. Make this variant visually distinct from other slots of the same emotion.`,
+    'Vary the exact pose, micro-expression, or slight angle — while keeping identity and layout stable.',
     '',
     '[Quality]',
     'Photorealistic, highly detailed skin and hair, clean eyes, natural lighting, no blur, no artifacts.',
