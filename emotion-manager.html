@@ -538,7 +538,7 @@ async function saveSlotImage(pid, eid, slot, dataUrl){
   state.images[pid] ||= {};
   state.images[pid][eid] ||= {};
   state.images[pid][eid][slot] = {
-    raw: v.raw,
+    raw: dataUrl,
     full: v.full,
     md: v.md,
     ld: v.ld,
@@ -546,7 +546,7 @@ async function saveSlotImage(pid, eid, slot, dataUrl){
   };
 
   await Promise.all([
-    idbSet(fullKey(pid, eid, slot), v.raw),
+    idbSet(fullKey(pid, eid, slot), dataUrl),
     idbSet(baseKey(pid, eid, slot), v.md),
     idbSet(`${baseKey(pid, eid, slot)}_hd`, v.full),
     idbSet(`${baseKey(pid, eid, slot)}_ld`, v.ld),
@@ -559,16 +559,18 @@ async function clearSlotImage(pid, eid, slot){
   const prefix = `emotion_${pid}_${emotionKey}_`;
   const dynamicDeletes = [];
   const allKeys = await idbKeys().catch(() => []);
+
   for (const key of allKeys) {
     const k = String(key || '');
     if (k.startsWith(prefix)) dynamicDeletes.push(idbDelete(k));
   }
+
   await Promise.allSettled([
-    idbDelete(baseKey(pid,eid,slot)),
-    idbDelete(fullKey(pid,eid,slot)),
-    idbDelete(`${baseKey(pid,eid,slot)}_hd`),
-    idbDelete(`${baseKey(pid,eid,slot)}_ld`),
-    idbDelete(`${baseKey(pid,eid,slot)}_thumb`),
+    idbDelete(baseKey(pid, eid, slot)),
+    idbDelete(fullKey(pid, eid, slot)),
+    idbDelete(`${baseKey(pid, eid, slot)}_hd`),
+    idbDelete(`${baseKey(pid, eid, slot)}_ld`),
+    idbDelete(`${baseKey(pid, eid, slot)}_thumb`),
     idbDelete(`emotion_${pid}_${emotionKey}_circle`),
     idbDelete(`emotion_${pid}_${emotionKey}_circle_thumb`),
     idbDelete(`emotion_${pid}_${emotionKey}_b_300`),
@@ -581,7 +583,8 @@ async function clearSlotImage(pid, eid, slot){
 }
 async function loadImagesFromIDB(){
   state.images = {};
-  const keys = await idbKeys().catch(()=>[]);
+
+  const keys = await idbKeys().catch(() => []);
   const knownPids = (state.personas || [])
     .map(p => p?.pid)
     .filter(Boolean)
@@ -593,7 +596,11 @@ async function loadImagesFromIDB(){
     state.images[pid] ||= {};
     state.images[pid][eid] ||= {};
     state.images[pid][eid][slot] ||= {
-      raw:'', full:'', md:'', ld:'', thumb:''
+      raw: '',
+      full: '',
+      md: '',
+      ld: '',
+      thumb: '',
     };
     return state.images[pid][eid][slot];
   };
@@ -616,7 +623,6 @@ async function loadImagesFromIDB(){
     ensureSlot(pid, eid, slot)[field] = val;
   };
 
-  // 1️⃣ RAW (원본)
   for (const key of keys) {
     const k = String(key || '');
     if (!k.startsWith('em_full_')) continue;
@@ -625,7 +631,7 @@ async function loadImagesFromIDB(){
     if (!raw) continue;
 
     const rest = k.slice('em_full_'.length);
-    const pid = knownPids.find(cand => rest.startsWith(`${cand}_`));
+    const pid = knownPids.find(candidatePid => rest.startsWith(`${candidatePid}_`));
     if (!pid) continue;
 
     const emotionKey = rest.slice(pid.length + 1);
@@ -638,41 +644,78 @@ async function loadImagesFromIDB(){
     setSlotRaw(pid, eid, slot, raw);
   }
 
-  // 2️⃣ 파생 캐시
   for (const key of keys) {
     const k = String(key || '');
+    if (!k.startsWith('emotion_')) continue;
 
-    let m;
+    let pid = '';
+    for (const candidatePid of knownPids) {
+      const prefix = `emotion_${candidatePid}_`;
+      if (!k.startsWith(prefix)) continue;
+      pid = candidatePid;
+      break;
+    }
+    if (!pid) continue;
 
-    m = k.match(/^emotion_(.+?)_([a-z0-9]+)_([a-z])_hd$/i);
+    const tail = k.slice(`emotion_${pid}_`.length);
+    const val = await idbGet(k).catch(() => null);
+    if (!val) continue;
+
+    let m = tail.match(/^(.+)_([a-z])_hd$/i);
     if (m) {
-      const [, pid, eid, slot] = m;
-      const val = await idbGet(k).catch(() => null);
-      if (val) setSlotFull(pid, eid, slot, val, 100);
+      const eid = String(m[1] || '').toLowerCase();
+      const slot = String(m[2] || '').toLowerCase();
+      setSlotFull(pid, eid, slot, val, 100);
       continue;
     }
 
-    m = k.match(/^emotion_(.+?)_([a-z0-9]+)_([a-z])_ld$/i);
+    m = tail.match(/^(.+)_([a-z])_ld$/i);
     if (m) {
-      const [, pid, eid, slot] = m;
-      const val = await idbGet(k).catch(() => null);
-      if (val) setSlotField(pid, eid, slot, 'ld', val);
+      const eid = String(m[1] || '').toLowerCase();
+      const slot = String(m[2] || '').toLowerCase();
+      setSlotField(pid, eid, slot, 'ld', val);
       continue;
     }
 
-    m = k.match(/^emotion_(.+?)_([a-z0-9]+)_([a-z])_thumb$/i);
+    m = tail.match(/^(.+)_([a-z])_thumb$/i);
     if (m) {
-      const [, pid, eid, slot] = m;
-      const val = await idbGet(k).catch(() => null);
-      if (val) setSlotField(pid, eid, slot, 'thumb', val);
+      const eid = String(m[1] || '').toLowerCase();
+      const slot = String(m[2] || '').toLowerCase();
+      setSlotField(pid, eid, slot, 'thumb', val);
       continue;
     }
 
-    m = k.match(/^emotion_(.+?)_([a-z0-9]+)_([a-z])$/i);
+    m = tail.match(/^(.+)_([a-z])$/i);
     if (m) {
-      const [, pid, eid, slot] = m;
-      const val = await idbGet(k).catch(() => null);
-      if (val) setSlotField(pid, eid, slot, 'md', val);
+      const eid = String(m[1] || '').toLowerCase();
+      const slot = String(m[2] || '').toLowerCase();
+      setSlotField(pid, eid, slot, 'md', val);
+      continue;
+    }
+
+    m = tail.match(/^(.+)_([a-z])_a_(\d+)$/i);
+    if (m) {
+      const eid = String(m[1] || '').toLowerCase();
+      const slot = String(m[2] || '').toLowerCase();
+      setSlotFull(pid, eid, slot, val, 85);
+      continue;
+    }
+
+    m = tail.match(/^(.+)_([a-z])_b_(\d+)$/i);
+    if (m) {
+      const eid = String(m[1] || '').toLowerCase();
+      const slot = String(m[2] || '').toLowerCase();
+      const w = Number(m[3] || 0);
+      setSlotFull(pid, eid, slot, val, w >= 300 ? 90 : 80);
+      continue;
+    }
+
+    m = tail.match(/^(.+)_([a-z])_c_(\d+)$/i);
+    if (m) {
+      const eid = String(m[1] || '').toLowerCase();
+      const slot = String(m[2] || '').toLowerCase();
+      setSlotFull(pid, eid, slot, val, 65);
+      continue;
     }
   }
 }
