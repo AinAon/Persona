@@ -2995,9 +2995,16 @@ function buildSystemPrompt(session, pListOverride = null) {
     return desc;
   }).join('\n\n');
 
-  const formatEx = pList.map(p => `[${p.pid}][emotion:감정]내용[/${p.pid}]`).join('\n');
+const formatEx = pList.map(p => `[${p.pid}][emotion:감정]내용[/${p.pid}]`).join('\n');
 
-  return ${worldPart}${userPart}${personaPart}\n\n형식:\n${formatEx}\nemotion: ${EMOTIONS.join('/')}\n규칙: emotion 태그는 반드시 pid 태그 바로 뒤에 한 번만. 내용 안에 [감정명] 태그 넣기 금지. 이름: 접두사 금지.${modeInstr ? '\n'+modeInstr : ''}\n인칭은 자연스러운 맥락에서만 가급적 사용. 매 발화 시작에 붙이지 말 것\n필요한 태그 내용은 마크다운(**, 코드블록, 목록 등) 사용 가능;
+  return `${worldPart}${userPart}${personaPart}
+
+형식:
+${formatEx}
+emotion: ${EMOTIONS.join('/')}
+규칙: emotion 태그는 반드시 pid 태그 바로 뒤에 한 번만. 내용 안에 [감정명] 태그 넣기 금지. 이름: 접두사 금지.${modeInstr ? '\n' + modeInstr : ''}
+인칭은 자연스러운 맥락에서만 가급적 사용. 매 발화 시작에 붙이지 말 것
+필요한 태그 내용은 마크다운(**, 코드블록, 목록 등) 사용 가능`;
 }
 
 function renderUserBubbleHTML(text, atts) {
