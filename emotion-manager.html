@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -669,77 +669,6 @@ async function loadPersonasFromBackend(){
     return true;
   } catch {
     return false;
-  }
-}
-    const slotMatch = String(key).match(/_(a|b|c|d|e)$/);
-    if (!slotMatch) continue;
-    const slot = slotMatch[1];
-    const body = String(key).slice('em_full_'.length, -2);
-    let pid = '';
-    let eid = '';
-    for (const candidatePid of knownPids) {
-      const prefix = `${candidatePid}_`;
-      if (!body.startsWith(prefix)) continue;
-      pid = candidatePid;
-      eid = body.slice(prefix.length);
-      break;
-    }
-    if (!pid || !eid) continue;
-    const val = await idbGet(key).catch(()=>null);
-    if (!val) continue;
-    setSlotFull(pid, eid, slot, val, 100);
-  }
-
-  for (const key of keys) {
-    const k = String(key || '');
-    if (!k.startsWith('emotion_')) continue;
-    let pid = '';
-    for (const candidatePid of knownPids) {
-      const prefix = `emotion_${candidatePid}_`;
-      if (!k.startsWith(prefix)) continue;
-      pid = candidatePid;
-      break;
-    }
-    if (!pid) continue;
-    const tail = k.slice(`emotion_${pid}_`.length);
-    const val = await idbGet(k).catch(()=>null);
-    if (!val) continue;
-
-    let m = tail.match(/^(.+)_([a-z])_b_(\d+)$/i);
-    if (m) {
-      const eid = String(m[1] || '').toLowerCase();
-      const slot = String(m[2] || '').toLowerCase();
-      const w = Number(m[3] || 0);
-      setSlotFull(pid, eid, slot, val, w >= 300 ? 90 : 80);
-      continue;
-    }
-    m = tail.match(/^(.+)_([a-z])(?:_(?:hd|ld|thumb|circle|circle_thumb))?$/i);
-    if (m) {
-      const eid = String(m[1] || '').toLowerCase();
-      const slot = String(m[2] || '').toLowerCase();
-      setSlotFull(pid, eid, slot, val, 70);
-      continue;
-    }
-    m = tail.match(/^(.+)_([a-z])_a_(\d+)$/i);
-    if (m) {
-      const eid = String(m[1] || '').toLowerCase();
-      const slot = String(m[2] || '').toLowerCase();
-      setSlotFull(pid, eid, slot, val, 85);
-      continue;
-    }
-    m = tail.match(/^(.+)_([a-z])_c_(\d+)$/i);
-    if (m) {
-      const eid = String(m[1] || '').toLowerCase();
-      const slot = String(m[2] || '').toLowerCase();
-      setSlotFull(pid, eid, slot, val, 65);
-      continue;
-    }
-    m = tail.match(/^(.+)_([a-z])$/i);
-    if (m) {
-      const eid = String(m[1] || '').toLowerCase();
-      const slot = String(m[2] || '').toLowerCase();
-      setSlotFull(pid, eid, slot, val, 75);
-    }
   }
 }
 
