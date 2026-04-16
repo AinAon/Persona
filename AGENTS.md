@@ -103,3 +103,25 @@ After advisor guidance, return implementation to the primary executor.
 - Do not introduce force cache-busting/no-store logic as a default fix unless there is evidence that stale cache is the root cause.
 - In image-loading paths, treat cache behavior as a stability-sensitive area; prefer preserving existing cache contract first.
 - If cache behavior must be changed, document expected side effects and add a rollback path.
+
+## Mandatory Line For Small Models
+Always append the following sentence block when delegating to a smaller model:
+- Only modify the specified section.
+- Do NOT rewrite the entire file.
+- Preserve encoding (UTF-8) and formatting.
+- Do NOT refactor unrelated code.
+
+## Strict Edit Safety Rules (Mandatory)
+- NEVER rewrite the entire file.
+- Modify ONLY the specified lines.
+- Preserve all existing text exactly (including Unicode/Korean).
+- Do NOT normalize encoding or formatting.
+- Do NOT refactor.
+- Do NOT reformat.
+- Do NOT clean up code.
+
+File encoding must remain UTF-8.
+
+## Communication Before Edits (Mandatory)
+- Do NOT make code changes silently.
+- Always announce intended edits before modifying files.

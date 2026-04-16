@@ -191,7 +191,7 @@ body {
 
 /* 페르소나 선택 → 채팅 시작 버튼 */
 .persona-start-chat-bar {
-  position: absolute; bottom: 0; left: 0; right: 0;
+  position: fixed; bottom: 0; left: 0; right: 0;
   padding: 12px 16px; background: linear-gradient(to top, var(--bg) 60%, transparent); z-index: 5;
   opacity: 0; transform: translateY(8px); pointer-events: none; transition: all .18s ease;
 }
@@ -321,7 +321,7 @@ body {
 .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px 12px; flex-shrink: 0; }
 .modal-title { font-size: 15px; font-weight: 600; }
 .modal-close { background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; }
-.modal-body { flex: 1; overflow-y: auto; padding: 12px 16px 24px; }
+.modal-body { flex: 1; overflow-y: auto; padding: 12px 16px 24px; display: flex; flex-direction: column; }
 
 /* 새 채팅 모달 안 페르소나 선택 그리드 */
 .select-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
@@ -333,7 +333,7 @@ body {
 .select-card .check { position: absolute; top: 4px; right: 4px; width: 16px; height: 16px; border-radius: 50%; background: var(--text); display: none; align-items: center; justify-content: center; }
 .select-card.selected .check { display: flex; }
 
-.modal-options { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+.modal-options { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; flex: 1; }
 .field-label { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 6px; }
 .mode-btns { display: flex; gap: 6px; }
 .mode-btn { flex: 1; padding: 8px 6px; border-radius: 9px; border: 1px solid var(--border2); background: transparent; color: var(--muted); font-family: 'Pretendard', sans-serif; font-size: 11px; cursor: pointer; transition: all .15s; text-align: center; }
@@ -343,6 +343,7 @@ body {
 .world-input::placeholder { color: var(--muted); }
 
 .start-btn { width: 100%; padding: 14px; background: var(--text); color: var(--bg); border: none; border-radius: 12px; font-family: 'Pretendard', sans-serif; font-size: 15px; font-weight: 700; cursor: pointer; transition: opacity .2s; }
+#startChatBtn { position: sticky; bottom: 0; margin-top: auto; z-index: 2; }
 .start-btn:hover { opacity: .85; }
 .start-btn:disabled { opacity: .3; cursor: not-allowed; }
 
@@ -557,13 +558,17 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .msg-time { font-size: 10px; color: var(--muted); line-height: 1.2; margin-top: 4px; }
 .msg-time-left { text-align: left; align-self: flex-start; }
 .msg-time-right { text-align: right; align-self: flex-end; }
+.msg-meta-row { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; }
+.msg-meta-left { justify-content: flex-start; }
+.msg-meta-right { justify-content: flex-end; align-self: flex-end; }
+.msg-actions { display: inline-flex; align-items: center; gap: 4px; }
 /* AI 생성 이미지 */
 .ai-bubble img { width: 100%; height: auto; border-radius: 8px; display: block; margin-top: 4px; cursor: pointer; }
 .ai-bubble.has-img { width: 100%; padding: 8px 10px 10px; }
 .ai-img-actions { display: flex; gap: 8px; margin-top: 8px; }
 .copy-btn {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 22px; height: 22px; margin-left: 5px;
+  width: 22px; height: 22px; margin-left: 0;
   background: none; border: none; cursor: pointer;
   color: rgba(255,255,255,0.28); border-radius: 5px;
   transition: color .15s, background .15s;
@@ -574,8 +579,8 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .copy-btn.copied { color: rgba(100,220,140,0.85); }
 .msg-pname { display: flex; align-items: center; font-size: 14px; font-weight: 700; margin-bottom: 3px; letter-spacing: .01em; }
 .msg-pname-text { line-height: 1; }
-.ai-bubble { padding: 11px 14px; border-radius: 2px 14px 14px 14px; font-size: var(--chat-font-size); line-height: 1.75; max-width: 100%; overflow-wrap: break-word; word-break: break-word; }
-.user-msg { align-self: flex-end; max-width: 78%; background: #1c1c24; border: 1px solid var(--border2); border-radius: 18px 18px 4px 18px; padding: 11px 15px; font-size: var(--chat-font-size); line-height: 1.7; }
+.ai-bubble { padding: 11px 14px; border-radius: 2px 14px 14px 14px; font-size: var(--chat-font-size); line-height: 1.75; max-width: 100%; overflow-wrap: break-word; word-break: break-word; border: none; outline: none; }
+.user-msg { align-self: flex-end; max-width: 78%; background: #1c1c24; border: none; outline: none; border-radius: 18px 18px 4px 18px; padding: 11px 15px; font-size: var(--chat-font-size); line-height: 1.7; }
 
 /* 마크다운 렌더링 스타일 */
 .md-content p { margin: 0 0 8px 0; }
@@ -888,10 +893,16 @@ max-width: 100vw;
 min-width: 0;
 }
 
-/* 2. 말풍선 계층별 가로 늘어남 강제 방지 */
 .msg-group, .ai-msg, .bubble-col, .bubble-wrap {
 max-width: 100%;
 min-width: 0;
+}
+
+.msg-group:has(.user-msg) {
+margin-left: max(60px, 5vw);
+}
+.msg-group:has(.ai-msg) {
+margin-right: max(60px, 5vw);
 }
 
 /* 3. 말풍선 내부 텍스트 강제 줄바꿈 처리 */

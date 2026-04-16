@@ -114,7 +114,10 @@ function formatMessageTime(ts) {
 function buildTimeMetaHTML(ts, align = 'left') {
   const label = formatMessageTime(ts);
   if (!label) return '';
-  return `<div class="msg-time msg-time-${align}">${label}</div>`;
+  if (align === 'right') {
+    return `<div class="msg-meta-row msg-meta-right"><div class="msg-time msg-time-right">${label}</div><div class="msg-actions msg-actions-right"></div></div>`;
+  }
+  return `<div class="msg-meta-row msg-meta-left"><div class="msg-actions msg-actions-left"></div><div class="msg-time msg-time-left">${label}</div></div>`;
 }
 
 function encodeCopyPayload(text) {
@@ -262,7 +265,8 @@ function enhanceRenderedMessage(container) {
   const group = container.classList?.contains('msg-group') ? container : container.querySelector?.('.msg-group');
   if (group) {
     const userMsg = group.querySelector('.user-msg');
-    if (userMsg && !group.querySelector('.user-copy-btn')) {
+    const userActions = group.querySelector('.msg-meta-right .msg-actions');
+    if (userMsg && userActions && !userActions.querySelector('.user-copy-btn')) {
       const btn = document.createElement('button');
       btn.className = 'copy-btn user-copy-btn';
       btn.type = 'button';
@@ -270,27 +274,25 @@ function enhanceRenderedMessage(container) {
       btn.dataset.copyText = encodeCopyPayload(userMsg.innerText || '');
       btn.innerHTML = '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="10" height="11" rx="2"/><path d="M13 5V3.5A1.5 1.5 0 0 0 11.5 2h-7A1.5 1.5 0 0 0 3 3.5v10A1.5 1.5 0 0 0 4.5 15H5"/></svg>';
       btn.onclick = () => copyBubble(btn, btn.dataset.copyText, true);
-      const wrap = document.createElement('div');
-      wrap.className = 'user-msg-wrap';
-      userMsg.parentNode.insertBefore(wrap, userMsg);
-      wrap.appendChild(userMsg);
-      wrap.appendChild(btn);
+      userActions.appendChild(btn);
     }
-    group.querySelectorAll('.msg-pname').forEach(nameRow => {
-      const bubble = nameRow.parentElement?.querySelector('.ai-bubble');
-      if (!bubble || bubble.querySelector('img')) return;
-      const btn = nameRow.querySelector('.copy-btn') || document.createElement('button');
-      if (!nameRow.querySelector('.copy-btn')) {
+
+    const aiActions = group.querySelector('.msg-meta-left .msg-actions');
+    const aiBubble = group.querySelector('.ai-msg:last-child .bubble-col:last-child .ai-bubble');
+    if (aiActions && aiBubble && !aiBubble.querySelector('img')) {
+      const btn = aiActions.querySelector('.copy-btn') || document.createElement('button');
+      if (!aiActions.querySelector('.copy-btn')) {
         btn.className = 'copy-btn';
         btn.type = 'button';
         btn.innerHTML = '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="10" height="11" rx="2"/><path d="M13 5V3.5A1.5 1.5 0 0 0 11.5 2h-7A1.5 1.5 0 0 0 3 3.5v10A1.5 1.5 0 0 0 4.5 15H5"/></svg>';
-        nameRow.appendChild(btn);
+        aiActions.appendChild(btn);
       }
       btn.title = '복사';
       btn.onclick = () => copyBubble(btn, btn.dataset.copyText, true);
-      btn.dataset.copyText = encodeCopyPayload(bubble.innerText || '');
-    });
+      btn.dataset.copyText = encodeCopyPayload(aiBubble.innerText || '');
+    }
   }
+
   container.querySelectorAll('pre').forEach(pre => {
     if (pre.dataset.copyEnhanced === '1') return;
     const code = pre.querySelector('code');
@@ -310,19 +312,19 @@ function enhanceRenderedMessage(container) {
 function attachMessageMeta(container, ts, align = 'left') {
   if (!container || !ts) return;
   if (container.querySelector('.msg-time')) return;
-  const label = formatMessageTime(ts);
-  if (!label) return;
-  const cls = align === 'right' ? 'msg-time msg-time-right' : 'msg-time msg-time-left';
+  const metaHTML = buildTimeMetaHTML(ts, align);
+  if (!metaHTML) return;
   if (align === 'left') {
     const leftTarget = container.querySelector('.ai-msg:last-child .bubble-col:last-child')
       || container.querySelector('.bubble-col:last-child')
       || container;
-    leftTarget.insertAdjacentHTML('beforeend', `<div class="${cls}">${label}</div>`);
+    leftTarget.insertAdjacentHTML('beforeend', metaHTML);
     return;
   }
-  const rightWrap = container.querySelector('.user-msg-wrap');
-  if (rightWrap) rightWrap.insertAdjacentHTML('afterend', `<div class="${cls}">${label}</div>`);
-  else container.insertAdjacentHTML('beforeend', `<div class="${cls}">${label}</div>`);
+  const rightWrap = container.querySelector('.user-msg-wrap')
+    || container.querySelector('.user-msg')
+    || container;
+  rightWrap.insertAdjacentHTML('afterend', metaHTML);
 }
 
 function updateChatBottomAnchor(area = document.getElementById('chatArea')) {
@@ -2439,7 +2441,7 @@ async function renderSelectGrid() {
     const card = document.createElement('div');
     card.className = 'select-card'; card.style.position = 'relative';
     card.onclick = () => toggleSelectPid(p.pid, card);
-    const neutral = await getNeutralImage(p.pid);
+    const neutral = await getEmotionImage(p.pid, 'neutral', 200);
     const imgSrc = neutral || p.image;
     card.innerHTML = `
       <div class="select-card-img">${imgSrc ? `<img src="${imgSrc}">` : defaultAvatar(p.hue)}</div>
@@ -2731,12 +2733,10 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
       <div class="bubble-col">
         <div class="msg-pname" style="color:hsl(${h},65%,72%)">
           <span class="msg-pname-text">${esc(p.name)}${p._ghost?`<span style="font-size:9px;opacity:.5">(삭제)</span>`:''}</span>
-          ${hasImg ? '' : `<button class="copy-btn" type="button" title="복사">
-            <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="10" height="11" rx="2"/><path d="M13 5V3.5A1.5 1.5 0 0 0 11.5 2h-7A1.5 1.5 0 0 0 3 3.5v10A1.5 1.5 0 0 0 4.5 15H5"/></svg>
-          </button>`}
+          
         </div>
         <div class="${bubbleWrapClass}">
-          <div class="${bubbleClass}" style="background:hsl(${h},25%,13%);border:1px solid hsl(${h},32%,26%);color:hsl(${h},55%,85%)">${renderedContent}${dlBtn}</div>
+          <div class="${bubbleClass}" style="background:hsl(${h},25%,13%);color:hsl(${h},55%,85%)">${renderedContent}${dlBtn}</div>
         </div>
       </div>
     </div>`;
@@ -3464,7 +3464,7 @@ async function renderDrawerBody(s) {
   const canInvite = pList.length < MAX_PARTICIPANTS;
 
   const personaCards = await Promise.all(pList.map(async p => {
-const neutral = await getNeutralImage(p.pid); // 사각 crop 소스 호출
+const neutral = await getNeutralImageThumb(p.pid, 42);
 const imgSrc = neutral || p.image;
 const imgHTML = imgSrc
 ? `<img src="${imgSrc}" style="width:100%;height:100%;object-fit:cover;object-position:top;display:block">`
@@ -3661,7 +3661,7 @@ async function renderInviteGrid(s) {
     const card = document.createElement('div');
     card.className = 'select-card'; card.style.position = 'relative';
     card.onclick = () => toggleInvitePid(p.pid, card, s);
-    const neutral = await getNeutralImage(p.pid);
+    const neutral = await getEmotionImage(p.pid, 'neutral', 200);
     const imgSrc = neutral || p.image;
     card.innerHTML = `
       <div class="select-card-img">${imgSrc ? `<img src="${imgSrc}">` : defaultAvatar(p.hue)}</div>
