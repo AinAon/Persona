@@ -881,45 +881,41 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .image-popup-overlay.active { display: flex; }
 .image-popup-img { max-width: 100%; max-height: 80vh; object-fit: contain; border-radius: 8px; box-shadow: 0 0 30px rgba(0,0,0,0.5); }
 
-/* 1. 화면 전체 가로 밀림(이탈) 원천 차단 */
-body {
-  width: 100vw;
-  max-width: 100%;
-  overflow-x: hidden;
-}
-.screen {
-  width: 100%;
-  max-width: 100%;
-  overflow-x: hidden;
+/* 1. 화면 전체 및 채팅 영역 팽창 원천 차단 (우측 잘림 방지) */
+.screen, .chat-area {
+width: 100%;
+max-width: 100vw;
+min-width: 0;
 }
 
-/* 2. 말풍선 팽창 방지 (min-width: 0 필수 적용) */
-.msg-group, .ai-msg, .user-msg-wrap,
-.bubble-col, .bubble-wrap, .md-content {
-  max-width: 100%;
-  min-width: 0;
+/* 2. 말풍선 계층별 가로 늘어남 강제 방지 */
+.msg-group, .ai-msg, .bubble-col, .bubble-wrap {
+max-width: 100%;
+min-width: 0;
 }
 
-/* 3. 텍스트 줄바꿈 강제 및 코드 블록 가로 스크롤 처리 */
-.ai-bubble, .user-msg {
-  max-width: 100%;
-  min-width: 0;
-  overflow-wrap: anywhere; /* break-word보다 강력한 줄바꿈 */
-  word-break: break-word;
-}
-.md-content pre {
-  max-width: 100%;
-  min-width: 0;
-  overflow-x: auto;
-  box-sizing: border-box;
+/* 3. 말풍선 내부 텍스트 강제 줄바꿈 처리 */
+.ai-bubble, .user-msg, .md-content {
+max-width: 100%;
+min-width: 0;
+overflow-wrap: anywhere !important;
+word-break: break-word !important;
 }
 
-/* 4. 머릿글/리스트 기호 말풍선 안으로 넣기 */
+/* 4. 마크다운 표(Table) 가로 스크롤 처리 (표로 인한 팽창 방지) */
+.md-content table {
+display: block;
+max-width: 100%;
+overflow-x: auto;
+white-space: nowrap;
+}
+
+/* 5. 머릿글/리스트 기호 말풍선 밖으로 이탈 방지 */
 .md-content ol,
 .md-content ul {
-  padding-left: 24px !important; /* 기호 여백 강제 적용 */
-  margin: 8px 0;
-  list-style-position: outside;
+padding-left: 28px !important;
+margin: 8px 0;
+list-style-position: outside;
 }
 
 </style>
