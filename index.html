@@ -574,7 +574,7 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .copy-btn.copied { color: rgba(100,220,140,0.85); }
 .msg-pname { display: flex; align-items: center; font-size: 14px; font-weight: 700; margin-bottom: 3px; letter-spacing: .01em; }
 .msg-pname-text { line-height: 1; }
-.ai-bubble { padding: 11px 14px; border-radius: 2px 14px 14px 14px; font-size: var(--chat-font-size); line-height: 1.75; }
+.ai-bubble { padding: 11px 14px; border-radius: 2px 14px 14px 14px; font-size: var(--chat-font-size); line-height: 1.75; max-width: 100%; overflow-wrap: break-word; word-break: break-word; }
 .user-msg { align-self: flex-end; max-width: 78%; background: #1c1c24; border: 1px solid var(--border2); border-radius: 18px 18px 4px 18px; padding: 11px 15px; font-size: var(--chat-font-size); line-height: 1.7; }
 
 /* 마크다운 렌더링 스타일 */
@@ -587,8 +587,8 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .md-content ul,.md-content ol { margin: 6px 0 6px 18px; padding: 0; }
 .md-content li { margin: 3px 0; }
 .md-content code { font-family: 'JetBrains Mono','Fira Code',monospace; font-size: 0.85em; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.08); }
-.md-content pre { margin: 8px 0; border-radius: 8px; overflow-x: auto; position: relative; }
-.md-content pre code { padding: 12px 14px; display: block; background: transparent; font-size: 13px; }
+.md-content pre { margin: 8px 0; border-radius: 8px; overflow-x: auto; position: relative; max-width: 100%; }
+.md-content pre code { padding: 12px 14px; display: block; background: transparent; font-size: 13px; white-space: pre; word-break: normal; }
 .code-copy-btn { position: absolute; top: 8px; right: 8px; background: rgba(17,17,20,.92); color: var(--text); border: 1px solid var(--border2); border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer; }
 .md-content blockquote { border-left: 3px solid rgba(255,255,255,0.2); margin: 8px 0; padding: 4px 12px; opacity: 0.8; }
   .md-content table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 13px; }
@@ -599,7 +599,7 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
   .md-content ol,
   .md-content ul {
     margin: 0.25em 0;
-    padding-left: 1em;
+    padding-left: 24px;
     list-style-position: outside;
   }
   .md-content li {
