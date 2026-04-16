@@ -824,17 +824,28 @@ async function loadIndex() {
     const res = await fetch(wUrl + '/sessions');
     const data = await res.json();
     const index = Array.isArray(data.sessions) ? data.sessions : [];
+    const localIndex = Array.isArray(getLocalSessionIndex()) ? getLocalSessionIndex() : [];
+    const mergedIndex = [...index];
     const activeIds = new Set(index.map(item => item?.id).filter(Boolean));
 
-    // Remote index is authoritative to prevent deleted/orphan sessions from resurrecting.
-    sessions = index.map(item => ({ ...item, history: [], _loaded: false }));
-    setLocalSessionIndex(index);
+    // Keep local-only sessions when local cache exists (e.g., newly created empty rooms before remote sync).
+    for (const item of localIndex) {
+      const sid = item?.id;
+      if (!sid || activeIds.has(sid)) continue;
+      const localSession = getLocalSession(sid);
+      if (Array.isArray(localSession)) {
+        mergedIndex.push(item);
+        activeIds.add(sid);
+      }
+    }
+
+    sessions = mergedIndex.map(item => ({ ...item, history: [], _loaded: false }));
+    setLocalSessionIndex(mergedIndex);
 
     // Remove stale local session caches that are no longer present in remote index.
     try {
-      const cached = getLocalSessionIndex();
-      if (Array.isArray(cached)) {
-        for (const s of cached) {
+      if (Array.isArray(localIndex)) {
+        for (const s of localIndex) {
           const sid = s?.id;
           if (sid && !activeIds.has(sid)) removeLocalSession(sid);
         }
@@ -847,13 +858,15 @@ async function loadIndex() {
 
 async function loadSession(id) {
   const s = sessions.find(x=>x.id===id); if (!s) return;
+  let hadLocalCache = false;
   // 로컬 캐시 먼저
   if (!s._loaded) {
     try {
       const cached = getLocalSession(id);
-      if (cached) {
+      if (Array.isArray(cached)) {
         s.history = cached;
         s._loaded = true;
+        hadLocalCache = true;
         if (activeChatId === id) renderChatArea();
       }
     } catch(e) {}
@@ -866,7 +879,19 @@ async function loadSession(id) {
     const data = await res.json();
     const remoteSession = data?.session || null;
     if (!remoteSession) {
-      // Session missing in KV: keep UI/index consistent and avoid zombie sessions.
+      const localSession = getLocalSession(id);
+      const shouldKeepLocal = hadLocalCache || Array.isArray(localSession) || Array.isArray(s.history);
+      if (shouldKeepLocal) {
+        s.history = Array.isArray(s.history) ? s.history : [];
+        s._loaded = true;
+        setLocalSession(id, s.history);
+        saveSession(id);
+        saveIndex();
+        if (activeChatId === id) renderChatArea();
+        return;
+      }
+
+      // local/remote 모두 없으면 stale 항목 제거
       sessions = sessions.filter(x => x.id !== id);
       removeLocalSession(id);
       setLocalSessionIndex(buildIndex());

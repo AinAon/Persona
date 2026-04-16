@@ -2475,7 +2475,12 @@ function startNewChat() {
   };
   sessions.push(session);
   activeChatId = session.id;
-  closeNewChatModal(); saveIndex(); renderChatList(); openChat(session.id);
+  closeNewChatModal();
+  saveSession(session.id);
+  saveIndex();
+  if (typeof flushPendingRemoteSaves === 'function') flushPendingRemoteSaves();
+  renderChatList();
+  openChat(session.id);
 }
 
 // ===============
