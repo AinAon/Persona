@@ -666,18 +666,6 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
   z-index: 5;
   pointer-events: none;
 }
-.input-tabbar.image-floating::before {
-  content: "";
-  position: absolute;
-  left: -10px;
-  right: -10px;
-  bottom: -10px;
-  height: 56px;
-  border-radius: 16px;
-  background: linear-gradient(to top, rgba(10,10,12,.92) 0%, rgba(10,10,12,.58) 42%, rgba(10,10,12,0) 100%);
-  pointer-events: none;
-  z-index: -1;
-}
 .input-tabbar.image-floating .input-model-area { pointer-events: auto; }
 .input-tabbar.image-floating .img-top-btn {
   opacity: 0;
@@ -689,6 +677,7 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .input-tabbar.image-floating.image-enter #itab-opts-image > .img-top-btn:nth-of-type(2) { animation: floatIn .22s ease-out .05s forwards; }
 .input-tabbar.image-floating.image-enter #itab-opts-image > .img-top-btn:nth-of-type(3) { animation: floatIn .22s ease-out .10s forwards; }
 .input-tabbar.image-floating.image-enter #itab-opts-image > .img-top-btn:nth-of-type(4) { animation: floatIn .22s ease-out .15s forwards; }
+.input-tabbar.image-floating.image-enter #itab-opts-image > .img-top-btn:nth-of-type(5) { animation: floatIn .22s ease-out .20s forwards; }
 @keyframes floatIn {
   from { opacity: 0; transform: translateY(10px) scale(.96); }
   to { opacity: 1; transform: translateY(0) scale(1); }
@@ -731,7 +720,13 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 }
 .img-top-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .img-top-btn:hover { background: rgba(255,255,255,0.12); color: #fff; opacity: 1; }
-.img-top-btn.on { background: rgba(37, 99, 235, 0.18); color: #8ec5ff; opacity: 1; transform: translateY(-1px); }
+.img-top-btn.on {
+  background: rgba(58, 132, 255, 0.32);
+  color: #dbeaff;
+  box-shadow: inset 0 0 0 1px rgba(158, 202, 255, .36), 0 0 12px rgba(64, 140, 255, .28);
+  opacity: 1;
+  transform: translateY(-1px);
+}
 .img-top-btn.ratio-btn {
   width: 34px;
   min-width: 34px;
@@ -827,7 +822,7 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .composer-tools-item.active { background: rgba(255,255,255,.12); }
 .composer-tools-item svg { width: 16px; height: 16px; opacity: .9; }
 .send-btn { width: 38px; height: 38px; border-radius: 50%; background: #0a73e8; color: #fff; border: none; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: opacity .2s, background .15s; }
-.attach-btn, #toolBtn { margin-top: 4px; }
+.attach-btn, #toolBtn { margin-top: 3px; }
 #micBtn { margin-top: 3px; }
 .send-btn { margin-top: 1px; }
 .composer-mode-chip { margin-top: 6px; }
@@ -1285,6 +1280,9 @@ list-style-position: outside;
             <svg viewBox="0 0 24 24"><path d="M12 3l7 4v10l-7 4-7-4V7z"/><path d="M9 9h6v6H9z"/></svg>
           </button>
           <button class="img-top-btn img-provider-btn" id="imgProvXai" onclick="setImageProvider('xai')" type="button" aria-label="Grok">
+            <svg viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></svg>
+          </button>
+          <button class="img-top-btn img-provider-btn" id="imgModeCloseBtn" onclick="switchInputTab('chat')" type="button" aria-label="채팅 모드">
             <svg viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></svg>
           </button>
           <div id="ratioPopup" class="ratio-popup-container hidden">
