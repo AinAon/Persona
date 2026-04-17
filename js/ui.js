@@ -2887,6 +2887,8 @@ function stopGeneration() {
 function switchInputTab(tab) {
   _inputTab = tab;
   const normalized = tab === 'context' ? 'project' : tab;
+  const tabbar = document.querySelector('.input-tabbar');
+  if (tabbar) tabbar.style.display = (tab === 'image' || tab === 'context') ? 'flex' : 'none';
   // 탭 버튼 active 토글
   ['chat','image','context'].forEach(t => {
     document.getElementById('itab-' + t)?.classList.toggle('active', t === tab);
