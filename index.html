@@ -742,6 +742,14 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
   padding: 0;
 }
 .img-provider-btn svg { width: 18px; height: 18px; }
+.provider-logo {
+  width: 18px;
+  height: 18px;
+  display: block;
+  filter: invert(1) brightness(1.08);
+  opacity: .96;
+}
+.img-top-btn.on .provider-logo { opacity: 1; }
 .input-tabs-group { display: none !important; }
 #composerModeChip { display: none !important; }
 .input-tab-select {
@@ -1274,13 +1282,13 @@ list-style-position: outside;
             <span>1:1</span>
           </button>
           <button class="img-top-btn img-provider-btn" id="imgProvGemini" onclick="setImageProvider('gemini')" type="button" aria-label="Google">
-            <svg viewBox="0 0 24 24"><path d="M12 4v16M4 12h16M6.6 6.6l10.8 10.8M17.4 6.6L6.6 17.4"/></svg>
+            <img class="provider-logo" src="assets/provider-icons/google.svg" alt="Google">
           </button>
           <button class="img-top-btn img-provider-btn" id="imgProvOpenAI" onclick="setImageProvider('openai')" type="button" aria-label="GPT">
-            <svg viewBox="0 0 24 24"><path d="M12 3l7 4v10l-7 4-7-4V7z"/><path d="M9 9h6v6H9z"/></svg>
+            <img class="provider-logo" src="assets/provider-icons/openai.svg" alt="OpenAI">
           </button>
           <button class="img-top-btn img-provider-btn" id="imgProvXai" onclick="setImageProvider('xai')" type="button" aria-label="Grok">
-            <svg viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></svg>
+            <img class="provider-logo" src="assets/provider-icons/grok.svg" alt="Grok">
           </button>
           <button class="img-top-btn img-provider-btn" id="imgModeCloseBtn" onclick="switchInputTab('chat')" type="button" aria-label="채팅 모드">
             <svg viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></svg>
