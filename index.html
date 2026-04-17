@@ -692,7 +692,7 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .composer-shell { position: relative; margin-top: 8px; }
 .input-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
   background: linear-gradient(180deg, #23262d 0%, #1c1f25 100%);
   border: none;
@@ -760,6 +760,7 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .composer-tools-item.active { background: rgba(255,255,255,.12); }
 .composer-tools-item svg { width: 16px; height: 16px; opacity: .9; }
 .send-btn { width: 38px; height: 38px; border-radius: 50%; background: #0a73e8; color: #fff; border: none; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: opacity .2s, background .15s; }
+.attach-btn, .composer-icon-btn, .send-btn { margin-top: 2px; }
 .send-btn:disabled { opacity: .3; cursor: not-allowed; }
 .send-btn svg { width: 15px; height: 15px; }
 .attachments-row { display: flex; gap: 6px; flex-wrap: wrap; padding: 6px 2px 0; }
