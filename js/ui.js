@@ -3072,7 +3072,7 @@ function autoResize(el) {
     }
   }
   el.style.height='auto';
-  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  el.style.height = Math.min(el.scrollHeight, 220) + 'px';
 }
 
 function buildSystemPrompt(session, pListOverride = null) {
