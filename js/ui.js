@@ -216,6 +216,14 @@ function updateChatHeaderActionButtons() {
   btn.innerHTML = on ? iconEyeOpenSVG() : iconEyeClosedSVG();
   btn.title = `프로필 표시 ${on ? 'ON' : 'OFF'} (클릭해서 전환)`;
   if (!override) btn.classList.remove('on');
+  updateChatHeaderAvatarVisibility();
+}
+
+function updateChatHeaderAvatarVisibility() {
+  const avatarsEl = document.getElementById('chatHeaderAvatars');
+  if (!avatarsEl) return;
+  const hidden = getChatAvatarStyle() === 'hidden';
+  avatarsEl.style.display = hidden ? 'none' : '';
 }
 
 function getChatHiddenFilterEnabled() {
@@ -2518,6 +2526,7 @@ async function openChat(id) {
     `;
   }
   updateChatHeaderActionButtons();
+  updateChatHeaderAvatarVisibility();
 
   pList.forEach(async (p, i) => {
     if (openToken !== _chatOpenToken || activeChatId !== id) return;
