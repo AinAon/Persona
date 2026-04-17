@@ -656,13 +656,13 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .input-tabbar {
   display: none;
   align-items: center;
-  gap: 8px;
-  padding: 2px 2px 4px;
+  gap: 10px;
+  padding: 0 2px 2px;
 }
 /* 모델/옵션 영역 — 왼쪽 flex */
 .input-model-area {
   display: flex; align-items: center;
-  gap: 8px; min-width: 0; overflow: visible;
+  gap: 10px; min-width: 0; overflow: visible;
 }
 /* 폴더탭 그룹 — 오른쪽 */
 
@@ -686,18 +686,32 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .input-tab-options.hidden { display: none; }
 .img-top-btn {
   width: 34px; height: 34px; border-radius: 50%;
-  border: 1px solid var(--border2);
-  background: var(--card); color: var(--muted);
+  border: none;
+  background: transparent;
+  color: rgba(255,255,255,.58);
   display: inline-flex; align-items: center; justify-content: center;
   cursor: pointer; flex-shrink: 0;
   font-family: 'Pretendard', sans-serif; font-size: 10px; font-weight: 700;
-  transition: border-color .15s, color .15s, background .15s;
+  transition: color .15s, opacity .15s, transform .15s;
 }
-.img-top-btn:hover { color: var(--text); border-color: var(--muted2); }
-.img-top-btn.on { color: #d7e8ff; border-color: #2d7eea; background: rgba(45,126,234,0.26); }
-.img-top-btn.ratio-btn { width: 62px; border-radius: 999px; font-size: 11px; gap: 2px; }
-.img-top-btn.ratio-btn svg { width: 12px; height: 12px; }
-.img-provider-btn { width: 72px; border-radius: 999px; font-size: 11px; }
+.img-top-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.img-top-btn:hover { color: rgba(255,255,255,.85); }
+.img-top-btn.on { color: #fff; opacity: 1; transform: translateY(-1px); }
+.img-top-btn.ratio-btn {
+  width: auto;
+  min-width: 46px;
+  border-radius: 999px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.img-provider-btn {
+  width: 34px;
+  border-radius: 999px;
+  font-size: 0;
+  padding: 0;
+}
+.img-provider-btn svg { width: 18px; height: 18px; }
 .input-tabs-group { display: none !important; }
 #composerModeChip { display: none !important; }
 .input-tab-select {
@@ -1203,11 +1217,16 @@ list-style-position: outside;
           </select>
           <button class="img-top-btn ratio-btn" id="imgRatioBtn" onclick="toggleRatioPopup()" type="button" aria-label="비율 선택">
             <span>1:1</span>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="7 10 12 15 17 10"/></svg>
           </button>
-          <button class="img-top-btn img-provider-btn" id="imgProvGemini" onclick="setImageProvider('gemini')" type="button">Gemini</button>
-          <button class="img-top-btn img-provider-btn" id="imgProvOpenAI" onclick="setImageProvider('openai')" type="button">OpenAI</button>
-          <button class="img-top-btn img-provider-btn" id="imgProvXai" onclick="setImageProvider('xai')" type="button">Xai</button>
+          <button class="img-top-btn img-provider-btn" id="imgProvGemini" onclick="setImageProvider('gemini')" type="button" aria-label="Google">
+            <svg viewBox="0 0 24 24"><path d="M12 4v16M4 12h16M6.6 6.6l10.8 10.8M17.4 6.6L6.6 17.4"/></svg>
+          </button>
+          <button class="img-top-btn img-provider-btn" id="imgProvOpenAI" onclick="setImageProvider('openai')" type="button" aria-label="GPT">
+            <svg viewBox="0 0 24 24"><path d="M12 3l7 4v10l-7 4-7-4V7z"/><path d="M9 9h6v6H9z"/></svg>
+          </button>
+          <button class="img-top-btn img-provider-btn" id="imgProvXai" onclick="setImageProvider('xai')" type="button" aria-label="Grok">
+            <svg viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></svg>
+          </button>
           <div id="ratioPopup" class="ratio-popup-container hidden">
             <div class="ratio-grid-9">
               <div class="ratio-item" onclick="selectRatio('21:9')">21:9</div>

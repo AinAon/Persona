@@ -2888,10 +2888,17 @@ function updateComposerToolButtonForMode(normalizedMode) {
   const btn = document.getElementById('toolBtn');
   if (!btn) return;
   const isImage = normalizedMode === 'image';
-  btn.classList.toggle('active', isImage);
-  btn.innerHTML = isImage
-    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>'
-    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="12" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M8 12h8M16.5 7.5l-8 4.5M16.5 16.5l-8-4.5"/></svg>';
+  const isProject = normalizedMode === 'project';
+  btn.classList.toggle('active', isImage || isProject);
+  if (isImage) {
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
+    return;
+  }
+  if (isProject) {
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8l2-3h14l2 3"/><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M9 12h6"/></svg>';
+    return;
+  }
+  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="12" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M8 12h8M16.5 7.5l-8 4.5M16.5 16.5l-8-4.5"/></svg>';
 }
 
 function setImageProvider(provider) {
