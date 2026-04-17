@@ -125,3 +125,16 @@ File encoding must remain UTF-8.
 ## Communication Before Edits (Mandatory)
 - Do NOT make code changes silently.
 - Always announce intended edits before modifying files.
+
+## File Rewrite Prohibition (Mandatory)
+- Never use whole-file rewrite methods for existing files (`Set-Content`, full-file regex replace, here-string overwrite, or equivalent).
+- Never perform operations that rewrite large unchanged regions just to edit a few lines.
+- For existing files, use line-targeted patching only (`apply_patch` with minimal hunks).
+- If a patch cannot be applied safely, stop and ask before attempting any fallback that rewrites the file.
+- After each edit, immediately verify diff scope is minimal; if diff is wide, revert and re-apply with a smaller patch.
+
+## Partial-Request Execution Rule (Mandatory)
+- When the user requests a partial/small change, execute only the requested scope immediately.
+- Do NOT start broad repository-wide inspection, cleanup, refactor, reformat, or normalization during partial requests.
+- If a full-file audit/cleanup is needed, schedule and run it separately as an explicit dedicated task.
+- For partial requests, prioritize fast, minimal-line patches over general codebase improvements.

@@ -655,14 +655,16 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 /* ── 탭바 행: [모델선택...] [채팅▼][이미지▼][컨텍스트▼] */
 .input-tabbar {
   display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 2px 4px;
 }
 /* 모델/옵션 영역 — 왼쪽 flex */
 .input-model-area {
-  flex: 1; display: flex; align-items: center;
-  padding: 0 4px 2px 0; gap: 4px; min-width: 0; overflow: visible;
+  display: flex; align-items: center;
+  gap: 8px; min-width: 0; overflow: visible;
 }
 /* 폴더탭 그룹 — 오른쪽 */
-.input-tabs-group { display: flex; align-items: flex-end; gap: 2px; flex-shrink: 0; }
 
 /* 폴더탭 단일 버튼 */
 .input-tab {
@@ -680,8 +682,24 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .input-tab svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; }
 .input-tab.active { color: var(--text); background: var(--card); }
 
-.input-tab-options { display: flex; align-items: center; gap: 4px; position: relative; }
+.input-tab-options { display: flex; align-items: center; gap: 8px; position: relative; }
 .input-tab-options.hidden { display: none; }
+.img-top-btn {
+  width: 34px; height: 34px; border-radius: 50%;
+  border: 1px solid var(--border2);
+  background: var(--card); color: var(--muted);
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0;
+  font-family: 'Pretendard', sans-serif; font-size: 10px; font-weight: 700;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.img-top-btn:hover { color: var(--text); border-color: var(--muted2); }
+.img-top-btn.on { color: #d7e8ff; border-color: #2d7eea; background: rgba(45,126,234,0.26); }
+.img-top-btn.ratio-btn { width: 62px; border-radius: 999px; font-size: 11px; gap: 2px; }
+.img-top-btn.ratio-btn svg { width: 12px; height: 12px; }
+.img-provider-btn { width: 72px; border-radius: 999px; font-size: 11px; }
+.input-tabs-group { display: none !important; }
+#composerModeChip { display: none !important; }
 .input-tab-select {
   background: var(--card); border: 1px solid var(--border2); color: var(--text);
   border-radius: 7px; padding: 4px 6px; font-size: 11px; font-family: 'Pretendard',sans-serif;
@@ -1178,12 +1196,18 @@ list-style-position: outside;
       <!-- 왼쪽: 탭별 모델/옵션 -->
       <div class="input-model-area">
         <div class="input-tab-options hidden" id="itab-opts-image" style="position:relative;">
-          <select class="input-tab-select" id="imageModelSelect" style="max-width:115px;">
+          <select class="input-tab-select" id="imageModelSelect" style="display:none;max-width:115px;">
             <option value="gemini-3.1-flash-image-preview">Gemini 3.1 Flash</option>
             <option value="grok-imagine-image-pro">Grok Imagine Pro</option>
             <option value="gpt-image-1.5">GPT Image 1.5</option>
           </select>
-          <button class="input-tab-select" id="imgRatioBtn" onclick="toggleRatioPopup()" style="width:36px;height:28px;font-weight:700;padding:0;display:flex;align-items:center;justify-content:center;flex-shrink:0">1:1</button>
+          <button class="img-top-btn ratio-btn" id="imgRatioBtn" onclick="toggleRatioPopup()" type="button" aria-label="비율 선택">
+            <span>1:1</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="7 10 12 15 17 10"/></svg>
+          </button>
+          <button class="img-top-btn img-provider-btn" id="imgProvGemini" onclick="setImageProvider('gemini')" type="button">Gemini</button>
+          <button class="img-top-btn img-provider-btn" id="imgProvOpenAI" onclick="setImageProvider('openai')" type="button">OpenAI</button>
+          <button class="img-top-btn img-provider-btn" id="imgProvXai" onclick="setImageProvider('xai')" type="button">Xai</button>
           <div id="ratioPopup" class="ratio-popup-container hidden">
             <div class="ratio-grid-9">
               <div class="ratio-item" onclick="selectRatio('21:9')">21:9</div>
@@ -1246,7 +1270,6 @@ list-style-position: outside;
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="12" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M8 12h8M16.5 7.5l-8 4.5M16.5 16.5l-8-4.5"/></svg>
         </button>
         <textarea id="userInput" rows="1" placeholder="무엇이든 물어보세요" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
-        <span class="composer-mode-chip" id="composerModeChip">이미지 모드</span>
         <button class="composer-icon-btn" id="micBtn" type="button" onclick="toggleMicInput()" title="음성 입력">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z"/><path d="M19 11a7 7 0 0 1-14 0"/><path d="M12 18v3"/><path d="M8 21h8"/></svg>
         </button>

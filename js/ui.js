@@ -2884,6 +2884,41 @@ function stopGeneration() {
   showToast('응답을 중지했어요.');
 }
 
+function updateComposerToolButtonForMode(normalizedMode) {
+  const btn = document.getElementById('toolBtn');
+  if (!btn) return;
+  const isImage = normalizedMode === 'image';
+  btn.classList.toggle('active', isImage);
+  btn.innerHTML = isImage
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="12" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M8 12h8M16.5 7.5l-8 4.5M16.5 16.5l-8-4.5"/></svg>';
+}
+
+function setImageProvider(provider) {
+  const select = document.getElementById('imageModelSelect');
+  if (!select) return;
+  const valueMap = {
+    gemini: 'gemini-3.1-flash-image-preview',
+    openai: 'gpt-image-1.5',
+    xai: 'grok-imagine-image-pro'
+  };
+  const selectedValue = valueMap[provider] || valueMap.xai;
+  if (select.value !== selectedValue) select.value = selectedValue;
+  document.getElementById('imgProvGemini')?.classList.toggle('on', provider === 'gemini');
+  document.getElementById('imgProvOpenAI')?.classList.toggle('on', provider === 'openai');
+  document.getElementById('imgProvXai')?.classList.toggle('on', provider === 'xai');
+}
+
+function syncImageProviderButtonsFromSelect() {
+  const selected = document.getElementById('imageModelSelect')?.value || '';
+  const provider = selected.startsWith('gemini')
+    ? 'gemini'
+    : selected.startsWith('gpt-image')
+      ? 'openai'
+      : 'xai';
+  setImageProvider(provider);
+}
+
 function switchInputTab(tab) {
   _inputTab = tab;
   const normalized = tab === 'context' ? 'project' : tab;
@@ -2906,6 +2941,8 @@ function switchInputTab(tab) {
   ['chat','image','project'].forEach(t => {
     document.getElementById('toolMode_' + t)?.classList.toggle('active', t === normalized);
   });
+  if (normalized === 'image') syncImageProviderButtonsFromSelect();
+  updateComposerToolButtonForMode(normalized);
   const chip = document.getElementById('composerModeChip');
   if (chip) {
     if (normalized === 'image') {
@@ -3879,7 +3916,8 @@ function toggleRatioPopup() {
 function selectRatio(ratio) {
   _selectedRatio = ratio;
   const btn = document.getElementById('imgRatioBtn');
-  if (btn) btn.textContent = ratio;
+  const label = btn?.querySelector('span');
+  if (label) label.textContent = ratio;
   
   // 활성시 스타일 적용
   document.querySelectorAll('#ratioPopup .ratio-item').forEach(el => {
