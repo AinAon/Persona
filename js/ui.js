@@ -3551,6 +3551,15 @@ function renderAttachmentPreviews() {
     div.innerHTML = `${media}${status}<button class="remove-btn" onclick="removeAttachment(${i})">x</button>`;
     row.appendChild(div);
   });
+  const hasImageAttachment = attachments.some(a => a?.type === 'image');
+  if (hasImageAttachment) {
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'attachment-add-thumb';
+    addBtn.onclick = () => document.getElementById('fileInput')?.click();
+    addBtn.innerHTML = '<span class="plus">+</span><span class="label">ADD</span>';
+    row.appendChild(addBtn);
+  }
 }
 async function removeAttachment(i) {
   const removed = attachments.splice(i,1)[0];

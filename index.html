@@ -720,11 +720,11 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
   width: 34px; height: 34px; border-radius: 50%;
   border: none;
   background: transparent;
-  color: rgba(255,255,255,.92);
+  color: #fff;
   display: inline-flex; align-items: center; justify-content: center;
   cursor: pointer; flex-shrink: 0;
   font-family: 'Pretendard', sans-serif; font-size: 10px; font-weight: 700; line-height: 1;
-  opacity: .96;
+  opacity: 1;
   transition: background .15s, color .15s, opacity .15s, transform .15s;
 }
 .img-top-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -767,7 +767,7 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 }
 .attach-btn { background: none; border: none; color: rgba(255,255,255,0.78); cursor: pointer; padding: 6px; flex-shrink: 0; -webkit-tap-highlight-color: transparent; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; }
 .attach-btn svg { width: 20px; height: 20px; display: block; }
-#userInput { flex: 1; background: transparent; border: none; border-radius: 0; padding: 4px 2px; color: var(--text); font-family: 'Pretendard', sans-serif; font-size: 16px; outline: none; resize: none; line-height: 1.4; max-height: 220px; overflow-y: auto; min-height: 22px; }
+#userInput { flex: 1; background: transparent; border: none; border-radius: 0; padding: 8px 2px 2px; color: var(--text); font-family: 'Pretendard', sans-serif; font-size: 16px; outline: none; resize: none; line-height: 1.4; max-height: 220px; overflow-y: auto; min-height: 22px; }
 #userInput::placeholder { color: var(--muted); }
 .composer-icon-btn { width: 34px; height: 34px; border-radius: 50%; background: transparent; color: rgba(255,255,255,0.82); border: none; cursor: pointer; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; transition: background .15s, color .15s, opacity .2s; }
 .composer-icon-btn:hover { background: rgba(255,255,255,0.08); }
@@ -832,6 +832,29 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .attachments-row { display: flex; gap: 6px; flex-wrap: wrap; padding: 6px 2px 0; }
 .attachment-thumb { position: relative; width: 48px; height: 48px; border-radius: 8px; overflow: hidden; background: var(--card); border: 1px solid var(--border2); }
 .attachment-thumb img { width: 48px; height: 48px; object-fit: cover; border-radius: 8px; }
+.attachment-add-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  border: 1px dashed rgba(255,255,255,.22);
+  background: rgba(255,255,255,.03);
+  color: rgba(255,255,255,.55);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.attachment-add-thumb:hover {
+  border-color: rgba(255,255,255,.45);
+  color: rgba(255,255,255,.85);
+  background: rgba(255,255,255,.06);
+}
+.attachment-add-thumb .plus { font-size: 16px; line-height: 1; font-weight: 700; }
+.attachment-add-thumb .label { font-size: 8px; letter-spacing: .08em; font-weight: 700; }
 .attachment-thumb .remove-btn { position: absolute; top: -4px; right: -4px; width: 16px; height: 16px; background: #333; border-radius: 50%; border: none; color: #aaa; font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .attachment-thumb.is-uploading img,
 .attachment-thumb.is-uploading .attachment-file { filter: brightness(.45); }
