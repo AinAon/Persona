@@ -508,6 +508,46 @@ function wrapPersonaReply(pid, reply) {
   return `[${pid}]${text}[/${pid}]`;
 }
 
+async function getImageDimensionsFromDataUrl(dataUrl) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth || img.width || 0, height: img.naturalHeight || img.height || 0 });
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
+  });
+}
+
+async function normalizeAttachmentImageForChat(dataUrl) {
+  const meta = await getImageDimensionsFromDataUrl(dataUrl);
+  if (!meta || !meta.width || !meta.height) return dataUrl;
+
+  const MAX_ORIGINAL_EDGE = 2048;
+  const LONG_EDGE_TARGET = 2000;
+  const longEdge = Math.max(meta.width, meta.height);
+  if (longEdge <= MAX_ORIGINAL_EDGE) return dataUrl;
+
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const srcW = img.width || meta.width;
+      const srcH = img.height || meta.height;
+      const scale = LONG_EDGE_TARGET / Math.max(srcW, srcH);
+      const w = Math.max(1, Math.round(srcW * scale));
+      const h = Math.max(1, Math.round(srcH * scale));
+      const cv = document.createElement('canvas');
+      cv.width = w;
+      cv.height = h;
+      const ctx = cv.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(cv.toDataURL('image/jpeg', 0.9));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
 async function buildAttachmentRecord(file) {
   const id = uid();
   const isImg = file.type.startsWith('image/');
@@ -537,7 +577,7 @@ async function buildAttachmentRecord(file) {
   record.originalCacheKey = cacheKey;
   await idbSet(cacheKey, dataUrl).catch(() => {});
 
-  const previewUrl = await resizeImage(dataUrl, 512, 0.82).catch(() => dataUrl);
+  const previewUrl = await normalizeAttachmentImageForChat(dataUrl).catch(() => dataUrl);
   record.previewUrl = previewUrl || dataUrl;
   record.dataUrl = record.previewUrl;
   return record;
@@ -2930,7 +2970,18 @@ function switchInputTab(tab) {
   _inputTab = tab;
   const normalized = tab === 'context' ? 'project' : tab;
   const tabbar = document.querySelector('.input-tabbar');
-  if (tabbar) tabbar.style.display = (tab === 'image' || tab === 'context') ? 'flex' : 'none';
+  if (tabbar) {
+    const show = (tab === 'image' || tab === 'context');
+    tabbar.style.display = show ? 'flex' : 'none';
+    tabbar.classList.toggle('image-floating', tab === 'image');
+    if (tab === 'image') {
+      tabbar.classList.remove('image-enter');
+      void tabbar.offsetWidth;
+      tabbar.classList.add('image-enter');
+    } else {
+      tabbar.classList.remove('image-enter');
+    }
+  }
   // 탭 버튼 active 토글
   ['chat','image','context'].forEach(t => {
     document.getElementById('itab-' + t)?.classList.toggle('active', t === tab);
@@ -3490,7 +3541,7 @@ function renderAttachmentPreviews() {
     if (a.uploading) div.classList.add('is-uploading');
     if (a.uploadError) div.classList.add('upload-error');
     const media = a.type === 'image'
-      ? `<img src="${a.dataUrl}">`
+      ? `<img src="${getAttachmentPreviewUrl(a) || a.dataUrl || ''}">`
       : `<div class="attachment-file">${a.name || '파일'}</div>`;
     const status = a.uploading
       ? `<div class="attachment-status"><div class="attachment-spinner"></div></div>`

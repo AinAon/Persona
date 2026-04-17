@@ -650,7 +650,7 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .msg-group.msg-enter { animation: msgRise .5s cubic-bezier(.22,.8,.24,1); }
 
 /* 입력창 */
-.chat-input-bar { background: var(--surface); border-top: 1px solid var(--border); padding: 0 10px 10px; flex-shrink: 0; }
+.chat-input-bar { position: relative; background: var(--surface); border-top: 1px solid var(--border); padding: 0 10px 10px; flex-shrink: 0; }
 
 /* ── 탭바 행: [모델선택...] [채팅▼][이미지▼][컨텍스트▼] */
 .input-tabbar {
@@ -658,6 +658,26 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
   align-items: center;
   gap: 6px;
   padding: 0 2px 0;
+}
+.input-tabbar.image-floating {
+  position: absolute;
+  left: 16px;
+  bottom: calc(100% + 8px);
+  z-index: 5;
+  pointer-events: none;
+}
+.input-tabbar.image-floating .input-model-area { pointer-events: auto; }
+.input-tabbar.image-floating .img-top-btn {
+  opacity: 0;
+  transform: translateY(10px) scale(.96);
+}
+.input-tabbar.image-floating.image-enter #itab-opts-image > .img-top-btn:nth-of-type(1) { animation: floatIn .22s ease-out .00s forwards; }
+.input-tabbar.image-floating.image-enter #itab-opts-image > .img-top-btn:nth-of-type(2) { animation: floatIn .22s ease-out .05s forwards; }
+.input-tabbar.image-floating.image-enter #itab-opts-image > .img-top-btn:nth-of-type(3) { animation: floatIn .22s ease-out .10s forwards; }
+.input-tabbar.image-floating.image-enter #itab-opts-image > .img-top-btn:nth-of-type(4) { animation: floatIn .22s ease-out .15s forwards; }
+@keyframes floatIn {
+  from { opacity: 0; transform: translateY(10px) scale(.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 /* 모델/옵션 영역 — 왼쪽 flex */
 .input-model-area {
