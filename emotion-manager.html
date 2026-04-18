@@ -60,13 +60,36 @@
 .section-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
 .section-title h2,.section-title h3{margin:0;font:600 13px var(--font-display);letter-spacing:.01em}
 .section-note{font-size:10px;color:var(--muted)}
-.persona-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.persona-grid{display:block}
 .persona-card{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--card);cursor:pointer;transition:.15s}
 .persona-card:hover{transform:translateY(-1px);border-color:var(--border2)}
 .persona-card.active{border-color:var(--accent)}
 .persona-thumb{aspect-ratio:2/3;background:#0b0b10;position:relative;overflow:hidden}
 .persona-thumb img{width:100%;height:100%;object-fit:cover;object-position:top;display:block}
 .persona-name{padding:6px 8px;font-size:10px;text-align:center;font-weight:700;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.persona-stage{position:relative;width:160px;max-width:100%}
+.persona-main{width:100%}
+.persona-popups{
+  position:absolute;
+  top:0;
+  left:calc(100% + 10px);
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  pointer-events:none;
+}
+.persona-popup{
+  width:132px;
+  opacity:0;
+  transform:translateX(-12px) scale(.98);
+  transition:opacity .24s ease, transform .24s ease;
+  transition-delay:calc(var(--i,0) * 40ms);
+}
+.persona-grid.open .persona-popups{pointer-events:auto}
+.persona-grid.open .persona-popup{
+  opacity:1;
+  transform:translateX(0) scale(1);
+}
 .badge{font-size:10px;padding:3px 8px;border-radius:999px;border:1px solid var(--border2);color:var(--muted)}
 .gallery-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
 .gallery-title{font-family:var(--font-display);font-size:14px;font-weight:700}
@@ -268,6 +291,7 @@ const state = {
   viewer: null,
   activeUpload: null,
   taskQueue: [],
+  personaPickerOpen: false,
 };
 
 const els = {
@@ -751,19 +775,51 @@ function render(){
   document.querySelectorAll('.cat-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.cat === state.activeCat));
 
   els.personaGrid.innerHTML = '';
-  for (const p of state.personas) {
-    const card = document.createElement('button');
-    card.type = 'button';
-    card.className = 'persona-card' + (state.activePid === p.pid ? ' active' : '');
-    card.innerHTML = `
-      <div class="persona-thumb">${getPersonaImage(p.pid) ? `<img src="${getPersonaImage(p.pid)}" alt="">` : '<div class="slot-empty">neutral_a</div>'}</div>
-      <div class="persona-name">${p.name || p.pid}</div>`;
-    card.onclick = () => {
-      state.activePid = p.pid;
-      render();
-      showStatus(`Selected ${p.pid} (IDB cache)`); 
-    };
-    els.personaGrid.appendChild(card);
+  if (state.personas.length) {
+    if (!state.activePid || !state.personas.some(p => p.pid === state.activePid)) {
+      state.activePid = state.personas[0].pid;
+    }
+    const activePersona = state.personas.find(p => p.pid === state.activePid) || state.personas[0];
+    const popupPersonas = state.personas.filter(p => p.pid !== activePersona.pid);
+    const mainImg = getPersonaImage(activePersona.pid);
+    const popupHtml = popupPersonas.map((p, i) => {
+      const img = getPersonaImage(p.pid);
+      return `
+      <button type="button" class="persona-card persona-popup" data-pid="${esc(p.pid)}" style="--i:${i}">
+        <div class="persona-thumb">${img ? `<img src="${img}" alt="">` : '<div class="slot-empty">neutral_a</div>'}</div>
+        <div class="persona-name">${esc(p.name || p.pid)}</div>
+      </button>`;
+    }).join('');
+    els.personaGrid.classList.toggle('open', !!state.personaPickerOpen && popupPersonas.length > 0);
+    els.personaGrid.innerHTML = `
+      <div class="persona-stage">
+        <button type="button" class="persona-card persona-main active" data-role="main">
+          <div class="persona-thumb">${mainImg ? `<img src="${mainImg}" alt="">` : '<div class="slot-empty">neutral_a</div>'}</div>
+          <div class="persona-name">${esc(activePersona.name || activePersona.pid)}</div>
+        </button>
+        <div class="persona-popups">${popupHtml}</div>
+      </div>`;
+
+    const mainBtn = els.personaGrid.querySelector('[data-role="main"]');
+    if (mainBtn) {
+      mainBtn.onclick = (ev) => {
+        ev.stopPropagation();
+        if (!popupPersonas.length) return;
+        state.personaPickerOpen = !state.personaPickerOpen;
+        render();
+      };
+    }
+    els.personaGrid.querySelectorAll('.persona-popup').forEach((btn) => {
+      btn.onclick = (ev) => {
+        ev.stopPropagation();
+        const pid = String(btn.getAttribute('data-pid') || '');
+        if (!pid) return;
+        state.activePid = pid;
+        state.personaPickerOpen = false;
+        render();
+        showStatus(`Selected ${pid} (IDB cache)`);
+      };
+    });
   }
 
   els.emotionGallery.innerHTML = '';
@@ -1349,6 +1405,13 @@ function init(){
     };
   }
   document.querySelectorAll('.cat-tab').forEach(btn => btn.onclick = () => { state.activeCat = btn.dataset.cat; render(); });
+  document.addEventListener('click', (e) => {
+    if (!state.personaPickerOpen) return;
+    if (!els.personaGrid?.contains(e.target)) {
+      state.personaPickerOpen = false;
+      render();
+    }
+  });
   els.cardFileInput.onchange = async () => {
     const file = els.cardFileInput.files?.[0];
     if (file) await uploadCurrentCard(file);
