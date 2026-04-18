@@ -2830,15 +2830,15 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
     if (hasImg && imageUrls.length > 0) {
       renderedContent = fmtContent.replace(
         /<img([^>]*?)src="([^"]+)"([^>]*?)>/gi,
-        (_, pre, src, post) =>
-          `<img${pre}src="${src}"${post} onclick="openImagePopup('${src.replace(/'/g,"\\'")}')" style="cursor:pointer">`
+        (_, pre, src, post) => {
+          const safeSrc = String(src || '').replace(/'/g, "\\'");
+          return `<div class="inline-image-wrap"><img${pre}src="${src}"${post} onclick="openImagePopup('${safeSrc}')" style="cursor:pointer"><div class="inline-image-actions"><button class="image-popup-action-btn" onclick="toggleInlineImageZoom(this)" title="원본 크기 / 축소">${getZoomIconSvg(false)}</button><button class="image-popup-action-btn" onclick="downloadImage('${safeSrc}','generated.jpg')" title="다운로드"><svg viewBox="0 0 24 24"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 21h16"/></svg></button><button class="image-popup-action-btn" onclick="upscaleImageAndDownload('${safeSrc}', this)" title="업스케일 후 다운로드"><svg viewBox="0 0 24 24"><path d="M4 14V4h10"/><path d="M20 10v10H10"/><path d="M14 4l6 6"/><path d="M4 20l6-6"/></svg></button><button class="image-popup-action-btn" onclick="copyImageToClipboard('${safeSrc}')" title="클립보드 복사"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div></div>`;
+        }
       );
     }
 
     // 저장 버튼
-    const dlBtn = hasImg && imageUrls.length > 0
-      ? `<div class="ai-img-actions">${imageUrls.map(u=>`<button class="img-download-btn" onclick="downloadImage('${u.replace(/'/g,"\\'")}','generated.jpg')">이미지 저장</button>`).join('')}</div>`
-      : '';
+    const dlBtn = '';
 
     html += `<div class="ai-msg ${hasImg ? 'ai-msg-img' : 'ai-msg-text'}" style="${opacity}">
       <div class="msg-av" style="background:hsl(${h},20%,11%);border-color:hsl(${h},28%,22%);${celebStroke};${avDisplay}${avShape}" onclick="openProfilePopup('${safePid}','${safeEmotion}',${h},'${safeThumb}','${safeSuffix}')">${baseImg}</div>
@@ -2848,7 +2848,7 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
           
         </div>
         <div class="${bubbleWrapClass}">
-          <div class="${bubbleClass}" style="background:hsl(${h},25%,13%);color:hsl(${h},55%,85%)">${renderedContent}${dlBtn}</div>
+          <div class="${bubbleClass}" style="background:hsl(${h},25%,13%);color:hsl(${h},55%,85%)">${renderedContent}</div>
         </div>
       </div>
     </div>`;
@@ -4084,7 +4084,11 @@ function updatePopupZoomButtonIcon() {
   const btn = document.getElementById('popupZoomBtn');
   if (!btn) return;
   btn.classList.toggle('active', _popupZoomed);
-  btn.innerHTML = _popupZoomed
+  btn.innerHTML = getZoomIconSvg(_popupZoomed);
+}
+
+function getZoomIconSvg(isZoomed) {
+  return isZoomed
     ? '<svg viewBox="0 0 24 24"><polyline points="3 9 3 3 9 3"/><polyline points="15 21 21 21 21 15"/><line x1="3" y1="3" x2="10" y2="10"/><line x1="21" y1="21" x2="14" y2="14"/></svg>'
     : '<svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
 }
@@ -4102,6 +4106,23 @@ async function copyPopupImageToClipboard() {
   }
   try {
     const res = await fetch(_popupImgUrl);
+    const blob = await res.blob();
+    await navigator.clipboard.write([new ClipboardItem({ [blob.type || 'image/png']: blob })]);
+    showToast('이미지를 클립보드에 복사했습니다.');
+  } catch (e) {
+    showToast('클립보드 복사에 실패했습니다.');
+  }
+}
+
+async function copyImageToClipboard(url) {
+  const target = String(url || '').trim();
+  if (!target) return;
+  if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') {
+    showToast('클립보드 이미지 복사를 지원하지 않는 환경입니다.');
+    return;
+  }
+  try {
+    const res = await fetch(target);
     const blob = await res.blob();
     await navigator.clipboard.write([new ClipboardItem({ [blob.type || 'image/png']: blob })]);
     showToast('이미지를 클립보드에 복사했습니다.');
@@ -4142,6 +4163,50 @@ async function upscalePopupImageAndDownload() {
     _popupUpscaling = false;
     if (btn) btn.classList.remove('busy');
   }
+}
+
+async function upscaleImageAndDownload(url, triggerBtn = null) {
+  const target = String(url || '').trim();
+  if (!target || _popupUpscaling) return;
+  _popupUpscaling = true;
+  if (triggerBtn) triggerBtn.classList.add('busy');
+  try {
+    const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+    if (!wUrl) throw new Error('Worker URL not configured');
+    const res = await fetch(wUrl + '/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gemini-3.1-flash-image-preview',
+        prompt: 'Upscale this image to high detail while preserving composition and identity. Keep colors natural and avoid style drift.',
+        images: [target],
+        aspect_ratio: '1:1'
+      })
+    });
+    const data = await res.json();
+    if (data?.result !== 'success') throw new Error(data?.error || 'upscale failed');
+    const rawImageUrl = String(data.image_url || '').trim();
+    const proxiedImageUrl = rawImageUrl ? `${wUrl}/image-fetch?url=${encodeURIComponent(rawImageUrl)}` : '';
+    const finalUrl = proxiedImageUrl || rawImageUrl;
+    if (!finalUrl) throw new Error('empty image url');
+    await downloadImage(finalUrl, 'upscaled.jpg');
+    showToast('업스케일 완료 후 다운로드했습니다.');
+  } catch (e) {
+    showToast('업스케일에 실패했습니다.');
+  } finally {
+    _popupUpscaling = false;
+    if (triggerBtn) triggerBtn.classList.remove('busy');
+  }
+}
+
+function toggleInlineImageZoom(btn) {
+  const wrap = btn?.closest?.('.inline-image-wrap');
+  const img = wrap?.querySelector?.('img');
+  if (!img) return;
+  const zoomed = !img.classList.contains('zoomed');
+  img.classList.toggle('zoomed', zoomed);
+  btn.classList.toggle('active', zoomed);
+  btn.innerHTML = getZoomIconSvg(zoomed);
 }
 
 async function downloadImage(url, filename = 'generated.jpg') {

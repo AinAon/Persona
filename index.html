@@ -934,6 +934,31 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 /* 이미지 컨테이너 및 버튼 스타일 */
 .bubble-img-container { width: 100%; margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
 .bubble-img { width: 100%; height: auto; border-radius: 12px; cursor: pointer; display: block; background: var(--surface); }
+.inline-image-wrap { position: relative; margin-top: 4px; }
+.inline-image-wrap > img { width: 100%; border-radius: 10px; display: block; }
+.inline-image-wrap > img.zoomed { max-width: none; width: auto; }
+.inline-image-actions {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 10px;
+  background: rgba(12, 12, 16, 0.58);
+  border: 1px solid rgba(255,255,255,.12);
+  backdrop-filter: blur(6px);
+}
+.inline-image-actions .image-popup-action-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+}
+.inline-image-actions .image-popup-action-btn svg {
+  width: 15px;
+  height: 15px;
+}
 .img-download-btn { align-self: flex-start; padding: 6px 14px; font-size: 11px; background: rgba(255,255,255,0.08); border: 1px solid var(--border2); border-radius: 8px; color: var(--muted); text-decoration: none; cursor: pointer; transition: all .15s; }
 .img-download-btn:hover { background: rgba(255,255,255,0.15); color: var(--text); }
 
