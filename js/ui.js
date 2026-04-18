@@ -347,12 +347,44 @@ function stickChatToBottom(area = document.getElementById('chatArea')) {
   area.scrollTop = area.scrollHeight;
 }
 
+function layoutHorizontalMasonryRows(root = document) {
+  const rows = root.querySelectorAll('.bubble-img-container.multi');
+  rows.forEach(row => {
+    const wraps = [...row.querySelectorAll('.inline-image-wrap')];
+    if (!wraps.length) return;
+    const imgs = wraps.map(w => w.querySelector('img')).filter(Boolean);
+    if (!imgs.length) return;
+    if (imgs.some(img => !img.naturalWidth || !img.naturalHeight)) return;
+
+    const rowWidth = row.clientWidth || row.getBoundingClientRect().width;
+    if (!rowWidth) return;
+    const style = getComputedStyle(row);
+    const gap = parseFloat(style.columnGap || style.gap || '8') || 8;
+    const available = Math.max(40, rowWidth - gap * Math.max(0, imgs.length - 1));
+
+    const ratios = imgs.map(img => img.naturalWidth / img.naturalHeight);
+    const ratioSum = ratios.reduce((sum, r) => sum + r, 0);
+    if (!ratioSum) return;
+    const fittedHeight = available / ratioSum;
+    const widths = ratios.map(r => r * fittedHeight);
+    if (widths.length > 1) {
+      const consumed = widths.slice(0, -1).reduce((a, b) => a + b, 0);
+      widths[widths.length - 1] = Math.max(16, available - consumed);
+    }
+    row.style.setProperty('--masonry-row-h', `${fittedHeight}px`);
+    wraps.forEach((w, i) => {
+      w.style.width = `${Math.max(16, widths[i] || 16)}px`;
+    });
+  });
+}
+
 function bindImageLoadBottomStick(area = document.getElementById('chatArea')) {
   if (!area) return;
   area.querySelectorAll('.inline-image-wrap img, .ai-bubble img, .bubble-img').forEach(img => {
     if (img.dataset.bottomStickBound === '1') return;
     img.dataset.bottomStickBound = '1';
     const onLoad = () => {
+      layoutHorizontalMasonryRows(area);
       if (area.dataset.imageLoadStick === '1') {
         requestAnimationFrame(() => stickChatToBottom(area));
       }
@@ -2533,6 +2565,15 @@ function ensureGlobalBackHandler() {
 
 ensureGlobalBackHandler();
 
+if (!window.__personaMasonryResizeBound) {
+  window.__personaMasonryResizeBound = true;
+  let masonryResizeTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(masonryResizeTimer);
+    masonryResizeTimer = setTimeout(() => layoutHorizontalMasonryRows(document.getElementById('chatArea') || document), 80);
+  });
+}
+
 function setupSwipeDelete(item, wrap, id) {
   let startX = 0, startY = 0, currentX = 0, tracking = false, revealed = false;
   const REVEAL_W = 144, THRESHOLD = 40;
@@ -2799,6 +2840,7 @@ async function renderChatArea() {
   renderMermaidBlocks(area);
   area.querySelectorAll('.msg-group').forEach(enhanceRenderedMessage);
   bindImageLoadBottomStick(area);
+  layoutHorizontalMasonryRows(area);
   requestAnimationFrame(() => { stickChatToBottom(area); });
 }
 
@@ -2964,6 +3006,7 @@ async function appendAIReplySequentially(reply, pList, suffixes, createdAt, tgtA
         if (document.getElementById('chatArea') === tgtArea) tgtArea.dataset.imageLoadStick = '0';
       }, 2600);
       bindImageLoadBottomStick(tgtArea);
+      layoutHorizontalMasonryRows(tgtArea);
       stickChatToBottom(tgtArea);
     }
     if (delays && i < segments.length - 1) await sleep(delays);
@@ -3478,6 +3521,7 @@ async function sendMessage() {
     attachMessageMeta(userEl.firstElementChild, userMsg.createdAt, 'right');
     area.appendChild(userEl.firstElementChild);
     updateChatBottomAnchor(area);
+    layoutHorizontalMasonryRows(area);
   }
 
   // 로딩 플레이스홀더
