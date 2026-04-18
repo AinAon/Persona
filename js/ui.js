@@ -4483,10 +4483,18 @@ function handleArchiveCardTap(key) {
 
 function updateArchiveSelectionUi() {
   const btn = document.getElementById('archiveBatchDeleteBtn');
+  const cancelBtn = document.getElementById('archiveBatchCancelBtn');
   if (!btn) return;
   const cnt = _archiveSelectedKeys.size;
   btn.disabled = cnt <= 0;
   btn.title = cnt > 0 ? `선택 삭제 (${cnt})` : '선택 삭제';
+  if (cancelBtn) cancelBtn.style.display = _archiveSelectionMode ? 'inline-flex' : 'none';
+}
+
+function clearArchiveSelection() {
+  _archiveSelectedKeys = new Set();
+  _archiveSelectionMode = false;
+  renderArchiveGrid();
 }
 
 async function deleteSelectedArchiveImages() {
