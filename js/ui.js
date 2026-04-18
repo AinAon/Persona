@@ -776,6 +776,7 @@ window.addEventListener('load', () => {
     popupImg.dataset.panBound = '1';
     popupImg.addEventListener('mousedown', startPopupPan);
     popupImg.addEventListener('touchstart', startPopupPan, { passive: false });
+    popupImg.addEventListener('wheel', handlePopupWheelZoom, { passive: false });
     window.addEventListener('mousemove', movePopupPan);
     window.addEventListener('touchmove', movePopupPan, { passive: false });
     window.addEventListener('mouseup', endPopupPan);
@@ -3007,6 +3008,8 @@ let _popupZoomed = false;
 let _popupPanning = false;
 let _popupPanOffset = { x: 0, y: 0 };
 let _popupPanLast = { x: 0, y: 0 };
+let _popupZoomLevel = 1;
+let _popupSuppressCloseUntil = 0;
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -4124,6 +4127,7 @@ function openImagePopup(url) {
   img.classList.remove('zoomed');
   img.classList.remove('panning');
   _popupZoomed = false;
+  _popupZoomLevel = 1;
   _popupPanning = false;
   _popupPanOffset = { x: 0, y: 0 };
   _popupPanLast = { x: 0, y: 0 };
@@ -4132,13 +4136,16 @@ function openImagePopup(url) {
   overlay.classList.add('active');
 }
 
-function closeImagePopup() {
+function closeImagePopup(e = null) {
+  if (e?.stopPropagation) e.stopPropagation();
+  if (Date.now() < _popupSuppressCloseUntil) return;
   const img = document.getElementById('popupImg');
   if (img) {
     img.classList.remove('zoomed');
     img.classList.remove('panning');
   }
   _popupZoomed = false;
+  _popupZoomLevel = 1;
   _popupPanning = false;
   _popupPanOffset = { x: 0, y: 0 };
   _popupPanLast = { x: 0, y: 0 };
@@ -4151,6 +4158,7 @@ function togglePopupImageZoom() {
   const img = document.getElementById('popupImg');
   if (!img) return;
   _popupZoomed = !_popupZoomed;
+  _popupZoomLevel = _popupZoomed ? Math.max(1.6, _popupZoomLevel) : 1;
   img.classList.toggle('zoomed', _popupZoomed);
   if (!_popupZoomed) {
     _popupPanning = false;
@@ -4169,7 +4177,7 @@ function applyPopupImageTransform() {
     img.style.transform = '';
     return;
   }
-  img.style.transform = `translate(${_popupPanOffset.x}px, ${_popupPanOffset.y}px)`;
+  img.style.transform = `translate(${_popupPanOffset.x}px, ${_popupPanOffset.y}px) scale(${_popupZoomLevel})`;
 }
 
 function getPopupPanPoint(e) {
@@ -4201,6 +4209,7 @@ function movePopupPan(e) {
   _popupPanLast = p;
   _popupPanOffset.x += dx;
   _popupPanOffset.y += dy;
+  _popupSuppressCloseUntil = Date.now() + 220;
   applyPopupImageTransform();
   if (e?.cancelable) e.preventDefault();
 }
@@ -4209,7 +4218,26 @@ function endPopupPan() {
   if (!_popupPanning) return;
   const img = document.getElementById('popupImg');
   _popupPanning = false;
+  _popupSuppressCloseUntil = Date.now() + 220;
   if (img) img.classList.remove('panning');
+}
+
+function handlePopupWheelZoom(e) {
+  const overlay = document.getElementById('imagePopup');
+  if (!overlay?.classList.contains('active')) return;
+  if (e?.cancelable) e.preventDefault();
+  const next = _popupZoomLevel + (e.deltaY < 0 ? 0.2 : -0.2);
+  _popupZoomLevel = Math.min(4, Math.max(1, Number(next.toFixed(2))));
+  _popupZoomed = _popupZoomLevel > 1.01;
+  const img = document.getElementById('popupImg');
+  if (img) img.classList.toggle('zoomed', _popupZoomed);
+  if (!_popupZoomed) {
+    _popupPanOffset = { x: 0, y: 0 };
+    _popupPanLast = { x: 0, y: 0 };
+  }
+  _popupSuppressCloseUntil = Date.now() + 220;
+  applyPopupImageTransform();
+  updatePopupZoomButtonIcon();
 }
 
 function updatePopupZoomButtonIcon() {
@@ -4231,19 +4259,7 @@ function downloadPopupImage() {
 }
 
 async function copyPopupImageToClipboard() {
-  if (!_popupImgUrl) return;
-  if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') {
-    showToast('클립보드 이미지 복사를 지원하지 않는 환경입니다.');
-    return;
-  }
-  try {
-    const res = await fetch(_popupImgUrl);
-    const blob = await res.blob();
-    await navigator.clipboard.write([new ClipboardItem({ [blob.type || 'image/png']: blob })]);
-    showToast('이미지를 클립보드에 복사했습니다.');
-  } catch (e) {
-    showToast('클립보드 복사에 실패했습니다.');
-  }
+  await copyImageToClipboard(_popupImgUrl);
 }
 
 async function copyImageToClipboard(url) {
@@ -4254,12 +4270,21 @@ async function copyImageToClipboard(url) {
     return;
   }
   try {
-    const res = await fetch(target);
+    const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+    const proxied = /^https?:\/\//i.test(target) && wUrl
+      ? `${wUrl}/image-fetch?url=${encodeURIComponent(target)}`
+      : target;
+    const res = await fetch(proxied);
     const blob = await res.blob();
     await navigator.clipboard.write([new ClipboardItem({ [blob.type || 'image/png']: blob })]);
     showToast('이미지를 클립보드에 복사했습니다.');
   } catch (e) {
-    showToast('클립보드 복사에 실패했습니다.');
+    try {
+      await navigator.clipboard.writeText(target);
+      showToast('이미지 URL을 클립보드에 복사했습니다.');
+    } catch {
+      showToast('클립보드 복사에 실패했습니다.');
+    }
   }
 }
 
