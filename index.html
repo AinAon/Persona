@@ -850,11 +850,11 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .send-btn:disabled { opacity: .3; cursor: not-allowed; }
 .send-btn svg { width: 15px; height: 15px; }
 .attachments-row { display: flex; gap: 6px; flex-wrap: wrap; padding: 6px 2px 0; }
-.attachment-thumb { position: relative; width: 48px; height: 48px; border-radius: 8px; overflow: hidden; background: var(--card); border: 1px solid var(--border2); }
-.attachment-thumb img { width: 48px; height: 48px; object-fit: cover; border-radius: 8px; }
+.attachment-thumb { position: relative; width: 48px; height: 144px; border-radius: 8px; overflow: hidden; background: var(--card); border: 1px solid var(--border2); }
+.attachment-thumb img { width: 48px; height: 144px; object-fit: cover; border-radius: 8px; }
 .attachment-add-thumb {
   width: 48px;
-  height: 48px;
+  height: 144px;
   border-radius: 10px;
   border: 1px dashed rgba(255,255,255,.22);
   background: rgba(255,255,255,.03);
@@ -945,10 +945,10 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 }
 
 /* 이미지 컨테이너 및 버튼 스타일 */
-.bubble-img-container { width: 100%; margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
-.bubble-img { width: 100%; height: auto; border-radius: 12px; cursor: pointer; display: block; background: var(--surface); }
-.inline-image-wrap { position: relative; margin-top: 4px; margin-bottom: 12px; }
-.inline-image-wrap > img { width: 100%; border-radius: 10px; display: block; }
+.bubble-img-container { width: 100%; margin-top: 8px; display: flex; flex-direction: row; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+.bubble-img { width: auto; height: 100%; border-radius: 12px; cursor: pointer; display: block; background: var(--surface); }
+.inline-image-wrap { position: relative; height: 180px; flex: 0 0 auto; margin-top: 4px; margin-bottom: 12px; }
+.inline-image-wrap > img { width: auto; height: 100%; border-radius: 10px; display: block; }
 .inline-image-wrap > img.zoomed { max-width: none; width: auto; }
 .inline-image-actions {
   position: absolute;

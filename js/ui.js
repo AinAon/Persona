@@ -379,6 +379,41 @@ function sanitizeTextForUnicodeSafety(value) {
   return s;
 }
 
+function extractFirstUrlFromText(text) {
+  const m = String(text || '').match(/https?:\/\/[^\s<>"')]+/i);
+  return m ? m[0] : '';
+}
+
+function extractImageUrlFromApiData(data) {
+  if (!data || typeof data !== 'object') return '';
+  const candidates = [
+    data.image_url,
+    data.imageUrl,
+    data.url,
+    data.image,
+    data.output_image_url,
+    Array.isArray(data.images) ? data.images[0] : '',
+    data?.output?.[0]?.url,
+    data?.result?.image_url
+  ];
+  for (const c of candidates) {
+    const u = String(c || '').trim();
+    if (/^https?:\/\//i.test(u) || /^data:image\//i.test(u)) return u;
+  }
+  const fromMd = String(data.reply || '').match(/!\[[^\]]*\]\((https?:\/\/[^)\s]+|data:image\/[^)]+)\)/i);
+  if (fromMd?.[1]) return fromMd[1];
+  return extractFirstUrlFromText(data.reply || '');
+}
+
+function normalizeGeneratedMarkdown(text) {
+  let s = String(text || '');
+  if (/!\[generated\](?!\()/i.test(s)) {
+    const u = extractFirstUrlFromText(s);
+    if (u) s = s.replace(/!\[generated\](?!\()/ig, `![generated](${u})`);
+  }
+  return s;
+}
+
 function isImageAttachment(a) {
   return a?.type === 'image';
 }
@@ -693,21 +728,18 @@ async function addFilesToAttachments(fileList, source = 'picker') {
 }
 
 function setComposerDragActive(active) {
-  const bar = document.querySelector('.chat-input-bar');
   const row = document.querySelector('.input-row');
-  const attachmentsRow = document.getElementById('attachmentsRow');
-  [bar, row, attachmentsRow].forEach(el => {
-    if (!el) return;
-    el.style.transition = 'box-shadow .12s ease, border-color .12s ease, background-color .12s ease';
-    el.style.boxShadow = active ? '0 0 0 1px rgba(255,255,255,.22), 0 0 0 4px rgba(255,255,255,.06)' : '';
-    el.style.backgroundColor = active && el === attachmentsRow ? 'rgba(255,255,255,.04)' : '';
-  });
+  if (!row) return;
+  row.style.transition = 'box-shadow .12s ease, border-color .12s ease, background-color .12s ease';
+  row.style.boxShadow = active ? '0 0 0 1px rgba(255,255,255,.22), 0 0 0 4px rgba(255,255,255,.06)' : '';
+  row.style.backgroundColor = '';
 }
 
 function initUserInputGuards() {
   const input = document.getElementById('userInput');
   if (!input) return;
-  const composer = document.querySelector('.chat-input-bar');
+  const row = document.querySelector('.input-row');
+  if (!row) return;
   let dragDepth = 0;
 
   input.addEventListener('paste', e => {
@@ -758,7 +790,7 @@ function initUserInputGuards() {
     }
   };
 
-  [composer, input, document.getElementById('attachmentsRow')].filter(Boolean).forEach(el => {
+  [row].forEach(el => {
     el.addEventListener('dragenter', onDragEnter);
     el.addEventListener('dragover', onDragOver);
     el.addEventListener('dragleave', onDragLeave);
@@ -3316,7 +3348,39 @@ function renderUserMessageHTML(msg) {
     ? msg.content
     : (Array.isArray(msg?.content) ? msg.content.find(c => c?.type === 'text')?.text || '' : '');
   const cleanedText = attachmentsForRender.length ? text.replace(/\n\nAttached files:\n[\s\S]*$/m, '') : text;
-  return `<div class="msg-group"><div class="user-msg">${renderUserBubbleHTMLV2(cleanedText, attachmentsForRender)}</div></div>`;
+  return `<div class="msg-group"><div class="user-msg">${renderUserBubbleHTMLV3(cleanedText, attachmentsForRender)}</div></div>`;
+}
+
+function renderUserBubbleHTMLV3(text, atts) {
+  let html = '';
+  let imageItemsHtml = '';
+  (atts || []).forEach(a => {
+    const isImg = isImageAttachment(a);
+    const viewUrl = isImg ? getAttachmentPreviewUrl(a) : (a?.url || a?.transportUrl || a?.dataUrl || '');
+    const dlUrl = a?.url || getAttachmentStoredUrl(a) || viewUrl;
+    if (!viewUrl) return;
+    const safeViewUrl = String(viewUrl).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const safeName = String(a?.name || (isImg ? 'image' : 'file')).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    if (isImg) {
+      imageItemsHtml += `
+      <div class="inline-image-wrap">
+        <img class="bubble-img" src="${viewUrl}" onclick="openImagePopup('${safeViewUrl}')">
+        <div class="inline-image-actions">
+          <button class="image-popup-action-btn" onclick="downloadImage('${safeViewUrl}','${safeName}')" title="다운로드">
+            <svg viewBox="0 0 24 24"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 21h16"/></svg>
+          </button>
+        </div>
+      </div>`;
+    } else {
+      html += `
+      <div class="bubble-file-container">
+        <a class="bubble-file-link" href="${dlUrl}" target="_blank" rel="noopener">${esc(a?.name || 'file')}</a>
+      </div>`;
+    }
+  });
+  if (imageItemsHtml) html += `<div class="bubble-img-container">${imageItemsHtml}</div>`;
+  if (text) html += fmt(text);
+  return html;
 }
 
 async function sendMessage() {
@@ -3596,8 +3660,10 @@ async function sendMessage() {
         } else {
           reply = sanitizeTextForUnicodeSafety(data.reply || '');
           if (isImageReq) {
-            const rawImageUrl = String(data.image_url || '').trim();
-            const proxiedImageUrl = rawImageUrl ? `${wUrl}/image-fetch?url=${encodeURIComponent(rawImageUrl)}` : '';
+            const rawImageUrl = extractImageUrlFromApiData(data);
+            const proxiedImageUrl = /^https?:\/\//i.test(rawImageUrl || '')
+              ? `${wUrl}/image-fetch?url=${encodeURIComponent(rawImageUrl)}`
+              : '';
             const safeImageUrl = proxiedImageUrl || rawImageUrl;
             if (safeImageUrl) {
               generatedImageUrl = safeImageUrl;
@@ -3614,7 +3680,7 @@ async function sendMessage() {
         reply = sanitizeTextForUnicodeSafety(`[${pid0}]연결 실패: ${e.message}[/${pid0}]`);
       }
     }
-    reply = sanitizeTextForUnicodeSafety(reply);
+    reply = normalizeGeneratedMarkdown(sanitizeTextForUnicodeSafety(reply));
 
     if (thinkEl.parentNode) thinkEl.remove();
     
