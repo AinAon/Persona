@@ -1743,9 +1743,6 @@ function renderEditBody(p, hdImage = null) {
       <div class="edit-field-label">기본 응답 모델 (이 페르소나가 참여한 채팅의 기본값)</div>
       ${buildModelSelect('editDefaultModel', p.defaultModel || '')}
     </div>`;
-  _editMultiUploadQueue = [];
-  renderEditMultiUploadList();
-  initEditMultiDropzone();
   ensureEditPrivateMemoryPanel(p.pid);
   renderPrivateMemoryList(p.pid);
 }

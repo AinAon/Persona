@@ -567,6 +567,11 @@ body {
 }
 .edit-upload-state.done { color: #8cf0b9; }
 .edit-upload-state.fail { color: #ff9ea6; }
+/* 페르소나 설정: 이미지 단체 업로드 UI 숨김 */
+#editBody #editMultiImgInput,
+#editBody #editMultiDropzone,
+#editBody #editMultiUploadList,
+#editBody button[onclick*="editMultiImgInput"] { display: none !important; }
 
 .edit-section-title { font-size: 18px; font-weight: 700; color: #7B6EF6; margin-bottom: 14px; margin-top: 4px; }
 .edit-field-label { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 5px; margin-top: 10px; }
