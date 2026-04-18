@@ -123,15 +123,15 @@
 .emotion-rule{height:1px;background:rgba(255,255,255,.18);margin:0 0 8px 0}
 .emotion-row{display:flex;gap:10px;overflow-x:auto;overflow-y:hidden;padding:2px 2px 8px 2px;scrollbar-width:thin}
 .emotion-row .slot-card{flex:0 0 auto}
-.slot-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;width:200px;min-width:200px;max-width:200px;height:auto}
-.slot-card.has-image{border-color:rgba(124,106,247,.55)}
+.slot-card{background:var(--card);border:0;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;width:200px;min-width:200px;max-width:200px;height:auto}
+.slot-card.has-image{border:0}
 .slot-preview{width:100%;aspect-ratio:2/3;flex:0 0 auto;background:#0b0b10;position:relative;overflow:hidden;cursor:pointer}
 .slot-preview img{width:100%;height:100%;object-fit:cover;display:block}
 .slot-empty{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:12px}
 .slot-foot{padding:8px;display:grid;gap:8px}
 .slot-actions{display:flex;gap:6px}
 .slot-actions .btn{width:30px;height:30px;flex:0 0 30px;border-radius:999px;padding:0;display:inline-flex;align-items:center;justify-content:center}
-.add-slot-card{display:grid;place-items:center;cursor:pointer;color:var(--muted);font-weight:700;font-size:12px;letter-spacing:.03em;border:0;background:transparent}
+.add-slot-card{display:grid;place-items:center;cursor:pointer;color:var(--muted);font-weight:700;font-size:12px;letter-spacing:.03em;border:1px solid var(--border2);background:transparent}
 .add-slot-card:hover{color:var(--text);border-color:var(--accent)}
 .row-note{font-size:10px;color:var(--muted);margin-top:4px}
 .bottom-status{flex:0 0 auto;position:relative;z-index:10;padding:4px 10px;border-top:1px solid var(--border);font-size:11px;line-height:1.2;color:var(--muted);white-space:pre-wrap;height:min(5vh,50px);max-height:50px;min-height:26px;overflow:auto;background:rgba(10,10,14,.98)}
@@ -957,7 +957,7 @@ function render(){
     }
     const addCard = document.createElement('article');
     addCard.className = 'slot-card add-slot-card';
-    addCard.innerHTML = '<div>[+ ADD]</div>';
+    addCard.innerHTML = '<div>+ ADD</div>';
     addCard.onclick = () => {
       const next = addSlotForEmotion(emo.id, state.activePid);
       if (!next) {
