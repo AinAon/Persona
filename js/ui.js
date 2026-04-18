@@ -2910,7 +2910,7 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
         /<img([^>]*?)src="([^"]+)"([^>]*?)>/gi,
         (_, pre, src, post) => {
           const safeSrc = String(src || '').replace(/'/g, "\\'");
-          return `<div class="inline-image-wrap"><img${pre}src="${src}"${post} onclick="openImagePopup('${safeSrc}')" style="cursor:pointer"><div class="inline-image-actions"><button class="image-popup-action-btn" onclick="downloadImage('${safeSrc}','generated.jpg')" title="다운로드"><svg viewBox="0 0 24 24"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 21h16"/></svg></button></div></div>`;
+          return `<div class="inline-image-wrap"><img${pre}src="${src}"${post} onclick="openImagePopup('${safeSrc}')" style="cursor:pointer"><div class="inline-image-actions"><button class="image-popup-action-btn" onclick="addImageSourceToComposer('${safeSrc}','reference-from-generated.jpg')" title="소스에 추가"><svg viewBox="0 0 24 24"><path d="M9 7H4v5"/><path d="M4 12c2.5-3.5 5.5-5 9.5-5H20"/><path d="M20 12v7H4v-4"/></svg></button><button class="image-popup-action-btn" onclick="downloadImage('${safeSrc}','generated.jpg')" title="다운로드"><svg viewBox="0 0 24 24"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 21h16"/></svg></button></div></div>`;
         }
       );
     }
@@ -3366,6 +3366,9 @@ function renderUserBubbleHTMLV3(text, atts) {
       <div class="inline-image-wrap">
         <img class="bubble-img" src="${viewUrl}" onclick="openImagePopup('${safeViewUrl}')">
         <div class="inline-image-actions">
+          <button class="image-popup-action-btn" onclick="addImageSourceToComposer('${safeViewUrl}','${safeName}')" title="소스에 추가">
+            <svg viewBox="0 0 24 24"><path d="M9 7H4v5"/><path d="M4 12c2.5-3.5 5.5-5 9.5-5H20"/><path d="M20 12v7H4v-4"/></svg>
+          </button>
           <button class="image-popup-action-btn" onclick="downloadImage('${safeViewUrl}','${safeName}')" title="다운로드">
             <svg viewBox="0 0 24 24"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 21h16"/></svg>
           </button>
@@ -3807,6 +3810,45 @@ function renderAttachmentPreviews() {
     addBtn.innerHTML = '<span class="plus">+</span><span class="label">ADD</span>';
     row.appendChild(addBtn);
   }
+}
+
+function guessImageNameFromUrl(url, fallback = 'reference-from-chat.jpg') {
+  try {
+    const u = new URL(String(url || '').trim());
+    const base = String(u.pathname || '').split('/').pop() || '';
+    if (base) return base;
+  } catch {}
+  return fallback;
+}
+
+function addImageSourceToComposer(url, name = '') {
+  const target = String(url || '').trim();
+  if (!target) return;
+  if (!Array.isArray(attachments)) attachments = [];
+  const exists = attachments.some(a => a?.type === 'image' && (
+    String(getAttachmentStoredUrl(a) || '').trim() === target ||
+    String(getAttachmentPreviewUrl(a) || '').trim() === target ||
+    String(a?.dataUrl || '').trim() === target
+  ));
+  if (exists) {
+    showToast('이미 소스로 추가되어 있습니다.');
+    return;
+  }
+  attachments.push({
+    id: `src_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    type: 'image',
+    name: name || guessImageNameFromUrl(target),
+    mimeType: 'image/jpeg',
+    dataUrl: target,
+    previewUrl: target,
+    transportUrl: target,
+    uploading: false,
+    uploadError: false,
+    source: 'bubble'
+  });
+  renderAttachmentPreviews();
+  document.getElementById('userInput')?.focus();
+  showToast('이미지를 소스에 추가했습니다.');
 }
 async function removeAttachment(i) {
   const removed = attachments.splice(i,1)[0];
