@@ -129,9 +129,11 @@
 .slot-preview img{width:100%;height:100%;object-fit:cover;display:block}
 .slot-empty{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:12px}
 .slot-foot{padding:8px;display:grid;gap:8px}
-.slot-actions{display:flex;gap:6px}
-.slot-actions .btn{width:30px;height:30px;flex:0 0 30px;border-radius:999px;padding:0;display:inline-flex;align-items:center;justify-content:center}
-.add-slot-card{display:grid;place-items:center;cursor:pointer;color:var(--muted);font-weight:700;font-size:12px;letter-spacing:.03em;border:1px solid var(--border2);background:transparent}
+.slot-actions{display:flex;gap:6px;align-items:center;justify-content:center}
+.slot-actions .btn{width:31px;height:31px;flex:0 0 31px;border-radius:999px;padding:0;display:inline-flex;align-items:center;justify-content:center}
+.add-slot-card{display:flex;flex-direction:column;cursor:pointer;color:var(--muted);font-weight:700;font-size:12px;letter-spacing:.03em;border:1px solid var(--border2);background:transparent}
+.add-slot-preview{width:100%;aspect-ratio:2/3;display:grid;place-items:center;background:#0b0b10}
+.add-slot-foot{padding:8px;display:grid;place-items:center}
 .add-slot-card:hover{color:var(--text);border-color:var(--accent)}
 .row-note{font-size:10px;color:var(--muted);margin-top:4px}
 .bottom-status{flex:0 0 auto;position:relative;z-index:10;padding:4px 10px;border-top:1px solid var(--border);font-size:11px;line-height:1.2;color:var(--muted);white-space:pre-wrap;height:min(5vh,50px);max-height:50px;min-height:26px;overflow:auto;background:rgba(10,10,14,.98)}
@@ -195,9 +197,7 @@
     <div class="persona-grid" id="personaGrid"></div>
     <div class="sidebar-actions">
       <button class="side-action-btn" id="reloadBtn" title="Reload" aria-label="Reload"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></button>
-      <button class="side-action-btn" id="generateAllBtn" title="Generate all" aria-label="Generate all"><svg viewBox="0 0 24 24"><path d="M12 3v4"/><path d="M12 17v4"/><path d="M3 12h4"/><path d="M17 12h4"/><path d="M6.5 6.5l2.8 2.8"/><path d="M14.7 14.7l2.8 2.8"/><path d="M17.5 6.5l-2.8 2.8"/><path d="M9.3 14.7l-2.8 2.8"/></svg></button>
       <button class="side-action-btn" id="pushAllBtn" title="Push all" aria-label="Push all"><svg viewBox="0 0 24 24"><path d="M7 18a4 4 0 1 1 1-7.9A6 6 0 0 1 20 12a4 4 0 0 1-1 7.9H7z"/><path d="M12 15V9"/><path d="M9.5 11.5 12 9l2.5 2.5"/></svg></button>
-      <button class="side-action-btn" id="deleteAllBtn" title="Delete all" aria-label="Delete all"><svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>
       <button class="side-action-btn" id="stopBtn" title="Stop" aria-label="Stop" style="display:none"><svg viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg></button>
     </div>
   </aside>
@@ -770,6 +770,15 @@ function getPersonaImage(pid){
     || state.images[pid]?.neutral?.a?.full
     || '';
 }
+function getPersonaTagColor(persona = null){
+  const p = persona || {};
+  const h = Number(p.hue);
+  if (Number.isFinite(h)) {
+    const hue = ((Math.round(h) % 360) + 360) % 360;
+    return `hsl(${hue} 48% 30%)`;
+  }
+  return '#53401f';
+}
 function getEmotionImage(pid, eid, slot){
   const s = state.images[pid]?.[eid]?.[slot];
   return s?.full || '';
@@ -863,7 +872,7 @@ function render(){
       <div class="persona-stage">
         <button type="button" class="persona-card persona-main active" data-role="main">
           <div class="persona-thumb">${mainImg ? `<img src="${mainImg}" alt="">` : '<div class="slot-empty">neutral_a</div>'}</div>
-          <div class="persona-name">${esc(activePersona.name || activePersona.pid)}</div>
+          <div class="persona-name" style="background:${esc(getPersonaTagColor(activePersona))}">${esc(activePersona.name || activePersona.pid)}</div>
         </button>
         <div class="persona-popups">${popupHtml}</div>
       </div>`;
@@ -957,7 +966,10 @@ function render(){
     }
     const addCard = document.createElement('article');
     addCard.className = 'slot-card add-slot-card';
-    addCard.innerHTML = '<div>+ ADD</div>';
+    addCard.innerHTML = `
+      <div class="add-slot-preview">+ ADD</div>
+      <div class="add-slot-foot"></div>
+    `;
     addCard.onclick = () => {
       const next = addSlotForEmotion(emo.id, state.activePid);
       if (!next) {
@@ -1468,11 +1480,11 @@ async function reloadAll(){
 }
 
 function init(){
-  els.reloadBtn.onclick = () => reloadAll();
-  els.generateAllBtn.onclick = generateAll;
-  els.pushAllBtn.onclick = pushAll;
-  els.deleteAllBtn.onclick = deleteAll;
-  els.stopBtn.onclick = () => { state.pendingAbort?.abort?.(); showStatus('Stopped.'); setBusy(false); };
+  if (els.reloadBtn) els.reloadBtn.onclick = () => reloadAll();
+  if (els.generateAllBtn) els.generateAllBtn.onclick = generateAll;
+  if (els.pushAllBtn) els.pushAllBtn.onclick = pushAll;
+  if (els.deleteAllBtn) els.deleteAllBtn.onclick = deleteAll;
+  if (els.stopBtn) els.stopBtn.onclick = () => { state.pendingAbort?.abort?.(); showStatus('Stopped.'); setBusy(false); };
   els.viewerClose.onclick = closeViewer;
   els.viewer.onclick = (e) => { if (e.target === els.viewer) closeViewer(); };
   if (els.cropCancelBtn) {
