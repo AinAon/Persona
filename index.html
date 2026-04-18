@@ -1598,7 +1598,7 @@ list-style-position: outside;
 </div>
 
 <div class="image-popup-overlay" id="imagePopup" onclick="closeImagePopup(event)">
-  <img class="image-popup-img" id="popupImg" onclick="event.stopPropagation()">
+  <img class="image-popup-img" id="popupImg" onclick="closeImagePopup(event)">
   <div class="image-popup-actions" onclick="event.stopPropagation()">
     <button class="image-popup-action-btn" id="popupZoomBtn" onclick="togglePopupImageZoom()" title="원본 크기 / 축소">
       <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
