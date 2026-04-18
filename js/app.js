@@ -127,6 +127,14 @@ function loadSessionsFromCache() {
 }
 
 async function init() {
+  // Failsafe: loading overlay should not stay forever if init flow is interrupted.
+  const loadingFailsafe = setTimeout(() => {
+    try {
+      setLoading(false);
+      if (typeof renderPersonaGrid === 'function') renderPersonaGrid();
+      if (typeof renderChatList === 'function') renderChatList();
+    } catch(e) {}
+  }, 15000);
   setLoading(true, '캐시 상태 점검 준비...');
   loadUserProfile();
   applyFontSize(userProfile.fontSize || 15);
@@ -205,7 +213,35 @@ async function init() {
       }
     }).catch(() => {});
   }
+  clearTimeout(loadingFailsafe);
 }
 
 // 앱 실행
-init();
+window.forceRecoverApp = async function() {
+  try {
+    setLoading(false);
+    const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+    if (wUrl) {
+      const pRes = await fetch(wUrl + '/personas', { cache: 'no-store' });
+      const pData = await pRes.json().catch(() => ({}));
+      if (Array.isArray(pData.personas)) {
+        const seen = new Set();
+        personas = pData.personas.filter(p => p && p.pid && !seen.has(p.pid) && seen.add(p.pid));
+        setLocalPersonas(personas);
+      }
+      await loadIndex();
+      if (typeof preloadAllSessions === 'function') await preloadAllSessions();
+    }
+    if (typeof renderPersonaGrid === 'function') await renderPersonaGrid();
+    if (typeof renderChatList === 'function') await renderChatList();
+    if (sessions?.length && typeof openChat === 'function') await openChat(sessions[0].id);
+  } catch(e) {
+    console.error('forceRecoverApp failed:', e);
+  } finally {
+    setLoading(false);
+  }
+};
+init().catch((e) => {
+  console.error('init failed:', e);
+  try { setLoading(false); } catch(err) {}
+});
