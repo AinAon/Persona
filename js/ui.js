@@ -4248,6 +4248,11 @@ let _archiveLoaded = false;
 let _archivePopupContext = null;
 let _pendingArchiveFocus = null;
 const ARCHIVE_MANIFEST_CACHE_KEY = 'archive_manifest_v1';
+const ARCHIVE_INITIAL_LOAD = 30;
+const ARCHIVE_LOAD_MORE = 10;
+const ARCHIVE_PREFETCH_PAGES = 1;
+let _archiveVisibleCount = ARCHIVE_INITIAL_LOAD;
+let _archiveScrollBound = false;
 
 function extractR2ImageKey(url) {
   const raw = String(url || '').trim();
@@ -4340,10 +4345,12 @@ async function ensureArchiveManifest() {
 
 function setArchiveFilter(filter) {
   _archiveFilter = filter;
+  _archiveVisibleCount = ARCHIVE_INITIAL_LOAD;
   document.getElementById('archiveFilterAll')?.classList.toggle('active', filter === 'all');
   document.getElementById('archiveFilterGenerated')?.classList.toggle('active', filter === 'generated');
   document.getElementById('archiveFilterUpload')?.classList.toggle('active', filter === 'upload');
   renderArchiveGrid();
+  prefetchArchiveNextPage();
 }
 
 function getFilteredArchiveItems() {
@@ -4363,7 +4370,8 @@ function renderArchiveGrid() {
     return;
   }
   empty.style.display = 'none';
-  grid.innerHTML = rows.map((it) => {
+  const visible = rows.slice(0, _archiveVisibleCount);
+  grid.innerHTML = visible.map((it) => {
     const safeUrl = String(it.url || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const safeKey = String(it.key || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     return `<div class="archive-card" onclick="openArchiveImagePopup('${safeKey}')">
@@ -4374,6 +4382,12 @@ function renderArchiveGrid() {
       </div>
     </div>`;
   }).join('');
+  if (rows.length > visible.length) {
+    empty.style.display = 'block';
+    empty.textContent = `스크롤하면 더 불러옵니다 (${visible.length}/${rows.length})`;
+  } else {
+    empty.style.display = 'none';
+  }
 }
 
 async function renderArchivePane() {
@@ -4383,6 +4397,36 @@ async function renderArchivePane() {
   setArchiveFilter(_archiveFilter || 'all');
   await ensureArchiveManifest();
   renderArchiveGrid();
+  bindArchiveInfiniteScroll();
+  prefetchArchiveNextPage();
+}
+
+function bindArchiveInfiniteScroll() {
+  if (_archiveScrollBound) return;
+  const pane = document.querySelector('#archivePane .archive-pane');
+  if (!pane) return;
+  _archiveScrollBound = true;
+  pane.addEventListener('scroll', () => {
+    const nearBottom = pane.scrollTop + pane.clientHeight >= pane.scrollHeight - 140;
+    if (!nearBottom) return;
+    const total = getFilteredArchiveItems().length;
+    if (_archiveVisibleCount >= total) return;
+    _archiveVisibleCount = Math.min(total, _archiveVisibleCount + ARCHIVE_LOAD_MORE);
+    renderArchiveGrid();
+    prefetchArchiveNextPage();
+  }, { passive: true });
+}
+
+function prefetchArchiveNextPage() {
+  const rows = getFilteredArchiveItems();
+  if (!rows.length) return;
+  const start = _archiveVisibleCount;
+  const end = Math.min(rows.length, start + (ARCHIVE_LOAD_MORE * ARCHIVE_PREFETCH_PAGES));
+  if (end <= start) return;
+  rows.slice(start, end).forEach((it) => {
+    const img = new Image();
+    img.src = it.url;
+  });
 }
 
 function openArchiveImagePopup(key) {

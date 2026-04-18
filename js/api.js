@@ -423,9 +423,9 @@ async function generateThumbnailSet(fullDataUrl, pid, emotion = 'neutral_a') {
   fullSource.height = H;
   fullSource.getContext('2d').drawImage(img, 0, 0, W, H);
 
-  const cropX = Math.round(W * 0.17);
-  const cropY = Math.round(H * 0.05);
-  const cropW = Math.max(1, W - cropX * 2);
+  const cropX = Math.max(0, Math.round(W * 0.17));
+  const cropY = Math.max(0, Math.round(H * 0.05));
+  const cropW = Math.max(1, Math.min(W - cropX * 2, Math.round(W * 0.66)));
   const cropH = Math.max(1, Math.min(H - cropY, Math.round(cropW * 1.5)));
 
   const rectSource = document.createElement('canvas');

@@ -551,16 +551,16 @@ async function makeVariants(dataUrl, pid, eid, slot){
   fullSource.height = H;
   fullSource.getContext('2d').drawImage(img, 0, 0, W, H);
 
-  const rectW = Math.max(1, W);
-  const rectH = Math.max(1, H);
+  const cropX = Math.max(0, Math.round(W * 0.17));
+  const cropY = Math.max(0, Math.round(H * 0.05));
+  const rectW = Math.max(1, Math.min(W - cropX * 2, Math.round(W * 0.66)));
+  const rectH = Math.max(1, Math.min(H - cropY, Math.round(rectW * 1.5)));
   const rectSource = document.createElement('canvas');
   rectSource.width = rectW;
   rectSource.height = rectH;
-  rectSource.getContext('2d').drawImage(img, 0, 0, rectW, rectH);
+  rectSource.getContext('2d').drawImage(img, cropX, cropY, rectW, rectH, 0, 0, rectW, rectH);
 
-  const cropX = Math.max(0, Math.round(W * 0.17));
-  const cropY = Math.max(0, Math.round(H * 0.05));
-  const circleSide = Math.max(1, Math.min(Math.max(1, W - cropX * 2), Math.max(1, H - cropY)));
+  const circleSide = Math.max(1, Math.min(rectW, H - cropY));
   const circleSource = document.createElement('canvas');
   circleSource.width = circleSide;
   circleSource.height = circleSide;
