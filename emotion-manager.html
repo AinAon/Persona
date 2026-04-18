@@ -566,7 +566,7 @@ async function makeVariants(dataUrl, pid, eid, slot){
   circleSource.height = circleSide;
   circleSource.getContext('2d').drawImage(img, cropX, cropY, circleSide, circleSide, 0, 0, circleSide, circleSide);
 
-  const aWidths = [Math.min(1200, W)];
+  const aWidths = [Math.min(1000, W)];
   const bWidths = [Math.min(300, rectW)];
   const cSizes = [Math.min(200, circleSide)];
 
