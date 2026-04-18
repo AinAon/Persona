@@ -4276,6 +4276,25 @@ function getArchiveTypeByKey(key) {
   return 'other';
 }
 
+function getFilenameFromR2Key(key, fallback = 'image.jpg') {
+  const raw = String(key || '').trim();
+  if (!raw) return fallback;
+  const base = raw.split('/').pop() || '';
+  return base || fallback;
+}
+
+function normalizeArchiveKey(rawKey) {
+  const raw = String(rawKey || '').trim();
+  if (!raw) return '';
+  const fromUrl = extractR2ImageKey(raw);
+  if (fromUrl) return fromUrl;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
 function buildArchiveSourceMap() {
   const out = new Map();
   (sessions || []).forEach((s) => {
@@ -4322,11 +4341,12 @@ async function loadArchiveManifestFromR2() {
   return keys
     .filter(Boolean)
     .map((key) => {
+      const normalizedKey = normalizeArchiveKey(key);
       const mapped = sourceMap.get(key) || {};
       return {
-        key,
-        url: `${wUrl}/image/${encodeURIComponent(key).replace(/%2F/gi, '/')}`,
-        type: getArchiveTypeByKey(key),
+        key: normalizedKey,
+        url: `${wUrl}/image/${encodeURIComponent(normalizedKey).replace(/%2F/gi, '/')}`,
+        type: getArchiveTypeByKey(normalizedKey),
         chatId: mapped.chatId || null,
         messageIndex: Number.isFinite(mapped.messageIndex) ? mapped.messageIndex : null,
         updatedAt: now,
@@ -4379,15 +4399,16 @@ function renderArchiveGrid() {
   grid.innerHTML = visible.map((it) => {
     const safeUrl = String(it.url || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const safeKey = String(it.key || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const safeFile = String(getFilenameFromR2Key(it.key, 'image.jpg')).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const selected = _archiveSelectedKeys.has(it.key) ? ' selected' : '';
     return `<div class="archive-card${selected}" onclick="handleArchiveCardTap('${safeKey}')" onpointerdown="startArchiveLongPress(event,'${safeKey}')" onpointerup="cancelArchiveLongPress()" onpointerleave="cancelArchiveLongPress()" onpointercancel="cancelArchiveLongPress()">
-      <img src="${it.url}" loading="lazy">
+      <img src="${it.url}" loading="lazy" onerror="handleArchiveImageError(this,'${safeKey}')">
       <div class="archive-card-check">✓</div>
       <div class="archive-card-actions" onclick="event.stopPropagation()">
         <button class="archive-action-btn icon" onclick="jumpToImageConversation('${safeKey}')" title="대화로 이동" aria-label="대화로 이동">
           <svg viewBox="0 0 24 24"><path d="M4 6h16a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-8l-4 3v-3H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2"/><circle cx="9" cy="11.5" r="1"/><circle cx="12" cy="11.5" r="1"/><circle cx="15" cy="11.5" r="1"/></svg>
         </button>
-        <button class="archive-action-btn icon" onclick="downloadImage('${safeUrl}','archive.jpg')" title="다운로드" aria-label="다운로드">
+        <button class="archive-action-btn icon" onclick="downloadImage('${safeUrl}','${safeFile}')" title="다운로드" aria-label="다운로드">
           <svg viewBox="0 0 24 24"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 21h16"/></svg>
         </button>
       </div>
@@ -4439,6 +4460,15 @@ function prefetchArchiveNextPage() {
     const img = new Image();
     img.src = it.url;
   });
+}
+
+function handleArchiveImageError(imgEl, key) {
+  if (!imgEl) return;
+  imgEl.style.opacity = '0.25';
+  imgEl.alt = 'broken';
+  imgEl.dataset.broken = '1';
+  const card = imgEl.closest('.archive-card');
+  if (card) card.title = `이미지를 불러오지 못했습니다: ${key}`;
 }
 
 function openArchiveImagePopup(key) {
@@ -4504,13 +4534,17 @@ async function deleteSelectedArchiveImages() {
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl) return;
   let deleted = 0;
+  const deletedKeySet = new Set();
   for (const key of keys) {
-    const res = await fetch(`${wUrl}/image/${encodeURIComponent(key).replace(/%2F/gi, '/')}`, { method: 'DELETE' }).catch(() => null);
-    if (res?.ok) deleted++;
+    const targetKey = normalizeArchiveKey(key);
+    const res = await fetch(`${wUrl}/image/${encodeURIComponent(targetKey).replace(/%2F/gi, '/')}`, { method: 'DELETE' }).catch(() => null);
+    if (res && (res.ok || res.status === 404)) {
+      deleted++;
+      deletedKeySet.add(targetKey);
+    }
   }
   if (deleted > 0) {
-    const keySet = new Set(keys);
-    _archiveItems = (_archiveItems || []).filter((it) => !keySet.has(it.key));
+    _archiveItems = (_archiveItems || []).filter((it) => !deletedKeySet.has(normalizeArchiveKey(it.key)));
     await idbSet(ARCHIVE_MANIFEST_CACHE_KEY, _archiveItems).catch(() => {});
   }
   _archiveSelectedKeys = new Set();
@@ -4760,7 +4794,10 @@ function getZoomIconSvg(isZoomed) {
 
 function downloadPopupImage() {
   if (!_popupImgUrl) return;
-  downloadImage(_popupImgUrl, 'generated.jpg');
+  const name = _archivePopupContext?.key
+    ? getFilenameFromR2Key(_archivePopupContext.key, 'image.jpg')
+    : 'generated.jpg';
+  downloadImage(_popupImgUrl, name);
 }
 
 async function copyPopupImageToClipboard() {
@@ -4823,6 +4860,43 @@ async function copyImageToClipboard(url) {
     } catch {
       showToast('클립보드 복사에 실패했습니다.');
     }
+  }
+}
+
+// Image-only clipboard override (no URL text fallback)
+async function copyImageToClipboard(url) {
+  const target = String(url || '').trim();
+  if (!target) return;
+  if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') {
+    showToast('이 브라우저는 이미지 클립보드 복사를 지원하지 않습니다.');
+    return;
+  }
+  try {
+    const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+    const proxied = /^https?:\/\//i.test(target) && wUrl
+      ? `${wUrl}/image-fetch?url=${encodeURIComponent(target)}`
+      : target;
+    const res = await fetch(proxied, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`fetch failed (${res.status})`);
+    const srcBlob = await res.blob();
+    const imageBlob = await (async () => {
+      if (String(srcBlob.type || '').startsWith('image/png')) return srcBlob;
+      const bitmap = await createImageBitmap(srcBlob);
+      const canvas = document.createElement('canvas');
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('canvas context unavailable');
+      ctx.drawImage(bitmap, 0, 0);
+      bitmap.close();
+      return await new Promise((resolve, reject) => {
+        canvas.toBlob((b) => b ? resolve(b) : reject(new Error('png conversion failed')), 'image/png');
+      });
+    })();
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': imageBlob })]);
+    showToast('이미지를 클립보드에 복사했습니다.');
+  } catch {
+    showToast('이미지 복사에 실패했습니다.');
   }
 }
 
