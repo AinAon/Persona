@@ -342,6 +342,26 @@ function updateChatBottomAnchor(area = document.getElementById('chatArea')) {
   if (firstContent) firstContent.classList.add('chat-bottom-anchor');
 }
 
+function stickChatToBottom(area = document.getElementById('chatArea')) {
+  if (!area) return;
+  area.scrollTop = area.scrollHeight;
+}
+
+function bindImageLoadBottomStick(area = document.getElementById('chatArea')) {
+  if (!area) return;
+  area.querySelectorAll('.inline-image-wrap img, .ai-bubble img, .bubble-img').forEach(img => {
+    if (img.dataset.bottomStickBound === '1') return;
+    img.dataset.bottomStickBound = '1';
+    const onLoad = () => {
+      if (area.dataset.imageLoadStick === '1') {
+        requestAnimationFrame(() => stickChatToBottom(area));
+      }
+    };
+    img.addEventListener('load', onLoad, { passive: true });
+    img.addEventListener('error', onLoad, { passive: true });
+  });
+}
+
 function sanitizeUserInputValue(value) {
   return sanitizeTextForUnicodeSafety(value);
 }
@@ -2711,6 +2731,10 @@ async function renderChatArea() {
   }
   area.classList.add('has-messages');
   empty.style.display = 'none';
+  area.dataset.imageLoadStick = '1';
+  setTimeout(() => {
+    if (document.getElementById('chatArea') === area) area.dataset.imageLoadStick = '0';
+  }, 2600);
 
   const fragment = document.createDocumentFragment();
   for (const msg of session.history) {
@@ -2738,7 +2762,8 @@ async function renderChatArea() {
   updateChatBottomAnchor(area);
   renderMermaidBlocks(area);
   area.querySelectorAll('.msg-group').forEach(enhanceRenderedMessage);
-  requestAnimationFrame(() => { area.scrollTop = area.scrollHeight; });
+  bindImageLoadBottomStick(area);
+  requestAnimationFrame(() => { stickChatToBottom(area); });
 }
 
 function buildEmotionCard(p, emotion, letter, dataUrl) {
@@ -2834,8 +2859,16 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
     const imgUrlRe = /https?:\/\/[^\s"')]+\.(?:jpg|jpeg|png|gif|webp)(?:[?#][^\s"')]*)?/gi;
     const imageUrls = [...(seg.content.matchAll(imgUrlRe))].map(m => m[0]);
     const hasImg = imageUrls.length > 0 || /<img/i.test(fmtContent);
+    const plainWithoutImage = String(seg.content || '')
+      .replace(/!\[[^\]]*\]\(([^)]+)\)/g, '')
+      .replace(/https?:\/\/[^\s]+/g, '')
+      .replace(/\s+/g, '')
+      .trim();
+    const isImageOnly = hasImg && !plainWithoutImage;
     const bubbleWrapClass = hasImg ? 'bubble-wrap has-img' : 'bubble-wrap';
-    const bubbleClass = hasImg ? 'ai-bubble md-content has-img' : 'ai-bubble md-content';
+    const bubbleClass = hasImg
+      ? `ai-bubble md-content has-img${isImageOnly ? ' ai-bubble-image-only' : ''}`
+      : 'ai-bubble md-content';
 
     // 클릭 시 팝업 연결 (이미지에 onclick 주입)
     let renderedContent = fmtContent;
@@ -2890,7 +2923,12 @@ async function appendAIReplySequentially(reply, pList, suffixes, createdAt, tgtA
       tgtArea.appendChild(replyEl.firstElementChild);
       updateChatBottomAnchor(tgtArea);
       renderMermaidBlocks(tgtArea);
-      tgtArea.scrollTop = tgtArea.scrollHeight;
+      tgtArea.dataset.imageLoadStick = '1';
+      setTimeout(() => {
+        if (document.getElementById('chatArea') === tgtArea) tgtArea.dataset.imageLoadStick = '0';
+      }, 2600);
+      bindImageLoadBottomStick(tgtArea);
+      stickChatToBottom(tgtArea);
     }
     if (delays && i < segments.length - 1) await sleep(delays);
   }

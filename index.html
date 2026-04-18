@@ -565,6 +565,18 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 /* AI 생성 이미지 */
 .ai-bubble img { width: 100%; height: auto; border-radius: 8px; display: block; margin-top: 4px; cursor: pointer; }
 .ai-bubble.has-img { width: 100%; padding: 8px 10px 10px; }
+.ai-bubble.ai-bubble-image-only {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+}
+.ai-bubble.ai-bubble-image-only .inline-image-wrap {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+.ai-bubble.ai-bubble-image-only img {
+  margin-top: 0;
+}
 .ai-img-actions { display: flex; gap: 8px; margin-top: 8px; }
 .copy-btn {
   display: inline-flex; align-items: center; justify-content: center;
