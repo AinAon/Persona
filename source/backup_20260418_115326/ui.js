@@ -358,19 +358,9 @@ function getAttachmentStoredUrl(a) {
   return a?.transportUrl || a?.dataUrl || getAttachmentPreviewUrl(a);
 }
 
-function isInlineDataImageUrl(url) {
-  return /^data:image\//i.test(String(url || ''));
-}
-
-function sanitizeImageUrlForHistory(url) {
-  const u = String(url || '').trim();
-  if (!u || isInlineDataImageUrl(u)) return '';
-  return u;
-}
-
 function serializeAttachmentForHistory(a) {
   if (!a) return null;
-  const url = sanitizeImageUrlForHistory(getAttachmentStoredUrl(a));
+  const url = getAttachmentStoredUrl(a);
   if (!url) return null;
   return {
     type: a.type === 'image' ? 'image' : 'file',
@@ -516,34 +506,6 @@ function wrapPersonaReply(pid, reply) {
   const alreadyWrapped = new RegExp(`^\\[${pid}\\][\\s\\S]*\\[\\/${pid}\\]$`, 'i').test(text);
   if (alreadyWrapped) return text;
   return `[${pid}]${text}[/${pid}]`;
-}
-
-function isImageWorkflowMessage(msg) {
-  return !!msg?._imageWorkflow;
-}
-
-function sanitizeMessageContentForTextContext(content) {
-  if (Array.isArray(content)) {
-    const filtered = content.filter(c => c?.type !== 'image_url');
-    if (!filtered.length) return '(image omitted)';
-    return filtered;
-  }
-  if (typeof content === 'string') {
-    return content
-      .replace(/!\[[^\]]*\]\((data:image\/[^)]+|https?:\/\/[^)\s]+)\)/gi, '[image]')
-      .trim();
-  }
-  return content;
-}
-
-function buildApiMessagesFromHistory(history, currentUserMsg, currentContent, isImageReq) {
-  return (history || [])
-    .filter(m => m.role === 'user' || m.role === 'assistant')
-    .filter(m => isImageReq || !isImageWorkflowMessage(m))
-    .map(m => ({
-      role: m.role,
-      content: sanitizeMessageContentForTextContext(m === currentUserMsg ? currentContent : m.content)
-    }));
 }
 
 async function getImageDimensionsFromDataUrl(dataUrl) {
@@ -738,12 +700,6 @@ window.addEventListener('load', () => {
   initMarked();
   initMermaid();
   initUserInputGuards();
-  const imageModelSelect = document.getElementById('imageModelSelect');
-  if (imageModelSelect && !imageModelSelect.dataset.boundChange) {
-    imageModelSelect.dataset.boundChange = '1';
-    _lastImageModelValue = String(imageModelSelect.value || '');
-    imageModelSelect.addEventListener('change', handleImageModelChanged);
-  }
 });
 
 let _chatListRefreshTimer = null;
@@ -2938,9 +2894,6 @@ function setMode(m) {
 // ===============
 let _inputTab = 'chat'; // 현재 입력 탭
 let _chatGeneration = null;
-let _lastImageModelValue = '';
-let _popupUpscaling = false;
-let _popupZoomed = false;
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -3013,37 +2966,6 @@ function syncImageProviderButtonsFromSelect() {
   setImageProvider(provider);
 }
 
-function clearImageWorkflowHistory(session) {
-  if (!session || !Array.isArray(session.history)) return;
-  const before = session.history.length;
-  session.history = session.history.filter(m => !isImageWorkflowMessage(m));
-  if (session.history.length === before) return;
-  const latest = session.history.at(-1);
-  const latestText = typeof latest?.content === 'string'
-    ? latest.content
-    : (Array.isArray(latest?.content) ? (latest.content.find(c => c?.type === 'text')?.text || '') : '');
-  session.lastPreview = sanitizeChatListPreview(buildChatPreviewText(latestText));
-  session.updatedAt = Date.now();
-  renderChatArea().catch(() => {});
-  renderChatList();
-  if (!session._demo) { saveSession(session.id); saveIndex(); }
-}
-
-function handleImageModelChanged() {
-  const select = document.getElementById('imageModelSelect');
-  if (!select) return;
-  const nextModel = String(select.value || '');
-  if (_lastImageModelValue && nextModel && _lastImageModelValue !== nextModel) {
-    const session = getActiveSession();
-    if (session) clearImageWorkflowHistory(session);
-    attachments = [];
-    renderAttachmentPreviews();
-    showToast('모델 변경으로 이미지 참조/히스토리를 초기화했습니다.');
-  }
-  _lastImageModelValue = nextModel;
-  syncImageProviderButtonsFromSelect();
-}
-
 function switchInputTab(tab) {
   _inputTab = tab;
   const normalized = tab === 'context' ? 'project' : tab;
@@ -3077,7 +2999,7 @@ function switchInputTab(tab) {
   ['chat','image','project'].forEach(t => {
     document.getElementById('toolMode_' + t)?.classList.toggle('active', t === normalized);
   });
-  if (normalized === 'image') handleImageModelChanged();
+  if (normalized === 'image') syncImageProviderButtonsFromSelect();
   updateComposerToolButtonForMode(normalized);
   const chip = document.getElementById('composerModeChip');
   if (chip) {
@@ -3203,6 +3125,7 @@ function renderUserBubbleHTML(text, atts) {
     html += `
     <div class="bubble-img-container">
       <img class="bubble-img" src="${url}" onclick="openImagePopup('${url}')">
+      <button class="img-download-btn" onclick="downloadImage('${url}', '${esc(a.name)}')">저장</button>
     </div>`;
   });
   if (text) html += fmt(text);
@@ -3217,10 +3140,13 @@ function renderUserBubbleHTMLV2(text, atts) {
     const dlUrl = a?.url || getAttachmentStoredUrl(a) || viewUrl;
     if (!viewUrl) return;
     const safeViewUrl = String(viewUrl).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const safeDlUrl = String(dlUrl).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const safeName = String(a?.name || (isImg ? 'image' : 'file')).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     if (isImg) {
       html += `
       <div class="bubble-img-container">
         <img class="bubble-img" src="${viewUrl}" onclick="openImagePopup('${safeViewUrl}')">
+        <button class="img-download-btn" onclick="downloadImage('${safeDlUrl}', '${safeName}')">저장</button>
       </div>`;
     } else {
       html += `
@@ -3254,11 +3180,7 @@ async function sendMessage() {
 
   const isImageReq = (_inputTab === 'image');
   const targetModel = getTargetModelForRequest(session, isImageReq);
-  const historyImageUrls = attachments
-    .filter(isImageAttachment)
-    .map(getAttachmentStoredUrl)
-    .map(sanitizeImageUrlForHistory)
-    .filter(Boolean);
+  const historyImageUrls = attachments.filter(isImageAttachment).map(getAttachmentStoredUrl).filter(Boolean);
   const requestImageUrls = [];
   for (const attachment of attachments.filter(isImageAttachment)) {
     const imageUrl = await getAttachmentRequestUrl(attachment, targetModel, isImageReq);
@@ -3299,14 +3221,7 @@ async function sendMessage() {
 
   const nowTs = Date.now();
   const persistedAttachments = attachments.map(serializeAttachmentForHistory).filter(Boolean);
-  const userMsg = {
-    role:'user',
-    content: msgContent,
-    attachments: persistedAttachments,
-    createdAt: nowTs,
-    _imageWorkflow: !!isImageReq,
-    _rendered:`<div class="msg-group"><div class="user-msg">${userHTML}</div></div>`
-  };
+  const userMsg = { role:'user', content: msgContent, attachments: persistedAttachments, createdAt: nowTs, _rendered:`<div class="msg-group"><div class="user-msg">${userHTML}</div></div>` };
   session.history.push(userMsg);
   session.updatedAt = Date.now();
 
@@ -3417,7 +3332,6 @@ async function sendMessage() {
   // 백그라운드 처리를 위한 분리된 비동기 함수
   const processApiAndRender = async () => {
     let reply = '';
-    let generatedImageUrl = '';
     if (session._demo) {
       await new Promise(r => setTimeout(r, 600));
       reply = window.getDemoReply ? window.getDemoReply(session) : '데모 응답 오류';
@@ -3426,7 +3340,9 @@ async function sendMessage() {
         const apiMessages = [
           { role:'system', content: buildSystemPrompt(session) },
           buildCurrentTimeSystemMessage(),
-          ...buildApiMessagesFromHistory(session.history, userMsg, requestMsgContent, isImageReq)
+          ...session.history
+            .filter(m => m.role==='user'||m.role==='assistant')
+            .map(m => ({ role:m.role, content: m === userMsg ? requestMsgContent : m.content }))
         ];
         const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
 
@@ -3452,7 +3368,9 @@ async function sendMessage() {
             const personaMessages = [
               { role:'system', content: buildSystemPrompt(session, [persona]) },
               buildCurrentTimeSystemMessage(),
-              ...buildApiMessagesFromHistory(session.history, userMsg, personaRequestMsgContent, isImageReq)
+              ...session.history
+                .filter(m => m.role==='user'||m.role==='assistant')
+                .map(m => ({ role:m.role, content: m === userMsg ? personaRequestMsgContent : m.content }))
             ];
             const res = await fetch(wUrl + '/chat', {
               method: 'POST',
@@ -3523,10 +3441,11 @@ async function sendMessage() {
             const proxiedImageUrl = rawImageUrl ? `${wUrl}/image-fetch?url=${encodeURIComponent(rawImageUrl)}` : '';
             const safeImageUrl = proxiedImageUrl || rawImageUrl;
             if (safeImageUrl) {
-              generatedImageUrl = safeImageUrl;
-              reply = `![generated](${safeImageUrl})`;
-            } else {
-              throw new Error('이미지 URL 응답이 비어 있습니다.');
+              if (/!\[[^\]]*\]\(([^)]*)\)/.test(reply)) {
+                reply = reply.replace(/!\[([^\]]*)\]\(([^)]*)\)/, (_m, alt) => `![${alt || 'generated'}](${safeImageUrl})`);
+              } else {
+                reply = `![generated](${safeImageUrl})`;
+              }
             }
           }
         }
@@ -3561,14 +3480,7 @@ async function sendMessage() {
     const suffixes = await resolveMessageSuffixes(reply, pList);
 
     const assistantCreatedAt = Date.now();
-    currentSession.history.push({
-      role:'assistant',
-      content:reply,
-      createdAt: assistantCreatedAt,
-      personaSnapshot,
-      _suffixes: suffixes,
-      _imageWorkflow: !!isImageReq
-    });
+    currentSession.history.push({ role:'assistant', content:reply, createdAt: assistantCreatedAt, personaSnapshot, _suffixes: suffixes });
 
     const parsed = parseResponse(reply, pList);
     const firstContent = parsed[0]?.content || '';
@@ -3584,21 +3496,6 @@ async function sendMessage() {
 
     if (!currentSession._demo) { saveSession(currentSession.id); saveIndex(); }
     renderChatList();
-    if (isImageReq && generatedImageUrl) {
-      attachments = [{
-        id: uid(),
-        type: 'image',
-        name: 'reference-1-generated.jpg',
-        mimeType: 'image/jpeg',
-        dataUrl: generatedImageUrl,
-        previewUrl: generatedImageUrl,
-        transportUrl: generatedImageUrl,
-        uploading: false,
-        uploadError: false,
-        source: 'generated'
-      }];
-      renderAttachmentPreviews();
-    }
     if (!currentSession._demo && (shouldAutoMemorySave || ((currentSession.history?.length || 0) % 12 === 0))) {
       extractSessionMemories(currentSession).catch(() => {});
     }
@@ -4046,87 +3943,12 @@ function openImagePopup(url) {
   const img = document.getElementById('popupImg');
   if (!overlay || !img) return;
   img.src = url;
-  img.classList.remove('zoomed');
-  _popupZoomed = false;
-  updatePopupZoomButtonIcon();
   overlay.classList.add('active');
 }
 
 function closeImagePopup() {
   document.getElementById('imagePopup')?.classList.remove('active');
   _popupImgUrl = '';
-}
-
-function togglePopupImageZoom() {
-  const img = document.getElementById('popupImg');
-  if (!img) return;
-  _popupZoomed = !_popupZoomed;
-  img.classList.toggle('zoomed', _popupZoomed);
-  updatePopupZoomButtonIcon();
-}
-
-function updatePopupZoomButtonIcon() {
-  const btn = document.getElementById('popupZoomBtn');
-  if (!btn) return;
-  btn.classList.toggle('active', _popupZoomed);
-  btn.innerHTML = _popupZoomed
-    ? '<svg viewBox="0 0 24 24"><polyline points="3 9 3 3 9 3"/><polyline points="15 21 21 21 21 15"/><line x1="3" y1="3" x2="10" y2="10"/><line x1="21" y1="21" x2="14" y2="14"/></svg>'
-    : '<svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
-}
-
-function downloadPopupImage() {
-  if (!_popupImgUrl) return;
-  downloadImage(_popupImgUrl, 'generated.jpg');
-}
-
-async function copyPopupImageToClipboard() {
-  if (!_popupImgUrl) return;
-  if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') {
-    showToast('클립보드 이미지 복사를 지원하지 않는 환경입니다.');
-    return;
-  }
-  try {
-    const res = await fetch(_popupImgUrl);
-    const blob = await res.blob();
-    await navigator.clipboard.write([new ClipboardItem({ [blob.type || 'image/png']: blob })]);
-    showToast('이미지를 클립보드에 복사했습니다.');
-  } catch (e) {
-    showToast('클립보드 복사에 실패했습니다.');
-  }
-}
-
-async function upscalePopupImageAndDownload() {
-  if (!_popupImgUrl || _popupUpscaling) return;
-  _popupUpscaling = true;
-  const btn = document.getElementById('popupUpscaleBtn');
-  if (btn) btn.classList.add('busy');
-  try {
-    const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-    if (!wUrl) throw new Error('Worker URL not configured');
-    const res = await fetch(wUrl + '/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'gemini-3.1-flash-image-preview',
-        prompt: 'Upscale this image to high detail while preserving composition and identity. Keep colors natural and avoid style drift.',
-        images: [_popupImgUrl],
-        aspect_ratio: '1:1'
-      })
-    });
-    const data = await res.json();
-    if (data?.result !== 'success') throw new Error(data?.error || 'upscale failed');
-    const rawImageUrl = String(data.image_url || '').trim();
-    const proxiedImageUrl = rawImageUrl ? `${wUrl}/image-fetch?url=${encodeURIComponent(rawImageUrl)}` : '';
-    const finalUrl = proxiedImageUrl || rawImageUrl;
-    if (!finalUrl) throw new Error('empty image url');
-    await downloadImage(finalUrl, 'upscaled.jpg');
-    showToast('업스케일 완료 후 다운로드했습니다.');
-  } catch (e) {
-    showToast('업스케일에 실패했습니다.');
-  } finally {
-    _popupUpscaling = false;
-    if (btn) btn.classList.remove('busy');
-  }
 }
 
 async function downloadImage(url, filename = 'generated.jpg') {
