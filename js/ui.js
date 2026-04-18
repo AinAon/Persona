@@ -348,7 +348,41 @@ function stickChatToBottom(area = document.getElementById('chatArea')) {
 }
 
 function layoutHorizontalMasonryRows(root = document) {
-  return;
+  const rows = root.querySelectorAll('.bubble-img-container.multi');
+  rows.forEach(row => {
+    const wraps = [...row.querySelectorAll('.inline-image-wrap')];
+    if (!wraps.length) return;
+    const imgs = wraps.map(w => w.querySelector('img')).filter(Boolean);
+    if (imgs.length !== wraps.length) return;
+    if (imgs.some(img => !img.naturalWidth || !img.naturalHeight)) return;
+
+    const rowWidth = row.clientWidth || row.getBoundingClientRect().width;
+    if (!rowWidth) return;
+    const style = getComputedStyle(row);
+    const gap = parseFloat(style.columnGap || style.gap || '8') || 8;
+    const available = Math.max(40, rowWidth - gap * Math.max(0, imgs.length - 1));
+
+    const ratios = imgs.map(img => img.naturalWidth / img.naturalHeight);
+    const ratioSum = ratios.reduce((sum, r) => sum + r, 0);
+    if (!ratioSum) return;
+
+    const rowHeight = available / ratioSum;
+    const widths = ratios.map(r => r * rowHeight);
+    if (widths.length > 1) {
+      const consumed = widths.slice(0, -1).reduce((a, b) => a + b, 0);
+      widths[widths.length - 1] = Math.max(12, available - consumed);
+    }
+
+    wraps.forEach((wrap, i) => {
+      wrap.style.height = `${rowHeight}px`;
+      wrap.style.width = `${Math.max(12, widths[i] || 12)}px`;
+      const img = imgs[i];
+      if (img) {
+        img.style.width = '100%';
+        img.style.height = '100%';
+      }
+    });
+  });
 }
 
 function bindImageLoadBottomStick(area = document.getElementById('chatArea')) {
