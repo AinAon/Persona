@@ -79,7 +79,7 @@
 .persona-card.active{border:0}
 .persona-thumb{aspect-ratio:1/3;background:#0b0b10;position:relative;overflow:hidden;border-radius:14px}
 .persona-thumb img{width:100%;height:100%;object-fit:cover;object-position:top;display:block}
-.persona-name{margin-top:6px;padding:6px 8px;font-size:12px;text-align:center;font-weight:800;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff;background:#53401f;border-radius:8px;text-transform:uppercase}
+.persona-name{margin:0 0 6px 0;padding:6px 8px;font-size:12px;text-align:center;font-weight:800;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff;background:#53401f;border-radius:8px;text-transform:uppercase}
 .persona-stage{position:relative;width:var(--persona-card-w);max-width:100%}
 .persona-main{width:100%}
 .persona-popups{
@@ -170,7 +170,6 @@
 .viewer-shell{position:relative;max-width:95vw;max-height:92vh;display:flex;align-items:center;justify-content:center}
 .viewer-img-wrap{max-width:95vw;max-height:92vh;overflow:hidden;border-radius:16px;background:#0a0a0d;box-shadow:0 20px 80px rgba(0,0,0,.45)}
 .viewer-img{display:block;max-width:95vw;max-height:92vh;width:auto;height:auto;object-fit:contain;touch-action:none;user-select:none;cursor:grab}
-.viewer-close{position:absolute;top:-12px;right:-12px;width:34px;height:34px;border-radius:999px;border:1px solid var(--border2);background:rgba(18,18,24,.95);color:#fff;font-size:18px;cursor:pointer;display:grid;place-items:center}
 .crop-overlay.open{opacity:1 !important;pointer-events:auto !important;}
 @media (max-width: 1280px){.layout{grid-template-columns:210px 1fr}}
 @media (max-width: 900px){.layout{grid-template-columns:1fr}.sidebar{border-right:none;border-bottom:1px solid var(--border)}}
@@ -229,7 +228,6 @@
 
 <div class="viewer" id="viewer">
   <div class="viewer-shell">
-    <button class="viewer-close" id="viewerClose" aria-label="Close">횞</button>
     <div class="viewer-img-wrap"><img id="viewerImg" class="viewer-img" alt="preview"></div>
   </div>
 </div>
@@ -349,7 +347,6 @@ const els = {
   progressBar: document.getElementById('progressBar'),
   viewer: document.getElementById('viewer'),
   viewerImg: document.getElementById('viewerImg'),
-  viewerClose: document.getElementById('viewerClose'),
   cardFileInput: document.getElementById('cardFileInput'),
   cropCancelBtn: document.getElementById('cropCancelBtn'),
   cropApplyBtn: document.getElementById('cropApplyBtn'),
@@ -863,16 +860,16 @@ function render(){
       const img = getPersonaImage(p.pid);
       return `
       <button type="button" class="persona-card persona-popup" data-pid="${esc(p.pid)}" style="--i:${i}">
-        <div class="persona-thumb">${img ? `<img src="${img}" alt="">` : '<div class="slot-empty">neutral_a</div>'}</div>
         <div class="persona-name">${esc(p.name || p.pid)}</div>
+        <div class="persona-thumb">${img ? `<img src="${img}" alt="">` : '<div class="slot-empty">neutral_a</div>'}</div>
       </button>`;
     }).join('');
     els.personaGrid.classList.toggle('open', !!state.personaPickerOpen && popupPersonas.length > 0);
     els.personaGrid.innerHTML = `
       <div class="persona-stage">
         <button type="button" class="persona-card persona-main active" data-role="main">
-          <div class="persona-thumb">${mainImg ? `<img src="${mainImg}" alt="">` : '<div class="slot-empty">neutral_a</div>'}</div>
           <div class="persona-name" style="background:${esc(getPersonaTagColor(activePersona))}">${esc(activePersona.name || activePersona.pid)}</div>
+          <div class="persona-thumb">${mainImg ? `<img src="${mainImg}" alt="">` : '<div class="slot-empty">neutral_a</div>'}</div>
         </button>
         <div class="persona-popups">${popupHtml}</div>
       </div>`;
@@ -1008,6 +1005,7 @@ function openViewer(src){
   els.viewerImg.src = src;
   els.viewerImg.style.width = 'auto';
   els.viewerImg.style.height = 'auto';
+  els.viewerImg.onclick = () => closeViewer();
   els.viewer.classList.add('open');
   if (state.viewer) state.viewer.destroy();
   state.viewer = Panzoom(els.viewerImg, { maxScale: 8, contain: 'outside', cursor: 'grab' });
@@ -1016,6 +1014,7 @@ function openViewer(src){
 function closeViewer(){
   els.viewer.classList.remove('open');
   els.viewerImg.src = '';
+  els.viewerImg.onclick = null;
   if (state.viewer) { state.viewer.destroy(); state.viewer = null; }
 }
 
@@ -1485,7 +1484,6 @@ function init(){
   if (els.pushAllBtn) els.pushAllBtn.onclick = pushAll;
   if (els.deleteAllBtn) els.deleteAllBtn.onclick = deleteAll;
   if (els.stopBtn) els.stopBtn.onclick = () => { state.pendingAbort?.abort?.(); showStatus('Stopped.'); setBusy(false); };
-  els.viewerClose.onclick = closeViewer;
   els.viewer.onclick = (e) => { if (e.target === els.viewer) closeViewer(); };
   if (els.cropCancelBtn) {
     els.cropCancelBtn.onclick = () => {
