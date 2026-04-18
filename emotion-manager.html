@@ -73,7 +73,7 @@
 .section-title h2,.section-title h3{margin:0;font:600 13px var(--font-display);letter-spacing:.01em}
 .section-note{font-size:10px;color:var(--muted)}
 .sidebar .section-title{display:none}
-.persona-grid{display:block;flex:0 0 auto}
+.persona-grid{display:block;flex:0 0 auto;padding-bottom:4px}
 .persona-card{border:0;border-radius:14px;overflow:hidden;background:transparent;cursor:pointer;transition:.18s}
 .persona-card:hover{transform:translateY(-1px)}
 .persona-card.active{border:0}
@@ -86,14 +86,16 @@
   position:absolute;
   top:0;
   left:calc(100% + 10px);
+  width:100%;
   display:flex;
   flex-direction:column;
   gap:10px;
   pointer-events:none;
-  z-index:9999;
+  z-index:500;
 }
 .persona-popup{
   width:100%;
+  min-width:100%;
   opacity:0;
   transform:translateX(-16px) scale(.98);
   transition:opacity .24s ease, transform .24s ease;
@@ -139,7 +141,17 @@
 .queue-item.done .queue-dot{background:var(--good)}
 .queue-item.fail .queue-dot{background:var(--danger)}
 .queue-item.done,.queue-item.fail{opacity:.9}
-.sidebar-actions{display:flex;gap:8px;margin-top:6px;flex:0 0 auto;position:static}
+.sidebar-actions{
+  display:flex;
+  gap:8px;
+  margin-top:6px;
+  flex:0 0 auto;
+  position:sticky;
+  bottom:0;
+  z-index:700;
+  background:linear-gradient(to top, rgba(15,15,19,.98), rgba(15,15,19,.86));
+  padding:6px 0 2px;
+}
 .side-action-btn{
   width:34px;height:34px;border-radius:999px;border:1px solid var(--border2);
   background:var(--card);color:var(--text);display:inline-flex;align-items:center;justify-content:center;cursor:pointer
