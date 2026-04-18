@@ -1457,7 +1457,7 @@ async function reloadPersonaFromR2(pid, hard = false){
     }
   }
   const loaded = await loadFromR2();
-  await loadImagesFromIDB();
+  await loadImagesFromIDB({ onlyPid: pid, merge: true });
   render();
   return loaded;
 }
@@ -1465,7 +1465,7 @@ async function reloadPersonaFromR2(pid, hard = false){
 async function reloadAll(){
   setBusy(true);
   setProgress(8);
-  showStatus('Reloading personas and cache (force no-cache)...');
+  showStatus('Reloading selected persona cache...');
   try {
     await loadPersonasFromBackend();
     if (!state.personas.length) {
@@ -1474,25 +1474,22 @@ async function reloadAll(){
       state.personas = Array.isArray(cached) ? cached.filter(p => p && p.pid && !seen.has(p.pid) && seen.add(p.pid)) : [];
     }
     if (state.personas.length && !state.activePid) state.activePid = state.personas[0].pid;
+    if (!state.activePid) {
+      showStatus('Reload skipped: no selected persona.');
+      return;
+    }
     render();
     setProgress(25);
-    if (state.activePid) {
-      await clearPersonaImageCaches(state.activePid);
-      await loadImagesFromIDB({ onlyPid: state.activePid, merge: true });
-    } else {
-      await clearAllImageCaches();
-      await loadImagesFromIDB();
-    }
+    await clearPersonaImageCaches(state.activePid);
+    await loadImagesFromIDB({ onlyPid: state.activePid, merge: true });
     render();
     setProgress(55);
-    if (state.activePid) {
-      showStatus(`Refreshing ${state.activePid} from R2 originals...`);
-      const loaded = await reloadPersonaFromR2(state.activePid, true);
-      if (!loaded) {
-        showStatus(`Reload finished, but no new R2 originals were found for ${state.activePid}.`);
-      }
-      setProgress(90);
+    showStatus(`Refreshing ${state.activePid} from R2 originals...`);
+    const loaded = await reloadPersonaFromR2(state.activePid, true);
+    if (!loaded) {
+      showStatus(`Reload finished, but no new R2 originals were found for ${state.activePid}.`);
     }
+    setProgress(90);
     showStatus('Reload completed: selected persona cache refreshed.');
   } catch (err) {
     showStatus(`Reload failed: ${err?.message || String(err || 'unknown error')}`);
