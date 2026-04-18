@@ -2968,7 +2968,7 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
         (_, pre, src, post) => {
           const safeSrc = String(src || '').replace(/'/g, "\\'");
           const safeKey = String(extractR2ImageKey(src) || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-          return `<div class="inline-image-wrap"><img${pre}src="${src}"${post} onclick="openImagePopup('${safeSrc}')" style="cursor:pointer"><div class="inline-image-actions"><button class="image-popup-action-btn" onclick="jumpToImageConversation('${safeKey}')" title="대화로 이동"><svg viewBox="0 0 24 24"><path d="M9 7H4v5"/><path d="M4 12c2.5-3.5 5.5-5 9.5-5H20"/><path d="M20 12v7H4v-4"/></svg></button><button class="image-popup-action-btn" onclick="downloadImage('${safeSrc}','generated.jpg')" title="다운로드"><svg viewBox="0 0 24 24"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 21h16"/></svg></button></div></div>`;
+          return `<div class="inline-image-wrap"><img${pre}src="${src}"${post} onclick="openImagePopup('${safeSrc}')" style="cursor:pointer"><div class="inline-image-actions"><button class="image-popup-action-btn" onclick="addImageSourceToComposer('${safeSrc}','generated.jpg')" title="소스로 추가"><svg viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></svg></button><button class="image-popup-action-btn" onclick="downloadImage('${safeSrc}','generated.jpg')" title="다운로드"><svg viewBox="0 0 24 24"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 21h16"/></svg></button></div></div>`;
         }
       );
     }
@@ -3428,8 +3428,8 @@ function renderUserBubbleHTMLV3(text, atts) {
       <div class="inline-image-wrap">
         <img class="bubble-img" src="${viewUrl}" onclick="openImagePopup('${safeViewUrl}')">
         <div class="inline-image-actions">
-          <button class="image-popup-action-btn" onclick="jumpToImageConversation('${safeKey}')" title="대화로 이동">
-            <svg viewBox="0 0 24 24"><path d="M9 7H4v5"/><path d="M4 12c2.5-3.5 5.5-5 9.5-5H20"/><path d="M20 12v7H4v-4"/></svg>
+          <button class="image-popup-action-btn" onclick="addImageSourceToComposer('${safeViewUrl}','${safeName}')" title="소스로 추가">
+            <svg viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
           </button>
           <button class="image-popup-action-btn" onclick="downloadImage('${safeViewUrl}','${safeName}')" title="다운로드">
             <svg viewBox="0 0 24 24"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 21h16"/></svg>
@@ -4428,7 +4428,7 @@ function renderArchiveGrid() {
     const safeKey = String(it.key || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const safeFile = String(getFilenameFromR2Key(it.key, 'image.jpg')).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const selected = _archiveSelectedKeys.has(it.key) ? ' selected' : '';
-    return `<div class="archive-card${selected}" onclick="handleArchiveCardTap('${safeKey}')" onpointerdown="startArchiveLongPress(event,'${safeKey}')" onpointerup="cancelArchiveLongPress()" onpointerleave="cancelArchiveLongPress()" onpointercancel="cancelArchiveLongPress()">
+    return `<div class="archive-card${selected}" onclick="handleArchiveCardTap('${safeKey}')" oncontextmenu="return false" onpointerdown="startArchiveLongPress(event,'${safeKey}')" onpointerup="cancelArchiveLongPress()" onpointerleave="cancelArchiveLongPress()" onpointercancel="cancelArchiveLongPress()">
       <img src="${it.url}" loading="lazy" onerror="handleArchiveImageError(this,'${safeKey}')">
       <div class="archive-card-check">✓</div>
       <div class="archive-card-actions" onclick="event.stopPropagation()">
@@ -4469,6 +4469,7 @@ function bindArchiveInfiniteScroll() {
   const pane = document.querySelector('#archivePane .archive-pane');
   if (!pane) return;
   _archiveScrollBound = true;
+  pane.addEventListener('contextmenu', (e) => e.preventDefault());
   pane.addEventListener('scroll', () => {
     const nearBottom = pane.scrollTop + pane.clientHeight >= pane.scrollHeight - 140;
     if (!nearBottom) return;
