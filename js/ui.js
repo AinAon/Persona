@@ -751,6 +751,17 @@ window.addEventListener('load', () => {
   initMarked();
   initMermaid();
   initUserInputGuards();
+  const popupImg = document.getElementById('popupImg');
+  if (popupImg && !popupImg.dataset.panBound) {
+    popupImg.dataset.panBound = '1';
+    popupImg.addEventListener('mousedown', startPopupPan);
+    popupImg.addEventListener('touchstart', startPopupPan, { passive: false });
+    window.addEventListener('mousemove', movePopupPan);
+    window.addEventListener('touchmove', movePopupPan, { passive: false });
+    window.addEventListener('mouseup', endPopupPan);
+    window.addEventListener('touchend', endPopupPan, { passive: true });
+    window.addEventListener('touchcancel', endPopupPan, { passive: true });
+  }
   const imageModelSelect = document.getElementById('imageModelSelect');
   if (imageModelSelect && !imageModelSelect.dataset.boundChange) {
     imageModelSelect.dataset.boundChange = '1';
@@ -2954,8 +2965,10 @@ function setMode(m) {
 let _inputTab = 'chat'; // 현재 입력 탭
 let _chatGeneration = null;
 let _lastImageModelValue = '';
-let _popupUpscaling = false;
 let _popupZoomed = false;
+let _popupPanning = false;
+let _popupPanOffset = { x: 0, y: 0 };
+let _popupPanLast = { x: 0, y: 0 };
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -4071,12 +4084,27 @@ function openImagePopup(url) {
   if (!overlay || !img) return;
   img.src = url;
   img.classList.remove('zoomed');
+  img.classList.remove('panning');
   _popupZoomed = false;
+  _popupPanning = false;
+  _popupPanOffset = { x: 0, y: 0 };
+  _popupPanLast = { x: 0, y: 0 };
+  applyPopupImageTransform();
   updatePopupZoomButtonIcon();
   overlay.classList.add('active');
 }
 
 function closeImagePopup() {
+  const img = document.getElementById('popupImg');
+  if (img) {
+    img.classList.remove('zoomed');
+    img.classList.remove('panning');
+  }
+  _popupZoomed = false;
+  _popupPanning = false;
+  _popupPanOffset = { x: 0, y: 0 };
+  _popupPanLast = { x: 0, y: 0 };
+  applyPopupImageTransform();
   document.getElementById('imagePopup')?.classList.remove('active');
   _popupImgUrl = '';
 }
@@ -4086,7 +4114,64 @@ function togglePopupImageZoom() {
   if (!img) return;
   _popupZoomed = !_popupZoomed;
   img.classList.toggle('zoomed', _popupZoomed);
+  if (!_popupZoomed) {
+    _popupPanning = false;
+    _popupPanOffset = { x: 0, y: 0 };
+    _popupPanLast = { x: 0, y: 0 };
+    img.classList.remove('panning');
+  }
+  applyPopupImageTransform();
   updatePopupZoomButtonIcon();
+}
+
+function applyPopupImageTransform() {
+  const img = document.getElementById('popupImg');
+  if (!img) return;
+  if (!_popupZoomed) {
+    img.style.transform = '';
+    return;
+  }
+  img.style.transform = `translate(${_popupPanOffset.x}px, ${_popupPanOffset.y}px)`;
+}
+
+function getPopupPanPoint(e) {
+  if (e?.touches?.length) {
+    return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }
+  if (e?.changedTouches?.length) {
+    return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+  }
+  return { x: e?.clientX || 0, y: e?.clientY || 0 };
+}
+
+function startPopupPan(e) {
+  if (!_popupZoomed) return;
+  const img = document.getElementById('popupImg');
+  if (!img) return;
+  const p = getPopupPanPoint(e);
+  _popupPanning = true;
+  _popupPanLast = p;
+  img.classList.add('panning');
+  if (e?.cancelable) e.preventDefault();
+}
+
+function movePopupPan(e) {
+  if (!_popupZoomed || !_popupPanning) return;
+  const p = getPopupPanPoint(e);
+  const dx = p.x - _popupPanLast.x;
+  const dy = p.y - _popupPanLast.y;
+  _popupPanLast = p;
+  _popupPanOffset.x += dx;
+  _popupPanOffset.y += dy;
+  applyPopupImageTransform();
+  if (e?.cancelable) e.preventDefault();
+}
+
+function endPopupPan() {
+  if (!_popupPanning) return;
+  const img = document.getElementById('popupImg');
+  _popupPanning = false;
+  if (img) img.classList.remove('panning');
 }
 
 function updatePopupZoomButtonIcon() {
@@ -4137,74 +4222,6 @@ async function copyImageToClipboard(url) {
     showToast('이미지를 클립보드에 복사했습니다.');
   } catch (e) {
     showToast('클립보드 복사에 실패했습니다.');
-  }
-}
-
-async function upscalePopupImageAndDownload() {
-  if (!_popupImgUrl || _popupUpscaling) return;
-  _popupUpscaling = true;
-  const btn = document.getElementById('popupUpscaleBtn');
-  if (btn) btn.classList.add('busy');
-  try {
-    const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-    if (!wUrl) throw new Error('Worker URL not configured');
-    const res = await fetch(wUrl + '/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'gemini-3.1-flash-image-preview',
-        prompt: 'Upscale this image to high detail while preserving composition and identity. Keep colors natural and avoid style drift.',
-        images: [_popupImgUrl],
-        aspect_ratio: '1:1'
-      })
-    });
-    const data = await res.json();
-    if (data?.result !== 'success') throw new Error(data?.error || 'upscale failed');
-    const rawImageUrl = String(data.image_url || '').trim();
-    const proxiedImageUrl = rawImageUrl ? `${wUrl}/image-fetch?url=${encodeURIComponent(rawImageUrl)}` : '';
-    const finalUrl = proxiedImageUrl || rawImageUrl;
-    if (!finalUrl) throw new Error('empty image url');
-    await downloadImage(finalUrl, 'upscaled.jpg');
-    showToast('업스케일 완료 후 다운로드했습니다.');
-  } catch (e) {
-    showToast('업스케일에 실패했습니다.');
-  } finally {
-    _popupUpscaling = false;
-    if (btn) btn.classList.remove('busy');
-  }
-}
-
-async function upscaleImageAndDownload(url, triggerBtn = null) {
-  const target = String(url || '').trim();
-  if (!target || _popupUpscaling) return;
-  _popupUpscaling = true;
-  if (triggerBtn) triggerBtn.classList.add('busy');
-  try {
-    const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-    if (!wUrl) throw new Error('Worker URL not configured');
-    const res = await fetch(wUrl + '/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'gemini-3.1-flash-image-preview',
-        prompt: 'Upscale this image to high detail while preserving composition and identity. Keep colors natural and avoid style drift.',
-        images: [target],
-        aspect_ratio: '1:1'
-      })
-    });
-    const data = await res.json();
-    if (data?.result !== 'success') throw new Error(data?.error || 'upscale failed');
-    const rawImageUrl = String(data.image_url || '').trim();
-    const proxiedImageUrl = rawImageUrl ? `${wUrl}/image-fetch?url=${encodeURIComponent(rawImageUrl)}` : '';
-    const finalUrl = proxiedImageUrl || rawImageUrl;
-    if (!finalUrl) throw new Error('empty image url');
-    await downloadImage(finalUrl, 'upscaled.jpg');
-    showToast('업스케일 완료 후 다운로드했습니다.');
-  } catch (e) {
-    showToast('업스케일에 실패했습니다.');
-  } finally {
-    _popupUpscaling = false;
-    if (triggerBtn) triggerBtn.classList.remove('busy');
   }
 }
 
