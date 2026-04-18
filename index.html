@@ -579,6 +579,7 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .copy-btn.copied { color: rgba(100,220,140,0.85); }
 .msg-pname { display: flex; align-items: center; font-size: 14px; font-weight: 700; margin-bottom: 3px; letter-spacing: .01em; }
 .msg-pname-text { line-height: 1; }
+.ai-msg.one-to-one .msg-pname { display: none; }
 .ai-bubble { padding: 11px 14px; border-radius: 2px 14px 14px 14px; font-size: var(--chat-font-size); line-height: 1.75; max-width: 100%; overflow-wrap: break-word; word-break: break-word; border: none; outline: none; }
 .user-msg { align-self: flex-end; max-width: 78%; background: #1c1c24; border: none; outline: none; border-radius: 18px 18px 4px 18px; padding: 11px 15px; font-size: var(--chat-font-size); line-height: 1.7; }
 
@@ -934,30 +935,30 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 /* 이미지 컨테이너 및 버튼 스타일 */
 .bubble-img-container { width: 100%; margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
 .bubble-img { width: 100%; height: auto; border-radius: 12px; cursor: pointer; display: block; background: var(--surface); }
-.inline-image-wrap { position: relative; margin-top: 4px; }
+.inline-image-wrap { position: relative; margin-top: 4px; margin-bottom: 12px; }
 .inline-image-wrap > img { width: 100%; border-radius: 10px; display: block; }
 .inline-image-wrap > img.zoomed { max-width: none; width: auto; }
 .inline-image-actions {
   position: absolute;
-  right: 8px;
-  bottom: 8px;
+  right: 4px;
+  bottom: 4px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 6px;
-  border-radius: 10px;
-  background: rgba(12, 12, 16, 0.58);
-  border: 1px solid rgba(255,255,255,.12);
-  backdrop-filter: blur(6px);
+  gap: 4px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: none;
+  backdrop-filter: none;
 }
 .inline-image-actions .image-popup-action-btn {
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
 }
 .inline-image-actions .image-popup-action-btn svg {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
 }
 .img-download-btn { align-self: flex-start; padding: 6px 14px; font-size: 11px; background: rgba(255,255,255,0.08); border: 1px solid var(--border2); border-radius: 8px; color: var(--muted); text-decoration: none; cursor: pointer; transition: all .15s; }
 .img-download-btn:hover { background: rgba(255,255,255,0.15); color: var(--text); }
@@ -1014,19 +1015,19 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
   bottom: 16px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 10px;
-  border-radius: 12px;
-  background: rgba(12, 12, 16, 0.72);
-  border: 1px solid rgba(255,255,255,.14);
-  backdrop-filter: blur(8px);
+  gap: 6px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: none;
+  backdrop-filter: none;
 }
 .image-popup-action-btn {
   width: 44px;
   height: 44px;
-  border-radius: 10px;
-  border: 1px solid var(--border2);
-  background: rgba(255,255,255,.05);
+  border-radius: 999px;
+  border: none;
+  background: rgba(0,0,0,.45);
   color: var(--text);
   display: inline-flex;
   align-items: center;
@@ -1043,7 +1044,7 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
   stroke-linejoin: round;
 }
 .image-popup-action-btn.active,
-.image-popup-action-btn:hover { background: rgba(255,255,255,.12); }
+.image-popup-action-btn:hover { background: rgba(0,0,0,.72); }
 .image-popup-action-btn.busy { opacity: .55; cursor: wait; }
 
 /* 1. 화면 전체 및 채팅 영역 팽창 원천 차단 (우측 잘림 방지) */
@@ -1592,7 +1593,7 @@ list-style-position: outside;
       <svg viewBox="0 0 24 24"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 21h16"/></svg>
     </button>
     <button class="image-popup-action-btn" id="popupUpscaleBtn" onclick="upscalePopupImageAndDownload()" title="업스케일 후 다운로드">
-      <svg viewBox="0 0 24 24"><path d="M4 14V4h10"/><path d="M20 10v10H10"/><path d="M14 4l6 6"/><path d="M4 20l6-6"/></svg>
+      <span style="font-size:14px;font-weight:800;letter-spacing:.02em;">2K</span>
     </button>
     <button class="image-popup-action-btn" onclick="copyPopupImageToClipboard()" title="클립보드 복사">
       <svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>

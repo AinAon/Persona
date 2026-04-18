@@ -1195,7 +1195,7 @@ async function renderPersonaGrid() {
     const imgSrc = neutral;
     const nametagBg = `hsl(${p.hue},45%,22%)`;
     const isCeleb = p.type === 'celebrity';
-    const celebStroke = isCeleb ? `box-shadow: inset 0 0 0 1.5px hsl(${p.hue},70%,60%), 0 0 8px hsl(${p.hue},60%,40%);` : '';
+    const celebStroke = '';
     card.innerHTML = `
       <div class="persona-card-img" style="${celebStroke}; aspect-ratio: 1 / 3; overflow: hidden; max-height: 1000px;">
         ${imgSrc ? `<img src="${imgSrc}" style="width: 100%; height: 100%; object-fit: cover; object-position: center;">` : defaultAvatar(p.hue)}
@@ -2775,8 +2775,9 @@ function copyBubble(btn, text, encoded = false) {
   } else { doFallback(); markDone(); }
 }
 
-async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = null) {
+async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = null, forceOneToOne = null) {
   const segments = parseResponse(rawText, pList);
+  const isOneToOne = forceOneToOne == null ? (pList || []).length <= 1 : !!forceOneToOne;
   let html = '';
   for (const seg of segments) {
     seg.content = sanitizeTextForUnicodeSafety(seg.content);
@@ -2807,7 +2808,7 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
     const safeEmotion = (seg.emotion||'neutral').replace(/'/g, "\\'");
     const safeSuffix = suffix.replace(/'/g, "\\'");
     const safeThumb = thumbSrc.replace(/'/g, "\\'");
-    const celebStroke = p.type === 'celebrity' ? `box-shadow: inset 0 0 0 1.5px hsl(${h},70%,60%), 0 0 6px hsl(${h},60%,40%);` : '';
+    const celebStroke = '';
     
     // 설정에 따른 스타일 결정
     const avDisplay = avStyle === 'hidden' ? 'display:none;' : '';
@@ -2832,7 +2833,7 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
         /<img([^>]*?)src="([^"]+)"([^>]*?)>/gi,
         (_, pre, src, post) => {
           const safeSrc = String(src || '').replace(/'/g, "\\'");
-          return `<div class="inline-image-wrap"><img${pre}src="${src}"${post} onclick="openImagePopup('${safeSrc}')" style="cursor:pointer"><div class="inline-image-actions"><button class="image-popup-action-btn" onclick="toggleInlineImageZoom(this)" title="원본 크기 / 축소">${getZoomIconSvg(false)}</button><button class="image-popup-action-btn" onclick="downloadImage('${safeSrc}','generated.jpg')" title="다운로드"><svg viewBox="0 0 24 24"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 21h16"/></svg></button><button class="image-popup-action-btn" onclick="upscaleImageAndDownload('${safeSrc}', this)" title="업스케일 후 다운로드"><svg viewBox="0 0 24 24"><path d="M4 14V4h10"/><path d="M20 10v10H10"/><path d="M14 4l6 6"/><path d="M4 20l6-6"/></svg></button><button class="image-popup-action-btn" onclick="copyImageToClipboard('${safeSrc}')" title="클립보드 복사"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div></div>`;
+          return `<div class="inline-image-wrap"><img${pre}src="${src}"${post} onclick="openImagePopup('${safeSrc}')" style="cursor:pointer"><div class="inline-image-actions"><button class="image-popup-action-btn" onclick="downloadImage('${safeSrc}','generated.jpg')" title="다운로드"><svg viewBox="0 0 24 24"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 21h16"/></svg></button></div></div>`;
         }
       );
     }
@@ -2840,7 +2841,7 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
     // 저장 버튼
     const dlBtn = '';
 
-    html += `<div class="ai-msg ${hasImg ? 'ai-msg-img' : 'ai-msg-text'}" style="${opacity}">
+    html += `<div class="ai-msg ${hasImg ? 'ai-msg-img' : 'ai-msg-text'} ${isOneToOne ? 'one-to-one' : ''}" style="${opacity}">
       <div class="msg-av" style="background:hsl(${h},20%,11%);border-color:hsl(${h},28%,22%);${celebStroke};${avDisplay}${avShape}" onclick="openProfilePopup('${safePid}','${safeEmotion}',${h},'${safeThumb}','${safeSuffix}')">${baseImg}</div>
       <div class="bubble-col">
         <div class="msg-pname" style="color:hsl(${h},65%,72%)">
@@ -2867,7 +2868,7 @@ async function appendAIReplySequentially(reply, pList, suffixes, createdAt, tgtA
     const p = pList[seg.idx] || pList[0];
     if (!p) continue;
     const segReply = `[${p.pid}][emotion:${seg.emotion || 'neutral'}]${segText}[/${p.pid}]`;
-    const html = await renderAIResponseHTML(segReply, [p], suffixes, createdAt);
+    const html = await renderAIResponseHTML(segReply, [p], suffixes, createdAt, (pList || []).length <= 1);
     if (_chatGeneration?.cancelled || activeChatId !== renderSessionId) return;
     const replyEl = document.createElement('div');
     replyEl.innerHTML = html;
@@ -3231,10 +3232,18 @@ function renderUserBubbleHTMLV2(text, atts) {
     const dlUrl = a?.url || getAttachmentStoredUrl(a) || viewUrl;
     if (!viewUrl) return;
     const safeViewUrl = String(viewUrl).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const safeName = String(a?.name || (isImg ? 'image' : 'file')).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     if (isImg) {
       html += `
       <div class="bubble-img-container">
-        <img class="bubble-img" src="${viewUrl}" onclick="openImagePopup('${safeViewUrl}')">
+        <div class="inline-image-wrap">
+          <img class="bubble-img" src="${viewUrl}" onclick="openImagePopup('${safeViewUrl}')">
+          <div class="inline-image-actions">
+            <button class="image-popup-action-btn" onclick="downloadImage('${safeViewUrl}','${safeName}')" title="다운로드">
+              <svg viewBox="0 0 24 24"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 21h16"/></svg>
+            </button>
+          </div>
+        </div>
       </div>`;
     } else {
       html += `
