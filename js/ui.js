@@ -2454,15 +2454,11 @@ function isEditableElement(el) {
   return tag === 'input' || tag === 'textarea' || tag === 'select' || !!el.isContentEditable;
 }
 
-function handleEscBackNavigation(event) {
-  if (!event || event.key !== 'Escape') return;
-  if (isEditableElement(event.target)) return;
-
+function handleInAppBackNavigation() {
   const imagePopup = document.getElementById('imagePopup');
   if (imagePopup?.classList.contains('active')) {
     closeImagePopup();
-    event.preventDefault();
-    return;
+    return true;
   }
 
   const closers = [
@@ -2478,57 +2474,64 @@ function handleEscBackNavigation(event) {
     const el = document.getElementById(id);
     if (el?.classList.contains('open')) {
       fn();
-      event.preventDefault();
-      return;
+      return true;
     }
   }
 
   const cropOverlay = document.getElementById('cropOverlay');
   if (cropOverlay?.classList.contains('open') && typeof closeCropEditor === 'function') {
     closeCropEditor();
-    event.preventDefault();
-    return;
+    return true;
   }
   const cropOverlayAvatar = document.getElementById('cropOverlayAvatar');
   if (cropOverlayAvatar?.classList.contains('open') && typeof closeAvatarCropEditor === 'function') {
     closeAvatarCropEditor();
-    event.preventDefault();
-    return;
+    return true;
   }
 
   const editScreen = document.getElementById('editScreen');
   if (editScreen?.classList.contains('active')) {
     goMain();
-    event.preventDefault();
-    return;
+    return true;
   }
 
   const chatScreen = document.getElementById('chatScreen');
   if (chatScreen?.classList.contains('active')) {
     goMain();
-    event.preventDefault();
-    return;
+    return true;
   }
 
   if (activeTab !== 'persona') {
     switchTab('persona');
-    event.preventDefault();
-    return;
+    return true;
   }
 
   if (_selectedPersonaPid) {
     clearPersonaSelection();
-    event.preventDefault();
+    return true;
   }
+  return false;
 }
 
-function ensureGlobalEscHandler() {
-  if (window.__personaEscBound) return;
-  window.__personaEscBound = true;
+function handleEscBackNavigation(event) {
+  if (!event || event.key !== 'Escape') return;
+  if (isEditableElement(event.target)) return;
+  if (handleInAppBackNavigation()) event.preventDefault();
+}
+
+function ensureGlobalBackHandler() {
+  if (window.__personaBackBound) return;
+  window.__personaBackBound = true;
   document.addEventListener('keydown', handleEscBackNavigation);
+  window.addEventListener('popstate', () => {
+    if (handleInAppBackNavigation()) {
+      try { history.pushState({ personaBackGuard: 1 }, '', location.href); } catch {}
+    }
+  });
+  try { history.pushState({ personaBackGuard: 1 }, '', location.href); } catch {}
 }
 
-ensureGlobalEscHandler();
+ensureGlobalBackHandler();
 
 function setupSwipeDelete(item, wrap, id) {
   let startX = 0, startY = 0, currentX = 0, tracking = false, revealed = false;
