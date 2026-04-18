@@ -4432,6 +4432,9 @@ function renderArchiveGrid() {
       <img src="${it.url}" loading="lazy" onerror="handleArchiveImageError(this,'${safeKey}')">
       <div class="archive-card-check">✓</div>
       <div class="archive-card-actions" onclick="event.stopPropagation()">
+        <button class="archive-action-btn icon" onclick="editArchiveImage('${safeKey}')" title="편집하기" aria-label="편집하기">
+          <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+        </button>
         <button class="archive-action-btn icon" onclick="jumpToImageConversation('${safeKey}')" title="대화로 이동" aria-label="대화로 이동">
           <svg viewBox="0 0 24 24"><path d="M4 6h16a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-8l-4 3v-3H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2"/><circle cx="9" cy="11.5" r="1"/><circle cx="12" cy="11.5" r="1"/><circle cx="15" cy="11.5" r="1"/></svg>
         </button>
@@ -4496,6 +4499,36 @@ function handleArchiveImageError(imgEl, key) {
   imgEl.dataset.broken = '1';
   const card = imgEl.closest('.archive-card');
   if (card) card.title = `이미지를 불러오지 못했습니다: ${key}`;
+}
+
+async function editArchiveImage(key) {
+  const normalizedKey = normalizeArchiveKey(key);
+  const hit = (_archiveItems || []).find((it) => normalizeArchiveKey(it.key) === normalizedKey);
+  if (!hit?.url) {
+    showToast('이미지 정보를 찾을 수 없습니다.');
+    return;
+  }
+  const persona1Pid = Array.isArray(personas) && personas[0]?.pid ? personas[0].pid : null;
+  if (!persona1Pid) {
+    showToast('페르소나 1을 찾을 수 없습니다.');
+    return;
+  }
+  const session = {
+    id: uid(), participantPids: [persona1Pid],
+    roomName: '',
+    responseMode: 'auto',
+    worldContext: '',
+    history: [], updatedAt: Date.now(), lastPreview: '', _loaded: true
+  };
+  sessions.push(session);
+  activeChatId = session.id;
+  saveIndex();
+  await renderChatList();
+  switchTab('chat');
+  await openChat(session.id);
+  switchInputTab('image');
+  addImageSourceToComposer(hit.url, getFilenameFromR2Key(hit.key, 'image.jpg'));
+  showToast('편집용 새 채팅을 열었습니다.');
 }
 
 function openArchiveImagePopup(key) {
