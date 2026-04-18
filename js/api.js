@@ -2,7 +2,7 @@
 //  INDEXED DB (로컬 이미지 캐싱)
 // ══════════════════════════════
 const IMAGE_CACHE_SIZES = {
-  HD: 1200,
+  HD: 1000,
   MD: 400,
   LD: 200,
   THUMB: 100,
@@ -12,8 +12,8 @@ const IMAGE_CACHE_SIZES = {
 
 // Keep rectangular chat/profile thumbs fixed at the cropped chat size.
 const PROFILE_RECT_WIDTH_STEPS = [300];
-const PROFILE_CIRCLE_STEPS = [100, 200, 300];
-const PROFILE_FULL_WIDTH_STEPS = [1200];
+const PROFILE_CIRCLE_STEPS = [200];
+const PROFILE_FULL_WIDTH_STEPS = [1000];
 
 // ══════════════════════════════
 //  IMAGE FETCH & CACHE

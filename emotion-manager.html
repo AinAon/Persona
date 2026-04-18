@@ -567,8 +567,8 @@ async function makeVariants(dataUrl, pid, eid, slot){
   circleSource.getContext('2d').drawImage(img, cropX, cropY, circleSide, circleSide, 0, 0, circleSide, circleSide);
 
   const aWidths = [Math.min(1200, W)];
-  const bWidths = [...new Set([300, Math.min(200, rectW)].filter((x) => x > 0))];
-  const cSizes = [...new Set([100, 200, 300].map((s) => Math.min(s, circleSide)).filter((x) => x > 0))];
+  const bWidths = [Math.min(300, rectW)];
+  const cSizes = [Math.min(200, circleSide)];
 
   const records = [];
   for (const outW of aWidths) {

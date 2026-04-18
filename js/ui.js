@@ -4432,8 +4432,8 @@ function prefetchArchiveNextPage() {
 function openArchiveImagePopup(key) {
   const hit = (_archiveItems || []).find((it) => it.key === key);
   if (!hit?.url) return;
-  _archivePopupContext = hit;
   openImagePopup(hit.url);
+  _archivePopupContext = hit;
   const deleteBtn = document.getElementById('popupDeleteBtn');
   if (deleteBtn) deleteBtn.style.display = 'inline-flex';
 }
@@ -4689,7 +4689,35 @@ async function copyPopupImageToClipboard() {
 async function copyImageToClipboard(url) {
   const target = String(url || '').trim();
   if (!target) return;
+  const fallbackCopyText = async (txt) => {
+    const value = String(txt || '').trim();
+    if (!value) return false;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+        return true;
+      }
+    } catch {}
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = value;
+      ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      return !!ok;
+    } catch {
+      return false;
+    }
+  };
   if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') {
+    const ok = await fallbackCopyText(target);
+    if (ok) {
+      showToast('이미지 URL을 클립보드에 복사했습니다.');
+      return;
+    }
     showToast('클립보드 이미지 복사를 지원하지 않는 환경입니다.');
     return;
   }
@@ -4703,6 +4731,11 @@ async function copyImageToClipboard(url) {
     await navigator.clipboard.write([new ClipboardItem({ [blob.type || 'image/png']: blob })]);
     showToast('이미지를 클립보드에 복사했습니다.');
   } catch (e) {
+    const ok = await fallbackCopyText(target);
+    if (ok) {
+      showToast('이미지 URL을 클립보드에 복사했습니다.');
+      return;
+    }
     try {
       await navigator.clipboard.writeText(target);
       showToast('이미지 URL을 클립보드에 복사했습니다.');
