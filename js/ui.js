@@ -4756,6 +4756,16 @@ function closeImagePopup(e = null) {
   _archivePopupContext = null;
 }
 
+function handlePopupImageTap(e = null) {
+  if (e?.stopPropagation) e.stopPropagation();
+  if (_popupZoomed) {
+    togglePopupImageZoom();
+    _popupSuppressCloseUntil = Date.now() + 180;
+    return;
+  }
+  closeImagePopup(e);
+}
+
 function togglePopupImageZoom() {
   const img = document.getElementById('popupImg');
   if (!img) return;
