@@ -4289,6 +4289,11 @@ function normalizeArchiveKey(rawKey) {
   const fromUrl = extractR2ImageKey(raw);
   if (fromUrl) return fromUrl;
   try {
+    const u = new URL(raw);
+    const p = decodeURIComponent(String(u.pathname || '').replace(/^\/+/, ''));
+    if (p.startsWith('img_generated/') || p.startsWith('img_uploaded/')) return p;
+  } catch {}
+  try {
     return decodeURIComponent(raw);
   } catch {
     return raw;
@@ -4338,11 +4343,14 @@ async function loadArchiveManifestFromR2() {
   const keys = [...(genRes?.keys || []), ...(uploadRes?.keys || [])];
   const sourceMap = buildArchiveSourceMap();
   const now = Date.now();
+  const seen = new Set();
   return keys
     .filter(Boolean)
     .map((key) => {
       const normalizedKey = normalizeArchiveKey(key);
-      const mapped = sourceMap.get(key) || {};
+      if (!normalizedKey || seen.has(normalizedKey)) return null;
+      seen.add(normalizedKey);
+      const mapped = sourceMap.get(normalizedKey) || sourceMap.get(key) || {};
       return {
         key: normalizedKey,
         url: `${wUrl}/image/${encodeURIComponent(normalizedKey).replace(/%2F/gi, '/')}`,
@@ -4352,18 +4360,37 @@ async function loadArchiveManifestFromR2() {
         updatedAt: now,
       };
     })
+    .filter(Boolean)
     .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 }
 
 async function ensureArchiveManifest() {
   if (_archiveLoaded) return;
   const cached = await idbGet(ARCHIVE_MANIFEST_CACHE_KEY).catch(() => null);
-  if (Array.isArray(cached) && cached.length) _archiveItems = cached;
+  if (Array.isArray(cached) && cached.length) {
+    _archiveItems = cached
+      .map((it) => {
+        const normalizedKey = normalizeArchiveKey(it?.key || it?.url);
+        if (!normalizedKey) return null;
+        const base = wUrlForImage();
+        return {
+          ...it,
+          key: normalizedKey,
+          url: base ? `${base}/image/${encodeURIComponent(normalizedKey).replace(/%2F/gi, '/')}` : String(it?.url || ''),
+          type: getArchiveTypeByKey(normalizedKey),
+        };
+      })
+      .filter(Boolean);
+  }
   renderArchiveGrid();
   const fresh = await loadArchiveManifestFromR2();
   _archiveItems = fresh;
   _archiveLoaded = true;
   await idbSet(ARCHIVE_MANIFEST_CACHE_KEY, fresh).catch(() => {});
+}
+
+function wUrlForImage() {
+  return (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
 }
 
 function setArchiveFilter(filter) {
@@ -4559,15 +4586,20 @@ async function deletePopupImageFromArchive() {
   if (!confirm('이 이미지를 아카이브와 R2에서 삭제할까요?')) return;
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl) return;
-  const res = await fetch(`${wUrl}/image/${encodeURIComponent(ctx.key).replace(/%2F/gi, '/')}`, { method: 'DELETE' }).catch(() => null);
-  if (!res?.ok) {
+  const targetKey = normalizeArchiveKey(ctx.key);
+  const res = await fetch(`${wUrl}/image/${encodeURIComponent(targetKey).replace(/%2F/gi, '/')}`, { method: 'DELETE' }).catch(() => null);
+  if (!res || (!res.ok && res.status !== 404)) {
     showToast('삭제에 실패했습니다.');
     return;
   }
-  _archiveItems = (_archiveItems || []).filter((it) => it.key !== ctx.key);
+  _archiveItems = (_archiveItems || []).filter((it) => normalizeArchiveKey(it.key) !== targetKey);
   await idbSet(ARCHIVE_MANIFEST_CACHE_KEY, _archiveItems).catch(() => {});
   closeImagePopup();
   renderArchiveGrid();
+  if (res.status === 404) {
+    showToast('R2에는 이미 없는 항목이라 목록에서 정리했습니다.');
+    return;
+  }
   showToast('아카이브에서 삭제했습니다.');
 }
 
