@@ -36,7 +36,13 @@ function startDemoChat() {
 
 function openEmotionManager() {
   const v = Date.now();
-  window.open(`./emotion-manager.html?v=${v}`, '_blank', 'noopener,noreferrer');
+  let pid = '';
+  try {
+    if (typeof editingPid === 'string' && editingPid) pid = editingPid;
+  } catch {}
+  const qs = new URLSearchParams({ v: String(v) });
+  if (pid) qs.set('pid', pid);
+  window.open(`./emotion-manager.html?${qs.toString()}`, '_blank', 'noopener,noreferrer');
 }
 
 window.getDemoReply = function(session) {

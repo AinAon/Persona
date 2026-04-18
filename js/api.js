@@ -499,6 +499,14 @@ async function generateThumbnailSet(fullDataUrl, pid, emotion = 'neutral_a') {
         detail: { pid, emotion }
       }));
     }
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('em_cache_ping', JSON.stringify({ pid, emotion, ts: Date.now() }));
+    }
+    if (typeof BroadcastChannel !== 'undefined') {
+      const ch = new BroadcastChannel('persona-cache-sync');
+      ch.postMessage({ type: 'persona-cache-updated', pid, emotion, ts: Date.now() });
+      ch.close();
+    }
   } catch (e) {}
 
   return { sqMd: rectMd, sqLd: rectLd, thumb: circleMain, fullHd, avatarPng: circleMain };

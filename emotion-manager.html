@@ -477,6 +477,17 @@ async function clearAllImageCaches(){
   }
   state.images = {};
 }
+async function clearPersonaImageCaches(pid){
+  if (!pid) return;
+  const keys = await idbKeys().catch(() => []);
+  for (const key of keys) {
+    const k = String(key || '');
+    if (k.startsWith(`emotion_${pid}_`) || k.startsWith(`em_full_${pid}_`)) {
+      await idbDelete(k).catch(() => {});
+    }
+  }
+  delete state.images[pid];
+}
 
 function fetchNoCache(url, options = {}){
   const opts = { ...options };
@@ -674,8 +685,10 @@ async function clearSlotImage(pid, eid, slot){
     ...dynamicDeletes,
   ]);
 }
-async function loadImagesFromIDB() {
-  state.images = {};
+async function loadImagesFromIDB(opts = {}) {
+  const onlyPid = String(opts.onlyPid || '').trim();
+  const merge = !!opts.merge;
+  if (!merge) state.images = {};
 
   const keys = await idbKeys().catch(() => []);
   const knownPids = (state.personas || [])
@@ -709,6 +722,8 @@ async function loadImagesFromIDB() {
   // ?⑥씪 猷⑦봽?먯꽌 紐⑤뱺 ??泥섎━
   for (const key of keys) {
     const k = String(key || '');
+    if (onlyPid && !k.startsWith(`emotion_${onlyPid}_`) && !k.startsWith(`em_full_${onlyPid}_`)) continue;
+    if (!(k.startsWith('emotion_') || k.startsWith('em_full_'))) continue;
     const val = await idbGet(k).catch(() => null);
     if (!val) continue;
 
@@ -887,12 +902,14 @@ function render(){
       };
     }
     els.personaGrid.querySelectorAll('.persona-popup').forEach((btn) => {
-      btn.onclick = (ev) => {
+      btn.onclick = async (ev) => {
         ev.stopPropagation();
         const pid = String(btn.getAttribute('data-pid') || '');
         if (!pid) return;
         state.activePid = pid;
         state.personaPickerOpen = false;
+        render();
+        await loadImagesFromIDB({ onlyPid: pid, merge: true }).catch(() => {});
         render();
         showStatus(`Selected ${pid} (IDB cache)`);
       };
@@ -1459,8 +1476,13 @@ async function reloadAll(){
     if (state.personas.length && !state.activePid) state.activePid = state.personas[0].pid;
     render();
     setProgress(25);
-    await clearAllImageCaches();
-    await loadImagesFromIDB();
+    if (state.activePid) {
+      await clearPersonaImageCaches(state.activePid);
+      await loadImagesFromIDB({ onlyPid: state.activePid, merge: true });
+    } else {
+      await clearAllImageCaches();
+      await loadImagesFromIDB();
+    }
     render();
     setProgress(55);
     if (state.activePid) {
@@ -1471,7 +1493,7 @@ async function reloadAll(){
       }
       setProgress(90);
     }
-    showStatus('Reload completed: R2 originals refreshed and local cache rebuilt.');
+    showStatus('Reload completed: selected persona cache refreshed.');
   } catch (err) {
     showStatus(`Reload failed: ${err?.message || String(err || 'unknown error')}`);
   } finally {
@@ -1525,16 +1547,44 @@ function init(){
     uploadCurrentCard(first);
   });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeViewer(); });
+  const refreshPidCache = async (pid = '') => {
+    const targetPid = String(pid || '').trim();
+    const focusPid = targetPid || state.activePid || '';
+    if (!focusPid) return;
+    await loadImagesFromIDB({ onlyPid: focusPid, merge: true }).catch(() => {});
+    render();
+  };
+  window.addEventListener('storage', (e) => {
+    if (e.key !== 'em_cache_ping' || !e.newValue) return;
+    try {
+      const data = JSON.parse(e.newValue);
+      refreshPidCache(String(data?.pid || ''));
+    } catch {}
+  });
+  if (typeof BroadcastChannel !== 'undefined') {
+    try {
+      const syncChannel = new BroadcastChannel('persona-cache-sync');
+      syncChannel.onmessage = (ev) => {
+        const data = ev?.data || {};
+        if (data?.type !== 'persona-cache-updated') return;
+        refreshPidCache(String(data?.pid || ''));
+      };
+    } catch {}
+  }
   (async () => {
+    const requestedPid = String(new URLSearchParams(location.search).get('pid') || '');
     await loadPersonasFromBackend();
     if (!state.personas.length) {
       const cached = JSON.parse(localStorage.getItem('em_personas') || '[]');
       const seen = new Set();
       state.personas = Array.isArray(cached) ? cached.filter(p => p && p.pid && !seen.has(p.pid) && seen.add(p.pid)) : [];
     }
-    if (state.personas.length) state.activePid = state.personas[0].pid;
+    if (state.personas.length) {
+      const hasRequested = requestedPid && state.personas.some(p => p.pid === requestedPid);
+      state.activePid = hasRequested ? requestedPid : state.personas[0].pid;
+    }
     render();
-    await loadImagesFromIDB().catch(() => {});
+    await loadImagesFromIDB(state.activePid ? { onlyPid: state.activePid, merge: true } : {}).catch(() => {});
     render();
     resetProgress();
   })();
