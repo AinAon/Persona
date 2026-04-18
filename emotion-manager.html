@@ -53,7 +53,7 @@
   stroke-linecap:round;
   stroke-linejoin:round;
 }
-.layout{flex:1 1 auto;display:grid;grid-template-columns:340px 1fr;min-height:0;overflow:hidden;padding-bottom:52px}
+.layout{flex:1 1 auto;display:grid;grid-template-columns:210px 1fr;min-height:0;overflow:hidden}
 .sidebar{border-right:1px solid var(--border);background:var(--surface);padding:14px;overflow:auto;min-height:0}
 .main{padding:18px 18px 0;overflow:hidden;min-height:0;display:flex;flex-direction:column}
 .main-scroll{flex:1 1 auto;overflow:auto;min-height:0;height:100%;padding-right:4px;padding-bottom:24px}
@@ -64,10 +64,10 @@
 .persona-card{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--card);cursor:pointer;transition:.15s}
 .persona-card:hover{transform:translateY(-1px);border-color:var(--border2)}
 .persona-card.active{border-color:var(--accent)}
-.persona-thumb{aspect-ratio:2/3;background:#0b0b10;position:relative;overflow:hidden}
+.persona-thumb{aspect-ratio:1/3;background:#0b0b10;position:relative;overflow:hidden}
 .persona-thumb img{width:100%;height:100%;object-fit:cover;object-position:top;display:block}
-.persona-name{padding:6px 8px;font-size:10px;text-align:center;font-weight:700;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.persona-stage{position:relative;width:160px;max-width:100%}
+.persona-name{padding:8px 8px;font-size:12px;text-align:center;font-weight:800;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff}
+.persona-stage{position:relative;width:100%;max-width:100%}
 .persona-main{width:100%}
 .persona-popups{
   position:absolute;
@@ -79,7 +79,7 @@
   pointer-events:none;
 }
 .persona-popup{
-  width:132px;
+  width:100%;
   opacity:0;
   transform:translateX(-12px) scale(.98);
   transition:opacity .24s ease, transform .24s ease;
@@ -94,27 +94,27 @@
 .gallery-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
 .gallery-title{font-family:var(--font-display);font-size:14px;font-weight:700}
 .gallery-stats{font-size:10px;color:var(--muted)}
-.cat-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.cat-tabs{display:none}
 .cat-tab{padding:7px 10px;border-radius:999px;border:1px solid var(--border2);background:transparent;color:var(--muted);font:12px var(--font-mono);font-weight:600;cursor:pointer}
 .cat-tab.active{background:var(--card);color:var(--text);border-color:var(--accent)}
 .cat{margin-bottom:18px}
 .cat-head{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:10px}
 .cat-head strong{font-size:11px;text-transform:uppercase;letter-spacing:.12em}
 .slot-grid{display:grid;grid-template-columns:repeat(5,minmax(150px,1fr));gap:10px}
-.slot-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;min-height:300px}
+.slot-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;height:300px}
 .slot-card.has-image{border-color:rgba(124,106,247,.55)}
-.slot-preview{aspect-ratio:2/3;background:#0b0b10;position:relative;overflow:hidden;cursor:pointer}
+.slot-preview{flex:1 1 auto;min-height:0;background:#0b0b10;position:relative;overflow:hidden;cursor:pointer}
 .slot-preview img{width:100%;height:100%;object-fit:cover;display:block}
-.slot-empty{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:11px}
+.slot-empty{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:22px}
 .slot-foot{padding:8px;display:grid;gap:8px}
-.slot-meta{display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--muted)}
+.slot-meta{display:flex;justify-content:space-between;align-items:center;font-size:20px;color:var(--muted)}
 .slot-actions{display:flex;gap:6px}
 .slot-actions .btn{flex:1}
 .slot-actions .btn span{display:block}
 .row-note{font-size:10px;color:var(--muted);margin-top:4px}
-.bottom-status{position:fixed;left:0;right:0;bottom:0;z-index:35;padding:10px 24px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);white-space:pre-wrap;min-height:44px}
+.bottom-status{flex:0 0 auto;position:relative;z-index:10;padding:16px 24px;border-top:1px solid var(--border);font-size:22px;line-height:1.35;color:var(--muted);white-space:pre-wrap;min-height:72px;background:rgba(10,10,14,.98)}
 .queue-list{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
-.queue-item{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;border:1px solid var(--border2);background:rgba(20,20,26,.9);font-size:10px;color:var(--muted)}
+.queue-item{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid var(--border2);background:rgba(20,20,26,.9);font-size:16px;color:var(--muted)}
 .queue-dot{width:6px;height:6px;border-radius:50%}
 .queue-item.queued .queue-dot{background:var(--muted2)}
 .queue-item.running .queue-dot{background:var(--accent)}
@@ -132,7 +132,7 @@
 .viewer-img{display:block;max-width:95vw;max-height:92vh;width:auto;height:auto;object-fit:contain;touch-action:none;user-select:none;cursor:grab}
 .viewer-close{position:absolute;top:-12px;right:-12px;width:34px;height:34px;border-radius:999px;border:1px solid var(--border2);background:rgba(18,18,24,.95);color:#fff;font-size:18px;cursor:pointer;display:grid;place-items:center}
 .crop-overlay.open{opacity:1 !important;pointer-events:auto !important;}
-@media (max-width: 1280px){.layout{grid-template-columns:280px 1fr}.slot-grid{grid-template-columns:repeat(3,minmax(150px,1fr))}}
+@media (max-width: 1280px){.layout{grid-template-columns:210px 1fr}.slot-grid{grid-template-columns:repeat(3,minmax(150px,1fr))}}
 @media (max-width: 900px){.layout{grid-template-columns:1fr}.sidebar{border-right:none;border-bottom:1px solid var(--border)}.slot-grid{grid-template-columns:repeat(2,minmax(140px,1fr))}}
 </style>
 </head>
@@ -704,6 +704,14 @@ function getPersonaImage(pid){
     || state.images[pid]?.neutral?.a?.full
     || '';
 }
+function personaTagStyle(pid = '') {
+  let h = 0;
+  const s = String(pid || '');
+  for (let i = 0; i < s.length; i++) h = ((h * 31) + s.charCodeAt(i)) % 360;
+  const bg = `hsla(${h}, 78%, 44%, 0.95)`;
+  const border = `hsla(${h}, 85%, 62%, 0.9)`;
+  return `background:${bg};border-top:1px solid ${border};`;
+}
 function getEmotionImage(pid, eid, slot){
   const s = state.images[pid]?.[eid]?.[slot];
   return s?.full || '';
@@ -773,9 +781,8 @@ async function findNeutralReferenceKey(pid) {
 function render(){
   els.personaCount.textContent = String(state.personas.length);
   els.galleryTitle.textContent = state.activePid ? (state.personas.find(p=>p.pid===state.activePid)?.name || state.activePid) : 'Select a persona';
-  els.galleryStats.textContent = state.activePid ? `Category: ${state.activeCat} / Rows = emotions, columns = slots a-e.` : 'neutral_a is the primary reference image.';
+  els.galleryStats.textContent = state.activePid ? `Rows = emotions, columns = slots a-e.` : 'neutral_a is the primary reference image.';
   els.cacheStats.textContent = state.activePid ? `${state.activePid}` : '';
-  document.querySelectorAll('.cat-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.cat === state.activeCat));
 
   els.personaGrid.innerHTML = '';
   if (state.personas.length) {
@@ -790,7 +797,7 @@ function render(){
       return `
       <button type="button" class="persona-card persona-popup" data-pid="${esc(p.pid)}" style="--i:${i}">
         <div class="persona-thumb">${img ? `<img src="${img}" alt="">` : '<div class="slot-empty">neutral_a</div>'}</div>
-        <div class="persona-name">${esc(p.name || p.pid)}</div>
+        <div class="persona-name" style="${personaTagStyle(p.pid)}">${esc(p.name || p.pid)}</div>
       </button>`;
     }).join('');
     els.personaGrid.classList.toggle('open', !!state.personaPickerOpen && popupPersonas.length > 0);
@@ -798,7 +805,7 @@ function render(){
       <div class="persona-stage">
         <button type="button" class="persona-card persona-main active" data-role="main">
           <div class="persona-thumb">${mainImg ? `<img src="${mainImg}" alt="">` : '<div class="slot-empty">neutral_a</div>'}</div>
-          <div class="persona-name">${esc(activePersona.name || activePersona.pid)}</div>
+          <div class="persona-name" style="${personaTagStyle(activePersona.pid)}">${esc(activePersona.name || activePersona.pid)}</div>
         </button>
         <div class="persona-popups">${popupHtml}</div>
       </div>`;
@@ -830,19 +837,13 @@ function render(){
     els.emotionGallery.innerHTML = '<div class="section-note">Choose a persona on the left.</div>';
     return;
   }
-  const groups = [[state.activeCat, state.activeCat.charAt(0).toUpperCase() + state.activeCat.slice(1)]];
-  for (const [cat, title] of groups) {
-    const items = state.activeCat === 'custom'
-      ? state.emotions.filter(e => e.category === 'custom')
-      : state.emotions.filter(e => e.category === cat && BUILTIN_BY_CAT[cat]?.includes(e.id));
-    if (!items.length) continue;
-    const wrap = document.createElement('section');
-    wrap.className = 'cat';
-    wrap.innerHTML = `<div class="cat-head"><strong>${title}</strong><span class="section-note">${items.length} emotions</span></div>`;
-    const grid = document.createElement('div');
-    grid.className = 'slot-grid';
-    for (const emo of items) {
-      for (const slot of SLOT_KEYS) {
+  const items = Array.isArray(state.emotions) ? state.emotions : [];
+  const wrap = document.createElement('section');
+  wrap.className = 'cat';
+  const grid = document.createElement('div');
+  grid.className = 'slot-grid';
+  for (const emo of items) {
+    for (const slot of SLOT_KEYS) {
         const img = getEmotionImage(state.activePid, emo.id, slot);
         const card = document.createElement('article');
         card.className = 'slot-card' + (img ? ' has-image' : '');
@@ -887,23 +888,11 @@ function render(){
             state.activeUpload = { pid: state.activePid, eid: emo.id, slot };
             uploadCurrentCard(file);
           };
-          grid.appendChild(card);
-        }
-      }
-      wrap.appendChild(grid);
-      els.emotionGallery.appendChild(wrap);
-    }
-    if (state.activeCat === 'custom' && !els.emotionGallery.children.length) {
-      els.emotionGallery.innerHTML = `
-        <div class="cat">
-          <div class="cat-head">
-            <strong>Custom</strong>
-            <button class="btn btn-ghost btn-sm" onclick="addCustomEmotion()">Add emotion</button>
-          </div>
-          <div class="section-note">No custom emotions yet.</div>
-        </div>`;
+        grid.appendChild(card);
     }
   }
+  wrap.appendChild(grid);
+  els.emotionGallery.appendChild(wrap);
 
 function addCustomEmotion() {
   const rawId = prompt('Custom emotion id');
