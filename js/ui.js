@@ -1143,11 +1143,15 @@ function switchTab(tab) {
   document.getElementById('btabPersona').classList.toggle('active', tab === 'persona');
   document.getElementById('btabChat').classList.toggle('active', tab === 'chat');
   document.getElementById('btabSettings').classList.toggle('active', tab === 'settings');
+  document.getElementById('btabArchive')?.classList.toggle('active', tab === 'archive');
   // 패널 표시
   document.getElementById('personaPane').style.display = tab === 'persona' ? 'flex' : 'none';
   document.getElementById('chatPane').style.display = tab === 'chat' ? 'flex' : 'none';
   document.getElementById('settingsPane').style.display = tab === 'settings' ? 'flex' : 'none';
+  const archivePaneEl = document.getElementById('archivePane');
+  if (archivePaneEl) archivePaneEl.style.display = tab === 'archive' ? 'flex' : 'none';
   if (tab === 'settings') renderSettingsPane();
+  if (tab === 'archive') renderArchivePane();
   // 페르소나 선택 초기화
   if (tab !== 'persona') clearPersonaSelection();
 }
@@ -2849,6 +2853,7 @@ async function renderChatArea() {
   bindImageLoadBottomStick(area);
   layoutHorizontalMasonryRows(area);
   requestAnimationFrame(() => { stickChatToBottom(area); });
+  if (_pendingArchiveFocus) setTimeout(() => focusPendingArchiveMessage(), 40);
 }
 
 function buildEmotionCard(p, emotion, letter, dataUrl) {
@@ -2962,7 +2967,8 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
         /<img([^>]*?)src="([^"]+)"([^>]*?)>/gi,
         (_, pre, src, post) => {
           const safeSrc = String(src || '').replace(/'/g, "\\'");
-          return `<div class="inline-image-wrap"><img${pre}src="${src}"${post} onclick="openImagePopup('${safeSrc}')" style="cursor:pointer"><div class="inline-image-actions"><button class="image-popup-action-btn" onclick="addImageSourceToComposer('${safeSrc}','reference-from-generated.jpg')" title="소스에 추가"><svg viewBox="0 0 24 24"><path d="M9 7H4v5"/><path d="M4 12c2.5-3.5 5.5-5 9.5-5H20"/><path d="M20 12v7H4v-4"/></svg></button><button class="image-popup-action-btn" onclick="downloadImage('${safeSrc}','generated.jpg')" title="다운로드"><svg viewBox="0 0 24 24"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 21h16"/></svg></button></div></div>`;
+          const safeKey = String(extractR2ImageKey(src) || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+          return `<div class="inline-image-wrap"><img${pre}src="${src}"${post} onclick="openImagePopup('${safeSrc}')" style="cursor:pointer"><div class="inline-image-actions"><button class="image-popup-action-btn" onclick="jumpToImageConversation('${safeKey}')" title="대화로 이동"><svg viewBox="0 0 24 24"><path d="M9 7H4v5"/><path d="M4 12c2.5-3.5 5.5-5 9.5-5H20"/><path d="M20 12v7H4v-4"/></svg></button><button class="image-popup-action-btn" onclick="downloadImage('${safeSrc}','generated.jpg')" title="다운로드"><svg viewBox="0 0 24 24"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 21h16"/></svg></button></div></div>`;
         }
       );
     }
@@ -3415,13 +3421,14 @@ function renderUserBubbleHTMLV3(text, atts) {
     if (!viewUrl) return;
     const safeViewUrl = String(viewUrl).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const safeName = String(a?.name || (isImg ? 'image' : 'file')).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const safeKey = String(extractR2ImageKey(viewUrl) || safeViewUrl).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     if (isImg) {
       imageCount++;
       imageItemsHtml += `
       <div class="inline-image-wrap">
         <img class="bubble-img" src="${viewUrl}" onclick="openImagePopup('${safeViewUrl}')">
         <div class="inline-image-actions">
-          <button class="image-popup-action-btn" onclick="addImageSourceToComposer('${safeViewUrl}','${safeName}')" title="소스에 추가">
+          <button class="image-popup-action-btn" onclick="jumpToImageConversation('${safeKey}')" title="대화로 이동">
             <svg viewBox="0 0 24 24"><path d="M9 7H4v5"/><path d="M4 12c2.5-3.5 5.5-5 9.5-5H20"/><path d="M20 12v7H4v-4"/></svg>
           </button>
           <button class="image-popup-action-btn" onclick="downloadImage('${safeViewUrl}','${safeName}')" title="다운로드">
@@ -4233,6 +4240,210 @@ async function compressChat() {
 }
 
 // ================================
+//  ARCHIVE
+// ================================
+let _archiveFilter = 'all';
+let _archiveItems = [];
+let _archiveLoaded = false;
+let _archivePopupContext = null;
+let _pendingArchiveFocus = null;
+const ARCHIVE_MANIFEST_CACHE_KEY = 'archive_manifest_v1';
+
+function extractR2ImageKey(url) {
+  const raw = String(url || '').trim();
+  if (!raw) return '';
+  const local = raw.match(/\/image\/(.+)$/i);
+  if (local?.[1]) return decodeURIComponent(local[1].split('?')[0]);
+  try {
+    const u = new URL(raw);
+    const fromPath = String(u.pathname || '').match(/\/image\/(.+)$/i);
+    if (fromPath?.[1]) return decodeURIComponent(fromPath[1].split('?')[0]);
+  } catch {}
+  return '';
+}
+
+function getArchiveTypeByKey(key) {
+  if (String(key || '').startsWith('img_generated/')) return 'generated';
+  if (String(key || '').startsWith('img_uploaded/')) return 'upload';
+  return 'other';
+}
+
+function buildArchiveSourceMap() {
+  const out = new Map();
+  (sessions || []).forEach((s) => {
+    const sid = s?.id;
+    if (!sid || !Array.isArray(s.history)) return;
+    s.history.forEach((m, idx) => {
+      const urls = new Set();
+      const c = m?.content;
+      if (typeof c === 'string') {
+        const mdMatches = c.match(/!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/gi) || [];
+        mdMatches.forEach((token) => {
+          const hit = token.match(/\((https?:\/\/[^)\s]+)\)/i);
+          if (hit?.[1]) urls.add(hit[1]);
+        });
+      } else if (Array.isArray(c)) {
+        c.forEach((part) => {
+          if (part?.type === 'image_url' && part?.image_url?.url) urls.add(part.image_url.url);
+        });
+      }
+      (m?.attachments || []).forEach((a) => {
+        const url = getAttachmentStoredUrl(a) || a?.url || a?.transportUrl || '';
+        if (url) urls.add(url);
+      });
+      urls.forEach((url) => {
+        const key = extractR2ImageKey(url);
+        if (!key || out.has(key)) return;
+        out.set(key, { chatId: sid, messageIndex: idx });
+      });
+    });
+  });
+  return out;
+}
+
+async function loadArchiveManifestFromR2() {
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) return [];
+  const [genRes, uploadRes] = await Promise.all([
+    fetch(`${wUrl}/image-list/img_generated`).then((r) => r.ok ? r.json() : { keys: [] }).catch(() => ({ keys: [] })),
+    fetch(`${wUrl}/image-list/img_uploaded`).then((r) => r.ok ? r.json() : { keys: [] }).catch(() => ({ keys: [] })),
+  ]);
+  const keys = [...(genRes?.keys || []), ...(uploadRes?.keys || [])];
+  const sourceMap = buildArchiveSourceMap();
+  const now = Date.now();
+  return keys
+    .filter(Boolean)
+    .map((key) => {
+      const mapped = sourceMap.get(key) || {};
+      return {
+        key,
+        url: `${wUrl}/image/${encodeURIComponent(key).replace(/%2F/gi, '/')}`,
+        type: getArchiveTypeByKey(key),
+        chatId: mapped.chatId || null,
+        messageIndex: Number.isFinite(mapped.messageIndex) ? mapped.messageIndex : null,
+        updatedAt: now,
+      };
+    })
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+}
+
+async function ensureArchiveManifest() {
+  if (_archiveLoaded) return;
+  const cached = await idbGet(ARCHIVE_MANIFEST_CACHE_KEY).catch(() => null);
+  if (Array.isArray(cached) && cached.length) _archiveItems = cached;
+  renderArchiveGrid();
+  const fresh = await loadArchiveManifestFromR2();
+  _archiveItems = fresh;
+  _archiveLoaded = true;
+  await idbSet(ARCHIVE_MANIFEST_CACHE_KEY, fresh).catch(() => {});
+}
+
+function setArchiveFilter(filter) {
+  _archiveFilter = filter;
+  document.getElementById('archiveFilterAll')?.classList.toggle('active', filter === 'all');
+  document.getElementById('archiveFilterGenerated')?.classList.toggle('active', filter === 'generated');
+  document.getElementById('archiveFilterUpload')?.classList.toggle('active', filter === 'upload');
+  renderArchiveGrid();
+}
+
+function getFilteredArchiveItems() {
+  if (_archiveFilter === 'all') return _archiveItems;
+  return (_archiveItems || []).filter((it) => it.type === _archiveFilter);
+}
+
+function renderArchiveGrid() {
+  const grid = document.getElementById('archiveGrid');
+  const empty = document.getElementById('archiveEmpty');
+  if (!grid || !empty) return;
+  const rows = getFilteredArchiveItems();
+  if (!rows.length) {
+    grid.innerHTML = '';
+    empty.style.display = 'block';
+    empty.textContent = _archiveLoaded ? '아카이브 이미지가 없습니다.' : '이미지를 불러오는 중...';
+    return;
+  }
+  empty.style.display = 'none';
+  grid.innerHTML = rows.map((it) => {
+    const safeUrl = String(it.url || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const safeKey = String(it.key || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return `<div class="archive-card" onclick="openArchiveImagePopup('${safeKey}')">
+      <img src="${it.url}" loading="lazy">
+      <div class="archive-card-actions" onclick="event.stopPropagation()">
+        <button class="archive-action-btn" onclick="jumpToImageConversation('${safeKey}')">대화로 이동</button>
+        <button class="archive-action-btn" onclick="downloadImage('${safeUrl}','archive.jpg')">다운로드</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function renderArchivePane() {
+  if (typeof preloadAllSessions === 'function') {
+    await preloadAllSessions().catch(() => {});
+  }
+  setArchiveFilter(_archiveFilter || 'all');
+  await ensureArchiveManifest();
+  renderArchiveGrid();
+}
+
+function openArchiveImagePopup(key) {
+  const hit = (_archiveItems || []).find((it) => it.key === key);
+  if (!hit?.url) return;
+  _archivePopupContext = hit;
+  openImagePopup(hit.url);
+  const deleteBtn = document.getElementById('popupDeleteBtn');
+  if (deleteBtn) deleteBtn.style.display = 'inline-flex';
+}
+
+async function deletePopupImageFromArchive() {
+  const ctx = _archivePopupContext;
+  if (!ctx?.key) return;
+  if (!confirm('이 이미지를 아카이브와 R2에서 삭제할까요?')) return;
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) return;
+  const res = await fetch(`${wUrl}/image/${encodeURIComponent(ctx.key).replace(/%2F/gi, '/')}`, { method: 'DELETE' }).catch(() => null);
+  if (!res?.ok) {
+    showToast('삭제에 실패했습니다.');
+    return;
+  }
+  _archiveItems = (_archiveItems || []).filter((it) => it.key !== ctx.key);
+  await idbSet(ARCHIVE_MANIFEST_CACHE_KEY, _archiveItems).catch(() => {});
+  closeImagePopup();
+  renderArchiveGrid();
+  showToast('아카이브에서 삭제했습니다.');
+}
+
+async function jumpToImageConversation(keyOrUrl) {
+  const normalizedKey = extractR2ImageKey(keyOrUrl) || String(keyOrUrl || '');
+  const hit = (_archiveItems || []).find((it) => it.key === normalizedKey || it.url === keyOrUrl);
+  if (!hit?.chatId) {
+    showToast('대화 위치를 찾지 못했습니다.');
+    return;
+  }
+  _pendingArchiveFocus = { key: hit.key || normalizedKey, url: hit.url };
+  switchTab('chat');
+  await openChat(hit.chatId);
+  setTimeout(() => focusPendingArchiveMessage(), 60);
+}
+
+function focusPendingArchiveMessage() {
+  const pending = _pendingArchiveFocus;
+  if (!pending) return;
+  const area = document.getElementById('chatArea');
+  if (!area) return;
+  const key = pending.key;
+  const match = [...area.querySelectorAll('img')].find((img) => {
+    const src = img.getAttribute('src') || '';
+    return extractR2ImageKey(src) === key || src === pending.url;
+  });
+  if (!match) return;
+  _pendingArchiveFocus = null;
+  const target = match.closest('.msg-group') || match;
+  target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  target.classList.add('archive-jump-focus');
+  setTimeout(() => target.classList.remove('archive-jump-focus'), 1300);
+}
+
+// ================================
 //  PROFILE POPUP
 // ================================
 async function openProfilePopup(pid, emotion, hue, fallbackSrc, suffix = '') {
@@ -4284,9 +4495,12 @@ let _popupImgUrl = '';
 
 function openImagePopup(url) {
   _popupImgUrl = url;
+  _archivePopupContext = null;
   const overlay = document.getElementById('imagePopup');
   const img = document.getElementById('popupImg');
+  const deleteBtn = document.getElementById('popupDeleteBtn');
   if (!overlay || !img) return;
+  if (deleteBtn) deleteBtn.style.display = 'none';
   img.src = url;
   img.classList.remove('zoomed');
   img.classList.remove('panning');
@@ -4315,7 +4529,9 @@ function closeImagePopup(e = null) {
   _popupPanLast = { x: 0, y: 0 };
   applyPopupImageTransform();
   document.getElementById('imagePopup')?.classList.remove('active');
+  document.getElementById('popupDeleteBtn')?.style && (document.getElementById('popupDeleteBtn').style.display = 'none');
   _popupImgUrl = '';
+  _archivePopupContext = null;
 }
 
 function togglePopupImageZoom() {
