@@ -864,7 +864,7 @@ function render(){
       return `
       <button type="button" class="persona-card persona-popup" data-pid="${esc(p.pid)}" style="--i:${i}">
         <div class="persona-thumb">${img ? `<img src="${img}" alt="">` : '<div class="slot-empty">neutral_a</div>'}</div>
-        <div class="persona-name">${esc(p.name || p.pid)}</div>
+        <div class="persona-name" style="background:${esc(getPersonaTagColor(p))}">${esc(p.name || p.pid)}</div>
       </button>`;
     }).join('');
     els.personaGrid.classList.toggle('open', !!state.personaPickerOpen && popupPersonas.length > 0);

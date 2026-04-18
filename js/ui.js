@@ -4253,6 +4253,9 @@ const ARCHIVE_LOAD_MORE = 10;
 const ARCHIVE_PREFETCH_PAGES = 1;
 let _archiveVisibleCount = ARCHIVE_INITIAL_LOAD;
 let _archiveScrollBound = false;
+let _archiveSelectionMode = false;
+let _archiveSelectedKeys = new Set();
+let _archiveLongPressTimer = null;
 
 function extractR2ImageKey(url) {
   const raw = String(url || '').trim();
@@ -4346,6 +4349,8 @@ async function ensureArchiveManifest() {
 function setArchiveFilter(filter) {
   _archiveFilter = filter;
   _archiveVisibleCount = ARCHIVE_INITIAL_LOAD;
+  _archiveSelectionMode = false;
+  _archiveSelectedKeys = new Set();
   document.getElementById('archiveFilterAll')?.classList.toggle('active', filter === 'all');
   document.getElementById('archiveFilterGenerated')?.classList.toggle('active', filter === 'generated');
   document.getElementById('archiveFilterUpload')?.classList.toggle('active', filter === 'upload');
@@ -4374,14 +4379,21 @@ function renderArchiveGrid() {
   grid.innerHTML = visible.map((it) => {
     const safeUrl = String(it.url || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const safeKey = String(it.key || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    return `<div class="archive-card" onclick="openArchiveImagePopup('${safeKey}')">
+    const selected = _archiveSelectedKeys.has(it.key) ? ' selected' : '';
+    return `<div class="archive-card${selected}" onclick="handleArchiveCardTap('${safeKey}')" onpointerdown="startArchiveLongPress(event,'${safeKey}')" onpointerup="cancelArchiveLongPress()" onpointerleave="cancelArchiveLongPress()" onpointercancel="cancelArchiveLongPress()">
       <img src="${it.url}" loading="lazy">
+      <div class="archive-card-check">✓</div>
       <div class="archive-card-actions" onclick="event.stopPropagation()">
-        <button class="archive-action-btn" onclick="jumpToImageConversation('${safeKey}')">대화로 이동</button>
-        <button class="archive-action-btn" onclick="downloadImage('${safeUrl}','archive.jpg')">다운로드</button>
+        <button class="archive-action-btn icon" onclick="jumpToImageConversation('${safeKey}')" title="대화로 이동" aria-label="대화로 이동">
+          <svg viewBox="0 0 24 24"><path d="M4 6h16a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-8l-4 3v-3H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2"/><circle cx="9" cy="11.5" r="1"/><circle cx="12" cy="11.5" r="1"/><circle cx="15" cy="11.5" r="1"/></svg>
+        </button>
+        <button class="archive-action-btn icon" onclick="downloadImage('${safeUrl}','archive.jpg')" title="다운로드" aria-label="다운로드">
+          <svg viewBox="0 0 24 24"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 21h16"/></svg>
+        </button>
       </div>
     </div>`;
   }).join('');
+  updateArchiveSelectionUi();
   if (rows.length > visible.length) {
     empty.style.display = 'block';
     empty.textContent = `스크롤하면 더 불러옵니다 (${visible.length}/${rows.length})`;
@@ -4430,12 +4442,73 @@ function prefetchArchiveNextPage() {
 }
 
 function openArchiveImagePopup(key) {
+  if (_archiveSelectionMode) return;
   const hit = (_archiveItems || []).find((it) => it.key === key);
   if (!hit?.url) return;
   openImagePopup(hit.url);
   _archivePopupContext = hit;
   const deleteBtn = document.getElementById('popupDeleteBtn');
   if (deleteBtn) deleteBtn.style.display = 'inline-flex';
+}
+
+function startArchiveLongPress(e, key) {
+  if (_archiveSelectionMode) return;
+  if (e?.pointerType === 'mouse' && e?.button !== 0) return;
+  cancelArchiveLongPress();
+  _archiveLongPressTimer = setTimeout(() => {
+    _archiveSelectionMode = true;
+    _archiveSelectedKeys.add(key);
+    renderArchiveGrid();
+    try { navigator.vibrate?.(20); } catch {}
+  }, 420);
+}
+
+function cancelArchiveLongPress() {
+  if (!_archiveLongPressTimer) return;
+  clearTimeout(_archiveLongPressTimer);
+  _archiveLongPressTimer = null;
+}
+
+function handleArchiveCardTap(key) {
+  cancelArchiveLongPress();
+  if (_archiveSelectionMode) {
+    if (_archiveSelectedKeys.has(key)) _archiveSelectedKeys.delete(key);
+    else _archiveSelectedKeys.add(key);
+    if (_archiveSelectedKeys.size === 0) _archiveSelectionMode = false;
+    renderArchiveGrid();
+    return;
+  }
+  openArchiveImagePopup(key);
+}
+
+function updateArchiveSelectionUi() {
+  const btn = document.getElementById('archiveBatchDeleteBtn');
+  if (!btn) return;
+  const cnt = _archiveSelectedKeys.size;
+  btn.disabled = cnt <= 0;
+  btn.title = cnt > 0 ? `선택 삭제 (${cnt})` : '선택 삭제';
+}
+
+async function deleteSelectedArchiveImages() {
+  const keys = [..._archiveSelectedKeys];
+  if (!keys.length) return;
+  if (!confirm(`선택한 ${keys.length}개 이미지를 R2에서 삭제할까요?`)) return;
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) return;
+  let deleted = 0;
+  for (const key of keys) {
+    const res = await fetch(`${wUrl}/image/${encodeURIComponent(key).replace(/%2F/gi, '/')}`, { method: 'DELETE' }).catch(() => null);
+    if (res?.ok) deleted++;
+  }
+  if (deleted > 0) {
+    const keySet = new Set(keys);
+    _archiveItems = (_archiveItems || []).filter((it) => !keySet.has(it.key));
+    await idbSet(ARCHIVE_MANIFEST_CACHE_KEY, _archiveItems).catch(() => {});
+  }
+  _archiveSelectedKeys = new Set();
+  _archiveSelectionMode = false;
+  renderArchiveGrid();
+  showToast(`${deleted}개 삭제했습니다.`);
 }
 
 async function deletePopupImageFromArchive() {
