@@ -3421,7 +3421,7 @@ async function sendMessage() {
   input.value = ''; input.style.height = 'auto';
 
   // 이미지 편집용 참조 이미지: attachments 클리어 전에 미리 캡처
-  const userHTML = renderUserBubbleHTMLV2(text, attachments);
+  const userHTML = renderUserBubbleHTMLV3(text, attachments);
   
   let msgContent = text || '(파일)';
   if (attachments.length > 0) {
