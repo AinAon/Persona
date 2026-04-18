@@ -333,7 +333,10 @@ function showStatus(msg){
   if (els.statusBox) els.statusBox.textContent = msg;
 }
 function esc(s){
-  return window.esc(s);
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 let _taskSeq = 0;
 function renderTaskQueue(){
