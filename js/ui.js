@@ -343,7 +343,20 @@ function updateChatBottomAnchor(area = document.getElementById('chatArea')) {
 }
 
 function sanitizeUserInputValue(value) {
-  return String(value || '').replace(/[\u200B-\u200D\u2060\uFEFF\uFFFC]/g, '');
+  return sanitizeTextForUnicodeSafety(value);
+}
+
+function sanitizeTextForUnicodeSafety(value) {
+  let s = String(value || '');
+  // Control chars except common whitespace
+  s = s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
+  // Zero-width / bidi / invisible formatting controls
+  s = s.replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF\uFFFC]/g, '');
+  // Interlinear annotation controls
+  s = s.replace(/[\uFFF9-\uFFFB]/g, '');
+  // Known accidental foreign-token artifact observed in chat
+  s = s.replace(/(^|[\s\[\(\{'"`])հիմա(?=$|[\s\]\)\}'"`.,!?;:])/gi, '$1');
+  return s;
 }
 
 function isImageAttachment(a) {
@@ -464,7 +477,7 @@ function getTargetModelForRequest(session, isImageReq) {
 }
 
 function buildChatPreviewText(text) {
-  const raw = String(text || '').replace(/\n/g, ' ').trim();
+  const raw = sanitizeTextForUnicodeSafety(text).replace(/\n/g, ' ').trim();
   if (!raw) return '';
   if (/(^|\s)(생성 오류|연결 실패)\s*:/.test(raw) || /API Error:|NOT_FOUND|INVALID_ARGUMENT|Gemini Image Error:/i.test(raw)) {
     return '[오류] 이미지 생성 실패';
@@ -477,7 +490,7 @@ function getPersonaModel(persona) {
 }
 
 function sanitizeChatListPreview(text) {
-  const raw = String(text || '').trim();
+  const raw = sanitizeTextForUnicodeSafety(text).trim();
   if (/!\[[^\]]*\]\((data:image\/[^)]+|https?:\/\/[^)\s]+)\)/i.test(raw)) {
     return '[이미지]';
   }
@@ -2766,6 +2779,7 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
   const segments = parseResponse(rawText, pList);
   let html = '';
   for (const seg of segments) {
+    seg.content = sanitizeTextForUnicodeSafety(seg.content);
     if (!seg.content.trim()) continue;
     const p = pList[seg.idx];
     const h = p._ghost ? 0 : p.hue;
@@ -3467,7 +3481,7 @@ async function sendMessage() {
             if (data.result !== 'success') {
               parts.push(`[${persona.pid}]응답생성 오류: ${data.error||'알 수 없는 오류'}[/${persona.pid}]`);
             } else {
-              parts.push(wrapPersonaReply(persona.pid, data.reply || ''));
+              parts.push(wrapPersonaReply(persona.pid, sanitizeTextForUnicodeSafety(data.reply || '')));
             }
           }
           reply = parts.join('\n');
@@ -3517,7 +3531,7 @@ async function sendMessage() {
           const pid0 = session.participantPids?.[0] || 'p';
           reply = `[${pid0}]생성 오류: ${data.error||'알 수 없는 오류'}[/${pid0}]`;
         } else {
-          reply = data.reply || '';
+          reply = sanitizeTextForUnicodeSafety(data.reply || '');
           if (isImageReq) {
             const rawImageUrl = String(data.image_url || '').trim();
             const proxiedImageUrl = rawImageUrl ? `${wUrl}/image-fetch?url=${encodeURIComponent(rawImageUrl)}` : '';
@@ -3534,9 +3548,10 @@ async function sendMessage() {
       } catch(e) {
         if (e?.name === 'AbortError') throw e;
         const pid0 = session.participantPids?.[0] || 'p';
-        reply = `[${pid0}]연결 실패: ${e.message}[/${pid0}]`;
+        reply = sanitizeTextForUnicodeSafety(`[${pid0}]연결 실패: ${e.message}[/${pid0}]`);
       }
     }
+    reply = sanitizeTextForUnicodeSafety(reply);
 
     if (thinkEl.parentNode) thinkEl.remove();
     
