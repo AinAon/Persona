@@ -3354,6 +3354,7 @@ function renderUserMessageHTML(msg) {
 function renderUserBubbleHTMLV3(text, atts) {
   let html = '';
   let imageItemsHtml = '';
+  let imageCount = 0;
   (atts || []).forEach(a => {
     const isImg = isImageAttachment(a);
     const viewUrl = isImg ? getAttachmentPreviewUrl(a) : (a?.url || a?.transportUrl || a?.dataUrl || '');
@@ -3362,6 +3363,7 @@ function renderUserBubbleHTMLV3(text, atts) {
     const safeViewUrl = String(viewUrl).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const safeName = String(a?.name || (isImg ? 'image' : 'file')).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     if (isImg) {
+      imageCount++;
       imageItemsHtml += `
       <div class="inline-image-wrap">
         <img class="bubble-img" src="${viewUrl}" onclick="openImagePopup('${safeViewUrl}')">
@@ -3381,7 +3383,7 @@ function renderUserBubbleHTMLV3(text, atts) {
       </div>`;
     }
   });
-  if (imageItemsHtml) html += `<div class="bubble-img-container">${imageItemsHtml}</div>`;
+  if (imageItemsHtml) html += `<div class="bubble-img-container${imageCount > 1 ? ' multi' : ''}">${imageItemsHtml}</div>`;
   if (text) html += fmt(text);
   return html;
 }
