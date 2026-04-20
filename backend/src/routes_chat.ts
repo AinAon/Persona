@@ -74,7 +74,9 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
           ...messages
         ]
       : messages;
-    const preparedMessages = await inlineImageUrlsInMessages(effectiveMessages);
+    const preparedMessages = model.startsWith("gemini")
+      ? await inlineImageUrlsInMessages(effectiveMessages)
+      : effectiveMessages;
 
     let reply = "";
     let imageUrlOut = "";
@@ -160,11 +162,11 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
 async function fetchImageUrlAsDataUrl(url: string): Promise<string> {
   try {
     const res = await fetch(url);
-    if (!res.ok) throw new Error(`image_fetch_failed:${res.status}`);
+    if (!res.ok) return url;
     const mime = (res.headers.get("content-type") || "image/jpeg").split(";")[0] || "image/jpeg";
-    if (!/^image\//i.test(mime)) throw new Error(`invalid_image_mime:${mime}`);
+    if (!/^image\//i.test(mime)) return url;
     const bytes = new Uint8Array(await res.arrayBuffer());
-    if (!bytes.length) throw new Error("empty_image_bytes");
+    if (!bytes.length) return url;
     let binary = "";
     const chunk = 0x8000;
     for (let i = 0; i < bytes.length; i += chunk) {
@@ -172,18 +174,18 @@ async function fetchImageUrlAsDataUrl(url: string): Promise<string> {
     }
     return `data:${mime};base64,${btoa(binary)}`;
   } catch {
-    throw new Error("image_ref_unreadable");
+    return url;
   }
 }
 
 function normalizeDataImageUrl(raw: string): string {
   const s = String(raw || "").trim();
   const m = s.match(/^data:([^;,]+);base64,(.+)$/i);
-  if (!m) throw new Error("invalid_data_url");
+  if (!m) return s;
   const mime = (m[1] || "").trim();
   const b64 = (m[2] || "").trim();
-  if (!/^image\//i.test(mime)) throw new Error("invalid_data_url_mime");
-  if (!b64 || b64.length < 64) throw new Error("empty_or_too_small_data_url");
+  if (!/^image\//i.test(mime)) return s;
+  if (!b64 || b64.length < 64) return s;
   return `data:${mime};base64,${b64}`;
 }
 
@@ -207,7 +209,7 @@ async function inlineImageUrlsInMessages(messages: any[]): Promise<any[]> {
           : await fetchImageUrlAsDataUrl(raw);
         content.push({ ...item, image_url: { ...item.image_url, url: normalized } });
       } catch {
-        throw new Error("image_ref_invalid_or_unreadable");
+        content.push(item);
       }
     }
     out.push({ ...m, content });
