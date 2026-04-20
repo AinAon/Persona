@@ -651,8 +651,9 @@ function isImageWorkflowMessage(msg) {
   return !!msg?._imageWorkflow;
 }
 
-function sanitizeMessageContentForTextContext(content) {
+function sanitizeMessageContentForTextContext(content, preserveImages = false) {
   if (Array.isArray(content)) {
+    if (preserveImages) return content;
     const filtered = content.filter(c => c?.type !== 'image_url');
     if (!filtered.length) return '(image omitted)';
     return filtered;
@@ -671,7 +672,7 @@ function buildApiMessagesFromHistory(history, currentUserMsg, currentContent, is
     .filter(m => isImageReq || !isImageWorkflowMessage(m))
     .map(m => ({
       role: m.role,
-      content: sanitizeMessageContentForTextContext(m === currentUserMsg ? currentContent : m.content)
+      content: sanitizeMessageContentForTextContext(m === currentUserMsg ? currentContent : m.content, m === currentUserMsg)
     }));
 }
 
