@@ -702,9 +702,51 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .md-content ul,.md-content ol { margin: 6px 0 6px 18px; padding: 0; }
 .md-content li { margin: 3px 0; }
 .md-content code { font-family: 'JetBrains Mono','Fira Code',monospace; font-size: 0.85em; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.08); }
-.md-content pre { margin: 8px 0; border-radius: 8px; overflow-x: auto; position: relative; max-width: 100%; }
-.md-content pre code { padding: 12px 14px; display: block; background: transparent; font-size: 13px; white-space: pre; word-break: normal; }
-.code-copy-btn { position: absolute; top: 8px; right: 8px; background: rgba(17,17,20,.92); color: var(--text); border: 1px solid var(--border2); border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer; }
+.md-content pre {
+  margin: 10px 0;
+  border-radius: 12px;
+  overflow-x: auto;
+  position: relative;
+  max-width: 100%;
+  background: linear-gradient(180deg, rgba(14,17,24,.95) 0%, rgba(11,14,20,.97) 100%);
+  border: 1px solid rgba(160,178,210,.25);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 2px 14px rgba(0,0,0,.22);
+}
+.md-content pre code {
+  padding: 14px 14px 14px;
+  display: block;
+  background: transparent;
+  font-size: 13px;
+  white-space: pre;
+  word-break: normal;
+}
+.code-copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(17,17,20,.88);
+  color: rgba(226,236,255,.88);
+  border: 1px solid rgba(160,178,210,.35);
+  border-radius: 7px;
+  padding: 0;
+  cursor: pointer;
+  transition: background .14s ease, color .14s ease, border-color .14s ease;
+}
+.code-copy-btn:hover { background: rgba(36,45,64,.95); color: #fff; border-color: rgba(191,212,255,.58); }
+.code-copy-btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.md-content pre code.language-python { border-left: 3px solid rgba(75,172,255,.85); }
+.md-content pre code.language-java { border-left: 3px solid rgba(255,140,120,.85); }
+.md-content pre code.language-python .hljs-keyword,
+.md-content pre code.language-python .hljs-built_in { color: #80d7ff; }
+.md-content pre code.language-python .hljs-string { color: #9ef0b6; }
+.md-content pre code.language-java .hljs-keyword,
+.md-content pre code.language-java .hljs-type { color: #ffb88f; }
+.md-content pre code.language-java .hljs-string { color: #9ceab0; }
 .md-content blockquote { border-left: 3px solid rgba(255,255,255,0.2); margin: 8px 0; padding: 4px 12px; opacity: 0.8; }
   .md-content table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 13px; }
   .md-content th,.md-content td { border: 1px solid rgba(255,255,255,0.15); padding: 6px 10px; text-align: left; }
