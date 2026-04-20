@@ -410,6 +410,22 @@ function layoutHorizontalMasonryRows(root = document) {
 function bindImageLoadBottomStick(area = document.getElementById('chatArea')) {
   if (!area) return;
   area.querySelectorAll('.inline-image-wrap img, .ai-bubble img, .bubble-img').forEach(img => {
+    if (img.dataset.chatCacheHydrateBound !== '1') {
+      img.dataset.chatCacheHydrateBound = '1';
+      const src = String(img.getAttribute('src') || '').trim();
+      if (canUseUrlForChatCache(src)) {
+        getCachedChatImageForUrl(src).then((cached) => {
+          if (!cached || img.getAttribute('src') !== src) return;
+          img.dataset.originalSrc = src;
+          img.src = cached;
+        }).catch(() => {});
+      }
+      img.addEventListener('error', () => {
+        const original = String(img.dataset.originalSrc || '').trim();
+        if (!original || img.getAttribute('src') === original) return;
+        img.src = original;
+      }, { passive: true });
+    }
     if (img.dataset.bottomStickBound === '1') return;
     img.dataset.bottomStickBound = '1';
     const onLoad = () => {
@@ -477,6 +493,24 @@ function normalizeGeneratedMarkdown(text) {
 
 function isImageAttachment(a) {
   return a?.type === 'image';
+}
+const CHAT_IMAGE_CACHE_PREFIX = 'chat_img_';
+function chatImageCacheKey(url) {
+  return `${CHAT_IMAGE_CACHE_PREFIX}${String(url || '').trim()}`;
+}
+function canUseUrlForChatCache(url) {
+  return /^https?:\/\//i.test(String(url || '').trim());
+}
+async function cacheChatImageForUrl(url, dataUrl) {
+  const targetUrl = String(url || '').trim();
+  const data = String(dataUrl || '').trim();
+  if (!canUseUrlForChatCache(targetUrl) || !/^data:image\//i.test(data)) return;
+  await idbSet(chatImageCacheKey(targetUrl), data).catch(() => {});
+}
+async function getCachedChatImageForUrl(url) {
+  const targetUrl = String(url || '').trim();
+  if (!canUseUrlForChatCache(targetUrl)) return '';
+  return await idbGet(chatImageCacheKey(targetUrl)).catch(() => '');
 }
 
 function getAttachmentPreviewUrl(a) {
@@ -553,7 +587,12 @@ async function getAttachmentRequestUrl(a, model, isImageReq) {
 }
 
 async function cleanupAttachmentCaches(items) {
-  await Promise.all((items || []).map(a => a?.originalCacheKey ? idbDel(a.originalCacheKey).catch(() => {}) : Promise.resolve()));
+  await Promise.all((items || []).map(async (a) => {
+    if (!a?.originalCacheKey) return;
+    const keepForChatCache = isImageAttachment(a) && !a?.uploadError;
+    if (keepForChatCache) return;
+    await idbDel(a.originalCacheKey).catch(() => {});
+  }));
 }
 
 function buildUserMessageContent(text, imageUrls) {
@@ -779,6 +818,7 @@ async function addFilesToAttachments(fileList, source = 'picker') {
         record.transportUrl = url || record.transportUrl;
         record.uploading = false;
         record.uploadError = false;
+        cacheChatImageForUrl(record.transportUrl, record.previewUrl || '').catch(() => {});
         renderAttachmentPreviews();
         return record.transportUrl;
       })
@@ -3802,6 +3842,9 @@ async function sendMessage() {
         const fname = makeImageFilename('generated') + '.jpg';
         const r2Url = await uploadToR2(imageRef, 'img_generated', fname).catch(() => '');
         if (r2Url && !/^data:image\//i.test(String(r2Url))) {
+          if (/^data:image\//i.test(String(imageRef || ''))) {
+            cacheChatImageForUrl(r2Url, imageRef).catch(() => {});
+          }
           reply = reply.replace(imageRef, r2Url);
         } else {
           reply = reply.replace(m[0], '[generated image upload failed]');
