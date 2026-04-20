@@ -410,22 +410,7 @@ function layoutHorizontalMasonryRows(root = document) {
 function bindImageLoadBottomStick(area = document.getElementById('chatArea')) {
   if (!area) return;
   area.querySelectorAll('.inline-image-wrap img, .ai-bubble img, .bubble-img').forEach(img => {
-    if (img.dataset.chatCacheHydrateBound !== '1') {
-      img.dataset.chatCacheHydrateBound = '1';
-      const src = String(img.getAttribute('src') || '').trim();
-      if (canUseUrlForChatCache(src)) {
-        getCachedChatImageForUrl(src).then((cached) => {
-          if (!cached || img.getAttribute('src') !== src) return;
-          img.dataset.originalSrc = src;
-          img.src = cached;
-        }).catch(() => {});
-      }
-      img.addEventListener('error', () => {
-        const original = String(img.dataset.originalSrc || '').trim();
-        if (!original || img.getAttribute('src') === original) return;
-        img.src = original;
-      }, { passive: true });
-    }
+    hydrateImageElementFromChatCache(img);
     if (img.dataset.bottomStickBound === '1') return;
     img.dataset.bottomStickBound = '1';
     const onLoad = () => {
@@ -511,6 +496,23 @@ async function getCachedChatImageForUrl(url) {
   const targetUrl = String(url || '').trim();
   if (!canUseUrlForChatCache(targetUrl)) return '';
   return await idbGet(chatImageCacheKey(targetUrl)).catch(() => '');
+}
+function hydrateImageElementFromChatCache(img) {
+  if (!img || img.dataset.chatCacheHydrateBound === '1') return;
+  img.dataset.chatCacheHydrateBound = '1';
+  const src = String(img.getAttribute('src') || '').trim();
+  if (canUseUrlForChatCache(src)) {
+    getCachedChatImageForUrl(src).then((cached) => {
+      if (!cached || img.getAttribute('src') !== src) return;
+      img.dataset.originalSrc = src;
+      img.src = cached;
+    }).catch(() => {});
+  }
+  img.addEventListener('error', () => {
+    const original = String(img.dataset.originalSrc || '').trim();
+    if (!original || img.getAttribute('src') === original) return;
+    img.src = original;
+  }, { passive: true });
 }
 
 function getAttachmentPreviewUrl(a) {
@@ -4533,6 +4535,7 @@ function renderArchiveGrid() {
       </div>
     </div>`;
   }).join('');
+  grid.querySelectorAll('.archive-card > img').forEach((img) => hydrateImageElementFromChatCache(img));
   updateArchiveSelectionUi();
   if (rows.length > visible.length) {
     empty.style.display = 'block';
@@ -4816,6 +4819,7 @@ function openImagePopup(url) {
   if (!overlay || !img) return;
   if (deleteBtn) deleteBtn.style.display = 'none';
   img.src = url;
+  hydrateImageElementFromChatCache(img);
   img.classList.remove('zoomed');
   img.classList.remove('panning');
   _popupZoomed = false;
