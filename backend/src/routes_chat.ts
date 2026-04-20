@@ -74,6 +74,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
           ...messages
         ]
       : messages;
+    const preparedMessages = await inlineImageUrlsInMessages(effectiveMessages);
 
     let reply = "";
     let imageUrlOut = "";
@@ -124,25 +125,25 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     } else if (model.startsWith("gemini")) {
       reply = await generateGeminiText({
         model,
-        messages: effectiveMessages,
+        messages: preparedMessages,
         apiKey: apiKeys.gemini,
       });
     } else if (model.startsWith("grok")) {
       reply = await generateGrokText({
         model,
-        messages: effectiveMessages,
+        messages: preparedMessages,
         apiKey: apiKeys.grok,
       });
     } else if (model.startsWith("claude")) {
       reply = await generateClaudeText({
         model,
-        messages: effectiveMessages,
+        messages: preparedMessages,
         apiKey: apiKeys.anthropic,
       });
     } else {
       reply = await generateOpenAIText({
         model,
-        messages: effectiveMessages,
+        messages: preparedMessages,
         apiKey: apiKeys.openai,
       });
     }
@@ -154,6 +155,64 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
   } catch (e: any) {
     return Response.json({ result: "error", error: e?.message || "unknown error" }, { status: 500, headers: cors });
   }
+}
+
+async function fetchImageUrlAsDataUrl(url: string): Promise<string> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`image_fetch_failed:${res.status}`);
+    const mime = (res.headers.get("content-type") || "image/jpeg").split(";")[0] || "image/jpeg";
+    if (!/^image\//i.test(mime)) throw new Error(`invalid_image_mime:${mime}`);
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (!bytes.length) throw new Error("empty_image_bytes");
+    let binary = "";
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+    }
+    return `data:${mime};base64,${btoa(binary)}`;
+  } catch {
+    throw new Error("image_ref_unreadable");
+  }
+}
+
+function normalizeDataImageUrl(raw: string): string {
+  const s = String(raw || "").trim();
+  const m = s.match(/^data:([^;,]+);base64,(.+)$/i);
+  if (!m) throw new Error("invalid_data_url");
+  const mime = (m[1] || "").trim();
+  const b64 = (m[2] || "").trim();
+  if (!/^image\//i.test(mime)) throw new Error("invalid_data_url_mime");
+  if (!b64 || b64.length < 64) throw new Error("empty_or_too_small_data_url");
+  return `data:${mime};base64,${b64}`;
+}
+
+async function inlineImageUrlsInMessages(messages: any[]): Promise<any[]> {
+  const out: any[] = [];
+  for (const m of (messages || [])) {
+    if (!Array.isArray(m?.content)) {
+      out.push(m);
+      continue;
+    }
+    const content = [];
+    for (const item of m.content) {
+      if (item?.type !== "image_url" || !item?.image_url?.url) {
+        content.push(item);
+        continue;
+      }
+      const raw = String(item.image_url.url || "").trim();
+      try {
+        const normalized = /^data:image\//i.test(raw)
+          ? normalizeDataImageUrl(raw)
+          : await fetchImageUrlAsDataUrl(raw);
+        content.push({ ...item, image_url: { ...item.image_url, url: normalized } });
+      } catch {
+        throw new Error("image_ref_invalid_or_unreadable");
+      }
+    }
+    out.push({ ...m, content });
+  }
+  return out;
 }
 
 function extractText(content: unknown): string {
