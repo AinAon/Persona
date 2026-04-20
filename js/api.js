@@ -64,6 +64,7 @@ function cacheBustUrl(url) {
 }
 
 const _neutralCache = {};
+const NEUTRAL_DEBUG_LOG = false;
 
 async function getNeutralImage(pid) {
   if (_neutralCache[pid]) return _neutralCache[pid];
@@ -549,7 +550,7 @@ async function loadNeutralDirect(pid) {
   // 삭제되었거나 존재하지 않는 페르소나는 즉시 중단
   try {
     if (typeof getPersona === 'function' && !getPersona(pid)) {
-      console.warn('[neutral] skip missing persona:', pid);
+      if (NEUTRAL_DEBUG_LOG) console.warn('[neutral] skip missing persona:', pid);
       return null;
     }
   } catch (e) {
@@ -569,7 +570,7 @@ async function loadNeutralDirect(pid) {
 
     // 목록에 아무것도 없으면 불필요한 직접 fetch 자체를 하지 않음
     if (!Array.isArray(keys) || keys.length === 0) {
-      console.warn('[neutral] skip empty image list:', pid);
+      if (NEUTRAL_DEBUG_LOG) console.warn('[neutral] skip empty image list:', pid);
       return null;
     }
 
@@ -577,12 +578,12 @@ async function loadNeutralDirect(pid) {
       ? [{ url: `${wUrl}/image/profile/${pid}/${pid}_neutral_a.jpg`, cacheEmotion: 'neutral_a' }]
       : [{ url: `${wUrl}/image/profile/${pid}/${pid}_neutral.jpg`, cacheEmotion: 'neutral' }];
 
-    console.log('[neutral] trying candidates for', pid, candidates.map(c => c.url).slice(0, 2));
+    if (NEUTRAL_DEBUG_LOG) console.log('[neutral] trying candidates for', pid, candidates.map(c => c.url).slice(0, 2));
 
     for (const c of candidates) {
       try {
         const resp = await fetch(cacheBustUrl(c.url));
-        console.log('[neutral]', c.url, resp.status);
+        if (NEUTRAL_DEBUG_LOG) console.log('[neutral]', c.url, resp.status);
         if (!resp.ok) continue;
 
         const blob = await resp.blob();

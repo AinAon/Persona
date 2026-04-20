@@ -2779,7 +2779,10 @@ async function openChat(id) {
     if (openToken !== _chatOpenToken || activeChatId !== id) return;
     if (img) {
       const avEl = avatarsEl.children[i];
-      if (avEl) avEl.innerHTML = `<img src="${img}" style="width:100%;height:100%;object-fit:cover;object-position:top;">`;
+      if (avEl) {
+        const cur = avEl.querySelector('img')?.getAttribute('src') || '';
+        if (cur !== img) avEl.innerHTML = `<img src="${img}" style="width:100%;height:100%;object-fit:cover;object-position:top;">`;
+      }
     }
   });
 
@@ -4088,11 +4091,14 @@ if (!confirm(`${p?.name || pid}를 이 채팅방에서 추방할까?\n대화 기
     
     pList.forEach(async (p, i) => {
       const img = await getNeutralImageThumb(p.pid, 42);
-      if (img) {
-        const avEl = avatarsEl.children[i];
-        if (avEl) avEl.innerHTML = `<img src="${img}" style="width:100%;height:100%;object-fit:cover;object-position:top;">`;
+    if (img) {
+      const avEl = avatarsEl.children[i];
+      if (avEl) {
+        const cur = avEl.querySelector('img')?.getAttribute('src') || '';
+        if (cur !== img) avEl.innerHTML = `<img src="${img}" style="width:100%;height:100%;object-fit:cover;object-position:top;">`;
       }
-    });
+    }
+  });
   }
   const namesEl = document.getElementById('chatHeaderNames');
   if (namesEl) namesEl.textContent = pList.map(p=>p.name).join(', ');
