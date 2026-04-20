@@ -772,17 +772,19 @@ async function addFilesToAttachments(fileList, source = 'picker') {
     const isImg = record.type === 'image';
     const uploadSource = isImg ? (record.previewUrl || record.dataUrl) : record.dataUrl;
     const fname = makeUploadFilenameForAttachment(file, isImg);
-    uploadToR2(uploadSource, 'img_uploaded', fname)
+    record.uploadPromise = uploadToR2(uploadSource, 'img_uploaded', fname)
       .then(url => {
         record.transportUrl = url || record.transportUrl;
         record.uploading = false;
         record.uploadError = false;
         renderAttachmentPreviews();
+        return record.transportUrl;
       })
       .catch(() => {
         record.uploading = false;
         record.uploadError = true;
         renderAttachmentPreviews();
+        return record.transportUrl;
       });
   }
   return added;
@@ -808,7 +810,14 @@ function initUserInputGuards() {
     const hasImage = items.some(item => item.kind === 'file' && item.type.startsWith('image/'));
     if (hasImage) {
       e.preventDefault();
-      showToast('클립보드 이미지 붙여넣기는 아직 지원하지 않아요. 파일 첨부 버튼을 사용해 주세요.');
+      const files = items
+        .filter(item => item.kind === 'file' && item.type.startsWith('image/'))
+        .map(item => item.getAsFile())
+        .filter(Boolean);
+      if (!files.length) return;
+      addFilesToAttachments(files, 'paste')
+        .then(added => { if (added > 0) showToast(`클립보드 이미지 ${added}개를 첨부했어요.`); })
+        .catch(err => showToast('클립보드 이미지 첨부 실패: ' + (err?.message || err)));
       return;
     }
     requestAnimationFrame(() => autoResize(input));
@@ -3479,6 +3488,8 @@ async function sendMessage() {
 
   const isImageReq = (_inputTab === 'image');
   const targetModel = getTargetModelForRequest(session, isImageReq);
+  const pendingImageUploads = attachments.filter(isImageAttachment).map(a => a?.uploadPromise).filter(Boolean);
+  if (pendingImageUploads.length) await Promise.allSettled(pendingImageUploads);
   const historyImageUrls = attachments
     .filter(isImageAttachment)
     .map(getAttachmentStoredUrl)
