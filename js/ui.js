@@ -3800,8 +3800,12 @@ async function sendMessage() {
       while ((m = dataUrlRe.exec(reply)) !== null) {
         const imageRef = m[1];
         const fname = makeImageFilename('generated') + '.jpg';
-        const r2Url = await uploadToR2(imageRef, 'img_generated', fname).catch(() => imageRef);
-        reply = reply.replace(imageRef, r2Url);
+        const r2Url = await uploadToR2(imageRef, 'img_generated', fname).catch(() => '');
+        if (r2Url && !/^data:image\//i.test(String(r2Url))) {
+          reply = reply.replace(imageRef, r2Url);
+        } else {
+          reply = reply.replace(m[0], '[generated image upload failed]');
+        }
       }
     }
 

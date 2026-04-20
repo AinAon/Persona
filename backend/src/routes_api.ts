@@ -288,6 +288,7 @@ export async function handleApiRoute(
   url: URL,
   cors: CorsHeaders,
 ): Promise<Response | null> {
+  const noStoreHeaders = { ...cors, "Cache-Control": "no-store" };
   if (url.pathname === "/memory/list" && request.method === "GET") {
     const scope = parseScope(url.searchParams.get("scope"));
     if (!scope) return Response.json({ error: "invalid scope" }, { status: 400, headers: cors });
@@ -504,7 +505,7 @@ export async function handleApiRoute(
   if (url.pathname === "/sessions") {
     if (request.method === "GET") {
       const sessions = await getSessionIndex(env);
-      return Response.json({ sessions }, { headers: cors });
+      return Response.json({ sessions }, { headers: noStoreHeaders });
     }
     if (request.method === "PUT") {
       const { sessions } = (await request.json()) as { sessions: unknown[] };
@@ -664,13 +665,32 @@ async function handleSessionRoute(
   id: string,
   cors: CorsHeaders,
 ): Promise<Response | null> {
+  const noStoreHeaders = { ...cors, "Cache-Control": "no-store" };
   if (request.method === "GET") {
     const data = await getSessionPayloadText(env, id);
-    return Response.json({ session: data ? JSON.parse(data) : null }, { headers: cors });
+    return Response.json({ session: data ? JSON.parse(data) : null }, { headers: noStoreHeaders });
   }
 
   if (request.method === "PUT") {
     const { session } = (await request.json()) as { session: Record<string, unknown> };
+    const incomingUpdatedAt = Number((session as any)?.updatedAt || 0);
+    const incomingHistoryLen = Array.isArray((session as any)?.history) ? (session as any).history.length : 0;
+    const existingRaw = await getSessionPayloadText(env, id);
+    if (existingRaw) {
+      try {
+        const existing = JSON.parse(existingRaw) as Record<string, unknown>;
+        const existingUpdatedAt = Number(existing?.updatedAt || 0);
+        const existingHistoryLen = Array.isArray(existing?.history) ? (existing as any).history.length : 0;
+        const incomingIsStale =
+          (incomingUpdatedAt > 0 && existingUpdatedAt > incomingUpdatedAt) ||
+          (incomingUpdatedAt > 0 && existingUpdatedAt === incomingUpdatedAt && existingHistoryLen > incomingHistoryLen);
+        if (incomingIsStale) {
+          return Response.json({ ok: true, skipped: "stale_write" }, { headers: cors });
+        }
+      } catch {
+        // ignore parse failure and proceed with overwrite
+      }
+    }
     const payload = JSON.stringify(session);
     await env.R2.put(sessionR2Key(id), payload, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
     await env.KV.delete(`session:${id}`);

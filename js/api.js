@@ -763,7 +763,40 @@ async function saveIndex() {
 
 async function saveSession(id) {
   const s = sessions.find(x=>x.id===id); if (!s) return;
-  const history = s.history.map(({_rendered,...rest})=>rest);
+  const sanitizeMessageForStorage = (msg) => {
+    const { _rendered, ...rest } = (msg || {});
+    const out = { ...rest };
+    if (typeof out.content === 'string') {
+      out.content = out.content.replace(/!\[[^\]]*\]\(data:image\/[^)]+\)/gi, '[image omitted]');
+    } else if (Array.isArray(out.content)) {
+      out.content = out.content
+        .filter((c) => {
+          if (c?.type !== 'image_url') return true;
+          const u = String(c?.image_url?.url || '').trim();
+          return !!u && !/^data:image\//i.test(u);
+        })
+        .map((c) => {
+          if (c?.type !== 'image_url') return c;
+          const u = String(c?.image_url?.url || '').trim();
+          return { ...c, image_url: { ...(c.image_url || {}), url: u } };
+        });
+    }
+    if (Array.isArray(out.attachments)) {
+      out.attachments = out.attachments
+        .map((a) => ({
+          ...a,
+          url: String(a?.url || '').trim(),
+          previewUrl: String(a?.previewUrl || '').trim(),
+        }))
+        .filter((a) => a.url && !/^data:image\//i.test(a.url))
+        .map((a) => ({
+          ...a,
+          previewUrl: (!a.previewUrl || /^data:image\//i.test(a.previewUrl)) ? a.url : a.previewUrl,
+        }));
+    }
+    return out;
+  };
+  const history = s.history.map(sanitizeMessageForStorage);
   const localSaved = setLocalSession(id, history);
   if (!localSaved) {
     console.warn('[session] local save failed', { id, historyLen: history.length });
@@ -871,6 +904,36 @@ async function loadIndex() {
 async function loadSession(id) {
   const s = sessions.find(x=>x.id===id); if (!s) return;
   let hadLocalCache = false;
+  const messageKey = (m) => {
+    try {
+      if (!m || typeof m !== 'object') return String(m || '');
+      const { _rendered, ...rest } = m;
+      return JSON.stringify(rest);
+    } catch {
+      const role = String(m?.role || '');
+      const createdAt = Number(m?.createdAt || 0);
+      let contentKey = '';
+      try {
+        contentKey = typeof m?.content === 'string' ? m.content : JSON.stringify(m?.content ?? null);
+      } catch {
+        contentKey = String(m?.content || '');
+      }
+      return `${role}|${createdAt}|${contentKey}`;
+    }
+  };
+  const mergeHistories = (a, b) => {
+    const merged = [];
+    const seen = new Set();
+    for (const msg of [...(Array.isArray(a) ? a : []), ...(Array.isArray(b) ? b : [])]) {
+      const key = messageKey(msg);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(msg);
+    }
+    merged.sort((x, y) => Number(x?.createdAt || 0) - Number(y?.createdAt || 0));
+    return merged;
+  };
+  const historySig = (arr) => (Array.isArray(arr) ? arr.map(messageKey).join('\n') : '');
   const getLastTs = (arr) => {
     if (!Array.isArray(arr) || !arr.length) return 0;
     let maxTs = 0;
@@ -941,6 +1004,21 @@ async function loadSession(id) {
       saveIndex();
       if (activeChatId === id) renderChatArea();
       return;
+    }
+    const localSig = historySig(localHistory);
+    const remoteSig = historySig(remoteHistory);
+    if (localHistory.length > 0 && remoteHistory.length > 0 && localSig !== remoteSig) {
+      const mergedHistory = mergeHistories(localHistory, remoteHistory);
+      if (mergedHistory.length >= Math.max(localHistory.length, remoteHistory.length)) {
+        s.history = mergedHistory;
+        s.updatedAt = Math.max(localUpdatedAt, remoteUpdatedAt, Date.now());
+        s._loaded = true;
+        setLocalSession(id, s.history);
+        saveSession(id);
+        saveIndex();
+        if (activeChatId === id) renderChatArea();
+        return;
+      }
     }
     s.history = remoteHistory;
     s._loaded = true;
