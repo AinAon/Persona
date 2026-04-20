@@ -764,7 +764,10 @@ async function saveIndex() {
 async function saveSession(id) {
   const s = sessions.find(x=>x.id===id); if (!s) return;
   const history = s.history.map(({_rendered,...rest})=>rest);
-  setLocalSession(id, history);
+  const localSaved = setLocalSession(id, history);
+  if (!localSaved) {
+    console.warn('[session] local save failed', { id, historyLen: history.length });
+  }
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl) return;
   const session = { ...buildIndex().find(x=>x.id===id), history };
@@ -925,7 +928,6 @@ async function loadSession(id) {
     const localUpdatedAt = Number(s.updatedAt || 0);
     const remoteUpdatedAt = Number(remoteSession.updatedAt || 0);
     const preferLocal =
-      hadLocalCache &&
       localHistory.length > 0 &&
       (
         localLastTs > remoteLastTs ||

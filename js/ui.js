@@ -501,12 +501,13 @@ function serializeAttachmentForHistory(a) {
   if (!a) return null;
   const url = sanitizeImageUrlForHistory(getAttachmentStoredUrl(a));
   if (!url) return null;
+  const previewUrl = sanitizeImageUrlForHistory(getAttachmentPreviewUrl(a)) || url;
   return {
     type: a.type === 'image' ? 'image' : 'file',
     name: a.name || '',
     mimeType: a.mimeType || '',
     url,
-    previewUrl: getAttachmentPreviewUrl(a) || url
+    previewUrl
   };
 }
 
