@@ -705,12 +705,34 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .md-content pre {
   margin: 10px 0;
   border-radius: 12px;
-  overflow-x: auto;
+  overflow: hidden;
   position: relative;
   max-width: 100%;
   background: linear-gradient(180deg, rgba(14,17,24,.95) 0%, rgba(11,14,20,.97) 100%);
   border: 1px solid rgba(160,178,210,.25);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 2px 14px rgba(0,0,0,.22);
+}
+.md-content .code-block-head {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 10px 0 12px;
+  border-bottom: 1px solid rgba(160,178,210,.20);
+  background: linear-gradient(90deg, rgba(255,255,255,.04), rgba(255,255,255,.01));
+}
+.md-content .code-block-lang {
+  font-family: 'Pretendard', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  color: rgba(231,238,255,.92);
+  text-transform: capitalize;
+}
+.md-content .code-block-body {
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 .md-content pre code {
   padding: 14px 14px 14px;
@@ -721,9 +743,6 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
   word-break: normal;
 }
 .code-copy-btn {
-  position: absolute;
-  top: 8px;
-  right: 8px;
   width: 26px;
   height: 26px;
   display: inline-flex;

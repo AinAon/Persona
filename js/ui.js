@@ -304,18 +304,37 @@ function enhanceRenderedMessage(container) {
   container.querySelectorAll('pre').forEach(pre => {
     if (pre.dataset.copyEnhanced === '1') return;
     const code = pre.querySelector('code');
+    if (!code) return;
     const text = code?.innerText || pre.innerText || '';
+    const langClass = [...(code.classList || [])].find(c => c.startsWith('language-')) || '';
+    const lang = langClass ? langClass.replace('language-', '') : 'code';
+    const langLabel = lang.charAt(0).toUpperCase() + lang.slice(1);
+
+    const head = document.createElement('div');
+    head.className = 'code-block-head';
+    const title = document.createElement('span');
+    title.className = 'code-block-lang';
+    title.textContent = langLabel;
+
     const btn = document.createElement('button');
     btn.className = 'code-copy-btn';
     btn.type = 'button';
     btn.title = 'Copy code';
     btn.setAttribute('aria-label', 'Copy code');
     btn.dataset.copyText = encodeCopyPayload(text);
-    btn.textContent = '복사';
     btn.innerHTML = '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="10" height="11" rx="2"/><path d="M13 5V3.5A1.5 1.5 0 0 0 11.5 2h-7A1.5 1.5 0 0 0 3 3.5v10A1.5 1.5 0 0 0 4.5 15H5"/></svg>';
     btn.onclick = () => copyBubble(btn, btn.dataset.copyText, true);
+    head.appendChild(title);
+    head.appendChild(btn);
+
+    const body = document.createElement('div');
+    body.className = 'code-block-body';
+    body.appendChild(code);
+
     pre.classList.add('code-copy-wrap');
-    pre.appendChild(btn);
+    pre.innerHTML = '';
+    pre.appendChild(head);
+    pre.appendChild(body);
     pre.dataset.copyEnhanced = '1';
   });
 }
