@@ -140,16 +140,71 @@ function personasSignature(list) {
   }
 }
 
+async function syncPersonasFromWorkerForStartup(wUrl, timeoutMs = 4000) {
+  if (!wUrl) return false;
+  const timeout = new Promise((resolve) => setTimeout(() => resolve({ timedOut: true }), timeoutMs));
+  const result = await Promise.race([
+    fetch(wUrl + '/personas', { cache: 'no-store' })
+      .then(r => r.json())
+      .catch(() => ({})),
+    timeout
+  ]);
+  if (!result || result.timedOut) return false;
+
+  const kvPersonas = Array.isArray(result.personas) ? result.personas : [];
+  if (kvPersonas.length) {
+    const seen = new Set();
+    const nextPersonas = kvPersonas.filter(p => {
+      if (!p?.pid || seen.has(p.pid)) return false;
+      seen.add(p.pid);
+      return true;
+    });
+    const samePersonas = personasSignature(nextPersonas) === personasSignature(personas);
+    if (!samePersonas) {
+      personas = nextPersonas;
+      setLocalPersonas(personas);
+      return true;
+    }
+    return false;
+  }
+
+  const celebs = await fetch('celebrity.json')
+    .then(r => r.ok ? r.json() : [])
+    .catch(() => []);
+  if (!Array.isArray(celebs) || !celebs.length) return false;
+
+  const nextCelebs = celebs.map(p => ({ ...p, type: p.type || 'celebrity' }));
+  const sameCelebs = personasSignature(nextCelebs) === personasSignature(personas);
+  if (!sameCelebs) {
+    personas = nextCelebs;
+    setLocalPersonas(personas);
+  }
+
+  fetch(wUrl + '/personas', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ personas })
+  }).catch(() => {});
+
+  return !sameCelebs;
+}
+
 async function init() {
+  let loadingEscapeTimer = null;
   // Failsafe: loading overlay should not stay forever if init flow is interrupted.
   const loadingFailsafe = setTimeout(() => {
     try {
+      if (typeof setLoadingEscapeVisible === 'function') setLoadingEscapeVisible(true);
       setLoading(false);
       if (typeof renderPersonaGrid === 'function') renderPersonaGrid();
       if (typeof renderChatList === 'function') renderChatList();
     } catch(e) {}
   }, 15000);
   setLoading(true, '캐시 상태 점검 준비...');
+  if (typeof setLoadingEscapeVisible === 'function') setLoadingEscapeVisible(false);
+  loadingEscapeTimer = setTimeout(() => {
+    try { if (typeof setLoadingEscapeVisible === 'function') setLoadingEscapeVisible(true); } catch(e) {}
+  }, 8000);
   loadUserProfile();
   applyFontSize(userProfile.fontSize || 15);
   switchTab(userProfile.defaultTab || 'persona');
@@ -182,17 +237,22 @@ async function init() {
   }).catch(() => null);
 
   // 페르소나 그리드 + 채팅 목록 렌더링
-  renderPersonaGrid();
-  renderChatList();
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (wUrl) {
+    setLoading(true, '초기 동기화 확인 중...');
+    await syncPersonasFromWorkerForStartup(wUrl, 4500).catch(() => false);
+  }
+  if (typeof renderPersonaGrid === 'function') await renderPersonaGrid();
+  if (typeof renderChatList === 'function') await renderChatList();
 
   setLoading(false);
+  if (typeof setLoadingEscapeVisible === 'function') setLoadingEscapeVisible(false);
 
   // 백그라운드 워밍업(추가 캐시 보강)
   setTimeout(() => { runGlobalCacheWarmup().catch(() => {}); }, 200);
 
 
   // 백그라운드: Worker KV에서 페르소나 + 세션 동기화
-  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (wUrl) {
     loadIndex().then(() => preloadAllSessions()).catch(()=>{});
 
@@ -210,7 +270,6 @@ async function init() {
         if (!samePersonas) {
           personas = nextPersonas;
           setLocalPersonas(personas);
-          renderPersonaGrid();
           preloadEmotionImages();
         }
       } else {
@@ -225,12 +284,12 @@ async function init() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ personas })
           }).catch(()=>{});
-          renderPersonaGrid();
           preloadEmotionImages();
         });
       }
     }).catch(() => {});
   }
+  if (loadingEscapeTimer) clearTimeout(loadingEscapeTimer);
   clearTimeout(loadingFailsafe);
 }
 
@@ -256,6 +315,7 @@ window.forceRecoverApp = async function() {
   } catch(e) {
     console.error('forceRecoverApp failed:', e);
   } finally {
+    try { if (typeof setLoadingEscapeVisible === 'function') setLoadingEscapeVisible(false); } catch(e) {}
     setLoading(false);
   }
 };

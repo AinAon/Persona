@@ -1124,6 +1124,11 @@ function setLoading(show, text = 'Loading...') {
   if (show) el.classList.remove('hidden');
   else el.classList.add('hidden');
 }
+function setLoadingEscapeVisible(show) {
+  const btn = document.getElementById('loadingEscapeBtn');
+  if (!btn) return;
+  btn.classList.toggle('show', !!show);
+}
 
 function updateMicButtonState(active) {
   const btn = document.getElementById('micBtn');
