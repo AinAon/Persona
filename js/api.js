@@ -63,6 +63,16 @@ function cacheBustUrl(url) {
   return url + (url.includes('?') ? '&' : '?') + 't=' + t;
 }
 
+async function fetchWithTimeout(url, options = {}, timeoutMs = 5000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 const _neutralCache = {};
 const NEUTRAL_DEBUG_LOG = false;
 
@@ -241,7 +251,7 @@ async function getEmotionImageSuffixed(pid, emotion, letter, displayPx = 200) {
     const url = letter
       ? `${wUrl}/image/profile/${pid}/${pid}_${emotion}_${letter}.jpg`
       : `${wUrl}/image/profile/${pid}/${pid}_${emotion}.jpg`;
-    const resp = await fetch(cacheBustUrl(url));
+    const resp = await fetchWithTimeout(cacheBustUrl(url), {}, 4500);
     if (!resp.ok) {
       console.warn(`[emotion] 404: ${url}`);
       return null;
@@ -324,7 +334,7 @@ async function getEmotionImageHD(pid, emotion, letter = '') {
     }
     
     if (!url) return null;
-    const resp = await fetch(cacheBustUrl(url));
+    const resp = await fetchWithTimeout(cacheBustUrl(url), {}, 4500);
     if (!resp.ok) return null;
     const blob = await resp.blob();
     const dataUrl = await new Promise(r => {
@@ -357,7 +367,7 @@ async function getNeutralABaseImageHD(pid) {
     const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
     if (!wUrl) return null;
     const url = `${wUrl}/image/profile/${pid}/${pid}_neutral_a.jpg`;
-    const resp = await fetch(cacheBustUrl(url));
+    const resp = await fetchWithTimeout(cacheBustUrl(url), {}, 4500);
     if (!resp.ok) return null;
     const blob = await resp.blob();
     const dataUrl = await new Promise((r) => {
@@ -582,7 +592,7 @@ async function loadNeutralDirect(pid) {
 
     for (const c of candidates) {
       try {
-        const resp = await fetch(cacheBustUrl(c.url));
+        const resp = await fetchWithTimeout(cacheBustUrl(c.url), {}, 4500);
         if (NEUTRAL_DEBUG_LOG) console.log('[neutral]', c.url, resp.status);
         if (!resp.ok) continue;
 
