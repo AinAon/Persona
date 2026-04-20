@@ -74,9 +74,9 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
           ...messages
         ]
       : messages;
-    const preparedMessages = model.startsWith("gemini")
-      ? await inlineImageUrlsInMessages(effectiveMessages)
-      : effectiveMessages;
+    const preparedMessages = isImageReq
+      ? effectiveMessages
+      : await inlineImageUrlsInMessages(effectiveMessages);
 
     let reply = "";
     let imageUrlOut = "";

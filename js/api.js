@@ -867,6 +867,15 @@ async function loadIndex() {
 async function loadSession(id) {
   const s = sessions.find(x=>x.id===id); if (!s) return;
   let hadLocalCache = false;
+  const getLastTs = (arr) => {
+    if (!Array.isArray(arr) || !arr.length) return 0;
+    let maxTs = 0;
+    for (const m of arr) {
+      const ts = Number(m?.createdAt || 0);
+      if (ts > maxTs) maxTs = ts;
+    }
+    return maxTs;
+  };
   // 로컬 캐시 먼저
   if (!s._loaded) {
     try {
@@ -909,6 +918,27 @@ async function loadSession(id) {
     }
 
     const remoteHistory = Array.isArray(remoteSession.history) ? remoteSession.history : [];
+    const localHistory = Array.isArray(s.history) ? s.history : [];
+    const localLastTs = getLastTs(localHistory);
+    const remoteLastTs = getLastTs(remoteHistory);
+    const localUpdatedAt = Number(s.updatedAt || 0);
+    const remoteUpdatedAt = Number(remoteSession.updatedAt || 0);
+    const preferLocal =
+      hadLocalCache &&
+      localHistory.length > 0 &&
+      (
+        localLastTs > remoteLastTs ||
+        localHistory.length > remoteHistory.length ||
+        (localUpdatedAt > 0 && remoteUpdatedAt > 0 && localUpdatedAt > remoteUpdatedAt)
+      );
+    if (preferLocal) {
+      s._loaded = true;
+      setLocalSession(id, localHistory);
+      saveSession(id);
+      saveIndex();
+      if (activeChatId === id) renderChatArea();
+      return;
+    }
     s.history = remoteHistory;
     s._loaded = true;
     setLocalSession(id, s.history);

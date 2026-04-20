@@ -3546,6 +3546,10 @@ async function sendMessage() {
   };
   session.history.push(userMsg);
   session.updatedAt = Date.now();
+  if (!session._demo) {
+    saveSession(session.id);
+    saveIndex();
+  }
 
   // 이미지 편집용 참조 이미지: attachments 클리어 전에 미리 캡처
   const refImages = [...requestImageUrls];
