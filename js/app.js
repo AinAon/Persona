@@ -126,6 +126,20 @@ function loadSessionsFromCache() {
   } catch (e) {}
 }
 
+function personasSignature(list) {
+  try {
+    return JSON.stringify((list || []).map(p => ({
+      pid: p?.pid || '',
+      name: p?.name || '',
+      image: p?.image || '',
+      neutral_md: p?.neutral_md || '',
+      updatedAt: Number(p?.updatedAt || 0)
+    })));
+  } catch(e) {
+    return '';
+  }
+}
+
 async function init() {
   // Failsafe: loading overlay should not stay forever if init flow is interrupted.
   const loadingFailsafe = setTimeout(() => {
@@ -188,13 +202,17 @@ async function init() {
       if (kvPersonas.length) {
         // pid 기준 중복 제거
         const seen = new Set();
-        personas = kvPersonas.filter(p => {
+        const nextPersonas = kvPersonas.filter(p => {
           if (seen.has(p.pid)) return false;
           seen.add(p.pid); return true;
         });
-        setLocalPersonas(personas);
-        renderPersonaGrid();
-        preloadEmotionImages();
+        const samePersonas = personasSignature(nextPersonas) === personasSignature(personas);
+        if (!samePersonas) {
+          personas = nextPersonas;
+          setLocalPersonas(personas);
+          renderPersonaGrid();
+          preloadEmotionImages();
+        }
       } else {
         // KV에 없으면 celebrity.json에서 초기 로드 (최초 1회)
         fetch('celebrity.json').then(r => r.ok ? r.json() : []).catch(() => []).then(celebs => {
