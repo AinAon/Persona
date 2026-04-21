@@ -247,8 +247,7 @@ async function init() {
 
   // 백그라운드: Worker KV에서 페르소나 + 세션 동기화
   if (wUrl) {
-    // Temporarily disable chat index/session startup preload.
-    // loadIndex().then(() => preloadAllSessions()).catch(()=>{});
+    loadIndex().catch(()=>{});
 
     // KV에서 페르소나 로드 (celebrity.json + GAS 대체)
     // duplicate personas sync disabled (already synced during loading)
