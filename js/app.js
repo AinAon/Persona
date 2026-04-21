@@ -182,7 +182,7 @@ async function init() {
   let loadingEscapeTimer = null;
   const cachedPersonas = getLocalPersonas();
   const cachedSessionIndex = getLocalSessionIndex();
-  const shouldBlockLoading = !((Array.isArray(cachedPersonas) && cachedPersonas.length) || (Array.isArray(cachedSessionIndex) && cachedSessionIndex.length));
+  const shouldBlockLoading = false;
   // Failsafe: loading overlay should not stay forever if init flow is interrupted.
   let loadingFailsafe = shouldBlockLoading ? setTimeout(() => {
     try {
