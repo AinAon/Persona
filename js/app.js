@@ -2,21 +2,8 @@
 //  DEMO CHAT REPLY LOGIC
 // ══════════════════════════════
 function setLoading(isLoading, text) {
-  console.log('Loading state:', isLoading, text);
+  return;
 
-  const overlay = document.getElementById('loadingOverlay');
-  const loadingText = document.getElementById('loadingText');
-
-  if (overlay) {
-    overlay.classList.toggle('hidden', !isLoading);
-
-    // 이 줄 추가
-    if (!isLoading) overlay.classList.add('hidden');
-  }
-
-  if (loadingText && text !== undefined) {
-    loadingText.textContent = text;
-  }
 }
 
 function startDemoChat() {

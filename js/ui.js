@@ -1119,10 +1119,7 @@ function showToast(msg, duration = 1800) {
   toastTimer = setTimeout(() => el.classList.remove('show'), duration);
 }
 function setLoading(show, text = 'Loading...') {
-  const el = document.getElementById('loadingOverlay');
-  document.getElementById('loadingText').textContent = text;
-  if (show) el.classList.remove('hidden');
-  else el.classList.add('hidden');
+  return;
 }
 function setLoadingEscapeVisible(show) {
   const btn = document.getElementById('loadingEscapeBtn');
