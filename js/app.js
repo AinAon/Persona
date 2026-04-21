@@ -189,6 +189,8 @@ async function syncPersonasFromWorkerForStartup(wUrl, timeoutMs = 4000) {
   return !sameCelebs;
 }
 
+const ENABLE_STARTUP_CACHE_PROCEDURES = false;
+
 async function init() {
   let loadingEscapeTimer = null;
   // Failsafe: loading overlay should not stay forever if init flow is interrupted.
@@ -226,19 +228,23 @@ async function init() {
   }
 
   // 앱 시작 시에는 전체 생성 대신 상태 점검만 수행
-  await checkCacheStateWithProgress((done, total, label, isMissing) => {
-    const tail = isMissing ? ' (missing)' : '';
-    setLoading(true, `캐시 점검 ${done}/${total} - ${label}${tail}`);
-  }).catch(() => null);
+  if (ENABLE_STARTUP_CACHE_PROCEDURES) {
+    await checkCacheStateWithProgress((done, total, label, isMissing) => {
+      const tail = isMissing ? ' (missing)' : '';
+      setLoading(true, `캐시 점검 ${done}/${total} - ${label}${tail}`);
+    }).catch(() => null);
+  }
 
   // 진입 전 최소 시각 캐시 로딩(그리드 + 채팅목록)
-  await runStartupVisualWarmup((done, total, label) => {
-    setLoading(true, `시작 준비 ${done}/${total} - ${label}`);
-  }).catch(() => null);
+  if (ENABLE_STARTUP_CACHE_PROCEDURES) {
+    await runStartupVisualWarmup((done, total, label) => {
+      setLoading(true, `시작 준비 ${done}/${total} - ${label}`);
+    }).catch(() => null);
+  }
 
   // 페르소나 그리드 + 채팅 목록 렌더링
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-  if (wUrl) {
+  if (wUrl && ENABLE_STARTUP_CACHE_PROCEDURES) {
     setLoading(true, '초기 동기화 확인 중...');
     await syncPersonasFromWorkerForStartup(wUrl, 4500).catch(() => false);
   }
