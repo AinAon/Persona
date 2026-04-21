@@ -1,8 +1,6 @@
 // ══════════════════════════════
 //  DEMO CHAT REPLY LOGIC
 // ══════════════════════════════
-let _loadingHideRaf1 = 0;
-let _loadingHideRaf2 = 0;
 function setLoading(isLoading, text) {
   console.log('Loading state:', isLoading, text);
 
@@ -10,20 +8,10 @@ function setLoading(isLoading, text) {
   const loadingText = document.getElementById('loadingText');
 
   if (overlay) {
-    if (_loadingHideRaf1) { cancelAnimationFrame(_loadingHideRaf1); _loadingHideRaf1 = 0; }
-    if (_loadingHideRaf2) { cancelAnimationFrame(_loadingHideRaf2); _loadingHideRaf2 = 0; }
-    if (isLoading) overlay.classList.remove('hidden');
+    overlay.classList.toggle('hidden', !isLoading);
 
     // 이 줄 추가
-    if (!isLoading) {
-      _loadingHideRaf1 = requestAnimationFrame(() => {
-        _loadingHideRaf2 = requestAnimationFrame(() => {
-          overlay.classList.add('hidden');
-          _loadingHideRaf1 = 0;
-          _loadingHideRaf2 = 0;
-        });
-      });
-    }
+    if (!isLoading) overlay.classList.add('hidden');
   }
 
   if (loadingText && text !== undefined) {
@@ -267,7 +255,8 @@ async function init() {
     loadIndex().then(() => preloadAllSessions()).catch(()=>{});
 
     // KV에서 페르소나 로드 (celebrity.json + GAS 대체)
-    fetch(wUrl + '/personas').then(r => r.json()).then(data => {
+    // duplicate personas sync disabled (already synced during loading)
+    /* fetch(wUrl + '/personas').then(r => r.json()).then(data => {
       const kvPersonas = data.personas || [];
       if (kvPersonas.length) {
         // pid 기준 중복 제거
@@ -297,7 +286,7 @@ async function init() {
           preloadEmotionImages();
         });
       }
-    }).catch(() => {});
+    }).catch(() => {}); */
   }
   if (loadingEscapeTimer) clearTimeout(loadingEscapeTimer);
   clearTimeout(loadingFailsafe);
