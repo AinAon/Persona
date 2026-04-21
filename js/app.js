@@ -231,7 +231,7 @@ async function init() {
 
   // 페르소나 그리드 + 채팅 목록 렌더링
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-  if (false && wUrl) {
+  if (wUrl) {
     setLoading(true, '초기 동기화 확인 중...');
     await syncPersonasFromWorkerForStartup(wUrl, 12000).catch(() => false);
   }
