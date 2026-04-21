@@ -1318,6 +1318,7 @@ function deleteSettingsUserImage() {
 let _personaGridRenderVersion = 0;
 let _suppressPersonaTapUntil = 0;
 let _chatOpenToken = 0;
+let _lastPersonaGridSignature = '';
 
 async function getRandomPersonaGridImage(pid) {
   const emotions = ['neutral', 'subtlesmile', 'shy', 'surprise'];
@@ -1378,6 +1379,16 @@ async function preloadImageDecode(src) {
 async function renderPersonaGrid() {
   const COLS = 3;
   const grid = document.getElementById('personaGrid');
+  const signature = JSON.stringify((personas || []).map((p) => ({
+    pid: p?.pid || '',
+    name: p?.name || '',
+    hue: Number(p?.hue || 0),
+    type: p?.type || '',
+    image: p?.image || '',
+    updatedAt: Number(p?.updatedAt || 0)
+  })));
+  if (grid && grid.children.length && signature === _lastPersonaGridSignature) return;
+  _lastPersonaGridSignature = signature;
   const fragment = document.createDocumentFragment();
 
   const myVersion = ++_personaGridRenderVersion;
