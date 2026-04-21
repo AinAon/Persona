@@ -9,13 +9,6 @@ function setLoading(isLoading, text) {
 
   if (overlay) {
     overlay.classList.toggle('hidden', !isLoading);
-    if (isLoading) {
-      overlay.style.zIndex = '999';
-      overlay.style.display = 'flex';
-    } else {
-      overlay.style.zIndex = '-1';
-      overlay.style.display = 'none';
-    }
 
     // 이 줄 추가
     if (!isLoading) overlay.classList.add('hidden');

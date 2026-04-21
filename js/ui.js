@@ -1121,15 +1121,8 @@ function showToast(msg, duration = 1800) {
 function setLoading(show, text = 'Loading...') {
   const el = document.getElementById('loadingOverlay');
   document.getElementById('loadingText').textContent = text;
-  if (show) {
-    el.style.zIndex = '999';
-    el.style.display = 'flex';
-    el.classList.remove('hidden');
-  } else {
-    el.style.zIndex = '-1';
-    el.style.display = 'none';
-    el.classList.add('hidden');
-  }
+  if (show) el.classList.remove('hidden');
+  else el.classList.add('hidden');
 }
 function setLoadingEscapeVisible(show) {
   const btn = document.getElementById('loadingEscapeBtn');
