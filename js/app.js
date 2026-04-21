@@ -236,8 +236,7 @@ async function init() {
     await syncPersonasFromWorkerForStartup(wUrl, 12000).catch(() => false);
   }
   if (typeof renderPersonaGrid === 'function') await renderPersonaGrid();
-  // Temporarily disable chat list startup render.
-  // if (typeof renderChatList === 'function') await renderChatList();
+  if (typeof renderChatList === 'function') await renderChatList();
 
   setLoading(false);
   if (typeof setLoadingEscapeVisible === 'function') setLoadingEscapeVisible(false);
