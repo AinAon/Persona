@@ -1,6 +1,8 @@
 // ══════════════════════════════
 //  DEMO CHAT REPLY LOGIC
 // ══════════════════════════════
+let _loadingHideRaf1 = 0;
+let _loadingHideRaf2 = 0;
 function setLoading(isLoading, text) {
   console.log('Loading state:', isLoading, text);
 
@@ -8,10 +10,20 @@ function setLoading(isLoading, text) {
   const loadingText = document.getElementById('loadingText');
 
   if (overlay) {
-    overlay.classList.toggle('hidden', !isLoading);
+    if (_loadingHideRaf1) { cancelAnimationFrame(_loadingHideRaf1); _loadingHideRaf1 = 0; }
+    if (_loadingHideRaf2) { cancelAnimationFrame(_loadingHideRaf2); _loadingHideRaf2 = 0; }
+    if (isLoading) overlay.classList.remove('hidden');
 
     // 이 줄 추가
-    if (!isLoading) overlay.classList.add('hidden');
+    if (!isLoading) {
+      _loadingHideRaf1 = requestAnimationFrame(() => {
+        _loadingHideRaf2 = requestAnimationFrame(() => {
+          overlay.classList.add('hidden');
+          _loadingHideRaf1 = 0;
+          _loadingHideRaf2 = 0;
+        });
+      });
+    }
   }
 
   if (loadingText && text !== undefined) {
