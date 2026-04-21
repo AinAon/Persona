@@ -44,6 +44,8 @@ Escalate only if one or more conditions are true:
 
 ## Library-First Rule
 - Prefer proven libraries over custom implementation.
+- Before proposing custom patterns, first identify and present widely adopted, low-incident implementation patterns (for memory, chat, state, data flow, and similar core areas), even when they are not tied to a specific library.
+- If such a standard pattern exists, treat it as the default recommendation and explicitly state it first before alternatives.
 - For high-variance browser/device areas (drag-and-drop, virtual scroll, editor, markdown rendering, image processing, animation, gesture, form validation), do not choose custom code by default.
 - Choose custom implementation only when requirements are very simple or library adoption cost is not justified.
 - For new features and bug fixes, first evaluate replacing with an existing proven library and propose that path first when feasible.
