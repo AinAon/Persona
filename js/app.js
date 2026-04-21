@@ -180,18 +180,22 @@ const ENABLE_STARTUP_CACHE_PROCEDURES = true;
 
 async function init() {
   let loadingEscapeTimer = null;
+  const cachedPersonas = getLocalPersonas();
+  const cachedSessionIndex = getLocalSessionIndex();
+  const shouldBlockLoading = !((Array.isArray(cachedPersonas) && cachedPersonas.length) || (Array.isArray(cachedSessionIndex) && cachedSessionIndex.length));
   // Failsafe: loading overlay should not stay forever if init flow is interrupted.
-  const loadingFailsafe = setTimeout(() => {
+  let loadingFailsafe = shouldBlockLoading ? setTimeout(() => {
     try {
       if (typeof setLoadingEscapeVisible === 'function') setLoadingEscapeVisible(true);
       setLoading(true, '로딩이 지연되고 있습니다. 강제 진입을 눌러 진행하세요.');
     } catch(e) {}
-  }, 15000);
-  setLoading(true, '캐시 상태 점검 준비...');
+  }, 15000) : null;
+  if (shouldBlockLoading) setLoading(true, '캐시 상태 점검 준비...');
   if (typeof setLoadingEscapeVisible === 'function') setLoadingEscapeVisible(false);
-  loadingEscapeTimer = setTimeout(() => {
+  if (shouldBlockLoading) loadingEscapeTimer = setTimeout(() => {
     try { if (typeof setLoadingEscapeVisible === 'function') setLoadingEscapeVisible(true); } catch(e) {}
   }, 8000);
+  if (!shouldBlockLoading) setLoading(false);
   loadUserProfile();
   applyFontSize(userProfile.fontSize || 15);
   switchTab(userProfile.defaultTab || 'persona');
@@ -218,27 +222,27 @@ async function init() {
   if (ENABLE_STARTUP_CACHE_PROCEDURES) {
     await checkCacheStateWithProgress((done, total, label, isMissing) => {
       const tail = isMissing ? ' (missing)' : '';
-      setLoading(true, `캐시 점검 ${done}/${total} - ${label}${tail}`);
+      if (shouldBlockLoading) setLoading(true, `캐시 점검 ${done}/${total} - ${label}${tail}`);
     }).catch(() => null);
   }
 
   // 진입 전 최소 시각 캐시 로딩(그리드 + 채팅목록)
   if (ENABLE_STARTUP_CACHE_PROCEDURES) {
     await runStartupVisualWarmup((done, total, label) => {
-      setLoading(true, `시작 준비 ${done}/${total} - ${label}`);
+      if (shouldBlockLoading) setLoading(true, `시작 준비 ${done}/${total} - ${label}`);
     }).catch(() => null);
   }
 
   // 페르소나 그리드 + 채팅 목록 렌더링
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (wUrl) {
-    setLoading(true, '초기 동기화 확인 중...');
+    if (shouldBlockLoading) setLoading(true, '초기 동기화 확인 중...');
     await syncPersonasFromWorkerForStartup(wUrl, 12000).catch(() => false);
   }
   if (typeof renderPersonaGrid === 'function') await renderPersonaGrid();
   if (typeof renderChatList === 'function') await renderChatList();
 
-  setLoading(false);
+  if (shouldBlockLoading) setLoading(false);
   if (typeof setLoadingEscapeVisible === 'function') setLoadingEscapeVisible(false);
 
   // 백그라운드 워밍업(추가 캐시 보강)
