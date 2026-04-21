@@ -1360,6 +1360,23 @@ async function getRandomPersonaGridImage(pid) {
   return null;
 }
 
+async function preloadImageDecode(src) {
+  if (!src) return;
+  try {
+    const img = new Image();
+    img.decoding = 'async';
+    img.src = src;
+    if (typeof img.decode === 'function') {
+      await img.decode().catch(() => {});
+      return;
+    }
+    await new Promise((resolve) => {
+      img.onload = () => resolve();
+      img.onerror = () => resolve();
+    });
+  } catch (e) {}
+}
+
 async function renderPersonaGrid() {
   const COLS = 3;
   const grid = document.getElementById('personaGrid');
@@ -1380,6 +1397,7 @@ async function renderPersonaGrid() {
     if (myVersion !== _personaGridRenderVersion) return;
 
     const imgSrc = neutral;
+    if (imgSrc) await preloadImageDecode(imgSrc);
     const nametagBg = `hsl(${p.hue},45%,22%)`;
     const isCeleb = p.type === 'celebrity';
     const celebStroke = '';
