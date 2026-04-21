@@ -195,9 +195,7 @@ async function init() {
   const loadingFailsafe = setTimeout(() => {
     try {
       if (typeof setLoadingEscapeVisible === 'function') setLoadingEscapeVisible(true);
-      setLoading(false);
-      if (typeof renderPersonaGrid === 'function') renderPersonaGrid();
-      if (typeof renderChatList === 'function') renderChatList();
+      setLoading(true, '로딩이 지연되고 있습니다. 강제 진입을 눌러 진행하세요.');
     } catch(e) {}
   }, 15000);
   setLoading(true, '캐시 상태 점검 준비...');
