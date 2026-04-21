@@ -2871,6 +2871,12 @@ async function openChat(id) {
     new Promise(r => setTimeout(r, 2000))
   ]);
   if (openToken !== _chatOpenToken || activeChatId !== id) return;
+  if (!s._demo) {
+    await loadSession(id);
+    if (openToken !== _chatOpenToken || activeChatId !== id) return;
+    renderChatArea();
+    return;
+  }
   renderChatArea();
 
   // _loaded 없으면 무조건 로드
