@@ -212,7 +212,9 @@ async function init() {
   loadSessionsFromCache();
 
   // KV에서 프로필 동기화 (name/bio/image — 기기별 설정은 로컬 유지)
-  loadUserProfileKV().then(() => renderSettingsPane()).catch(()=>{});
+  loadUserProfileKV().then(() => {
+    if (activeTab === 'settings') renderSettingsPane();
+  }).catch(()=>{});
 
   // neutral 이미지 IDB에서 로드 (neutral_a 우선)
   for (const [pid] of Object.entries(EMOTION_PROFILE_MAP)) {
