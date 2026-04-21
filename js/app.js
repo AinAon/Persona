@@ -176,7 +176,7 @@ async function syncPersonasFromWorkerForStartup(wUrl, timeoutMs = 4000) {
   return !sameCelebs;
 }
 
-const ENABLE_STARTUP_CACHE_PROCEDURES = false;
+const ENABLE_STARTUP_CACHE_PROCEDURES = true;
 
 async function init() {
   let loadingEscapeTimer = null;
