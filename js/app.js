@@ -236,7 +236,8 @@ async function init() {
     await syncPersonasFromWorkerForStartup(wUrl, 12000).catch(() => false);
   }
   if (typeof renderPersonaGrid === 'function') await renderPersonaGrid();
-  if (typeof renderChatList === 'function') await renderChatList();
+  // Temporarily disable chat list startup render.
+  // if (typeof renderChatList === 'function') await renderChatList();
 
   setLoading(false);
   if (typeof setLoadingEscapeVisible === 'function') setLoadingEscapeVisible(false);
@@ -247,7 +248,8 @@ async function init() {
 
   // 백그라운드: Worker KV에서 페르소나 + 세션 동기화
   if (wUrl) {
-    loadIndex().then(() => preloadAllSessions()).catch(()=>{});
+    // Temporarily disable chat index/session startup preload.
+    // loadIndex().then(() => preloadAllSessions()).catch(()=>{});
 
     // KV에서 페르소나 로드 (celebrity.json + GAS 대체)
     // duplicate personas sync disabled (already synced during loading)

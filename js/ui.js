@@ -987,7 +987,8 @@ async function runGlobalCacheWarmup() {
     }
   } finally {
     _globalWarmupRunning = false;
-    scheduleChatListRefresh(120);
+    // Temporarily disable chat list auto refresh from startup/global warmup.
+    // scheduleChatListRefresh(120);
   }
 }
 
