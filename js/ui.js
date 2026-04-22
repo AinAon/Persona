@@ -5289,6 +5289,7 @@ function memoryEditIconSVG() {
 
 const _memoryListCache = {};
 const _memorySelection = {};
+const _memoryInlineEdit = { id: '', scope: '', owner: '', value: '' };
 function memoryCacheKey(scope, owner = '') { return `${scope || ''}::${owner || ''}`; }
 function getMemoryListFromCache(scope, owner = '') {
   const key = memoryCacheKey(scope, owner);
@@ -5349,11 +5350,21 @@ function memoryItemRowHTML(item, onDelete) {
   const editOpacity = locked ? 'opacity:.45;cursor:not-allowed;' : 'cursor:pointer;';
   const deleteOpacity = locked ? 'opacity:.45;cursor:not-allowed;' : 'cursor:pointer;';
   const selected = getMemorySelectionSet(item.scope || '', item.owner || '').has(item.id);
+  const cacheOwner = item.scope === 'public_profile' ? 'global' : (item.owner || editingPid || '');
+  const isEditing = _memoryInlineEdit.id === item.id
+    && _memoryInlineEdit.scope === (item.scope || '')
+    && _memoryInlineEdit.owner === cacheOwner;
   return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border2);border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));">
     <input type="checkbox" ${selected ? 'checked' : ''} onchange="toggleMemoryItemSelection('${item.scope || ''}','${item.owner || ''}','${item.id}',this.checked)" style="margin-top:4px;cursor:pointer;accent-color:hsl(196,72%,56%)" />
     <div style="flex:1">
       <div style="display:inline-flex;align-items:center;font-size:10px;color:var(--muted);margin-bottom:5px;padding:2px 7px;border:1px solid var(--border2);border-radius:999px;text-transform:uppercase;letter-spacing:.06em">${esc(scopeBadge)}</div>
-      <div style="font-size:12px;line-height:1.58;color:var(--text)">${safeText}</div>
+      ${isEditing
+        ? `<textarea oninput="memoryInlineEditInput(this.value)" style="width:100%;min-height:72px;resize:vertical;padding:8px 10px;border-radius:10px;border:1px solid var(--muted);background:var(--card);color:var(--text);font-size:12px;line-height:1.58;font-family:'Pretendard',sans-serif">${esc(_memoryInlineEdit.value || String(item.text || ''))}</textarea>
+           <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:7px">
+             <button onclick="saveMemoryInlineEdit('${item.id}','${item.scope || ''}','${cacheOwner}')" style="padding:5px 10px;border-radius:9px;border:1px solid var(--border2);background:var(--text);color:var(--bg);font-size:11px;cursor:pointer">저장</button>
+             <button onclick="cancelMemoryInlineEdit('${item.scope || ''}','${cacheOwner}')" style="padding:5px 10px;border-radius:9px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">취소</button>
+           </div>`
+        : `<div style="font-size:12px;line-height:1.58;color:var(--text)">${safeText}</div>`}
     </div>
     <button onclick="toggleMemoryLockItem('${item.id}','${item.scope || ''}','${item.owner || ''}',${lockNext})" title="${lockTitle}" style="flex-shrink:0;width:30px;height:30px;border-radius:9px;border:1px solid var(--border2);background:rgba(255,255,255,.02);color:${locked ? 'hsl(45,80%,68%)' : 'var(--muted)'};display:inline-flex;align-items:center;justify-content:center;cursor:pointer">${memoryLockIconSVG(locked)}</button>
     <button onclick="editMemoryItem('${item.id}','${item.scope || ''}','${item.owner || ''}')" title="Edit" ${editDisabled} style="flex-shrink:0;width:30px;height:30px;border-radius:9px;border:1px solid var(--border2);background:rgba(255,255,255,.02);color:var(--muted);display:inline-flex;align-items:center;justify-content:center;${editOpacity}">${memoryEditIconSVG()}</button>
@@ -5587,15 +5598,43 @@ async function editMemoryItem(id, scope = '', owner = '') {
     showToast('Locked memory cannot be edited.');
     return;
   }
+  _memoryInlineEdit.id = id;
+  _memoryInlineEdit.scope = scope;
+  _memoryInlineEdit.owner = cacheOwner;
+  _memoryInlineEdit.value = String(target.text || '');
+  if (scope === 'public_profile') renderPublicMemoryList();
+  if (scope === 'private_profile') renderPrivateMemoryList(cacheOwner);
+}
 
-  const edited = prompt('메모리 수정', String(target.text || ''));
-  if (edited === null) return;
-  const clean = String(edited || '').replace(/^\s*profile\s*:\s*/i, '').trim();
+function memoryInlineEditInput(value = '') {
+  _memoryInlineEdit.value = String(value || '');
+}
+
+function cancelMemoryInlineEdit(scope = '', owner = '') {
+  const cacheOwner = scope === 'public_profile' ? 'global' : (owner || editingPid || '');
+  _memoryInlineEdit.id = '';
+  _memoryInlineEdit.scope = '';
+  _memoryInlineEdit.owner = '';
+  _memoryInlineEdit.value = '';
+  if (scope === 'public_profile') renderPublicMemoryList();
+  if (scope === 'private_profile') renderPrivateMemoryList(cacheOwner);
+}
+
+async function saveMemoryInlineEdit(id, scope = '', owner = '') {
+  if (!id || !scope) return;
+  const cacheOwner = scope === 'public_profile' ? 'global' : (owner || editingPid || '');
+  const current = getMemoryListFromCache(scope, cacheOwner) || await getMemoryListCached(scope, cacheOwner, 120);
+  const target = current.find(it => it.id === id);
+  if (!target) return;
+  const clean = String(_memoryInlineEdit.value || '').replace(/^\s*profile\s*:\s*/i, '').trim();
   if (!clean) {
     showToast('빈 메모리는 저장할 수 없습니다.');
     return;
   }
-  if (clean === String(target.text || '').trim()) return;
+  if (clean === String(target.text || '').trim()) {
+    cancelMemoryInlineEdit(scope, cacheOwner);
+    return;
+  }
 
   const prev = current.map(it => ({ ...it }));
   const optimistic = current.map(it => it.id === id ? { ...it, text: clean } : it);
@@ -5611,6 +5650,12 @@ async function editMemoryItem(id, scope = '', owner = '') {
     showToast('메모리 수정 실패');
     return;
   }
+  _memoryInlineEdit.id = '';
+  _memoryInlineEdit.scope = '';
+  _memoryInlineEdit.owner = '';
+  _memoryInlineEdit.value = '';
+  if (scope === 'public_profile') renderPublicMemoryList();
+  if (scope === 'private_profile') renderPrivateMemoryList(cacheOwner);
   showToast('메모리 수정 완료');
 }
 
