@@ -745,6 +745,7 @@ function buildIndex() {
     userOverride: s.userOverride || null,
     userProfileMode: s.userProfileMode || 'default',
     overrideModel: s.overrideModel || null,
+    personaModelOverrides: (s.personaModelOverrides && typeof s.personaModelOverrides === 'object') ? s.personaModelOverrides : null,
     chatProfileOverride: s.chatProfileOverride || null,
     hidden: !!s.hidden
   }));

@@ -26,6 +26,12 @@ function buildModelSelect(id, selectedValue, style = '') {
   return `<select class="edit-input" id="${id}" style="width:100%;${style}">${opts}</select>`;
 }
 
+function getChatModelLabel(modelValue = '') {
+  const key = String(modelValue || '');
+  const found = CHAT_MODELS.find((m) => !m.group && m.value === key);
+  return found?.label || key || '미설정';
+}
+
 // ══════════════════════════════
 //  UTILS (UI)
 // ══════════════════════════════
@@ -643,8 +649,16 @@ function buildChatPreviewText(text) {
   return raw.slice(0, 120);
 }
 
-function getPersonaModel(persona) {
-  return persona?.defaultModel || document.getElementById('chatModeSelect')?.value || 'grok-4.20-non-reasoning-latest';
+function getPersonaModel(sessionOrPersona, maybePersona = null) {
+  const session = maybePersona ? sessionOrPersona : null;
+  const persona = maybePersona || sessionOrPersona || null;
+  const pid = String(persona?.pid || '');
+  const overrideByPersona = session?.personaModelOverrides && pid ? session.personaModelOverrides[pid] : '';
+  return overrideByPersona
+    || session?.overrideModel
+    || persona?.defaultModel
+    || document.getElementById('chatModeSelect')?.value
+    || 'grok-4.20-non-reasoning-latest';
 }
 
 function sanitizeChatListPreview(text) {
@@ -3812,43 +3826,59 @@ async function sendMessage() {
 
         if (!isImageReq) {
           const responders = pickRespondingPersonas(session, pListAll);
-          const parts = [];
-          for (const persona of responders) {
-            const personaImageUrls = [];
-            for (const attachment of sentAttachments.filter(isImageAttachment)) {
-              const imageUrl = await getAttachmentRequestUrl(attachment, getPersonaModel(persona), false);
-              if (imageUrl) personaImageUrls.push(imageUrl);
-            }
-            const personaFileRefs = [];
-            for (const attachment of sentAttachments.filter(a => !isImageAttachment(a))) {
-              const fileUrl = await getAttachmentRequestUrl(attachment, getPersonaModel(persona), false);
-              if (fileUrl) personaFileRefs.push({ name: attachment.name || 'file', url: fileUrl });
-            }
-            const personaRequestMsgContent = sentAttachments.length > 0
-              ? buildUserMessageContentV2(text, personaImageUrls, personaFileRefs)
-              : text || '(빈글)';
-            const personaMessages = [
-              { role:'system', content: buildSystemPrompt(session, [persona]) },
-              buildCurrentTimeSystemMessage(),
-              ...buildApiMessagesFromHistory(session.history, userMsg, personaRequestMsgContent, isImageReq)
-            ];
-            const res = await fetch(wUrl + '/chat', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                messages: personaMessages,
-                model: getPersonaModel(persona),
-                participant_pids: [persona.pid]
-              })
-            });
-            const data = await res.json();
-            if (data.result !== 'success') {
-              parts.push(`[${persona.pid}]응답생성 오류: ${data.error||'알 수 없는 오류'}[/${persona.pid}]`);
-            } else {
-              parts.push(wrapPersonaReply(persona.pid, sanitizeTextForUnicodeSafety(data.reply || '')));
-            }
+          const responderEntries = responders.map((persona) => ({
+            persona,
+            model: getPersonaModel(session, persona)
+          }));
+          const groupedByModel = new Map();
+          for (const entry of responderEntries) {
+            const key = entry.model || 'grok-4.20-non-reasoning-latest';
+            if (!groupedByModel.has(key)) groupedByModel.set(key, []);
+            groupedByModel.get(key).push(entry.persona);
           }
-          reply = parts.join('\n');
+          const replyByPid = new Map();
+          await Promise.all([...groupedByModel.entries()].map(async ([model, personasInGroup]) => {
+            const groupImageUrls = [];
+            for (const attachment of sentAttachments.filter(isImageAttachment)) {
+              const imageUrl = await getAttachmentRequestUrl(attachment, model, false);
+              if (imageUrl) groupImageUrls.push(imageUrl);
+            }
+            const groupFileRefs = [];
+            for (const attachment of sentAttachments.filter(a => !isImageAttachment(a))) {
+              const fileUrl = await getAttachmentRequestUrl(attachment, model, false);
+              if (fileUrl) groupFileRefs.push({ name: attachment.name || 'file', url: fileUrl });
+            }
+            await Promise.all(personasInGroup.map(async (persona) => {
+              try {
+                const personaRequestMsgContent = sentAttachments.length > 0
+                  ? buildUserMessageContentV2(text, groupImageUrls, groupFileRefs)
+                  : text || '(빈글)';
+                const personaMessages = [
+                  { role:'system', content: buildSystemPrompt(session, [persona]) },
+                  buildCurrentTimeSystemMessage(),
+                  ...buildApiMessagesFromHistory(session.history, userMsg, personaRequestMsgContent, isImageReq)
+                ];
+                const res = await fetch(wUrl + '/chat', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    messages: personaMessages,
+                    model,
+                    participant_pids: [persona.pid]
+                  })
+                });
+                const data = await res.json();
+                if (data.result !== 'success') {
+                  replyByPid.set(persona.pid, `[${persona.pid}]응답생성 오류: ${data.error||'알 수 없는 오류'}[/${persona.pid}]`);
+                } else {
+                  replyByPid.set(persona.pid, wrapPersonaReply(persona.pid, sanitizeTextForUnicodeSafety(data.reply || '')));
+                }
+              } catch (e) {
+                replyByPid.set(persona.pid, `[${persona.pid}]응답생성 오류: 네트워크 또는 처리 오류[/${persona.pid}]`);
+              }
+            }));
+          }));
+          reply = responders.map((persona) => replyByPid.get(persona.pid) || `[${persona.pid}]응답생성 오류: 응답 누락[/${persona.pid}]`).join('\n');
         } else {
         const ratio = typeof _selectedRatio !== 'undefined' ? _selectedRatio : "1:1";
 
@@ -4153,13 +4183,13 @@ body.innerHTML = `
      </div>
    </div>
    <div>
-     <div class="field-label" style="margin-bottom:6px">이 채팅방 응답 모델</div>
-     <div style="display:flex;gap:6px;align-items:center">
-       <div style="flex:1;display:flex;flex-direction:column;gap:6px">${pList.map(p => `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid var(--border2);border-radius:10px;background:var(--card)"><span style="font-size:12px;color:var(--text)">${esc(p.name)}</span><span style="font-size:11px;color:var(--muted)">${esc(p.defaultModel || '미설정')}</span></div>`).join('') || `<div style="font-size:11px;color:var(--muted)">참여 중인 페르소나가 없어</div>`}</div>
-       <button onclick="applyDrawerModel()" style="padding:7px 12px;border-radius:9px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-family:'Pretendard',sans-serif;font-size:11px;cursor:pointer;white-space:nowrap;flex-shrink:0">적용</button>
-     </div>
-     <div style="font-size:10px;color:var(--muted);margin-top:4px">비워두면 페르소나 기본 모델 사용</div>
-   </div>
+      <div class="field-label" style="margin-bottom:6px">이 채팅방 응답 모델</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <div style="flex:1;display:flex;flex-direction:column;gap:6px">${pList.map(p => `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid var(--border2);border-radius:10px;background:var(--card)"><div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-size:12px;color:var(--text)">${esc(p.name)}</span><span style="font-size:10px;color:var(--muted)">기본: ${esc(getChatModelLabel(p.defaultModel || ''))}</span></div><div style="min-width:210px;max-width:240px">${buildModelSelect(`drawerModel_${p.pid}`, s?.personaModelOverrides?.[p.pid] || '', 'font-size:11px;padding:7px 9px;border-radius:9px')}</div></div>`).join('') || `<div style="font-size:11px;color:var(--muted)">참여 중인 페르소나가 없어</div>`}</div>
+        <button onclick="applyDrawerModel()" style="padding:7px 12px;border-radius:9px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-family:'Pretendard',sans-serif;font-size:11px;cursor:pointer;white-space:nowrap;flex-shrink:0">적용</button>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px">각 행에서 모델 선택 후 적용. 빈 값이면 해당 페르소나 기본 모델 사용</div>
+    </div>
    <div>
      <div class="field-label" style="margin-bottom:8px">내 프로필</div>
      <div class="mode-btns" style="margin-bottom:${showCustom?'10px':'0'}">
@@ -4350,10 +4380,16 @@ function confirmInvite() {
 function applyDrawerModel() {
   const s = getActiveSession(); if (!s) return;
   const pList = (s.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
-  const effective = pList.find(p => p.defaultModel)?.defaultModel || document.getElementById('chatModeSelect')?.value || '';
-  const sel = document.getElementById('chatModeSelect');
-  if (sel && effective) sel.value = effective;
-  showToast('이제 채팅방 공통 모델 대신 각 페르소나 기본 모델을 사용해요.');
+  const overrides = {};
+  for (const p of pList) {
+    const sel = document.getElementById(`drawerModel_${p.pid}`);
+    const picked = String(sel?.value || '').trim();
+    if (picked) overrides[p.pid] = picked;
+  }
+  s.personaModelOverrides = Object.keys(overrides).length ? overrides : null;
+  s.updatedAt = Date.now();
+  saveIndex();
+  showToast('채팅방 모델 설정을 적용했어.');
 }
 
 function setDrawerMode(m) {

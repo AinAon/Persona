@@ -23,6 +23,12 @@
   --text: #e8e8f0;
   --muted: #5a5a6e;
   --muted2: #3a3a4a;
+  --title-btn-bg: #d7deec;
+  --title-btn-bg-hover: #eef3ff;
+  --title-btn-text: #161c2b;
+  --title-btn-danger-bg: #7b2028;
+  --title-btn-danger-bg-hover: #9a2a34;
+  --title-btn-danger-text: #ffd8de;
   --chat-font-size: 15px;
 }
 
@@ -99,7 +105,8 @@ body {
 .main-titlebar {
     background: var(--surface);
     border-bottom: 1px solid var(--border);
-    padding: 18px 18px 14px;
+    min-height: 62px;
+    padding: 14px 18px;
     font-size: 22px;
     font-weight: 700;
     letter-spacing: .1em;
@@ -117,24 +124,26 @@ body {
     gap: 8px;
     flex-shrink: 0;
   }
-  .persona-title-icon {
+  .persona-title-icon,
+  .chat-restore-icon-btn {
     width: 34px;
     height: 34px;
     border-radius: 999px;
-    border: 1px solid var(--border2);
-    background: transparent;
-    color: var(--muted);
+    border: none;
+    background: var(--title-btn-bg);
+    color: var(--title-btn-text);
     display: grid;
     place-items: center;
     cursor: pointer;
     transition: all .15s;
   }
-  .persona-title-icon:hover {
-    color: var(--text);
-    border-color: var(--muted);
-    background: rgba(255,255,255,.03);
+  .persona-title-icon:hover,
+  .chat-restore-icon-btn:hover {
+    background: var(--title-btn-bg-hover);
+    color: #0f1524;
   }
-  .persona-title-icon svg {
+  .persona-title-icon svg,
+  .chat-restore-icon-btn svg {
     width: 17px;
     height: 17px;
     stroke: currentColor;
@@ -266,11 +275,13 @@ body {
 .archive-head-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .archive-filter-tabs { display: flex; gap: 7px; }
 .archive-filter-tab {
-  border: 1px solid var(--border2); background: transparent; color: var(--muted);
+  border: none;
+  background: var(--title-btn-bg);
+  color: var(--title-btn-text);
   border-radius: 999px; padding: 7px 12px; font-size: 11px; font-weight: 700;
   letter-spacing: .05em; cursor: pointer;
 }
-.archive-filter-tab.active { color: var(--text); border-color: var(--text); }
+.archive-filter-tab.active { background: var(--title-btn-bg-hover); color: #0f1524; }
 .archive-grid { column-count: 3; column-gap: 10px; padding-top: 10px; }
 .archive-card {
   break-inside: avoid; margin-bottom: 10px; border: 1px solid var(--border2);
@@ -328,28 +339,30 @@ body {
   width: 34px;
   height: 34px;
   border-radius: 999px;
-  border: 1px solid rgba(255,107,107,.45);
-  background: rgba(120,22,26,.28);
-  color: #ff8f97;
+  border: none;
+  background: var(--title-btn-danger-bg);
+  color: var(--title-btn-danger-text);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
 }
+.archive-batch-delete:hover { background: var(--title-btn-danger-bg-hover); }
 .archive-batch-delete svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .archive-batch-delete:disabled { opacity: .35; cursor: default; }
 .archive-batch-cancel {
   width: 34px;
   height: 34px;
   border-radius: 999px;
-  border: 1px solid var(--border2);
-  background: rgba(0,0,0,.22);
-  color: var(--muted);
+  border: none;
+  background: var(--title-btn-bg);
+  color: var(--title-btn-text);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
 }
+.archive-batch-cancel:hover { background: var(--title-btn-bg-hover); }
 .archive-batch-cancel svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .archive-empty { color: var(--muted); text-align: center; padding: 30px 10px; font-size: 12px; }
 .archive-jump-focus { outline: 2px solid rgba(123, 110, 246, .8); border-radius: 12px; transition: outline-color .8s; }
@@ -362,21 +375,7 @@ body {
 }
 .header-btn:hover { opacity: .85; }
 .header-btn.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border2); }
-.chat-restore-icon-btn {
-  width: 30px;
-  height: 30px;
-  border-radius: 999px;
-  border: 1px solid var(--border2);
-  background: var(--card);
-  color: var(--muted);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all .15s;
-}
-.chat-restore-icon-btn svg { width: 14px; height: 14px; }
-.chat-restore-icon-btn:hover { color: var(--text); border-color: var(--muted2); }
+.chat-restore-icon-btn svg { width: 17px; height: 17px; }
 
 /* ── 페르소나 그리드 ── */
 .persona-pane { flex: 1; overflow-y: auto; padding: 16px; }
@@ -1466,9 +1465,15 @@ list-style-position: outside;
     <div class="main-titlebar" style="display:flex;align-items:center;justify-content:space-between;">
       <span>Chat</span>
       <div style="display:flex;gap:6px;align-items:center">
-        <button class="chat-restore-icon-btn" onclick="refreshAllCachesManual()" title="Refresh all">↻</button>
-        <button class="chat-restore-icon-btn" id="chatHiddenToggleBtn" onclick="toggleChatHiddenVisibility()" title="숨긴 채팅 보기">👁</button>
-        <button class="chat-restore-icon-btn" onclick="openRestoreModal()" title="채팅 복원">↶</button>
+        <button class="chat-restore-icon-btn" onclick="refreshAllCachesManual()" title="Refresh all" aria-label="Refresh all">
+          <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0 2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+        </button>
+        <button class="chat-restore-icon-btn" id="chatHiddenToggleBtn" onclick="toggleChatHiddenVisibility()" title="숨긴 채팅 보기" aria-label="숨긴 채팅 보기">
+          <svg viewBox="0 0 24 24"><path d="M1.5 12s3.5-6 10.5-6 10.5 6 10.5 6-3.5 6-10.5 6S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+        <button class="chat-restore-icon-btn" onclick="openRestoreModal()" title="채팅 복원" aria-label="채팅 복원">
+          <svg viewBox="0 0 24 24"><path d="M3 7v5h5"/><path d="M3.5 12a8.5 8.5 0 1 0 2.2-5.5"/></svg>
+        </button>
       </div>
     </div>
     <div class="search-wrap">
@@ -1560,7 +1565,9 @@ list-style-position: outside;
     <div class="main-titlebar" style="display:flex;align-items:center;justify-content:space-between;">
       <span>Archive</span>
       <div style="display:flex;gap:6px;align-items:center">
-        <button class="chat-restore-icon-btn" onclick="refreshAllCachesManual()" title="Refresh all">↻</button>
+        <button class="chat-restore-icon-btn" onclick="refreshAllCachesManual()" title="Refresh all" aria-label="Refresh all">
+          <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0 2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+        </button>
       </div>
     </div>
     <div class="archive-pane">
