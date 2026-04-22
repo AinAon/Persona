@@ -1853,7 +1853,7 @@ function renderEditBody(p, hdImage = null) {
     <div>
       <div class="edit-section-title">Description</div>
       <div class="edit-field-label">ROLE / INTRODUCTION</div>
-      <textarea class="edit-textarea" id="editBio" placeholder="어떤 역할인지 짧게 적어줘" style="height:90px">${esc(p.bio)}</textarea>
+      <textarea class="edit-textarea" id="editBio" placeholder="어떤 역할인지 짧게 적어줘" style="height:min(42dvh, 360px); min-height:220px">${esc(p.bio)}</textarea>
     </div>
 
     <div>
