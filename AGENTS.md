@@ -124,6 +124,13 @@ Always append the following sentence block when delegating to a smaller model:
 
 File encoding must remain UTF-8.
 
+## Terminal Encoding Guard (Mandatory)
+- At the start of Windows terminal work, force UTF-8 console code page (`chcp 65001 >nul`) before search/read/edit commands.
+- In PowerShell, explicitly set UTF-8 for console I/O when possible (`[Console]::InputEncoding` / `[Console]::OutputEncoding`).
+- Never rely on default encoding for file reads/writes; always specify encoding explicitly (for example, `Get-Content -Encoding UTF8`).
+- Treat BOM-less UTF-8 as a high-risk misread case on legacy shells; verify encoding before concluding text is corrupted.
+- If terminal output and editor view differ, trust byte-level verification first and report the discrepancy before any edit.
+
 ## Communication Before Edits (Mandatory)
 - Do NOT make code changes silently.
 - Always announce intended edits before modifying files.
