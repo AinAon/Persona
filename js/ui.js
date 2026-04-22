@@ -3430,6 +3430,41 @@ function updateThinkingStreamPreview(thinkEl, text) {
   thinkEl.innerHTML = `<div class="thinking-stream-preview" style="white-space:pre-wrap;line-height:1.55;color:var(--text);max-width:min(78vw,740px)">${safe}</div>`;
 }
 
+async function createLiveStreamBubble(tgtArea, persona, createdAt, renderSessionId) {
+  if (!tgtArea || !persona) return null;
+  const seed = `[${persona.pid}][emotion:neutral]...[/${persona.pid}]`;
+  const html = await renderAIResponseHTML(seed, [persona], {}, createdAt, true);
+  const wrap = document.createElement('div');
+  wrap.innerHTML = html;
+  const root = wrap.firstElementChild;
+  if (!root) return null;
+  root.classList.add('msg-enter');
+  enhanceRenderedMessage(root);
+  attachMessageMeta(root, createdAt, 'left');
+  tgtArea.appendChild(root);
+  updateChatBottomAnchor(tgtArea);
+  renderMermaidBlocks(tgtArea);
+  bindImageLoadBottomStick(tgtArea);
+  layoutHorizontalMasonryRows(tgtArea);
+  stickChatToBottom(tgtArea);
+  const bubbleEl = root.querySelector('.ai-bubble');
+  return { root, bubbleEl, pid: persona.pid, renderSessionId };
+}
+
+function updateLiveStreamBubbleText(state, text, tgtArea) {
+  if (!state?.bubbleEl || !tgtArea) return;
+  if (_chatGeneration?.cancelled || activeChatId !== state.renderSessionId) return;
+  const pidRe = new RegExp(`\\[\\/?${state.pid}\\]`, 'g');
+  const clean = String(text || '')
+    .replace(pidRe, '')
+    .replace(/\[emotion:\s*[^\]]+\]/gi, '')
+    .trim();
+  state.bubbleEl.innerHTML = fmt(clean || '...');
+  renderMermaidBlocks(tgtArea);
+  layoutHorizontalMasonryRows(tgtArea);
+  stickChatToBottom(tgtArea);
+}
+
 async function fetchChatStreamSSE(url, body, signal, onDelta) {
   const res = await fetch(url, {
     method: 'POST',
@@ -4019,6 +4054,7 @@ async function sendMessage() {
   const processApiAndRender = async () => {
     let reply = '';
     let generatedImageUrl = '';
+    let streamedInPlace = false;
     if (session._demo) {
       await new Promise(r => setTimeout(r, 600));
       reply = window.getDemoReply ? window.getDemoReply(session) : '데모 응답 오류';
@@ -4096,15 +4132,24 @@ async function sendMessage() {
               if (canLiveStream) {
                 let liveText = '';
                 let lastPaintAt = 0;
+                let liveState = null;
+                const liveArea = (activeChatId === renderSessionId) ? document.getElementById('chatArea') : null;
+                if (liveArea) {
+                  if (thinkEl?.parentNode) thinkEl.remove();
+                  liveState = await createLiveStreamBubble(liveArea, persona, Date.now(), renderSessionId);
+                }
                 rawReply = await fetchChatStreamSSE(wUrl + '/chat', payload, _chatGeneration?.controller?.signal, (_delta, fullText) => {
                   liveText = fullText;
                   const now = Date.now();
                   if (now - lastPaintAt >= 70) {
-                    updateThinkingStreamPreview(thinkEl, liveText);
+                    if (liveState && liveArea) updateLiveStreamBubbleText(liveState, liveText, liveArea);
                     lastPaintAt = now;
                   }
                 });
-                if (liveText) updateThinkingStreamPreview(thinkEl, liveText);
+                if (liveText && liveState && liveArea) {
+                  updateLiveStreamBubbleText(liveState, liveText, liveArea);
+                  streamedInPlace = true;
+                }
               } else {
                 const res = await fetch(wUrl + '/chat', {
                   method: 'POST',
@@ -4275,7 +4320,9 @@ async function sendMessage() {
     if (activeChatId === currentSession.id) {
       const tgtArea = document.getElementById('chatArea');
       tgtArea.classList.add('has-messages');
-      if (!isImageReq && (pList || []).length <= 1) {
+      if (streamedInPlace && !isImageReq && (pList || []).length <= 1) {
+        // Live stream bubble already rendered in-place.
+      } else if (!isImageReq && (pList || []).length <= 1) {
         await appendAIReplyStreamingOneToOne(reply, pList, suffixes, assistantCreatedAt, tgtArea, currentSession.id);
       } else {
         await appendAIReplySequentially(reply, pList, suffixes, assistantCreatedAt, tgtArea, currentSession.id);
