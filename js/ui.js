@@ -192,7 +192,7 @@ function iconRefreshSVG() {
 }
 
 function iconSettingsSVG() {
-  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
+  return '<img src="assets/ui-icons/setting.svg" alt="">';
 }
 
 function iconEyeOpenSVG() {
@@ -667,6 +667,28 @@ function sanitizeChatListPreview(text) {
     return '[이미지]';
   }
   return raw;
+}
+
+function buildSessionPreviewFallback(session) {
+  if (!session || !Array.isArray(session.history) || !session.history.length) return '';
+  const last = [...session.history].reverse().find(m => m && m.role !== 'system');
+  if (!last) return '';
+  let text = '';
+  if (typeof last.content === 'string') {
+    text = last.content;
+  } else if (Array.isArray(last.content)) {
+    const textParts = last.content
+      .filter(c => c?.type === 'text' && typeof c?.text === 'string')
+      .map(c => c.text.trim())
+      .filter(Boolean);
+    if (textParts.length) {
+      text = textParts.join(' ');
+    } else if (last.content.some(c => c?.type === 'image' || c?.type === 'image_url' || c?.type === 'input_image')) {
+      text = '[이미지]';
+    }
+  }
+  const built = sanitizeChatListPreview(buildChatPreviewText(text));
+  return built || sanitizeChatListPreview(text) || '';
 }
 
 function shuffleArray(list) {
@@ -2609,11 +2631,12 @@ async function renderChatList() {
     if (myVersion !== _chatListRenderVersion) return;
     const avWidth = pList.length > 0 ? (80 + (pList.length - 1) * 52) : 80;
 
+    const previewText = s.lastPreview || buildSessionPreviewFallback(s) || '대화를 시작해봐';
     item.innerHTML = `
       <div class="chat-avatars-row" style="width:${avWidth}px;flex-shrink:0">${avEls.join('')}</div>
       <div class="chat-list-info">
         <div class="chat-list-names">${esc(roomName)}</div>
-        <div class="chat-list-preview">${esc(s.lastPreview || '대화를 시작해봐')}</div>
+        <div class="chat-list-preview">${esc(previewText)}</div>
       </div>
       <div class="chat-list-meta">
         <span class="chat-list-time">${timeLabel(s.updatedAt)}</span>
@@ -2905,6 +2928,7 @@ if (!window.__personaMasonryResizeBound) {
 
 function setupSwipeDelete(item, wrap, id) {
   let startX = 0, startY = 0, currentX = 0, tracking = false, revealed = false;
+  let pointerTracking = false, pointerId = null;
   const REVEAL_W = 144, THRESHOLD = 40;
   const setTranslate = (x, animate = false) => {
     item.style.transition = animate ? 'transform .25s cubic-bezier(.25,.8,.25,1)' : 'none';
@@ -2912,25 +2936,62 @@ function setupSwipeDelete(item, wrap, id) {
   };
   const reveal = () => { revealed = true; setTranslate(-REVEAL_W, true); item.onclick = null; };
   const close  = () => { revealed = false; setTranslate(0, true); item.onclick = () => openChat(id); };
+  const onMove = (x, y, preventDefault) => {
+    if (!tracking) return;
+    const dx = x - startX;
+    const dy = Math.abs(y - startY);
+    if (dy > 12 && Math.abs(dx) < dy) { tracking = false; return; }
+    if (dx > 0 && !revealed) return;
+    if (preventDefault) preventDefault();
+    currentX = Math.max(-REVEAL_W, Math.min(0, (revealed ? -REVEAL_W : 0) + dx));
+    setTranslate(currentX);
+  };
+  const onEnd = (x) => {
+    if (!tracking) return;
+    tracking = false;
+    const dx = x - startX;
+    if (revealed) { dx > THRESHOLD ? close() : reveal(); } else { dx < -THRESHOLD ? reveal() : close(); }
+  };
 
   item.addEventListener('touchstart', e => { startX = e.touches[0].clientX; startY = e.touches[0].clientY; tracking = true; }, { passive: true });
   item.addEventListener('touchmove', e => {
-    if (!tracking) return;
-    const dx = e.touches[0].clientX - startX, dy = Math.abs(e.touches[0].clientY - startY);
-    if (dy > 12 && Math.abs(dx) < dy) { tracking = false; return; }
-    if (dx > 0 && !revealed) return;
-    e.preventDefault();
-    currentX = Math.max(-REVEAL_W, Math.min(0, (revealed ? -REVEAL_W : 0) + dx));
-    setTranslate(currentX);
+    onMove(e.touches[0].clientX, e.touches[0].clientY, () => e.preventDefault());
   }, { passive: false });
   item.addEventListener('touchend', e => {
-    if (!tracking) return;
+    onEnd(e.changedTouches[0].clientX);
+  });
+
+  item.addEventListener('pointerdown', e => {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    pointerTracking = true;
+    pointerId = e.pointerId;
+    startX = e.clientX;
+    startY = e.clientY;
+    tracking = true;
+    try { item.setPointerCapture(pointerId); } catch {}
+  });
+  item.addEventListener('pointermove', e => {
+    if (!pointerTracking || e.pointerId !== pointerId) return;
+    onMove(e.clientX, e.clientY, () => e.preventDefault());
+  });
+  item.addEventListener('pointerup', e => {
+    if (!pointerTracking || e.pointerId !== pointerId) return;
+    pointerTracking = false;
+    try { item.releasePointerCapture(pointerId); } catch {}
+    onEnd(e.clientX);
+    pointerId = null;
+  });
+  item.addEventListener('pointercancel', e => {
+    if (!pointerTracking || e.pointerId !== pointerId) return;
+    pointerTracking = false;
     tracking = false;
-    const dx = e.changedTouches[0].clientX - startX;
-    if (revealed) { dx > THRESHOLD ? close() : reveal(); } else { dx < -THRESHOLD ? reveal() : close(); }
+    try { item.releasePointerCapture(pointerId); } catch {}
+    pointerId = null;
+    close();
   });
   wrap.addEventListener('touchstart', () => {}, { passive: true });
   document.addEventListener('touchstart', e => { if (revealed && !wrap.contains(e.target)) close(); }, { passive: true });
+  document.addEventListener('pointerdown', e => { if (revealed && !wrap.contains(e.target)) close(); }, { passive: true });
 }
 
 async function deleteChatFromDrawer() {
