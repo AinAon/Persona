@@ -3060,10 +3060,11 @@ async function openChat(id) {
   show('chatScreen');
   switchInputTab('chat');
 
-  // 첫 번째 페르소나 기본 모델을 일시적으로만 동기화
+  // 첫 번째 페르소나의 현재 유효 모델을 UI에 동기화 (기본/채팅방 오버라이드 반영)
   const modelEl = document.getElementById('chatModeSelect');
   if (modelEl) {
-    const effectiveModel = pList.find(p => p.defaultModel)?.defaultModel
+    const firstPersona = pList[0] || null;
+    const effectiveModel = (firstPersona ? getPersonaModel(s, firstPersona) : '')
       || '';
     if (effectiveModel) modelEl.value = effectiveModel;
   }
@@ -4715,9 +4716,12 @@ function applyDrawerModel() {
     const picked = String(sel?.value || '').trim();
     if (picked) overrides[p.pid] = picked;
   }
+  // Per-persona override를 우선 사용하므로 레거시 방 단일 override는 해제
+  s.overrideModel = null;
   s.personaModelOverrides = Object.keys(overrides).length ? overrides : null;
   s.updatedAt = Date.now();
   saveIndex();
+  if (typeof flushPendingRemoteSaves === 'function') flushPendingRemoteSaves();
   showToast('채팅방 모델 설정을 적용했어.');
 }
 
