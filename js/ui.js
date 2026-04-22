@@ -188,7 +188,7 @@ function getChatAvatarStyle() {
 }
 
 function iconRefreshSVG() {
-  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0 2.3 5.7"/><path d="M20 4v7h-7"/></svg>';
+  return '<img src="assets/ui-icons/refresh.svg" alt="">';
 }
 
 function iconSettingsSVG() {
@@ -196,11 +196,11 @@ function iconSettingsSVG() {
 }
 
 function iconEyeOpenSVG() {
-  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 12s3.5-6 10.5-6 10.5 6 10.5 6-3.5 6-10.5 6S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+  return '<img src="assets/ui-icons/eye-open.svg" alt="">';
 }
 
 function iconEyeClosedSVG() {
-  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 12s3.5-6 10.5-6 10.5 6 10.5 6-3.5 6-10.5 6S1.5 12 1.5 12z"/><path d="M3 3l18 18"/></svg>';
+  return '<img src="assets/ui-icons/eye-close.svg" alt="">';
 }
 
 function iconTrashSVG() {

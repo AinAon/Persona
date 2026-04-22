@@ -155,6 +155,12 @@ body {
     stroke-linecap: round;
     stroke-linejoin: round;
   }
+  .persona-title-icon img,
+  .chat-restore-icon-btn img {
+    width: 17px;
+    height: 17px;
+    display: block;
+  }
 
 /* 검색바 */
 .search-wrap {
@@ -1447,10 +1453,10 @@ list-style-position: outside;
       <span>Persona</span>
       <div class="persona-title-actions">
         <button class="persona-title-icon" onclick="refreshAllCachesManual()" title="Refresh all caches" aria-label="Refresh all caches">
-          <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0 2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+          <img src="assets/ui-icons/refresh.svg" alt="">
         </button>
         <button class="persona-title-icon" onclick="openEmotionManager()" title="Open emotion manager" aria-label="Open emotion manager">
-          <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h16"/><path d="M17 9l3 3-3 3"/></svg>
+          <img src="assets/ui-icons/emotion.svg" alt="">
         </button>
       </div>
     </div>
@@ -1469,13 +1475,13 @@ list-style-position: outside;
       <span>Chat</span>
       <div style="display:flex;gap:6px;align-items:center">
         <button class="chat-restore-icon-btn" onclick="refreshAllCachesManual()" title="Refresh all" aria-label="Refresh all">
-          <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0 2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+          <img src="assets/ui-icons/refresh.svg" alt="">
         </button>
         <button class="chat-restore-icon-btn" id="chatHiddenToggleBtn" onclick="toggleChatHiddenVisibility()" title="숨긴 채팅 보기" aria-label="숨긴 채팅 보기">
-          <svg viewBox="0 0 24 24"><path d="M1.5 12s3.5-6 10.5-6 10.5 6 10.5 6-3.5 6-10.5 6S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="3"/></svg>
+          <img src="assets/ui-icons/eye-open.svg" alt="">
         </button>
         <button class="chat-restore-icon-btn" onclick="openRestoreModal()" title="채팅 복원" aria-label="채팅 복원">
-          <svg viewBox="0 0 24 24"><path d="M3 7v5h5"/><path d="M3.5 12a8.5 8.5 0 1 0 2.2-5.5"/></svg>
+          <img src="assets/ui-icons/restore.svg" alt="">
         </button>
       </div>
     </div>
@@ -1578,7 +1584,7 @@ list-style-position: outside;
       <span>Archive</span>
       <div style="display:flex;gap:6px;align-items:center">
         <button class="chat-restore-icon-btn" onclick="refreshAllCachesManual()" title="Refresh all" aria-label="Refresh all">
-          <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0 2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+          <img src="assets/ui-icons/refresh.svg" alt="">
         </button>
       </div>
     </div>
