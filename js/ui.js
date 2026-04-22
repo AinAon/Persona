@@ -5230,21 +5230,28 @@ function ensureSettingsMemoryPanel() {
   const block = document.createElement('div');
   block.style.paddingTop = '20px';
   block.style.borderTop = '1px solid var(--border)';
+  block.style.marginTop = '4px';
+  block.style.paddingBottom = '8px';
   block.innerHTML = `
-    <div class="field-label" style="margin-bottom:10px">Public Memory</div>
-    <div id="memoryMetaLine" style="font-size:11px;color:var(--muted);margin:-2px 0 8px 0">Loading memory status...</div>
-    <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px">
-      <textarea id="publicMemoryInput" class="edit-input" placeholder="Rememberable user fact..." style="flex:1;height:72px;resize:none;line-height:1.5"></textarea>
-      <button onclick="addPublicMemoryManual()" style="padding:10px 12px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;font-family:'Pretendard',sans-serif">Save</button>
+    <div style="padding:12px;border:1px solid var(--border2);border-radius:14px;background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));">
+      <div class="field-label" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
+        <span>Public Memory</span>
+        <span style="font-size:10px;color:var(--muted);font-weight:500;letter-spacing:.04em">AUTO + MANUAL</span>
+      </div>
+      <div id="memoryMetaLine" style="font-size:11px;color:var(--muted);margin:-1px 0 10px 0;padding:8px 10px;border:1px dashed var(--border2);border-radius:10px;background:rgba(255,255,255,.015)">Loading memory status...</div>
+      <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px">
+        <textarea id="publicMemoryInput" class="edit-input" placeholder="Rememberable user fact..." style="flex:1;height:78px;resize:none;line-height:1.55;border-radius:12px"></textarea>
+        <button onclick="addPublicMemoryManual()" style="height:78px;min-width:72px;padding:0 12px;border-radius:12px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;font-family:'Pretendard',sans-serif;font-weight:600">Save</button>
+      </div>
     </div>
-    <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
-      <button onclick="optimizeMemoryNow()" style="padding:8px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;font-family:'Pretendard',sans-serif">메모리최적화</button>
-      <button onclick="rebuildMemoryNow()" style="margin-left:8px;padding:8px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;font-family:'Pretendard',sans-serif">메모리재생성</button>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin:10px 0">
+      <button onclick="optimizeMemoryNow()" style="padding:8px 12px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;font-family:'Pretendard',sans-serif;font-weight:600">메모리최적화</button>
+      <button onclick="rebuildMemoryNow()" style="padding:8px 12px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;font-family:'Pretendard',sans-serif;font-weight:600">메모리재생성</button>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:10px">
       <button onclick="toggleMemorySelectAll('public_profile','global',true); renderPublicMemoryList();" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">전체선택</button>
       <button onclick="clearMemorySelection('public_profile','global'); renderPublicMemoryList();" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">선택해제</button>
-      <button onclick="deleteSelectedMemories('public_profile','global')" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:#3a1f24;color:#ffd7dd;font-size:11px;cursor:pointer">선택삭제</button>
+      <button onclick="deleteSelectedMemories('public_profile','global')" style="padding:7px 10px;border-radius:10px;border:1px solid hsl(0,28%,32%);background:hsl(0,24%,16%);color:#ffd7dd;font-size:11px;cursor:pointer">선택삭제</button>
     </div>
     <div id="publicMemoryList" style="display:flex;flex-direction:column;gap:8px"></div>
   `;
@@ -5328,15 +5335,15 @@ function memoryItemRowHTML(item, onDelete) {
   const editOpacity = locked ? 'opacity:.45;cursor:not-allowed;' : 'cursor:pointer;';
   const deleteOpacity = locked ? 'opacity:.45;cursor:not-allowed;' : 'cursor:pointer;';
   const selected = getMemorySelectionSet(item.scope || '', item.owner || '').has(item.id);
-  return `<div style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border:1px solid var(--border2);border-radius:10px;background:var(--card)">
-    <input type="checkbox" ${selected ? 'checked' : ''} onchange="toggleMemoryItemSelection('${item.scope || ''}','${item.owner || ''}','${item.id}',this.checked)" style="margin-top:3px;cursor:pointer" />
+  return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border2);border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));">
+    <input type="checkbox" ${selected ? 'checked' : ''} onchange="toggleMemoryItemSelection('${item.scope || ''}','${item.owner || ''}','${item.id}',this.checked)" style="margin-top:4px;cursor:pointer;accent-color:hsl(196,72%,56%)" />
     <div style="flex:1">
-      <div style="font-size:10px;color:var(--muted);margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em">${esc(scopeBadge)}</div>
-      <div style="font-size:12px;line-height:1.5;color:var(--text)">${safeText}</div>
+      <div style="display:inline-flex;align-items:center;font-size:10px;color:var(--muted);margin-bottom:5px;padding:2px 7px;border:1px solid var(--border2);border-radius:999px;text-transform:uppercase;letter-spacing:.06em">${esc(scopeBadge)}</div>
+      <div style="font-size:12px;line-height:1.58;color:var(--text)">${safeText}</div>
     </div>
-    <button onclick="toggleMemoryLockItem('${item.id}','${item.scope || ''}','${item.owner || ''}',${lockNext})" title="${lockTitle}" style="flex-shrink:0;width:28px;height:28px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:${locked ? 'hsl(45,80%,68%)' : 'var(--muted)'};display:inline-flex;align-items:center;justify-content:center;cursor:pointer">${memoryLockIconSVG(locked)}</button>
-    <button onclick="editMemoryItem('${item.id}','${item.scope || ''}','${item.owner || ''}')" title="Edit" ${editDisabled} style="flex-shrink:0;width:28px;height:28px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--muted);display:inline-flex;align-items:center;justify-content:center;${editOpacity}">${memoryEditIconSVG()}</button>
-    <button onclick="${onDelete}('${item.id}','${item.scope || ''}','${item.owner || ''}')" title="삭제" ${deleteDisabled} style="flex-shrink:0;width:28px;height:28px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--muted);display:inline-flex;align-items:center;justify-content:center;${deleteOpacity}">${memoryTrashIconSVG()}</button>
+    <button onclick="toggleMemoryLockItem('${item.id}','${item.scope || ''}','${item.owner || ''}',${lockNext})" title="${lockTitle}" style="flex-shrink:0;width:30px;height:30px;border-radius:9px;border:1px solid var(--border2);background:rgba(255,255,255,.02);color:${locked ? 'hsl(45,80%,68%)' : 'var(--muted)'};display:inline-flex;align-items:center;justify-content:center;cursor:pointer">${memoryLockIconSVG(locked)}</button>
+    <button onclick="editMemoryItem('${item.id}','${item.scope || ''}','${item.owner || ''}')" title="Edit" ${editDisabled} style="flex-shrink:0;width:30px;height:30px;border-radius:9px;border:1px solid var(--border2);background:rgba(255,255,255,.02);color:var(--muted);display:inline-flex;align-items:center;justify-content:center;${editOpacity}">${memoryEditIconSVG()}</button>
+    <button onclick="${onDelete}('${item.id}','${item.scope || ''}','${item.owner || ''}')" title="삭제" ${deleteDisabled} style="flex-shrink:0;width:30px;height:30px;border-radius:9px;border:1px solid var(--border2);background:rgba(255,255,255,.02);color:var(--muted);display:inline-flex;align-items:center;justify-content:center;${deleteOpacity}">${memoryTrashIconSVG()}</button>
   </div>`;
 }
 
@@ -5428,18 +5435,18 @@ function ensureEditPrivateMemoryPanel(pid) {
   const wrap = document.createElement('div');
   wrap.id = 'editPrivateMemoryWrap';
   wrap.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
       <div class="edit-section-title" style="margin:0">Private Memory</div>
-      <button onclick="optimizePrivateMemoryNow('${esc(pid)}')" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer;font-family:'Pretendard',sans-serif">최적화</button>
+      <button onclick="optimizePrivateMemoryNow('${esc(pid)}')" style="padding:7px 12px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer;font-family:'Pretendard',sans-serif;font-weight:600">최적화</button>
     </div>
     <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px">
-      <textarea id="privateMemoryInput" class="edit-input" placeholder="Memory for ${esc(pid)}..." style="flex:1;height:64px;resize:none;line-height:1.5"></textarea>
-      <button onclick="addPrivateMemoryManual('${esc(pid)}')" style="padding:10px 12px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;font-family:'Pretendard',sans-serif">Save</button>
+      <textarea id="privateMemoryInput" class="edit-input" placeholder="Memory for ${esc(pid)}..." style="flex:1;height:74px;resize:none;line-height:1.55;border-radius:12px"></textarea>
+      <button onclick="addPrivateMemoryManual('${esc(pid)}')" style="height:74px;min-width:72px;padding:0 12px;border-radius:12px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;font-family:'Pretendard',sans-serif;font-weight:600">Save</button>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:10px">
       <button onclick="toggleMemorySelectAll('private_profile','${esc(pid)}',true); renderPrivateMemoryList('${esc(pid)}');" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">전체선택</button>
       <button onclick="clearMemorySelection('private_profile','${esc(pid)}'); renderPrivateMemoryList('${esc(pid)}');" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">선택해제</button>
-      <button onclick="deleteSelectedMemories('private_profile','${esc(pid)}')" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:#3a1f24;color:#ffd7dd;font-size:11px;cursor:pointer">선택삭제</button>
+      <button onclick="deleteSelectedMemories('private_profile','${esc(pid)}')" style="padding:7px 10px;border-radius:10px;border:1px solid hsl(0,28%,32%);background:hsl(0,24%,16%);color:#ffd7dd;font-size:11px;cursor:pointer">선택삭제</button>
     </div>
     <div id="privateMemoryList" style="display:flex;flex-direction:column;gap:8px"></div>
   `;
