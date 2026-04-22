@@ -188,7 +188,7 @@ function getChatAvatarStyle() {
 }
 
 function iconRefreshSVG() {
-  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>';
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0 2.3 5.7"/><path d="M20 4v7h-7"/></svg>';
 }
 
 function iconSettingsSVG() {
@@ -196,11 +196,11 @@ function iconSettingsSVG() {
 }
 
 function iconEyeOpenSVG() {
-  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 12s3.5-6 10.5-6 10.5 6 10.5 6-3.5 6-10.5 6S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="3"/></svg>';
 }
 
 function iconEyeClosedSVG() {
-  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19C5 19 1 12 1 12a21.77 21.77 0 0 1 5.06-6.94"/><path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a21.76 21.76 0 0 1-3.17 4.56"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 12s3.5-6 10.5-6 10.5 6 10.5 6-3.5 6-10.5 6S1.5 12 1.5 12z"/><path d="M3 3l18 18"/></svg>';
 }
 
 function iconTrashSVG() {
@@ -682,6 +682,100 @@ function pickRespondingPersonas(session, pList) {
   if (pList.length <= 1) return pList;
   if (session.responseMode === 'all') return shuffleArray(pList);
   return [shuffleArray(pList)[0]];
+}
+
+function getRouterModel(session, pList = []) {
+  return session?.overrideModel
+    || pList.find((p) => p?.defaultModel)?.defaultModel
+    || document.getElementById('chatModeSelect')?.value
+    || 'grok-4.20-non-reasoning-latest';
+}
+
+function extractJsonObject(raw = '') {
+  const txt = String(raw || '').trim();
+  if (!txt) return null;
+  const start = txt.indexOf('{');
+  const end = txt.lastIndexOf('}');
+  if (start < 0 || end <= start) return null;
+  try { return JSON.parse(txt.slice(start, end + 1)); } catch { return null; }
+}
+
+async function planGroupResponse(session, pList, userText = '') {
+  const fallbackResponders = pickRespondingPersonas(session, pList);
+  if (!Array.isArray(pList) || pList.length <= 1) {
+    return { responders: fallbackResponders, delivery: 'sequential' };
+  }
+  if (session?.responseMode === 'all') {
+    return { responders: shuffleArray(pList), delivery: 'parallel' };
+  }
+  if (session?.responseMode === 'random') {
+    return { responders: [shuffleArray(pList)[0]], delivery: 'sequential' };
+  }
+  if (session?.responseMode !== 'auto') {
+    return { responders: fallbackResponders, delivery: 'sequential' };
+  }
+
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) return { responders: fallbackResponders, delivery: 'sequential' };
+
+  try {
+    const candidates = pList.map((p) => ({ pid: String(p?.pid || ''), name: String(p?.name || '') })).filter((x) => x.pid);
+    const routerMessages = [
+      {
+        role: 'system',
+        content: [
+          '너는 그룹채팅 라우터다.',
+          '주어진 사용자 입력을 보고 응답자와 응답 방식을 결정해라.',
+          '반드시 JSON 한 개만 출력.',
+          '스키마:',
+          '{"mode":"one|all","delivery":"sequential|parallel","pids":["pid1","pid2",...]}',
+          '- mode=one이면 pids는 1개.',
+          '- mode=all이면 pids는 후보들 중 2명 이상 또는 전원.',
+          '- 후보에 없는 pid는 절대 넣지 말 것.'
+        ].join('\n')
+      },
+      {
+        role: 'user',
+        content: JSON.stringify({
+          text: String(userText || ''),
+          responseMode: session?.responseMode || 'auto',
+          candidates
+        })
+      }
+    ];
+    const res = await fetch(wUrl + '/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: getRouterModel(session, pList),
+        participant_pids: candidates.map((c) => c.pid),
+        messages: routerMessages
+      })
+    });
+    const data = await res.json().catch(() => ({}));
+    const parsed = extractJsonObject(data?.reply || '');
+    if (!parsed || typeof parsed !== 'object') {
+      return { responders: fallbackResponders, delivery: 'sequential' };
+    }
+
+    const allowed = new Set(candidates.map((c) => c.pid));
+    const mode = parsed.mode === 'all' ? 'all' : 'one';
+    const delivery = parsed.delivery === 'parallel' ? 'parallel' : 'sequential';
+    const picked = Array.isArray(parsed.pids) ? parsed.pids.map((x) => String(x || '').trim()).filter((x) => allowed.has(x)) : [];
+    let selectedPids = [];
+    if (mode === 'all') {
+      selectedPids = picked.length ? Array.from(new Set(picked)) : pList.map((p) => p.pid);
+      if (selectedPids.length < 2) selectedPids = pList.map((p) => p.pid);
+    } else {
+      selectedPids = [picked[0] || shuffleArray(pList)[0].pid];
+    }
+    const orderMap = new Map(pList.map((p) => [p.pid, p]));
+    const responders = selectedPids.map((pid) => orderMap.get(pid)).filter(Boolean);
+    if (!responders.length) return { responders: fallbackResponders, delivery: 'sequential' };
+    return { responders, delivery };
+  } catch {
+    return { responders: fallbackResponders, delivery: 'sequential' };
+  }
 }
 
 function getSessionPersonas(session) {
@@ -3825,7 +3919,9 @@ async function sendMessage() {
         // targetModel is resolved before we clear attachments.
 
         if (!isImageReq) {
-          const responders = pickRespondingPersonas(session, pListAll);
+          const plan = await planGroupResponse(session, pListAll, text || '');
+          const responders = Array.isArray(plan?.responders) && plan.responders.length ? plan.responders : pickRespondingPersonas(session, pListAll);
+          const runSequential = plan?.delivery === 'sequential';
           const responderEntries = responders.map((persona) => ({
             persona,
             model: getPersonaModel(session, persona)
@@ -3837,7 +3933,9 @@ async function sendMessage() {
             groupedByModel.get(key).push(entry.persona);
           }
           const replyByPid = new Map();
-          await Promise.all([...groupedByModel.entries()].map(async ([model, personasInGroup]) => {
+          const attachmentByModel = new Map();
+          const getGroupAttachments = async (model) => {
+            if (attachmentByModel.has(model)) return attachmentByModel.get(model);
             const groupImageUrls = [];
             for (const attachment of sentAttachments.filter(isImageAttachment)) {
               const imageUrl = await getAttachmentRequestUrl(attachment, model, false);
@@ -3848,36 +3946,53 @@ async function sendMessage() {
               const fileUrl = await getAttachmentRequestUrl(attachment, model, false);
               if (fileUrl) groupFileRefs.push({ name: attachment.name || 'file', url: fileUrl });
             }
-            await Promise.all(personasInGroup.map(async (persona) => {
-              try {
-                const personaRequestMsgContent = sentAttachments.length > 0
-                  ? buildUserMessageContentV2(text, groupImageUrls, groupFileRefs)
-                  : text || '(빈글)';
-                const personaMessages = [
-                  { role:'system', content: buildSystemPrompt(session, [persona]) },
-                  buildCurrentTimeSystemMessage(),
-                  ...buildApiMessagesFromHistory(session.history, userMsg, personaRequestMsgContent, isImageReq)
-                ];
-                const res = await fetch(wUrl + '/chat', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    messages: personaMessages,
-                    model,
-                    participant_pids: [persona.pid]
-                  })
-                });
-                const data = await res.json();
-                if (data.result !== 'success') {
-                  replyByPid.set(persona.pid, `[${persona.pid}]응답생성 오류: ${data.error||'알 수 없는 오류'}[/${persona.pid}]`);
-                } else {
-                  replyByPid.set(persona.pid, wrapPersonaReply(persona.pid, sanitizeTextForUnicodeSafety(data.reply || '')));
-                }
-              } catch (e) {
-                replyByPid.set(persona.pid, `[${persona.pid}]응답생성 오류: 네트워크 또는 처리 오류[/${persona.pid}]`);
+            const packed = { groupImageUrls, groupFileRefs };
+            attachmentByModel.set(model, packed);
+            return packed;
+          };
+          const runPersonaCall = async (persona, model) => {
+            const { groupImageUrls, groupFileRefs } = await getGroupAttachments(model);
+            try {
+              const personaRequestMsgContent = sentAttachments.length > 0
+                ? buildUserMessageContentV2(text, groupImageUrls, groupFileRefs)
+                : text || '(빈글)';
+              const personaMessages = [
+                { role:'system', content: buildSystemPrompt(session, [persona]) },
+                buildCurrentTimeSystemMessage(),
+                ...buildApiMessagesFromHistory(session.history, userMsg, personaRequestMsgContent, isImageReq)
+              ];
+              const res = await fetch(wUrl + '/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  messages: personaMessages,
+                  model,
+                  participant_pids: [persona.pid]
+                })
+              });
+              const data = await res.json();
+              if (data.result !== 'success') {
+                replyByPid.set(persona.pid, `[${persona.pid}]응답생성 오류: ${data.error||'알 수 없는 오류'}[/${persona.pid}]`);
+              } else {
+                replyByPid.set(persona.pid, wrapPersonaReply(persona.pid, sanitizeTextForUnicodeSafety(data.reply || '')));
               }
+            } catch (e) {
+              replyByPid.set(persona.pid, `[${persona.pid}]응답생성 오류: 네트워크 또는 처리 오류[/${persona.pid}]`);
+            }
+          };
+
+          if (runSequential) {
+            for (const entry of responderEntries) {
+              await runPersonaCall(entry.persona, entry.model);
+            }
+          } else {
+            await Promise.all([...groupedByModel.entries()].map(async ([model, personasInGroup]) => {
+              await getGroupAttachments(model);
+              await Promise.all(personasInGroup.map(async (persona) => {
+                await runPersonaCall(persona, model);
+              }));
             }));
-          }));
+          }
           reply = responders.map((persona) => replyByPid.get(persona.pid) || `[${persona.pid}]응답생성 오류: 응답 누락[/${persona.pid}]`).join('\n');
         } else {
         const ratio = typeof _selectedRatio !== 'undefined' ? _selectedRatio : "1:1";
