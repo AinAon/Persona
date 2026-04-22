@@ -294,8 +294,9 @@ export async function handleApiRoute(
     if (!scope) return Response.json({ error: "invalid scope" }, { status: 400, headers: cors });
     const owner = normalizeScopeOwner(scope, url.searchParams.get("owner"));
     const limit = Number(url.searchParams.get("limit") || "50");
-    const items = await listMemories(env, scope, owner, Number.isFinite(limit) ? limit : 50);
-    return Response.json({ items }, { headers: cors });
+    const cursor = String(url.searchParams.get("cursor") || "");
+    const result = await listMemories(env, scope, owner, Number.isFinite(limit) ? limit : 50, cursor);
+    return Response.json({ items: result.items, nextCursor: result.nextCursor }, { headers: cors });
   }
 
   if (url.pathname === "/memory/upsert" && request.method === "POST") {

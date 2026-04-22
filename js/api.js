@@ -1157,20 +1157,24 @@ async function loadUserProfileKV() {
 }
 
 // Memory API
-async function listMemoriesApi(scope, owner = '', limit = 50) {
+async function listMemoriesApi(scope, owner = '', limit = 50, cursor = '') {
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-  if (!wUrl) return [];
+  if (!wUrl) return { items: [], nextCursor: '' };
   const qs = new URLSearchParams({
     scope: String(scope || ''),
     owner: String(owner || ''),
     limit: String(limit || 50)
   });
+  if (cursor) qs.set('cursor', String(cursor));
   try {
     const res = await fetch(`${wUrl}/memory/list?${qs.toString()}`);
     const data = await res.json();
-    return data.items || [];
+    return {
+      items: Array.isArray(data.items) ? data.items : [],
+      nextCursor: String(data.nextCursor || '')
+    };
   } catch {
-    return [];
+    return { items: [], nextCursor: '' };
   }
 }
 

@@ -354,19 +354,20 @@ export async function listMemories(
   scope: MemoryScope,
   owner: string,
   limit = 50,
-): Promise<MemoryItem[]> {
+  cursor = "",
+): Promise<{ items: MemoryItem[]; nextCursor: string }> {
   const cleanOwner = normalizeOwner(scope, owner);
   const max = Math.max(1, Math.min(limit, 200));
+  const start = Math.max(0, Number.parseInt(String(cursor || "0"), 10) || 0);
   const { chunks, byChunk } = await loadAllChunkItems(env, scope, cleanOwner);
-  const out: MemoryItem[] = [];
+  const all: MemoryItem[] = [];
   for (const chunk of chunks) {
     const items = sortMemoryItems(byChunk[chunk] || []);
-    for (const it of items) {
-      out.push(it);
-      if (out.length >= max) return out;
-    }
+    for (const it of items) all.push(it);
   }
-  return out;
+  const items = all.slice(start, start + max);
+  const nextCursor = start + max < all.length ? String(start + max) : "";
+  return { items, nextCursor };
 }
 
 export async function upsertMemory(
@@ -504,6 +505,20 @@ function stripNoisyPhrases(text: string): string {
 function shouldCaptureProfile(text: string): boolean {
   const t = normalizeText(text);
   return PROFILE_HINTS.some((k) => t.includes(normalizeText(k)));
+}
+
+function shouldPersistFact(text: string): boolean {
+  const base = stripNoisyPhrases(String(text || "").trim());
+  if (!base || base.length < 8) return false;
+  const t = normalizeText(base);
+  if (!t) return false;
+  const explicit = EXPLICIT_MARKERS.some((m) => t.includes(normalizeText(m)));
+  if (explicit) return true;
+  if (shouldCaptureProfile(base)) return true;
+  if (/[?？]/.test(base)) return false;
+  if (/(오늘|지금|방금|이번|잠깐|나중|이따|조금\s*후|오늘만|이번만)/.test(base)) return false;
+  if (/(해줘|해주세요|해줄래|할까|할게|부탁|please|can you|could you)/i.test(base)) return false;
+  return /(좋아|싫어|선호|취향|알레르기|생일|직업|mbti|이름|거주|사는|주로|항상|보통|prefer|like|allergic|birthday|job|name|live|usually|always)/i.test(base);
 }
 
 function findMentionedPersonaPids(text: string, participantPids: string[]): string[] {
@@ -717,6 +732,7 @@ export async function extractAndStoreMemories(
     usedFallback = true;
     userFacts = fallbackExtractFacts(userLines);
   }
+  userFacts = [...new Set(userFacts.map((x) => clampText(String(x || "").trim())).filter(shouldPersistFact))].slice(0, 40);
   for (const text of userFacts) {
     const mentionedPids = findMentionedPersonaPids(text, participantPids);
     if (mentionedPids.length) {
@@ -756,6 +772,7 @@ export async function extractAndStoreMemories(
       personaFacts = fallbackExtractFacts(personaLines);
     }
     personaFacts = filterPersonaFactsByPid(personaFacts, pid, participantPids);
+    personaFacts = [...new Set(personaFacts.map((x) => clampText(String(x || "").trim())).filter(shouldPersistFact))].slice(0, 40);
     for (const text of personaFacts) {
       const r = await upsertMemory(env, {
         scope: "private_profile",
@@ -800,7 +817,7 @@ export async function optimizeMemories(
 
     for (const t of targets) {
       try {
-        const items = await listMemories(env, t.scope, t.owner, 200);
+        const { items } = await listMemories(env, t.scope, t.owner, 200);
         const manual = items.filter((x) => x.source === "manual" && !x.locked);
         const chat = items.filter((x) => x.source !== "manual" && !x.locked);
         if (chat.length < 2) continue;
@@ -884,10 +901,10 @@ export async function buildMemorySystemPrompt(
   const pids = Array.isArray(args.participantPids) ? args.participantPids.filter(Boolean) : [];
   const profileLimit = Math.max(1, Math.min(30, args.profileLimit || 10));
 
-  const pubProfile = await listMemories(env, "public_profile", "global", profileLimit);
+  const pubProfile = (await listMemories(env, "public_profile", "global", profileLimit)).items;
   const privateProfileByPid: Record<string, MemoryItem[]> = {};
   for (const pid of pids) {
-    privateProfileByPid[pid] = await listMemories(env, "private_profile", pid, profileLimit);
+    privateProfileByPid[pid] = (await listMemories(env, "private_profile", pid, profileLimit)).items;
   }
 
   const lines: string[] = [];

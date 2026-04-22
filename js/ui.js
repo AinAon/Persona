@@ -5266,6 +5266,7 @@ function memoryEditIconSVG() {
 }
 
 const _memoryListCache = {};
+const _memoryListCursor = {};
 const _memorySelection = {};
 function memoryCacheKey(scope, owner = '') { return `${scope || ''}::${owner || ''}`; }
 function getMemoryListFromCache(scope, owner = '') {
@@ -5276,13 +5277,26 @@ function setMemoryListToCache(scope, owner = '', items = []) {
   const key = memoryCacheKey(scope, owner);
   _memoryListCache[key] = Array.isArray(items) ? [...items] : [];
 }
-async function getMemoryListCached(scope, owner = '', limit = 120, force = false) {
-  if (!force) {
+function getMemoryNextCursor(scope, owner = '') {
+  const key = memoryCacheKey(scope, owner);
+  return String(_memoryListCursor[key] || '');
+}
+function setMemoryNextCursor(scope, owner = '', cursor = '') {
+  const key = memoryCacheKey(scope, owner);
+  _memoryListCursor[key] = String(cursor || '');
+}
+async function getMemoryListCached(scope, owner = '', limit = 120, force = false, append = false) {
+  const current = getMemoryListFromCache(scope, owner) || [];
+  if (!force && !append) {
     const cached = getMemoryListFromCache(scope, owner);
     if (cached) return cached;
   }
-  const fresh = await listMemoriesApi(scope, owner, limit);
-  setMemoryListToCache(scope, owner, fresh);
+  const cursor = append ? getMemoryNextCursor(scope, owner) : '';
+  const res = await listMemoriesApi(scope, owner, limit, cursor);
+  const fresh = Array.isArray(res?.items) ? res.items : [];
+  const merged = append ? [...current, ...fresh.filter(it => !current.some(c => c.id === it.id))] : fresh;
+  setMemoryListToCache(scope, owner, merged);
+  setMemoryNextCursor(scope, owner, res?.nextCursor || '');
   return getMemoryListFromCache(scope, owner) || [];
 }
 function sortMemoryList(items) {
@@ -5341,12 +5355,23 @@ function memoryItemRowHTML(item, onDelete) {
 async function renderPublicMemoryList(force = false) {
   const wrap = document.getElementById('publicMemoryList');
   if (!wrap) return;
-  const items = sortMemoryList(await getMemoryListCached('public_profile', 'global', 120, !!force));
+  const items = sortMemoryList(await getMemoryListCached('public_profile', 'global', 60, !!force));
   if (!items.length) {
     wrap.innerHTML = `<div style="font-size:11px;color:var(--muted);padding:4px 2px">No public memory yet.</div>`;
     return;
   }
-  wrap.innerHTML = items.map(item => memoryItemRowHTML(item, 'deletePublicMemoryItem')).join('');
+  const nextCursor = getMemoryNextCursor('public_profile', 'global');
+  const moreBtn = nextCursor
+    ? `<button onclick="loadMorePublicMemories()" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">더보기</button>`
+    : '';
+  wrap.innerHTML = items.map(item => memoryItemRowHTML(item, 'deletePublicMemoryItem')).join('') + (moreBtn ? `<div style="display:flex;justify-content:center;padding-top:6px">${moreBtn}</div>` : '');
+}
+
+async function loadMorePublicMemories() {
+  const cursor = getMemoryNextCursor('public_profile', 'global');
+  if (!cursor) return;
+  await getMemoryListCached('public_profile', 'global', 60, false, true);
+  renderPublicMemoryList();
 }
 
 async function addPublicMemoryManual() {
@@ -5381,41 +5406,53 @@ async function deleteSelectedMemories(scope = '', owner = '') {
     showToast('선택된 메모리가 없습니다.');
     return;
   }
-  const res = await deleteMemoryBatchApi({ scope, owner, ids });
-  if (!res?.ok) {
-    showToast('선택삭제 실패');
-    return;
-  }
   const current = getMemoryListFromCache(scope, owner) || [];
   const idSet = new Set(ids);
-  setMemoryListToCache(scope, owner, current.filter(it => !idSet.has(it.id)));
+  const next = current.filter(it => !idSet.has(it.id));
+  setMemoryListToCache(scope, owner, next);
   clearMemorySelection(scope, owner);
-  showToast(`삭제 완료 (${res.deleted || 0}/${ids.length})`);
   if (scope === 'public_profile') {
     renderPublicMemoryList();
     renderMemoryMeta();
   } else if (scope === 'private_profile') {
     renderPrivateMemoryList(owner || editingPid);
   }
+  showToast(`삭제 진행중 (${ids.length}개)`);
+
+  const res = await deleteMemoryBatchApi({ scope, owner, ids });
+  if (!res?.ok) {
+    setMemoryListToCache(scope, owner, current);
+    ids.forEach(id => toggleMemoryItemSelection(scope, owner, id, true));
+    if (scope === 'public_profile') {
+      renderPublicMemoryList();
+      renderMemoryMeta();
+    } else if (scope === 'private_profile') {
+      renderPrivateMemoryList(owner || editingPid);
+    }
+    showToast('선택삭제 실패 (복원됨)');
+    return;
+  }
+  showToast(`삭제 완료 (${res.deleted || 0}/${ids.length})`);
 }
 
 async function deletePublicMemoryItem(id, scope = 'public_profile', owner = 'global') {
   if (!id || !scope) return;
-  const res = await deleteMemoryApi({
-    scope,
-    owner,
-    id
-  });
+  const current = getMemoryListFromCache(scope, owner) || [];
+  setMemoryListToCache(scope, owner, current.filter(it => it.id !== id));
+  toggleMemoryItemSelection(scope, owner, id, false);
+  renderPublicMemoryList();
+  renderMemoryMeta();
+  showToast('삭제 진행중...');
+
+  const res = await deleteMemoryApi({ scope, owner, id });
   if (res?.ok) {
-    showToast('Public memory deleted.');
-    const current = getMemoryListFromCache(scope, owner) || [];
-    setMemoryListToCache(scope, owner, current.filter(it => it.id !== id));
-    toggleMemoryItemSelection(scope, owner, id, false);
-    renderPublicMemoryList();
-    renderMemoryMeta();
-  } else {
-    showToast('삭제 실패. 잠금 상태인지 확인하세요.');
+    showToast('삭제 완료');
+    return;
   }
+  setMemoryListToCache(scope, owner, current);
+  renderPublicMemoryList();
+  renderMemoryMeta();
+  showToast('삭제 실패. 항목 복원됨');
 }
 
 function ensureEditPrivateMemoryPanel(pid) {
@@ -5447,12 +5484,24 @@ function ensureEditPrivateMemoryPanel(pid) {
 async function renderPrivateMemoryList(pid, force = false) {
   const wrap = document.getElementById('privateMemoryList');
   if (!wrap || !pid) return;
-  const items = sortMemoryList(await getMemoryListCached('private_profile', pid, 120, !!force));
+  const items = sortMemoryList(await getMemoryListCached('private_profile', pid, 60, !!force));
   if (!items.length) {
     wrap.innerHTML = `<div style="font-size:11px;color:var(--muted);padding:4px 2px">No private memory yet.</div>`;
     return;
   }
-  wrap.innerHTML = items.map(item => memoryItemRowHTML(item, 'deletePrivateMemoryItem')).join('');
+  const nextCursor = getMemoryNextCursor('private_profile', pid);
+  const moreBtn = nextCursor
+    ? `<button onclick="loadMorePrivateMemories('${esc(pid)}')" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">더보기</button>`
+    : '';
+  wrap.innerHTML = items.map(item => memoryItemRowHTML(item, 'deletePrivateMemoryItem')).join('') + (moreBtn ? `<div style="display:flex;justify-content:center;padding-top:6px">${moreBtn}</div>` : '');
+}
+
+async function loadMorePrivateMemories(pid) {
+  if (!pid) return;
+  const cursor = getMemoryNextCursor('private_profile', pid);
+  if (!cursor) return;
+  await getMemoryListCached('private_profile', pid, 60, false, true);
+  renderPrivateMemoryList(pid);
 }
 
 async function addPrivateMemoryManual(pid) {
@@ -5515,20 +5564,24 @@ async function optimizePrivateMemoryNow(pid) {
 async function deletePrivateMemoryItem(id, scope = 'private_profile', owner = '') {
   const pid = owner || editingPid;
   if (!id || !pid || !scope) return;
+  const current = getMemoryListFromCache(scope, pid) || [];
+  setMemoryListToCache(scope, pid, current.filter(it => it.id !== id));
+  toggleMemoryItemSelection(scope, pid, id, false);
+  renderPrivateMemoryList(pid);
+  showToast('삭제 진행중...');
+
   const res = await deleteMemoryApi({
     scope,
     owner: pid,
     id
   });
   if (res?.ok) {
-    showToast('Private memory deleted.');
-    const current = getMemoryListFromCache(scope, pid) || [];
-    setMemoryListToCache(scope, pid, current.filter(it => it.id !== id));
-    toggleMemoryItemSelection(scope, pid, id, false);
-    renderPrivateMemoryList(pid);
-  } else {
-    showToast('삭제 실패. 잠금 상태인지 확인하세요.');
+    showToast('삭제 완료');
+    return;
   }
+  setMemoryListToCache(scope, pid, current);
+  renderPrivateMemoryList(pid);
+  showToast('삭제 실패. 항목 복원됨');
 }
 
 async function toggleMemoryLockItem(id, scope = '', owner = '', locked = false) {
