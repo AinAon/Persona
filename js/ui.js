@@ -2895,6 +2895,10 @@ async function openChat(id) {
   }
 
   // KV updatedAt 비교 후 로컬보다 최신이면 강제 리프레시
+  if (!s._demo && typeof refreshCurrentChatIfStale === 'function') {
+    refreshCurrentChatIfStale(id).catch(() => {});
+    return;
+  }
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (wUrl && !s._demo) {
     fetch(wUrl + '/session/' + id)
@@ -4514,11 +4518,24 @@ async function ensureArchiveManifest() {
       })
       .filter(Boolean);
   }
-  renderArchiveGrid();
-  const fresh = await loadArchiveManifestFromR2();
-  _archiveItems = fresh;
   _archiveLoaded = true;
-  await idbSet(ARCHIVE_MANIFEST_CACHE_KEY, fresh).catch(() => {});
+  renderArchiveGrid();
+}
+
+function archiveManifestSignature(items = []) {
+  return JSON.stringify((items || []).map((it) => normalizeArchiveKey(it?.key || it?.url)).filter(Boolean).sort());
+}
+
+async function refreshArchiveManifestIfChanged(force = false) {
+  const fresh = await loadArchiveManifestFromR2().catch(() => []);
+  const currentSig = archiveManifestSignature(_archiveItems || []);
+  const freshSig = archiveManifestSignature(fresh || []);
+  if (!force && currentSig === freshSig) return false;
+  _archiveItems = Array.isArray(fresh) ? fresh : [];
+  _archiveLoaded = true;
+  await idbSet(ARCHIVE_MANIFEST_CACHE_KEY, _archiveItems).catch(() => {});
+  if (activeTab === 'archive') renderArchiveGrid();
+  return true;
 }
 
 function wUrlForImage() {
@@ -4587,9 +4604,6 @@ function renderArchiveGrid() {
 }
 
 async function renderArchivePane() {
-  if (typeof preloadAllSessions === 'function') {
-    await preloadAllSessions().catch(() => {});
-  }
   setArchiveFilter(_archiveFilter || 'all');
   await ensureArchiveManifest();
   renderArchiveGrid();

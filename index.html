@@ -1385,6 +1385,9 @@ list-style-position: outside;
     <div class="main-titlebar">
       <span>Persona</span>
       <div class="persona-title-actions">
+        <button class="persona-title-icon" onclick="refreshAllCachesManual()" title="Refresh all caches" aria-label="Refresh all caches">
+          <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0 2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+        </button>
         <button class="persona-title-icon" onclick="openEmotionManager()" title="Open emotion manager" aria-label="Open emotion manager">
           <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h16"/><path d="M17 9l3 3-3 3"/></svg>
         </button>
@@ -1404,6 +1407,7 @@ list-style-position: outside;
     <div class="main-titlebar" style="display:flex;align-items:center;justify-content:space-between;">
       <span>Chat</span>
       <div style="display:flex;gap:6px;align-items:center">
+        <button class="chat-restore-icon-btn" onclick="refreshAllCachesManual()" title="Refresh all">↻</button>
         <button class="chat-restore-icon-btn" id="chatHiddenToggleBtn" onclick="toggleChatHiddenVisibility()" title="숨긴 채팅 보기">👁</button>
         <button class="chat-restore-icon-btn" onclick="openRestoreModal()" title="채팅 복원">↶</button>
       </div>
@@ -1489,7 +1493,12 @@ list-style-position: outside;
   </div>
 
   <div id="archivePane" style="display:none;flex-direction:column;flex:1;overflow:hidden;position:relative;">
-    <div class="main-titlebar">Archive</div>
+    <div class="main-titlebar" style="display:flex;align-items:center;justify-content:space-between;">
+      <span>Archive</span>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="chat-restore-icon-btn" onclick="refreshAllCachesManual()" title="Refresh all">↻</button>
+      </div>
+    </div>
     <div class="archive-pane">
       <div class="archive-head">
         <div class="archive-head-row">

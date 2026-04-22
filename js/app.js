@@ -127,6 +127,113 @@ function personasSignature(list) {
   }
 }
 
+function sessionIndexSignature(list) {
+  try {
+    return JSON.stringify((list || []).map((s) => ({
+      id: s?.id || '',
+      updatedAt: Number(s?.updatedAt || 0),
+      participantPids: Array.from(new Set(s?.participantPids || [])).sort(),
+      roomName: s?.roomName || '',
+      lastPreview: s?.lastPreview || ''
+    })));
+  } catch (e) {
+    return '';
+  }
+}
+
+function getLocalArchiveManifestSignature() {
+  return idbGet(typeof ARCHIVE_MANIFEST_CACHE_KEY !== 'undefined' ? ARCHIVE_MANIFEST_CACHE_KEY : 'archive_manifest_v1')
+    .then((items) => (typeof archiveManifestSignature === 'function' ? archiveManifestSignature(items || []) : ''))
+    .catch(() => '');
+}
+
+async function fetchRemoteSessionIndex() {
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) return [];
+  try {
+    const res = await fetch(wUrl + '/sessions', { cache: 'no-store' });
+    const data = await res.json().catch(() => ({}));
+    return Array.isArray(data.sessions) ? data.sessions : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+async function refreshCurrentChatIfStale(id) {
+  const sid = String(id || activeChatId || '').trim();
+  if (!sid) return false;
+  const session = sessions.find((x) => x.id === sid);
+  if (!session) return false;
+  const localLastTs = Array.isArray(session.history) ? session.history.reduce((max, m) => Math.max(max, Number(m?.createdAt || 0)), 0) : 0;
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) return false;
+  try {
+    const res = await fetch(wUrl + '/session/' + sid, { cache: 'no-store' });
+    const data = await res.json().catch(() => ({}));
+    const remoteHistory = Array.isArray(data?.session?.history) ? data.session.history : [];
+    const remoteLastTs = remoteHistory.reduce((max, m) => Math.max(max, Number(m?.createdAt || 0)), 0);
+    if (remoteLastTs > localLastTs) {
+      await loadSession(sid);
+      if (activeChatId === sid) renderChatArea();
+      return true;
+    }
+  } catch (e) {}
+  return false;
+}
+
+async function refreshAllCaches(options = {}) {
+  const { force = false, showLoading = true, loadingLabel = '로컬 캐시 확인 중...' } = options;
+  if (showLoading) {
+    setLoading(true, loadingLabel);
+    if (typeof setLoadingEscapeVisible === 'function') setLoadingEscapeVisible(true);
+  }
+  try {
+    if (showLoading) setLoading(true, '로컬 캐시 로드 중...');
+    const hasLocalPersonas = loadPersonasFromCache();
+    if (!hasLocalPersonas) personas = DEFAULT_PERSONAS.map(p => ({ ...p, tags: [...p.tags] }));
+    loadSessionsFromCache();
+    if (typeof ensureArchiveManifest === 'function') await ensureArchiveManifest();
+    if (typeof renderPersonaGrid === 'function') await renderPersonaGrid();
+    if (typeof renderChatList === 'function') await renderChatList();
+    if (activeTab === 'archive' && typeof renderArchiveGrid === 'function') renderArchiveGrid();
+
+    const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+    if (!wUrl) return;
+
+    if (showLoading) setLoading(true, '페르소나 비교 중...');
+    const personasChanged = await syncPersonasFromWorkerForStartup(wUrl, 12000).catch(() => false);
+    if (personasChanged && typeof renderPersonaGrid === 'function') await renderPersonaGrid();
+
+    if (showLoading) setLoading(true, '채팅 목록 비교 중...');
+    const localIndexSig = sessionIndexSignature(getLocalSessionIndex() || []);
+    const remoteIndex = await fetchRemoteSessionIndex();
+    const remoteIndexSig = sessionIndexSignature(remoteIndex);
+    if (force || (remoteIndexSig && remoteIndexSig !== localIndexSig)) {
+      await loadIndex();
+    }
+    if (typeof renderChatList === 'function') await renderChatList();
+
+    if (showLoading) setLoading(true, '아카이브 비교 중...');
+    const localArchiveSig = await getLocalArchiveManifestSignature();
+    const remoteArchiveChanged = typeof refreshArchiveManifestIfChanged === 'function'
+      ? await refreshArchiveManifestIfChanged(force || !localArchiveSig)
+      : false;
+    if (remoteArchiveChanged && activeTab === 'archive' && typeof renderArchiveGrid === 'function') renderArchiveGrid();
+
+    if (activeChatId) {
+      if (showLoading) setLoading(true, '현재 채팅 비교 중...');
+      await refreshCurrentChatIfStale(activeChatId);
+    }
+  } finally {
+    if (typeof setLoadingEscapeVisible === 'function') setLoadingEscapeVisible(false);
+    if (showLoading) setLoading(false);
+  }
+}
+
+window.refreshAllCachesManual = async function() {
+  await refreshAllCaches({ force: true, showLoading: true, loadingLabel: '수동 새로고침 준비 중...' });
+};
+
 async function syncPersonasFromWorkerForStartup(wUrl, timeoutMs = 4000) {
   if (!wUrl) return false;
   const timeout = new Promise((resolve) => setTimeout(() => resolve({ timedOut: true }), timeoutMs));
@@ -208,6 +315,8 @@ async function init() {
   loadUserProfileKV().then(() => {
     if (activeTab === 'settings') renderSettingsPane();
   }).catch(()=>{});
+  await refreshAllCaches({ force: false, showLoading: true, loadingLabel: '로컬 캐시 로드 중...' });
+  return;
 
   // neutral 이미지 IDB에서 로드 (neutral_a 우선)
   for (const [pid] of Object.entries(EMOTION_PROFILE_MAP)) {
