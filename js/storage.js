@@ -50,6 +50,30 @@ async function idbDel(key) {
   });
 }
 
+async function idbDelByPrefix(prefix) {
+  const db = await openIDB();
+  const start = String(prefix || '');
+  if (!start) return 0;
+  const end = `${start}\uffff`;
+  return new Promise((res, rej) => {
+    let deleted = 0;
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    const store = tx.objectStore(IDB_STORE);
+    const range = IDBKeyRange.bound(start, end, false, false);
+    const req = store.openCursor(range);
+    req.onsuccess = (e) => {
+      const cursor = e.target.result;
+      if (!cursor) return;
+      cursor.delete();
+      deleted++;
+      cursor.continue();
+    };
+    tx.oncomplete = () => res(deleted);
+    tx.onerror = () => rej(tx.error);
+    req.onerror = () => rej(req.error);
+  });
+}
+
 async function idbClearAll() {
   const db = await openIDB();
   return new Promise((res, rej) => {

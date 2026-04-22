@@ -265,16 +265,45 @@ async function syncPersonasFromWorkerForStartup(wUrl, timeoutMs = 4000) {
 
   const kvPersonas = Array.isArray(result.personas) ? result.personas : [];
   if (kvPersonas.length) {
+    const prevByPid = new Map((personas || []).map(p => [String(p?.pid || ''), p]));
     const seen = new Set();
     const nextPersonas = kvPersonas.filter(p => {
       if (!p?.pid || seen.has(p.pid)) return false;
       seen.add(p.pid);
       return true;
     });
+    const changedPids = nextPersonas
+      .map((p) => String(p?.pid || '').trim())
+      .filter(Boolean)
+      .filter((pid) => {
+        const next = nextPersonas.find((x) => String(x?.pid || '') === pid) || null;
+        const prev = prevByPid.get(pid) || null;
+        if (!prev || !next) return true;
+        const nextUpdatedAt = Number(next.updatedAt || 0);
+        const prevUpdatedAt = Number(prev.updatedAt || 0);
+        if (nextUpdatedAt > prevUpdatedAt) return true;
+        const nextImageUrl = String(next.imageUrl || '');
+        const prevImageUrl = String(prev.imageUrl || '');
+        return !!nextImageUrl && nextImageUrl !== prevImageUrl;
+      });
     const samePersonas = personasSignature(nextPersonas) === personasSignature(personas);
     if (!samePersonas) {
       personas = nextPersonas;
       setLocalPersonas(personas);
+      if (changedPids.length) {
+        for (const pid of changedPids) {
+          try {
+            if (typeof idbDelByPrefix === 'function') await idbDelByPrefix(`emotion_${pid}_`);
+          } catch {}
+          try {
+            if (typeof _neutralCache !== 'undefined') delete _neutralCache[pid];
+          } catch {}
+          try {
+            if (typeof _imageListCache !== 'undefined') delete _imageListCache[pid];
+          } catch {}
+        }
+        try { setImageCacheBustToken(Date.now().toString()); } catch {}
+      }
       return true;
     }
     return false;

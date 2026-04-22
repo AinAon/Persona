@@ -2224,6 +2224,7 @@ async function handleMultiImageFiles(fileList) {
 
 async function savePersonaEdit() {
   const p = getPersona(editingPid); if (!p) return;
+  const personaUpdatedAt = Date.now();
   const newPid = document.getElementById('editPid')?.value.trim();
   if (isNewPersona && newPid && newPid !== p.pid) {
     personas = personas.filter(x => x.pid !== p.pid);
@@ -2259,13 +2260,14 @@ async function savePersonaEdit() {
       const res = await fetch(workerUrl + '/image', { method: 'POST', body: form });
       const data = await res.json();
       if (!data.url) throw new Error(data.error || '업로드 실패');
-      p.imageUrl = data.url;
+      p.imageUrl = `${data.url}${String(data.url).includes('?') ? '&' : '?'}v=${personaUpdatedAt}`;
     } catch(e) {
       alert('업로드 실패: ' + e.message);
       return;
     }
     delete p._pendingImage;
   }
+  p.updatedAt = personaUpdatedAt;
   savePersonas(); renderPersonaGrid(); goMain();
   showToast('저장됨 ✓');
 }
