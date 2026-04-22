@@ -1120,7 +1120,11 @@ function showToast(msg, duration = 1800) {
   toastTimer = setTimeout(() => el.classList.remove('show'), duration);
 }
 function setLoading(show, text = 'Loading...') {
-  return;
+  const overlay = document.getElementById('loadingOverlay');
+  const textEl = document.getElementById('loadingText');
+  if (!overlay) return;
+  if (textEl) textEl.textContent = text;
+  overlay.classList.toggle('hidden', !show);
 }
 function setLoadingEscapeVisible(show) {
   const btn = document.getElementById('loadingEscapeBtn');
@@ -1319,6 +1323,7 @@ let _personaGridRenderVersion = 0;
 let _suppressPersonaTapUntil = 0;
 let _chatOpenToken = 0;
 let _lastPersonaGridSignature = '';
+let _lastChatListSignature = '';
 
 async function getRandomPersonaGridImage(pid) {
   const emotions = ['neutral', 'subtlesmile', 'shy', 'surprise'];
@@ -2347,6 +2352,30 @@ let _chatListRenderVersion = 0;
 async function renderChatList() {
   const list = document.getElementById('chatList');
   const empty = document.getElementById('chatEmpty');
+  const signature = JSON.stringify({
+    search: _chatSearchQuery || '',
+    showHidden: getChatHiddenFilterEnabled(),
+    activeChatId: activeChatId || '',
+    sessions: (sessions || []).map(s => ({
+      id: s?.id || '',
+      updatedAt: Number(s?.updatedAt || 0),
+      roomName: s?.roomName || '',
+      lastPreview: s?.lastPreview || '',
+      hidden: !!s?.hidden,
+      participants: (s?.participantPids || []).map(pid => {
+        const p = getPersona(pid);
+        return {
+          pid,
+          name: p?.name || '',
+          image: p?.image || '',
+          hue: Number(p?.hue || 0),
+          updatedAt: Number(p?.updatedAt || 0)
+        };
+      })
+    }))
+  });
+  if (list && list.children.length && signature === _lastChatListSignature) return;
+  _lastChatListSignature = signature;
   const myVersion = ++_chatListRenderVersion;
   list.querySelectorAll('.chat-list-wrap').forEach(e => e.remove());
   list.querySelectorAll('.chat-list-item').forEach(e => e.remove());

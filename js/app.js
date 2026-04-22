@@ -2,8 +2,11 @@
 //  DEMO CHAT REPLY LOGIC
 // ══════════════════════════════
 function setLoading(isLoading, text) {
-  return;
-
+  const overlay = document.getElementById('loadingOverlay');
+  const textEl = document.getElementById('loadingText');
+  if (!overlay) return;
+  if (textEl && typeof text === 'string') textEl.textContent = text;
+  overlay.classList.toggle('hidden', !isLoading);
 }
 
 function startDemoChat() {
