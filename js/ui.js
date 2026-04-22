@@ -844,14 +844,37 @@ function sanitizeMessageContentForTextContext(content, preserveImages = false) {
   return content;
 }
 
-function buildApiMessagesFromHistory(history, currentUserMsg, currentContent, isImageReq) {
+function extractAssistantContentForPid(rawContent, pid = '') {
+  const text = typeof rawContent === 'string' ? rawContent : '';
+  const targetPid = String(pid || '').trim();
+  if (!text || !targetPid) return text;
+  const escapedPid = targetPid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`\\[${escapedPid}\\]([\\s\\S]*?)\\[\\/${escapedPid}\\]`, 'gi');
+  const chunks = [];
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    let body = String(m[1] || '').trim();
+    body = body.replace(/^\[emotion:\s*[a-zA-Z]+\s*\]/i, '').trim();
+    body = cleanContent(body);
+    if (body) chunks.push(body);
+  }
+  return chunks.join('\n').trim();
+}
+
+function buildApiMessagesFromHistory(history, currentUserMsg, currentContent, isImageReq, targetPid = '') {
   return (history || [])
     .filter(m => m.role === 'user' || m.role === 'assistant')
     .filter(m => isImageReq || !isImageWorkflowMessage(m))
-    .map(m => ({
-      role: m.role,
-      content: sanitizeMessageContentForTextContext(m === currentUserMsg ? currentContent : m.content, m === currentUserMsg)
-    }));
+    .map(m => {
+      const role = m.role;
+      let content = sanitizeMessageContentForTextContext(m === currentUserMsg ? currentContent : m.content, m === currentUserMsg);
+      if (role === 'assistant' && targetPid) {
+        content = extractAssistantContentForPid(content, targetPid);
+        if (!content) return null;
+      }
+      return { role, content };
+    })
+    .filter(Boolean);
 }
 
 async function getImageDimensionsFromDataUrl(dataUrl) {
@@ -3993,11 +4016,11 @@ async function sendMessage() {
               const personaRequestMsgContent = sentAttachments.length > 0
                 ? buildUserMessageContentV2(text, groupImageUrls, groupFileRefs)
                 : text || '(빈글)';
-              const personaMessages = [
-                { role:'system', content: buildSystemPrompt(session, [persona]) },
-                buildCurrentTimeSystemMessage(),
-                ...buildApiMessagesFromHistory(session.history, userMsg, personaRequestMsgContent, isImageReq)
-              ];
+                const personaMessages = [
+                  { role:'system', content: buildSystemPrompt(session, [persona]) },
+                  buildCurrentTimeSystemMessage(),
+                  ...buildApiMessagesFromHistory(session.history, userMsg, personaRequestMsgContent, isImageReq, persona.pid)
+                ];
               const res = await fetch(wUrl + '/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
