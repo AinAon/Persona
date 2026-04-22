@@ -5239,6 +5239,7 @@ function ensureSettingsMemoryPanel() {
     </div>
     <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
       <button onclick="optimizeMemoryNow()" style="padding:8px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;font-family:'Pretendard',sans-serif">메모리최적화</button>
+      <button onclick="rebuildMemoryNow()" style="margin-left:8px;padding:8px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;font-family:'Pretendard',sans-serif">메모리재생성</button>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:10px">
       <button onclick="toggleMemorySelectAll('public_profile','global',true); renderPublicMemoryList();" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">전체선택</button>
@@ -5686,6 +5687,42 @@ async function optimizeMemoryNow() {
     } else {
       showToast('메모리 최적화 실패');
       setMemoryProgressLine('메모리 최적화 실패', false);
+    }
+  } finally {
+    clearInterval(ticker);
+    renderMemoryMeta();
+  }
+}
+
+async function rebuildMemoryNow() {
+  const session = getActiveSession();
+  if (!session) {
+    showToast('활성 채팅이 없습니다.');
+    return;
+  }
+  if (!confirm('현재 채팅 기록 기준으로 메모리를 재생성할까요? 수동 메모리는 유지되고 자동(chat) 메모리만 재구성됩니다.')) return;
+  const participantPids = Array.from(new Set((session.participantPids || []).filter(Boolean)));
+  const ticker = startMemoryProgressTicker('메모리 재생성');
+  showToast('메모리 재생성을 백그라운드에서 시작했습니다.');
+  try {
+    const res = await rebuildMemoriesApi({
+      sessionId: session.id,
+      participantPids,
+      history: (session.history || []).map(m => ({
+        role: m.role,
+        content: m.content,
+        createdAt: m.createdAt || Date.now()
+      })),
+      includePublic: true
+    });
+    if (res?.ok) {
+      showToast(`재생성 완료: ${res.cleared || 0} 제거, ${res.saved || 0} 저장`);
+      setMemoryProgressLine(`메모리 재생성 완료: ${res.cleared || 0} 제거, ${res.saved || 0} 저장`, false);
+      renderPublicMemoryList(true);
+      if (editingPid) renderPrivateMemoryList(editingPid, true);
+    } else {
+      showToast('메모리 재생성 실패');
+      setMemoryProgressLine('메모리 재생성 실패', false);
     }
   } finally {
     clearInterval(ticker);
