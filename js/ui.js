@@ -3528,7 +3528,7 @@ async function fetchChatStreamSSE(url, body, signal, onDelta) {
         const obj = JSON.parse(payload);
         if (obj?.type === 'delta' && typeof obj?.text === 'string') {
           full += obj.text;
-          onDelta?.(obj.text, full);
+          await Promise.resolve(onDelta?.(obj.text, full));
         } else if (obj?.type === 'done' && typeof obj?.reply === 'string') {
           full = obj.reply;
         } else if (obj?.type === 'error') {
@@ -4160,19 +4160,24 @@ async function sendMessage() {
                 let lastPaintAt = 0;
                 let liveState = null;
                 const liveArea = (activeChatId === renderSessionId) ? document.getElementById('chatArea') : null;
-                if (liveArea) {
-                  if (thinkEl?.parentNode) thinkEl.remove();
-                  liveState = await createLiveStreamBubble(liveArea, persona, Date.now(), renderSessionId);
-                  streamedLiveState = liveState;
-                }
-                rawReply = await fetchChatStreamSSE(wUrl + '/chat', payload, _chatGeneration?.controller?.signal, (_delta, fullText) => {
+                rawReply = await fetchChatStreamSSE(wUrl + '/chat', payload, _chatGeneration?.controller?.signal, async (_delta, fullText) => {
                   liveText = fullText;
                   const now = Date.now();
+                  if (liveArea && !liveState && String(fullText || '').trim()) {
+                    if (thinkEl?.parentNode) thinkEl.remove();
+                    liveState = await createLiveStreamBubble(liveArea, persona, Date.now(), renderSessionId);
+                    streamedLiveState = liveState;
+                  }
                   if (now - lastPaintAt >= 70) {
                     if (liveState && liveArea) updateLiveStreamBubbleText(liveState, liveText, liveArea);
                     lastPaintAt = now;
                   }
                 });
+                if (liveText && liveArea && !liveState) {
+                  if (thinkEl?.parentNode) thinkEl.remove();
+                  liveState = await createLiveStreamBubble(liveArea, persona, Date.now(), renderSessionId);
+                  streamedLiveState = liveState;
+                }
                 if (liveText && liveState && liveArea) {
                   updateLiveStreamBubbleText(liveState, liveText, liveArea);
                   streamedInPlace = true;
