@@ -684,6 +684,24 @@ function pickRespondingPersonas(session, pList) {
   return [shuffleArray(pList)[0]];
 }
 
+let _groupRouterDebug = false;
+try {
+  _groupRouterDebug = localStorage.getItem('group_router_debug') === '1';
+} catch {}
+function logGroupRouterDebug(label, payload = null) {
+  if (!_groupRouterDebug) return;
+  try {
+    if (payload == null) console.log(`[group-router] ${label}`);
+    else console.log(`[group-router] ${label}`, payload);
+  } catch {}
+}
+window.toggleGroupRouterDebug = function(force) {
+  _groupRouterDebug = typeof force === 'boolean' ? force : !_groupRouterDebug;
+  try { localStorage.setItem('group_router_debug', _groupRouterDebug ? '1' : '0'); } catch {}
+  try { showToast(`Group router debug: ${_groupRouterDebug ? 'ON' : 'OFF'}`); } catch {}
+  return _groupRouterDebug;
+};
+
 function getRouterModel(session, pList = []) {
   return session?.overrideModel
     || pList.find((p) => p?.defaultModel)?.defaultModel
@@ -706,9 +724,11 @@ async function planGroupResponse(session, pList, userText = '') {
     return { responders: fallbackResponders, delivery: 'sequential' };
   }
   if (session?.responseMode === 'all') {
+    logGroupRouterDebug('plan.fixed.all', { pids: (pList || []).map((p) => p.pid), delivery: 'parallel' });
     return { responders: shuffleArray(pList), delivery: 'parallel' };
   }
   if (session?.responseMode === 'random') {
+    logGroupRouterDebug('plan.fixed.random', { pid: shuffleArray(pList)[0]?.pid, delivery: 'sequential' });
     return { responders: [shuffleArray(pList)[0]], delivery: 'sequential' };
   }
   if (session?.responseMode !== 'auto') {
@@ -755,6 +775,7 @@ async function planGroupResponse(session, pList, userText = '') {
     const data = await res.json().catch(() => ({}));
     const parsed = extractJsonObject(data?.reply || '');
     if (!parsed || typeof parsed !== 'object') {
+      logGroupRouterDebug('plan.router.invalid-json', { reply: String(data?.reply || '').slice(0, 300) });
       return { responders: fallbackResponders, delivery: 'sequential' };
     }
 
@@ -772,8 +793,15 @@ async function planGroupResponse(session, pList, userText = '') {
     const orderMap = new Map(pList.map((p) => [p.pid, p]));
     const responders = selectedPids.map((pid) => orderMap.get(pid)).filter(Boolean);
     if (!responders.length) return { responders: fallbackResponders, delivery: 'sequential' };
+    logGroupRouterDebug('plan.router.result', {
+      mode,
+      delivery,
+      selectedPids,
+      routerModel: getRouterModel(session, pList)
+    });
     return { responders, delivery };
   } catch {
+    logGroupRouterDebug('plan.router.error-fallback');
     return { responders: fallbackResponders, delivery: 'sequential' };
   }
 }
@@ -3922,6 +3950,11 @@ async function sendMessage() {
           const plan = await planGroupResponse(session, pListAll, text || '');
           const responders = Array.isArray(plan?.responders) && plan.responders.length ? plan.responders : pickRespondingPersonas(session, pListAll);
           const runSequential = plan?.delivery === 'sequential';
+          logGroupRouterDebug('send.non-image.plan', {
+            responseMode: session?.responseMode,
+            responders: responders.map((p) => p.pid),
+            delivery: runSequential ? 'sequential' : 'parallel'
+          });
           const responderEntries = responders.map((persona) => ({
             persona,
             model: getPersonaModel(session, persona)
@@ -3932,6 +3965,10 @@ async function sendMessage() {
             if (!groupedByModel.has(key)) groupedByModel.set(key, []);
             groupedByModel.get(key).push(entry.persona);
           }
+          logGroupRouterDebug('send.non-image.grouped-by-model', [...groupedByModel.entries()].map(([model, personas]) => ({
+            model,
+            pids: personas.map((p) => p.pid)
+          })));
           const replyByPid = new Map();
           const attachmentByModel = new Map();
           const getGroupAttachments = async (model) => {
@@ -3974,7 +4011,27 @@ async function sendMessage() {
               if (data.result !== 'success') {
                 replyByPid.set(persona.pid, `[${persona.pid}]응답생성 오류: ${data.error||'알 수 없는 오류'}[/${persona.pid}]`);
               } else {
-                replyByPid.set(persona.pid, wrapPersonaReply(persona.pid, sanitizeTextForUnicodeSafety(data.reply || '')));
+                const rawReply = sanitizeTextForUnicodeSafety(data.reply || '');
+                const parsedSelf = parseResponse(rawReply, [persona]);
+                logGroupRouterDebug('send.non-image.persona.raw', {
+                  pid: persona.pid,
+                  model,
+                  rawPreview: rawReply.slice(0, 220),
+                  parsedSegments: Array.isArray(parsedSelf) ? parsedSelf.length : 0
+                });
+                if (Array.isArray(parsedSelf) && parsedSelf.length > 0) {
+                  const mergedContent = parsedSelf
+                    .map((seg) => String(seg?.content || '').trim())
+                    .filter(Boolean)
+                    .join('\n')
+                    .trim();
+                  const chosenEmotion = String(parsedSelf[0]?.emotion || 'neutral');
+                  const safeEmotion = EMOTIONS.includes(chosenEmotion) ? chosenEmotion : 'neutral';
+                  const finalContent = mergedContent || rawReply || '...';
+                  replyByPid.set(persona.pid, `[${persona.pid}][emotion:${safeEmotion}]${finalContent}[/${persona.pid}]`);
+                } else {
+                  replyByPid.set(persona.pid, wrapPersonaReply(persona.pid, rawReply));
+                }
               }
             } catch (e) {
               replyByPid.set(persona.pid, `[${persona.pid}]응답생성 오류: 네트워크 또는 처리 오류[/${persona.pid}]`);
