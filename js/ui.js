@@ -5282,7 +5282,8 @@ async function getMemoryListCached(scope, owner = '', limit = 120, force = false
     const cached = getMemoryListFromCache(scope, owner);
     if (cached) return cached;
   }
-  const fresh = await listMemoriesApi(scope, owner, limit);
+  const freshRes = await listMemoriesApi(scope, owner, limit);
+  const fresh = Array.isArray(freshRes) ? freshRes : (Array.isArray(freshRes?.items) ? freshRes.items : []);
   setMemoryListToCache(scope, owner, fresh);
   return getMemoryListFromCache(scope, owner) || [];
 }
