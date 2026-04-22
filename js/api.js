@@ -1347,6 +1347,43 @@ async function optimizeMemoriesApi({ sessionId = '', participantPids = [], inclu
   }
 }
 
+async function rebuildMemoriesApi({ sessionId = '', participantPids = [], history = [], includePublic = true } = {}) {
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) return { ok: false, cleared: 0, saved: 0, duplicate: 0, processed: 0, cursor: 0, error: 'WORKER_URL missing' };
+  try {
+    const res = await fetch(`${wUrl}/memory/rebuild`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: String(sessionId || ''),
+        participantPids: Array.from(new Set(participantPids || [])),
+        history: Array.isArray(history) ? history : [],
+        includePublic: includePublic !== false
+      })
+    });
+    const raw = await res.text();
+    let data = null;
+    try { data = raw ? JSON.parse(raw) : {}; } catch {}
+    if (!res.ok) {
+      return {
+        ok: false,
+        cleared: 0,
+        saved: 0,
+        duplicate: 0,
+        processed: 0,
+        cursor: 0,
+        status: res.status,
+        error: data?.error || `HTTP ${res.status}`,
+        detail: raw ? String(raw).slice(0, 220) : ''
+      };
+    }
+    return data || { ok: false, cleared: 0, saved: 0, duplicate: 0, processed: 0, cursor: 0, error: 'empty response' };
+  } catch (e) {
+    const msg = e && typeof e === 'object' && 'message' in e ? String(e.message || '') : '';
+    return { ok: false, cleared: 0, saved: 0, duplicate: 0, processed: 0, cursor: 0, error: msg || 'network_error' };
+  }
+}
+
 async function getMemoryMetaApi(sessionId = '') {
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl) return { ok: false, session: { lastExtractedAt: 0, lastOptimizedAt: 0 }, global: { lastOptimizedAt: 0 } };

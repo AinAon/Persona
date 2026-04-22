@@ -1,6 +1,6 @@
-// ── 채팅 모델 목록 (페르소나 편집 + 드로어에서 공유) ──
+// ???? 嶺????嶺뚮ㅄ維??嶺뚮ㅄ維뽨빳?(??濡〓??????筌뤾쑴異?+ ??類ㅼŦ??怨룻뱺????ㅻ쾴??) ????
 const CHAT_MODELS = [
-  { value: '', label: '기본 (채팅방 설정 따름)' },
+  { value: '', label: '?リ옇???(嶺????ㅼ낯????깆젧 ??⑤벡??' },
   { group: 'Google' },
   { value: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Lite' },
   { value: 'gemini-3.1-pro-preview',    label: 'Gemini 3.1 Pro' },
@@ -26,16 +26,16 @@ function buildModelSelect(id, selectedValue, style = '') {
   return `<select class="edit-input" id="${id}" style="width:100%;${style}">${opts}</select>`;
 }
 
-// ══════════════════════════════
+// ??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫
 //  UTILS (UI)
-// ══════════════════════════════
+// ??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-// 마크다운 렌더러 초기화
+// 嶺뚮씭?뉐칰???깅뮧 ???????貫?껆뵳??
 function initMarked() {
   if (typeof marked === 'undefined') return;
   marked.setOptions({
-    breaks: true,       // 줄바꿈 → <br>
+    breaks: true,       // 繞벿븐뫊??????<br>
     gfm: true,          // GitHub Flavored Markdown
     highlight: (code, lang) => {
       if (typeof hljs !== 'undefined' && lang && hljs.getLanguage(lang)) {
@@ -46,20 +46,20 @@ function initMarked() {
   });
 }
 
-// mermaid 초기화
+// mermaid ?貫?껆뵳??
 function initMermaid() {
   if (typeof mermaid !== 'undefined') {
     mermaid.initialize({ startOnLoad: false, theme: 'dark', darkMode: true });
   }
 }
 
-// 마크다운 → HTML 변환 (mermaid 블록 포함)
+// 嶺뚮씭?뉐칰???깅뮧 ??HTML ?곌떠???(mermaid ??곕?餓?????
 function mdRender(text) {
   if (typeof marked === 'undefined') {
-    // fallback: 기존 fmt
+    // fallback: ?リ옇???fmt
     return esc(text).replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>');
   }
-  // mermaid 블록 임시 치환
+  // mermaid ??곕?餓??熬곣뫖六??곸궡瑗??
   const mermaidBlocks = [];
   const replaced = text.replace(/```mermaid\n([\s\S]*?)```/g, (_, code) => {
     const idx = mermaidBlocks.length;
@@ -70,7 +70,7 @@ function mdRender(text) {
   return html;
 }
 
-// mermaid 블록 실제 렌더링 (DOM 삽입 후 호출)
+// mermaid ??곕?餓????깆젷 ?????춯?(DOM ????엷 ???筌뤾쑵??
 async function renderMermaidBlocks(container) {
   if (typeof mermaid === 'undefined') return;
   const placeholders = container.querySelectorAll('.mermaid-placeholder');
@@ -105,7 +105,7 @@ function formatMessageTime(ts) {
       hour12: false
     }).formatToParts(new Date(ts));
     const pick = t => parts.find(p => p.type === t)?.value || '';
-    return `${pick('year')}년 ${pick('month')}월 ${pick('day')}일 ${pick('hour')}:${pick('minute')}`;
+    return `${pick('year')}??${pick('month')}??${pick('day')}??${pick('hour')}:${pick('minute')}`;
   } catch {
     return '';
   }
@@ -214,7 +214,7 @@ function updateChatHeaderActionButtons() {
   const on = effective !== 'hidden';
   btn.classList.toggle('on', on);
   btn.innerHTML = on ? iconEyeOpenSVG() : iconEyeClosedSVG();
-  btn.title = `프로필 표시 ${on ? 'ON' : 'OFF'} (클릭해서 전환)`;
+  btn.title = `?熬곣뫁夷????戮?뻣 ${on ? 'ON' : 'OFF'} (??????怨댄맋 ?熬곥굦??`;
   if (!override) btn.classList.remove('on');
   updateChatHeaderAvatarVisibility();
 }
@@ -236,7 +236,7 @@ function updateChatListVisibilityButton() {
   const on = getChatHiddenFilterEnabled();
   btn.classList.toggle('on', on);
   btn.innerHTML = on ? iconEyeOpenSVG() : iconEyeClosedSVG();
-  btn.title = on ? '숨긴 채팅 보기 중' : '숨긴 채팅 숨기기';
+  btn.title = on ? '??節뗢뵺 嶺?????곌랜??뵳?繞? : '??節뗢뵺 嶺??????節뗢뵛??;
 }
 
 function toggleChatHiddenVisibility() {
@@ -249,12 +249,12 @@ async function refreshCurrentChat() {
   const session = getActiveSession();
   if (!session || !activeChatId) return;
   if (session._demo) {
-    showToast('데모 채팅은 새로고침 대상이 아니야');
+    showToast('??⑤틳嫄?嶺????? ???됱Ŧ??μ쪠??????⑤챷逾??熬곣뫀鍮??);
     return;
   }
   await loadSession(activeChatId);
   renderChatArea();
-  showToast('대화를 새로고침했어');
+  showToast('????? ???됱Ŧ??μ쪠????곗꽑');
 }
 
 function toggleChatProfileOverride() {
@@ -278,7 +278,7 @@ function enhanceRenderedMessage(container) {
       const btn = document.createElement('button');
       btn.className = 'copy-btn user-copy-btn';
       btn.type = 'button';
-      btn.title = '복사';
+      btn.title = '?곌랜踰딀쾮?;
       btn.dataset.copyText = encodeCopyPayload(userMsg.innerText || '');
       btn.innerHTML = '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="10" height="11" rx="2"/><path d="M13 5V3.5A1.5 1.5 0 0 0 11.5 2h-7A1.5 1.5 0 0 0 3 3.5v10A1.5 1.5 0 0 0 4.5 15H5"/></svg>';
       btn.onclick = () => copyBubble(btn, btn.dataset.copyText, true);
@@ -295,7 +295,7 @@ function enhanceRenderedMessage(container) {
         btn.innerHTML = '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="10" height="11" rx="2"/><path d="M13 5V3.5A1.5 1.5 0 0 0 11.5 2h-7A1.5 1.5 0 0 0 3 3.5v10A1.5 1.5 0 0 0 4.5 15H5"/></svg>';
         aiActions.appendChild(btn);
       }
-      btn.title = '복사';
+      btn.title = '?곌랜踰딀쾮?;
       btn.onclick = () => copyBubble(btn, btn.dataset.copyText, true);
       btn.dataset.copyText = encodeCopyPayload(aiBubble.innerText || '');
     }
@@ -437,7 +437,7 @@ function sanitizeTextForUnicodeSafety(value) {
   // Interlinear annotation controls
   s = s.replace(/[\uFFF9-\uFFFB]/g, '');
   // Known accidental foreign-token artifact observed in chat
-  s = s.replace(/(^|[\s\[\(\{'"`])հիմա(?=$|[\s\]\)\}'"`.,!?;:])/gi, '$1');
+  s = s.replace(/(^|[\s\[\(\{'"`])??몄い??귥깚(?=$|[\s\]\)\}'"`.,!?;:])/gi, '$1');
   return s;
 }
 
@@ -599,7 +599,7 @@ async function cleanupAttachmentCaches(items) {
 
 function buildUserMessageContent(text, imageUrls) {
   const imgs = (imageUrls || []).filter(Boolean);
-  if (!imgs.length) return text || '(파일)';
+  if (!imgs.length) return text || '(???逾?';
   const content = [];
   if (text) content.push({ type: 'text', text });
   imgs.forEach(url => content.push({ type: 'image_url', image_url: { url } }));
@@ -643,7 +643,7 @@ function buildChatPreviewText(text) {
 function isPreviewableAssistantText(text) {
   const raw = sanitizeTextForUnicodeSafety(text).replace(/\n/g, ' ').trim();
   if (!raw) return false;
-  if (/(^|\s)(생성 오류|연결 실패)\s*:/.test(raw)) return false;
+  if (/(^|\s)(??諛댁뎽 ???댁쾼|??⑤슡?????덉넮)\s*:/.test(raw)) return false;
   if (/API Error:|RESOURCE_EXHAUSTED|NOT_FOUND|INVALID_ARGUMENT|Gemini Image Error:/i.test(raw)) return false;
   return true;
 }
@@ -685,7 +685,7 @@ function getPersonaModel(persona) {
 function sanitizeChatListPreview(text) {
   const raw = sanitizeTextForUnicodeSafety(text).trim();
   if (/!\[[^\]]*\]\((data:image\/[^)]+|https?:\/\/[^)\s]+)\)/i.test(raw)) {
-    return '[이미지]';
+    return '[????嶺뚯솘?]';
   }
   return raw;
 }
@@ -895,8 +895,8 @@ function initUserInputGuards() {
         .filter(Boolean);
       if (!files.length) return;
       addFilesToAttachments(files, 'paste')
-        .then(added => { if (added > 0) showToast(`클립보드 이미지 ${added}개를 첨부했어요.`); })
-        .catch(err => showToast('클립보드 이미지 첨부 실패: ' + (err?.message || err)));
+        .then(added => { if (added > 0) showToast(`????怨꾪돦??獄?????嶺뚯솘? ${added}?띠룇裕? 嶺뚳퐘維????곗꽑??`); })
+        .catch(err => showToast('????怨꾪돦??獄?????嶺뚯솘? 嶺뚳퐘維? ???덉넮: ' + (err?.message || err)));
       return;
     }
     requestAnimationFrame(() => autoResize(input));
@@ -934,7 +934,7 @@ function initUserInputGuards() {
     setComposerDragActive(false);
     const added = await addFilesToAttachments(files, 'drop');
     if (added > 0) {
-      showToast(`${added}개 파일을 첨부했어요.`);
+      showToast(`${added}?????逾??嶺뚳퐘維????곗꽑??`);
       input.focus();
     }
   };
@@ -947,7 +947,7 @@ function initUserInputGuards() {
   });
 }
 
-// 라이브러리 초기화 (스크립트 로드 후)
+// ??源녿턄??곗뒧??逾??貫?껆뵳??(???꾩씩?源????β돦裕녻キ???
 window.addEventListener('load', () => {
   initMarked();
   initMermaid();
@@ -1135,15 +1135,15 @@ function show(id) {
 }
 function timeLabel(ts) {
   const diff = Date.now() - ts;
-  if (diff < 60000) return '방금';
-  if (diff < 3600000) return `${Math.floor(diff/60000)}분 전`;
-  if (diff < 86400000) return `${Math.floor(diff/3600000)}시간 전`;
-  return `${Math.floor(diff/86400000)}일 전`;
+  if (diff < 60000) return '?꾩렮維??;
+  if (diff < 3600000) return `${Math.floor(diff/60000)}????;
+  if (diff < 86400000) return `${Math.floor(diff/3600000)}??蹂?뜟 ??;
+  return `${Math.floor(diff/86400000)}????;
 }
 
-// ══════════════════════════════
+// ??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫
 //  TOAST / LOADING
-// ══════════════════════════════
+// ??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫
 let toastTimer = null;
 let _speechRecognition = null;
 let _speechListening = false;
@@ -1172,7 +1172,7 @@ function updateMicButtonState(active) {
   if (!btn) return;
   btn.classList.toggle('active', !!active);
   btn.setAttribute('aria-pressed', active ? 'true' : 'false');
-  btn.title = active ? '음성 입력 중지' : '음성 입력';
+  btn.title = active ? '????????놁졑 繞벿살탳?' : '????????놁졑';
 }
 
 function stopMicInput() {
@@ -1186,7 +1186,7 @@ function stopMicInput() {
 function toggleMicInput() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
-    showToast('이 브라우저는 음성 입력을 지원하지 않습니다.');
+    showToast('????곗뒧??????????????놁졑??嶺뚯솘???믨퀡由?춯?뼿 ???용????덈펲.');
     return;
   }
   if (_speechListening) {
@@ -1205,7 +1205,7 @@ function toggleMicInput() {
   recognition.onstart = () => {
     _speechListening = true;
     updateMicButtonState(true);
-    showToast('음성 입력을 듣는 중입니다.', 1200);
+    showToast('????????놁졑???影?ル츎 繞벿살탳????덈펲.', 1200);
   };
   recognition.onresult = (event) => {
     let transcript = '';
@@ -1220,7 +1220,7 @@ function toggleMicInput() {
   recognition.onerror = () => {
     _speechListening = false;
     updateMicButtonState(false);
-    showToast('음성 입력을 처리하지 못했습니다.');
+    showToast('????????놁졑??嶺뚳퐣瑗???? 嶺뚮쪇沅?쭛???鍮??');
   };
   recognition.onend = () => {
     _speechListening = false;
@@ -1229,9 +1229,9 @@ function toggleMicInput() {
   recognition.start();
 }
 
-// ══════════════════════════════
+// ??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫
 //  AVATAR HTML
-// ══════════════════════════════
+// ??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫
 function defaultAvatar(h) {
   return `<svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">
     <circle cx="18" cy="14" r="7" fill="hsl(${h},40%,35%)"/>
@@ -1251,17 +1251,17 @@ async function getPersonaCircleThumb(pid, emotion = 'neutral', letter = '', disp
   return await getNeutralImageThumb(pid, displayPx);
 }
 
-// ══════════════════════════════
+// ??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫
 //  TAB SWITCHING & SETTINGS
-// ══════════════════════════════
+// ??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫
 function switchTab(tab) {
   activeTab = tab;
-  // 하단 탭 활성화
+  // ??濡ル펺 ????戮?뎽??
   document.getElementById('btabPersona').classList.toggle('active', tab === 'persona');
   document.getElementById('btabChat').classList.toggle('active', tab === 'chat');
   document.getElementById('btabSettings').classList.toggle('active', tab === 'settings');
   document.getElementById('btabArchive')?.classList.toggle('active', tab === 'archive');
-  // 패널 표시
+  // ???븐꽢 ??戮?뻣
   document.getElementById('personaPane').style.display = tab === 'persona' ? 'flex' : 'none';
   document.getElementById('chatPane').style.display = tab === 'chat' ? 'flex' : 'none';
   document.getElementById('settingsPane').style.display = tab === 'settings' ? 'flex' : 'none';
@@ -1269,7 +1269,7 @@ function switchTab(tab) {
   if (archivePaneEl) archivePaneEl.style.display = tab === 'archive' ? 'flex' : 'none';
   if (tab === 'settings') renderSettingsPane();
   if (tab === 'archive') renderArchivePane();
-  // 페르소나 선택 초기화
+  // ??濡〓???????ルㅎ臾??貫?껆뵳??
   if (tab !== 'persona') clearPersonaSelection();
 }
 
@@ -1278,7 +1278,7 @@ function renderSettingsPane() {
   if (av) av.innerHTML = userProfile.image
     ? `<img src="${userProfile.image}" style="width:100%;height:100%;object-fit:cover;">`
     : `<svg viewBox="0 0 36 36" style="width:100%;height:100%"><circle cx="18" cy="14" r="7" fill="hsl(220,30%,35%)"/><ellipse cx="18" cy="30" rx="11" ry="7" fill="hsl(220,30%,28%)"/></svg>`;
-  // 삭제 버튼 표시/숨김
+  // ?????뺢퀗?????戮?뻣/???
   const delBtn = document.getElementById('settingsDelAvBtn');
   if (delBtn) delBtn.style.display = userProfile.image ? 'block' : 'none';
   const nameEl = document.getElementById('settingsUserName');
@@ -1286,18 +1286,18 @@ function renderSettingsPane() {
   if (nameEl) nameEl.value = userProfile.name || '';
   if (bioEl) bioEl.value = userProfile.bio || '';
   
-  // 시작 화면 설정
+  // ??戮곗굚 ??븐뻼?????깆젧
   const tabEl = document.getElementById('settingsDefaultTab');
   if (tabEl) tabEl.value = userProfile.defaultTab || 'persona';
 
-  // 글씨 크기 슬라이더
+  // ?リ섣???????????????
   const fs = userProfile.fontSize || 15;
   const fsEl = document.getElementById('settingsFontSize');
   const fsLabel = document.getElementById('settingsFontSizeLabel');
   if (fsEl) fsEl.value = fs;
   if (fsLabel) fsLabel.textContent = fs + 'px';
 
-  // 썸네일 스타일 설정 추가
+  // ?筌뤾퍒???????????깆젧 ?怨뺣뼺?
   const avStyleEl = document.getElementById('settingsAvatarStyle');
   if (avStyleEl) avStyleEl.value = userProfile.chatAvatarStyle || 'square';
   ensureSettingsMemoryPanel();
@@ -1325,7 +1325,7 @@ function saveSettingsUserProfile() {
   applyFontSize(userProfile.fontSize);
   saveUserProfile();
   saveUserProfileKV();
-  showToast('설정 저장됨 ✓');
+  showToast('???깆젧 ???縕ワ쭕???);
 }
 
 function handleSettingsUserImage(input) {
@@ -1344,16 +1344,16 @@ function handleSettingsUserImage(input) {
 }
 
 function deleteSettingsUserImage() {
-  if (!confirm('프로필 이미지를 삭제할까요?')) return;
+  if (!confirm('?熬곣뫁夷??????嶺뚯솘????????ル맪???')) return;
   userProfile.image = null;
   saveUserProfile();
   renderSettingsPane();
   idbSet('user_profile_hd', null).catch(()=>{});
 }
 
-// ══════════════════════════════
+// ??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫
 //  PERSONA GRID
-// ══════════════════════════════
+// ??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫
 let _personaGridRenderVersion = 0;
 let _suppressPersonaTapUntil = 0;
 let _chatOpenToken = 0;
@@ -1442,7 +1442,7 @@ async function renderPersonaGrid() {
 
     const neutral = await getNeutralABaseImageHD(p.pid) || await idbGet(`em_full_${p.pid}_neutral_a`);
 
-    // 새 render 호출이 이미 시작됐으면 이 루프 중단
+    // ??render ?筌뤾쑵??????? ??戮곗굚???紐든춯????猷먮쳜??繞벿살탮??
     if (myVersion !== _personaGridRenderVersion) return;
 
     const imgSrc = neutral;
@@ -1503,7 +1503,7 @@ function setupPersonaGridBlankTapClear(grid) {
 
   grid.addEventListener('click', e => {
     if (Date.now() < _suppressPersonaTapUntil) return;
-    if (e.target !== grid) return; // 카드가 아닌, 빈 공간 터치/클릭만 처리
+    if (e.target !== grid) return; // ?곸궠?獄?쑚泥? ?熬곣뫀鍮? ????ㅻ?????⑥?뭵/????猿볦춹?嶺뚳퐣瑗??
     if (!_selectedPersonaPid) return;
     clearPersonaSelection();
   });
@@ -1751,15 +1751,15 @@ function setupTouchDrag(grid) {
   });
 }
 
-// ══════════════════════════════
+// ??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫
 //  PERSONA EDIT
-// ══════════════════════════════
+// ??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫??믊삳쫫
 let isNewPersona = false;
 
 async function openPersonaEdit(pid) {
   editingPid = pid; isNewPersona = false;
   const p = getPersona(pid);
-  document.getElementById('editTitle').textContent = p ? p.name || '페르소나 편집' : '새 페르소나';
+  document.getElementById('editTitle').textContent = p ? p.name || '??濡〓??????筌뤾쑴異? : '????濡〓?????;
     const hdImage = p ? await getEmotionImageHD(p.pid, 'neutral_a') || await idbGet(`em_full_${p.pid}_neutral_a`) : null;
   renderEditBody(p || { pid, name:'', bio:'', tags:[], hue:200, image:null }, hdImage);
   renderEditFooter(!!p);
@@ -1770,7 +1770,7 @@ function createNewPersona() {
   const p = { pid: nextPid(), name: '', bio: '', tags: [], hue: 200, image: null };
   isNewPersona = true; editingPid = p.pid;
   personas.push(p);
-  document.getElementById('editTitle').textContent = '새 페르소나';
+  document.getElementById('editTitle').textContent = '????濡〓?????;
   renderEditBody(p, null); renderEditFooter(false);
   show('editScreen');
 }
@@ -1780,13 +1780,13 @@ function renderEditFooter(isExisting) {
   const p = getPersona(editingPid);
   if (isExisting) {
     footer.innerHTML = `
-      <button class="edit-delete-btn" onclick="deletePersonaFromEdit()">삭제</button>
-      <button class="edit-cancel-btn" onclick="cancelPersonaEdit()">취소</button>
-      <button class="edit-save-btn" onclick="savePersonaEdit()">저장</button>`;
+      <button class="edit-delete-btn" onclick="deletePersonaFromEdit()">????/button>
+      <button class="edit-cancel-btn" onclick="cancelPersonaEdit()">???쳛??/button>
+      <button class="edit-save-btn" onclick="savePersonaEdit()">????/button>`;
   } else {
     footer.innerHTML = `
-      <button class="edit-cancel-btn" onclick="cancelPersonaEdit()">취소</button>
-      <button class="edit-save-btn" onclick="savePersonaEdit()">생성</button>`;
+      <button class="edit-cancel-btn" onclick="cancelPersonaEdit()">???쳛??/button>
+      <button class="edit-save-btn" onclick="savePersonaEdit()">??諛댁뎽</button>`;
   }
 }
 
@@ -1796,8 +1796,8 @@ function cancelPersonaEdit() {
 }
 
 function deletePersonaFromEdit() {
-  if (personas.length <= 1) { showToast('마지막 페르소나는 삭제할 수 없어'); return; }
-  if (!confirm('이 페르소나를 삭제할까?')) return;
+  if (personas.length <= 1) { showToast('嶺뚮씭??嶺???濡〓???????????????怨룹꽑'); return; }
+  if (!confirm('????濡〓???????????ル맪??')) return;
   personas = personas.filter(p => p.pid !== editingPid);
   savePersonas(); renderPersonaGrid(); goMain();
 }
@@ -1816,31 +1816,31 @@ function renderEditBody(p, hdImage = null) {
     <input type="file" id="editImgInput" style="display:none" accept="image/*" onchange="handleEditImage(this)">
     <input type="file" id="editMultiImgInput" style="display:none" accept="image/*" multiple onchange="handleMultiImageUpload(this)">
     <button onclick="document.getElementById('editMultiImgInput').click()" style="width:100%;padding:9px;border-radius:10px;border:1px solid var(--border2);background:transparent;color:var(--muted);font-family:'Pretendard',sans-serif;font-size:12px;cursor:pointer;margin-top:6px">
-     📁 감정 이미지 일괄 업로드 (파일명 그대로 저장)
+     ?獄??띠룆흮??????嶺뚯솘? ????깼 ???놁Ŧ??(???逾х춯??잙갭梨???????
     </button>
     <div id="editMultiDropzone" class="edit-multi-dropzone" role="button" tabindex="0" onclick="document.getElementById('editMultiImgInput').click()">
       <div class="edit-multi-dropzone-icon">
         <svg viewBox="0 0 24 24"><path d="M12 16V6"/><path d="M8.5 9.5L12 6l3.5 3.5"/><path d="M20 16.5V18a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-1.5"/><path d="M7 12.5a4 4 0 0 1 7.4-2.1A3.5 3.5 0 1 1 17 17"/></svg>
       </div>
-      <div class="edit-multi-dropzone-title">감정 이미지 여러 장 업로드</div>
-      <div class="edit-multi-dropzone-sub">파일을 드래그해서 놓거나 클릭해 선택</div>
+      <div class="edit-multi-dropzone-title">?띠룆흮??????嶺뚯솘? ?????????놁Ŧ??/div>
+      <div class="edit-multi-dropzone-sub">???逾????類ㅼ굥?잙갭梨면뜮???癰귙끆???????????ルㅎ臾?/div>
     </div>
     <div id="editMultiUploadList" class="edit-upload-list"></div>
 
     <div>
       <div class="edit-section-title">Identity Details</div>
 
-      <div class="edit-field-label">PID ${isNewPersona?'<span style="font-size:9px;color:var(--muted)">(변경 가능)</span>':'<span style="font-size:9px;color:var(--muted)">(읽기 전용)</span>'}</div>
+      <div class="edit-field-label">PID ${isNewPersona?'<span style="font-size:9px;color:var(--muted)">(?곌떠????띠럾???</span>':'<span style="font-size:9px;color:var(--muted)">(??袁ⓥ뵛 ?熬곣뫗??</span>'}</div>
       <input class="edit-input" id="editPid" value="${esc(p.pid)}" placeholder="p_riley" ${isNewPersona?'':'readonly'} style="width:100%;font-family:monospace;font-size:12px;color:var(--muted);${isNewPersona?'':'opacity:.6;cursor:default'}">
 
       <div class="edit-field-label">NAME</div>
-      <input class="edit-input" id="editName" value="${esc(p.name)}" placeholder="이름" style="width:100%">
+      <input class="edit-input" id="editName" value="${esc(p.name)}" placeholder="???藥? style="width:100%">
 
       <div class="edit-field-row" style="margin-top:0">
         <div>
           <div class="edit-field-label">GENDER</div>
           <select class="edit-input" id="editGender" style="width:100%">
-            <option value="" ${!p.gender?'selected':''}>선택 안 함</option>
+            <option value="" ${!p.gender?'selected':''}>??ルㅎ臾?????/option>
             <option value="male" ${p.gender==='male'?'selected':''}>Male</option>
             <option value="female" ${p.gender==='female'?'selected':''}>Female</option>
             <option value="nonbinary" ${p.gender==='nonbinary'?'selected':''}>Non-binary</option>
@@ -1849,21 +1849,21 @@ function renderEditBody(p, hdImage = null) {
         </div>
         <div>
           <div class="edit-field-label">AGE / BIRTH YEAR</div>
-          <input class="edit-input" id="editAge" value="${esc(p.age||'')}" placeholder="예: 28, 1996" style="width:100%">
+          <input class="edit-input" id="editAge" value="${esc(p.age||'')}" placeholder="?? 28, 1996" style="width:100%">
         </div>
       </div>
 
       <div class="edit-field-label">MBTI TYPE</div>
-      <input class="edit-input" id="editMbti" value="${esc(p.mbti||'')}" placeholder="예: INTJ-A" style="width:100%">
+      <input class="edit-input" id="editMbti" value="${esc(p.mbti||'')}" placeholder="?? INTJ-A" style="width:100%">
 
       <div class="edit-field-row">
         <div>
-          <div class="edit-field-label">NICKNAME (쉼표 구분)</div>
-          <input class="edit-input" id="editNicknames" value="${esc((p.nicknames||[]).join(', '))}" placeholder="닉네임" style="width:100%">
+          <div class="edit-field-label">NICKNAME (???멥걫 ??뚮맪??</div>
+          <input class="edit-input" id="editNicknames" value="${esc((p.nicknames||[]).join(', '))}" placeholder="??怨뚰맟?? style="width:100%">
         </div>
         <div>
-          <div class="edit-field-label">나를 부르는 호칭</div>
-          <input class="edit-input" id="editUserTitle" value="${esc(p.userTitle||'')}" placeholder="예: 선생님" style="width:100%">
+          <div class="edit-field-label">??? ?遊붋??????筌뤾쑬圭</div>
+          <input class="edit-input" id="editUserTitle" value="${esc(p.userTitle||'')}" placeholder="?? ??ル―臾?? style="width:100%">
         </div>
       </div>
     </div>
@@ -1871,7 +1871,7 @@ function renderEditBody(p, hdImage = null) {
     <div>
       <div class="edit-section-title">Personality</div>
 
-      <div class="edit-field-label">PERSONALITY TRAITS (최대 6개)</div>
+      <div class="edit-field-label">PERSONALITY TRAITS (嶺뚣끉裕? 6??</div>
       <div class="tags-wrap">
         ${TRAIT_OPTIONS.map(t => `<div class="tag ${(p.tags||[]).includes(t)?'on':''}" onclick="toggleEditTrait('${t}',this)">${t}</div>`).join('')}
       </div>
@@ -1885,12 +1885,12 @@ function renderEditBody(p, hdImage = null) {
     <div>
       <div class="edit-section-title">Description</div>
       <div class="edit-field-label">ROLE / INTRODUCTION</div>
-      <textarea class="edit-textarea" id="editBio" placeholder="어떤 역할인지 짧게 적어줘" style="height:90px">${esc(p.bio)}</textarea>
+      <textarea class="edit-textarea" id="editBio" placeholder="?????????筌? 嶺뚯쉧猷볢떋???⑤챶?좈쨹? style="height:90px">${esc(p.bio)}</textarea>
     </div>
 
     <div>
       <div class="edit-section-title">Model</div>
-      <div class="edit-field-label">기본 응답 모델 (이 페르소나가 참여한 채팅의 기본값)</div>
+      <div class="edit-field-label">?リ옇?????얜Ŧ堉?嶺뚮ㅄ維??(????濡〓????뚧뤆?쎛 嶺뚣볦굣???嶺??????リ옇???泥?</div>
       ${buildModelSelect('editDefaultModel', p.defaultModel || '')}
     </div>`;
   ensureEditPrivateMemoryPanel(p.pid);
@@ -1913,26 +1913,26 @@ function handleEditImage(input) {
   reader.onload = e => {
     const originalDataUrl = e.target.result;
     openCropEditor(originalDataUrl, async (cropped) => {
-      // 화면 즉시 반영
+      // ??븐뻼??嶺뚯빖留???꾩룇瑗??
       const av = document.querySelector('#editBody .edit-big-img-wrap');
       if (av) av.innerHTML = `<img src="${cropped}" style="width:100%;height:100%;object-fit:cover;object-position:top;display:block"><div class="edit-big-img-overlay"><svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg></div>`;
 
       const p = getPersona(editingPid); if (!p) return;
 
-      // 3단계 썸네일 생성
+      // 3??節띉??筌뤾퍒?????諛댁뎽
       idbSet(`em_full_${p.pid}_neutral_a`, cropped).catch(() => {});
       p._pendingImage = cropped;
 
       const { sqMd, fullHd, avatarPng } = await generateThumbnailSet(cropped, p.pid, 'neutral_a');
 
-      // 메모리
+      // 嶺뚮∥???꾨뎨?
       p.image = sqMd;
       p.neutral_md = sqMd;
       p.neutral_hd = fullHd;
       p.neutral_thumb = avatarPng;
       _neutralCache[p.pid] = sqMd;
 
-      showToast('이미지 선택됨 - 저장 버튼을 눌러줘');
+      showToast('????嶺뚯솘? ??ルㅎ臾??- ?????뺢퀗????????롩쨹?);
     });
   };
   reader.readAsDataURL(file);
@@ -1947,9 +1947,9 @@ async function handleMultiImageUpload(input) {
   const p = getPersona(editingPid); if (!p) return;
   const filesLegacy = [...input.files]; if (!filesLegacy.length) return;
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-  if (!wUrl) { alert('Worker URL 없음'); return; }
+  if (!wUrl) { alert('Worker URL ??怨몃쾳'); return; }
 
-  showToast(`⏳ ${files.length}개 업로드 중...`, 10000);
+  showToast(`??${files.length}?????놁Ŧ??繞?..`, 10000);
   let ok = 0, fail = 0;
   for (const file of files) {
     try {
@@ -1989,7 +1989,7 @@ async function handleMultiImageUpload(input) {
     } catch(e) { fail++; }
   }
   if (typeof _imageListCache !== 'undefined') delete _imageListCache[p.pid];
-  showToast(`✓ ${ok}개 완료${fail ? ` / ${fail}개 실패` : ''}`);
+  showToast(`??${ok}???熬곣뫁??{fail ? ` / ${fail}?????덉넮` : ''}`);
   input.value = '';
 }
 
@@ -2008,9 +2008,9 @@ function renderEditMultiUploadList() {
       : `<div class="edit-upload-file">${esc((item.name || '').slice(0, 12) || 'file')}</div>`;
     const stateClass = item.status === 'done' ? 'is-done' : (item.status === 'fail' ? 'is-fail' : 'is-uploading');
     const stateBadge = item.status === 'done'
-      ? `<div class="edit-upload-state done">완료</div>`
+      ? `<div class="edit-upload-state done">?熬곣뫁??/div>`
       : item.status === 'fail'
-        ? `<div class="edit-upload-state fail">실패</div>`
+        ? `<div class="edit-upload-state fail">???덉넮</div>`
         : `<div class="edit-upload-state"><div class="attachment-spinner"></div></div>`;
     return `<div class="edit-upload-thumb ${stateClass}">${thumb}${stateBadge}</div>`;
   }).join('');
@@ -2067,11 +2067,11 @@ function initEditMultiDropzone_legacy() {
     mark(false);
     const files = [...(e.dataTransfer?.files || [])].filter(f => (f?.type || '').startsWith('image/'));
     if (!files.length) {
-      showToast('이미지 파일만 업로드할 수 있어요.');
+      showToast('????嶺뚯솘? ???逾х춯????놁Ŧ???ル쭑 ?????곗꽑??');
       return;
     }
     if (!files.length) {
-      showToast('이미지 파일만 업로드할 수 있어');
+      showToast('????嶺뚯솘? ???逾х춯????놁Ŧ???ル쭑 ?????곗꽑');
       return;
     }
     await handleMultiImageFiles(files);
@@ -2083,9 +2083,9 @@ async function handleMultiImageFiles_legacy(fileList) {
   const files = [...(fileList || [])].filter(f => (f?.type || '').startsWith('image/'));
   if (!files.length) return;
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-  if (!wUrl) { alert('Worker URL 없음'); return; }
+  if (!wUrl) { alert('Worker URL ??怨몃쾳'); return; }
 
-  showToast(`총${files.length}개 업로드 중...`, 10000);
+  showToast(`??{files.length}?????놁Ŧ??繞?..`, 10000);
   let ok = 0, fail = 0;
   for (const file of files) {
     try {
@@ -2125,7 +2125,7 @@ async function handleMultiImageFiles_legacy(fileList) {
     } catch(e) { fail++; }
   }
   if (typeof _imageListCache !== 'undefined') delete _imageListCache[p.pid];
-  showToast(`총${ok}개 성공${fail ? ` / ${fail}개 실패` : ''}`);
+  showToast(`??{ok}???繹먭퍓沅?{fail ? ` / ${fail}?????덉넮` : ''}`);
 }
 
 function initEditMultiDropzone() {
@@ -2179,7 +2179,7 @@ function initEditMultiDropzone() {
     mark(false);
     const files = [...(e.dataTransfer?.files || [])].filter(f => (f?.type || '').startsWith('image/'));
     if (!files.length) {
-      showToast('이미지 파일만 업로드할 수 있어요.');
+      showToast('????嶺뚯솘? ???逾х춯????놁Ŧ???ル쭑 ?????곗꽑??');
       return;
     }
     await handleMultiImageFiles(files);
@@ -2191,7 +2191,7 @@ async function handleMultiImageFiles(fileList) {
   const files = [...(fileList || [])].filter(f => (f?.type || '').startsWith('image/'));
   if (!files.length) return;
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-  if (!wUrl) { alert('Worker URL 없음'); return; }
+  if (!wUrl) { alert('Worker URL ??怨몃쾳'); return; }
 
   _editMultiUploadQueue = files.map((file, idx) => ({
     id: `upload_${Date.now()}_${idx}`,
@@ -2200,7 +2200,7 @@ async function handleMultiImageFiles(fileList) {
     status: 'uploading'
   }));
   renderEditMultiUploadList();
-  showToast(`이미지 ${files.length}개 업로드 시작`);
+  showToast(`????嶺뚯솘? ${files.length}?????놁Ŧ????戮곗굚`);
 
   let ok = 0, fail = 0;
   for (let i = 0; i < files.length; i++) {
@@ -2251,7 +2251,7 @@ async function handleMultiImageFiles(fileList) {
     renderEditMultiUploadList();
   }
   if (typeof _imageListCache !== 'undefined') delete _imageListCache[p.pid];
-  showToast(`업로드 완료: ${ok}${fail ? `, 실패 ${fail}개` : ''}`);
+  showToast(`???놁Ŧ???熬곣뫁?? ${ok}${fail ? `, ???덉넮 ${fail}?? : ''}`);
 }
 
 async function savePersonaEdit() {
@@ -2263,7 +2263,7 @@ async function savePersonaEdit() {
     editingPid = newPid;
     personas.push(p);
   }
-  p.name = document.getElementById('editName').value.trim() || '페르소나';
+  p.name = document.getElementById('editName').value.trim() || '??濡〓?????;
   p.bio = document.getElementById('editBio').value.trim();
   const selSwatch = document.querySelector('#editBody .hue-swatch.on');
   if (selSwatch?.dataset.hue) p.hue = parseInt(selSwatch.dataset.hue);
@@ -2277,10 +2277,10 @@ async function savePersonaEdit() {
   isNewPersona = false;
 
   if (p._pendingImage) {
-    showToast('새 이미지 저장 중...', 5000);
+    showToast('??????嶺뚯솘? ????繞?..', 5000);
     try {
       const workerUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-      if (!workerUrl) throw new Error('Worker URL 없음');
+      if (!workerUrl) throw new Error('Worker URL ??怨몃쾳');
       const b64 = p._pendingImage.split(',')[1];
       const byteArr = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
       const blob = new Blob([byteArr], { type: 'image/jpeg' });
@@ -2290,16 +2290,16 @@ async function savePersonaEdit() {
       form.append('folder', `profile/${p.pid}`);
       const res = await fetch(workerUrl + '/image', { method: 'POST', body: form });
       const data = await res.json();
-      if (!data.url) throw new Error(data.error || '업로드 실패');
+      if (!data.url) throw new Error(data.error || '???놁Ŧ?????덉넮');
       p.imageUrl = data.url;
     } catch(e) {
-      alert('업로드 실패: ' + e.message);
+      alert('???놁Ŧ?????덉넮: ' + e.message);
       return;
     }
     delete p._pendingImage;
   }
   savePersonas(); renderPersonaGrid(); goMain();
-  showToast('저장됨 ✓');
+  showToast('???縕ワ쭕???);
 }
 
 // ===============
@@ -2308,14 +2308,14 @@ async function savePersonaEdit() {
 
 
 // ===============
-//  마크다운 렌더링 데모
+//  嶺뚮씭?뉐칰???깅뮧 ?????춯???⑤틳嫄?
 // ===============
 const _DEMO_SLIDES = [
-  { label: "표(Table)", text: "| 항목 | 금액 | 비고 |\n|---|---:|---|\n| 매출 | 12,500,000 | 1분기 |\n| 매입 | 8,200,000 | 원자재 |\n| **영업이익** | **4,300,000** | 34.4% |" },
-  { label: "코드 블록", text: "```python\ndef greet(name):\n    return '?덈뀞, ' + name\n\nprint(greet('Riley'))\n```" },
-  { label: "紐⑸줉 & ?몄슜", text: "**?ㅻ뒛 ????*\n\n1. 湲고쉷???묒꽦\n2. ?붿옄??由щ럭\n3. 諛고룷 ?뺤씤\n\n> ?꾨꼍??肄붾뱶蹂대떎 ?숈옉?섎뒗 肄붾뱶媛 ?ル떎" },
-  { label: "Mermaid", text: "```mermaid\nflowchart LR\n  A[?ъ슜?? --> B{?뚯떛}\n  B --> C[?섎Ⅴ?뚮굹]\n  B --> D[留덊겕?ㅼ슫]\n  C --> E[媛먯젙이미지]\n  D --> F[?뚮뜑留?\n```" },
-  { label: "紐⑤뜽 鍮꾧탳", text: "| 紐⑤뜽 | ?띾룄 | 鍮꾩쟾 | 이미지?앹꽦 |\n|---|:---:|:---:|:---:|\n| grok-4-1-fast-non-reasoning | ?△슒??| ??| ??|\n| grok-3-mini | ?△슒 | ??| ??|\n| claude-sonnet | ?△슒 | ??| ??|\n| gemini-2.5-pro | ??| ??| ??|\n| gpt-4o | ?△슒 | ??| ??|" }
+  { label: "??Table)", text: "| ????| ?ル?녽뇡?| ?????|\n|---|---:|---|\n| 嶺뚮씞???| 12,500,000 | 1?釉뚯뫅??|\n| 嶺뚮씞???| 8,200,000 | ??????|\n| **??⑤챶???怨몃덧** | **4,300,000** | 34.4% |" },
+  { label: "?袁⑤?獄???곕?餓?, text: "```python\ndef greet(name):\n    return '????읐? ' + name\n\nprint(greet('Riley'))\n```" },
+  { label: "癲ル슢?꾤땟戮⑤뭄?& ?嶺뚮ㅎ???, text: "**????몄툜 ????*\n\n1. ??れ삀??????????n2. ??釉먯뒭????域밸Ŧ留??n3. ?袁⑸즲?????嶺뚮Ĳ?됮?n\n> ??ш끽紐????熬곣뫀?????????????깃탾??嚥▲꺂痢??熬곣뫀????싷㎗? ????ロ렡" },
+  { label: "Mermaid", text: "```mermaid\nflowchart LR\n  A[????? --> B{?????\n  B --> C[??嚥▲벬?????\n  B --> D[癲ル슢???먯물???源낅?]\n  C --> E[??좊즴????됰턄亦껋꼶梨?]\n  D --> F[?????異?\n```" },
+  { label: "癲ル슢?꾤땟????????, text: "| 癲ル슢?꾤땟???| ????뽦뵣 | ?????| ????嶺뚯솘???獄쏅똻??|\n|---|:---:|:---:|:---:|\n| grok-4-1-fast-non-reasoning | ???諛몃츊??| ??| ??|\n| grok-3-mini | ???諛몃츊 | ??| ??|\n| claude-sonnet | ???諛몃츊 | ??| ??|\n| gemini-2.5-pro | ??| ??| ??|\n| gpt-4o | ???諛몃츊 | ??| ??|" }
 ];
 
 let _demoSlideIdx = 0;
@@ -2332,38 +2332,38 @@ function openMarkdownDemo() {
       _markdownDemo: true,
       participantPids: [],
       history: [],
-      roomName: '렌더링 데모',
+      roomName: '?????춯???⑤틳嫄?,
       updatedAt: Date.now(),
-      lastPreview: '수식 · 코드 · Mermaid'
+      lastPreview: '??琉용뻤 鸚??袁⑤?獄?鸚?Mermaid'
     };
     sessions.unshift(s);
   }
   s.history = [];
   s._loaded = true;
   activeChatId = s.id;
-  // 메인화면 및 채팅 탭 활성화 후 chatScreen으로
+  // 嶺뚮∥????븐뻼????嶺????????戮?뎽????chatScreen??怨쀬Ŧ
   show('chatScreen');
-  // 하단바 active 상태 갱신
+  // ??濡ル펺??active ??⑤객臾??띠룄???
   ['Persona','Chat','Settings'].forEach(t =>
     document.getElementById('btab'+t)?.classList.toggle('active', false)
   );
-  document.getElementById('chatHeaderNames').textContent = '렌더링 데모';
+  document.getElementById('chatHeaderNames').textContent = '?????춯???⑤틳嫄?;
   document.getElementById('chatHeaderAvatars').innerHTML =
     '<div class="chat-header-av" style="background:hsl(220,20%,14%);border-color:hsl(220,28%,22%);font-size:18px;display:flex;align-items:center;justify-content:center"></div>';
   const area = document.getElementById('chatArea');
   area.innerHTML = '';
   _showDemoSlide(area);
   const input = document.getElementById('userInput');
-  if (input) { input.placeholder = 'Enter 눌러 다음 슬라이드'; input.value = ''; input.focus(); }
+  if (input) { input.placeholder = 'Enter ????????깅쾳 ??????獄?; input.value = ''; input.focus(); }
 }
 
 function _showDemoSlide(area) {
   if (_demoSlideIdx >= _DEMO_SLIDES.length) {
     const el = document.createElement('div');
-    el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--muted);font-size:13px">— 데모 끝 —<br><br><span style="font-size:11px;opacity:.6">진짜 채팅을 시작해봐</span></div>`;
+    el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--muted);font-size:13px">????⑤틳嫄?????br><br><span style="font-size:11px;opacity:.6">嶺뚯쉳?닷퐲?嶺???????戮곗굚?????/span></div>`;
     area.appendChild(el);
     area.scrollTop = area.scrollHeight;
-    document.getElementById('userInput').placeholder = '메시지를 입력하세요';
+    document.getElementById('userInput').placeholder = '嶺뚮∥???낆???????놁졑??琉얠돪??;
     return;
   }
   const slide = _DEMO_SLIDES[_demoSlideIdx];
@@ -2432,8 +2432,8 @@ async function renderChatList() {
 
   for (const s of sorted) {
     const pList = (s.participantPids || []).map(pid => getPersona(pid)).filter(Boolean);
-    const roomName = s.roomName || pList.map(p=>p.name).join(', ') || '채팅';
-    const listPreview = resolveSessionListPreview(s, pList) || '대화를 시작해봐';
+    const roomName = s.roomName || pList.map(p=>p.name).join(', ') || '嶺????;
+    const listPreview = resolveSessionListPreview(s, pList) || '????? ??戮곗굚?????;
 
     const wrap = document.createElement('div');
     wrap.className = 'chat-list-wrap';
@@ -2504,24 +2504,24 @@ async function openRestoreModal() {
 async function renderRestoreList() {
   const wrap = document.getElementById('restoreList');
   if (!wrap) return;
-  wrap.innerHTML = `<div style="font-size:12px;color:var(--muted);padding:6px 2px">불러오는 중...</div>`;
+  wrap.innerHTML = `<div style="font-size:12px;color:var(--muted);padding:6px 2px">?釉띾쐞????노츎 繞?..</div>`;
   const deleted = await listDeletedSessionsRemote();
   const sorted = [...deleted].sort((a, b) => (b.deletedAt || b.updatedAt || 0) - (a.deletedAt || a.updatedAt || 0));
   if (!sorted.length) {
-    wrap.innerHTML = `<div style="font-size:12px;color:var(--muted);padding:6px 2px">복원 가능한 채팅이 없습니다.</div>`;
+    wrap.innerHTML = `<div style="font-size:12px;color:var(--muted);padding:6px 2px">?곌랜踰???띠럾??繞③뇡?嶺???????怨룸????덈펲.</div>`;
     return;
   }
   wrap.innerHTML = sorted.map(s => {
-    const names = (s.roomName || (s.participantPids || []).map(pid => getPersona(pid)?.name || '').filter(Boolean).join(', ') || '채팅');
+    const names = (s.roomName || (s.participantPids || []).map(pid => getPersona(pid)?.name || '').filter(Boolean).join(', ') || '嶺????);
     return `
       <div style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--border2);border-radius:10px;background:var(--card)">
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(names)}</div>
-          <div style="font-size:11px;color:var(--muted)">삭제: ${timeLabel(s.deletedAt || s.updatedAt || Date.now())}</div>
+          <div style="font-size:11px;color:var(--muted)">???? ${timeLabel(s.deletedAt || s.updatedAt || Date.now())}</div>
         </div>
         <div style="display:flex;gap:6px;align-items:center">
-          <button onclick="restoreDeletedChat('${s.id}')" style="padding:7px 10px;border-radius:9px;border:1px solid var(--border2);background:transparent;color:var(--text);font-size:12px;cursor:pointer">강제복구</button>
-          <button onclick="purgeDeletedChat('${s.id}')" style="padding:7px 10px;border-radius:9px;border:1px solid hsl(0,30%,24%);background:hsl(0,20%,12%);color:hsl(0,70%,68%);font-size:12px;cursor:pointer">영구삭제</button>
+          <button onclick="restoreDeletedChat('${s.id}')" style="padding:7px 10px;border-radius:9px;border:1px solid var(--border2);background:transparent;color:var(--text);font-size:12px;cursor:pointer">?띠룆踰?節덊돦????/button>
+          <button onclick="purgeDeletedChat('${s.id}')" style="padding:7px 10px;border-radius:9px;border:1px solid hsl(0,30%,24%);background:hsl(0,20%,12%);color:hsl(0,70%,68%);font-size:12px;cursor:pointer">??⑤??????/button>
         </div>
       </div>
     `;
@@ -2532,28 +2532,28 @@ async function restoreDeletedChat(id) {
   if (!id) return;
   const res = await restoreDeletedSessionRemote(id);
   if (!res?.ok) {
-    showToast('채팅 복원 실패');
+    showToast('嶺?????곌랜踰?????덉넮');
     return;
   }
   await loadIndex();
   await renderRestoreList();
   renderChatList();
-  showToast('채팅이 복원되었습니다');
+  showToast('嶺??????곌랜踰???琉????鍮??);
 }
 
 async function purgeDeletedChat(id) {
   if (!id) return;
-  if (!confirm('이 채팅 찌꺼기를 KV에서 영구삭제할까요? 복구할 수 없습니다.')) return;
+  if (!confirm('??嶺????嶺뚣볦뒦癰귥뇳臾얏? KV???????⑤???????ル맪??? ?곌랜踰???????怨룸????덈펲.')) return;
   const res = await purgeSessionRemote(id);
   if (!res?.ok) {
-    showToast('영구삭제 실패');
+    showToast('??⑤?????????덉넮');
     return;
   }
   sessions = sessions.filter(s => s.id !== id);
   removeLocalSession(id);
   await renderRestoreList();
   renderChatList();
-  showToast('KV에서 영구삭제했습니다.');
+  showToast('KV???????⑤????????곕????덈펲.');
 }
 
 let _selectedPersonaPid = null;
@@ -2610,7 +2610,7 @@ function ensurePersonaActionButtons() {
     editBtn.id = 'personaEditBtn';
     editBtn.className = 'persona-start-chat-btn secondary';
     editBtn.type = 'button';
-    editBtn.textContent = '페르소나 수정';
+    editBtn.textContent = '??濡〓???????瑜곸젧';
     editBtn.onclick = () => editSelectedPersona();
     actions.appendChild(editBtn);
   } else if (editBtn.parentElement !== actions) {
@@ -2627,7 +2627,7 @@ function selectPersonaForChat(pid) {
   if (newBtn) newBtn.classList.add('visible');
   if (editBtn) editBtn.classList.add('visible');
   const p = getPersona(pid);
-  if (newBtn) newBtn.textContent = p?.name ? `${p.name} 와 채팅` : '와(과) 채팅';
+  if (newBtn) newBtn.textContent = p?.name ? `${p.name}에게 말 걸기` : '말 걸기';
   document.querySelectorAll('.persona-card[data-pid]').forEach(c => {
     c.style.opacity = c.dataset.pid === pid ? '1' : '0.5';
   });
@@ -2788,21 +2788,21 @@ function setupSwipeDelete(item, wrap, id) {
 }
 
 async function deleteChatFromDrawer() {
-  if (!confirm('이 채팅방을 삭제할까요? 저장된 내용은 모두 사라져요')) return;
+  if (!confirm('??嶺????ㅼ낯?諭諭??????ル맪??? ???縕ワ쭕???怨몃뮔?? 嶺뚮ㅄ維筌?????筌뤾쑴??)) return;
   const id = activeChatId;
   sessions = sessions.filter(s => s.id !== id);
   removeLocalSession(id);
   await deleteSessionRemote(id).catch(() => {});
-  showToast('채팅이 휴지통으로 이동되었습니다.');
+  showToast('嶺???????????紐드슖???????琉????鍮??');
   saveIndex(); closeDrawer(); activeChatId = null; goMain(); switchTab('chat');
 }
 
 async function deleteChat(id) {
-  if (!confirm('이 채팅을 삭제할까요?')) return;
+  if (!confirm('??嶺??????????ル맪???')) return;
   sessions = sessions.filter(s => s.id !== id);
   removeLocalSession(id);
   await deleteSessionRemote(id).catch(() => {});
-  showToast('채팅이 휴지통으로 이동되었습니다.');
+  showToast('嶺???????????紐드슖???????琉????鍮??');
   renderChatList(); saveIndex();
 }
 
@@ -2814,7 +2814,7 @@ async function toggleChatHidden(id) {
   saveSession(id);
   saveIndex();
   await renderChatList();
-  showToast(s.hidden ? '채팅이 숨겨졌어요.' : '채팅이 다시 보이게 했어요.');
+  showToast(s.hidden ? '嶺???????節딅낵?브퀡?ｅ젆??' : '嶺????????곕뻣 ?곌랜??議얠물????곗꽑??');
 }
 
 // ===============
@@ -2850,7 +2850,7 @@ function toggleSelectPid(pid, card) {
   const idx = selectedPids.indexOf(pid);
   if (idx > -1) { selectedPids.splice(idx, 1); card.classList.remove('selected'); }
   else {
-    if (selectedPids.length >= MAX_PARTICIPANTS) { showToast(`최대 ${MAX_PARTICIPANTS}명까지 참여 가능해`); return; }
+    if (selectedPids.length >= MAX_PARTICIPANTS) { showToast(`嶺뚣끉裕? ${MAX_PARTICIPANTS}嶺뚮ㅏ援??먯?? 嶺뚣볦굣???띠럾??繞③뜮?); return; }
     selectedPids.push(pid); card.classList.add('selected');
   }
   document.getElementById('startChatBtn').disabled = selectedPids.length === 0;
@@ -2932,7 +2932,7 @@ async function openChat(id) {
   show('chatScreen');
   switchInputTab('chat');
 
-  // 첫 번째 페르소나 기본 모델을 일시적으로만 동기화
+  // 嶺??뺢퀡?????濡〓??????リ옇???嶺뚮ㅄ維?????源낅뻣??⑤챷紐드슖?る츊壤????욋뵛??
   const modelEl = document.getElementById('chatModeSelect');
   if (modelEl) {
     const effectiveModel = pList.find(p => p.defaultModel)?.defaultModel
@@ -2953,13 +2953,13 @@ async function openChat(id) {
   }
   renderChatArea();
 
-  // _loaded 없으면 무조건 로드
+  // _loaded ??怨몃さ嶺???쒕샍??롮퀪??β돦裕녻キ?
   if (!s._loaded) {
     loadSession(id);
     return;
   }
 
-  // KV updatedAt 비교 후 로컬보다 최신이면 강제 리프레시
+  // KV updatedAt ????????β돦裕뉛쭚袁ν돦????嶺뚣끉裕???????띠룆踰???洹먮뿫????곕뻣
   if (!s._demo && typeof refreshCurrentChatIfStale === 'function') {
     refreshCurrentChatIfStale(id).catch(() => {});
     return;
@@ -2971,7 +2971,7 @@ async function openChat(id) {
       .then(data => {
         const kvUpdatedAt = data.session?.updatedAt;
         if (kvUpdatedAt && kvUpdatedAt > (s.updatedAt || 0)) {
-          loadSession(id); // 최신 내용으로 교체
+          loadSession(id); // 嶺뚣끉裕????怨몃뮔??怨쀬Ŧ ??흮??
         }
       })
       .catch(() => {});
@@ -2982,7 +2982,7 @@ function goMain() {
   _isDemoMode = false;
   activeChatId = null;
   const input = document.getElementById('userInput');
-  if (input) input.placeholder = '메시지를 입력하세요';
+  if (input) input.placeholder = '嶺뚮∥???낆???????놁졑??琉얠돪??;
   show('mainScreen');
   renderChatList();
 }
@@ -2990,7 +2990,7 @@ function goMain() {
 async function renderChatArea() {
   const session = getActiveSession(); if (!session) return;
   const renderSessionId = session.id;
-  if (session._markdownDemo) return; // 데모는 직접 관리
+  if (session._markdownDemo) return; // ??⑤틳嫄??嶺뚯쉳?????㉱??
   const area = document.getElementById('chatArea');
   const empty = document.getElementById('chatEmpty2');
 
@@ -2999,7 +2999,7 @@ async function renderChatArea() {
     [...area.children].forEach(c => { if (c.id !== 'chatEmpty2') c.remove(); });
     empty.style.display = 'flex';
     const pList = (session.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
-    document.getElementById('emptyText').textContent = pList.map(p=>p.name).join(', ') + '님께 메시지를 입력해보세요';
+    document.getElementById('emptyText').textContent = pList.map(p=>p.name).join(', ') + '???곷쐾 嶺뚮∥???낆???????놁졑?????筌뤾쑴??;
     return;
   }
   area.classList.add('has-messages');
@@ -3013,7 +3013,7 @@ async function renderChatArea() {
   for (const msg of session.history) {
     const el = document.createElement('div');
     if (msg.role === 'user') {
-  let text = typeof msg.content === 'string' ? msg.content : (Array.isArray(msg.content) ? msg.content.find(c=>c.type==='text')?.text||'(메시지)' : '(또는 텍스트)');
+  let text = typeof msg.content === 'string' ? msg.content : (Array.isArray(msg.content) ? msg.content.find(c=>c.type==='text')?.text||'(嶺뚮∥???낆??)' : '(???裕????⑸츩??');
   el.innerHTML = msg._rendered || renderUserMessageHTML(msg);
 } else {
       const pList = getSessionPersonas(session);
@@ -3078,7 +3078,7 @@ function copyBubble(btn, text, encoded = false) {
     btn.querySelector('svg')?.style && (btn.querySelector('svg').style.display = 'none');
     btn.dataset.orig = btn.innerHTML;
     btn.innerHTML = '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 9 7 13 15 5"/></svg>';
-    showToast('클립보드에 복사되었습니다', 1200);
+    showToast('????怨꾪돦??獄???곌랜踰딀쾮??琉????鍮??, 1200);
     setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = btn.dataset.orig; }, 1500);
   };
   if (navigator.clipboard?.writeText) {
@@ -3121,7 +3121,7 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
     const safeThumb = thumbSrc.replace(/'/g, "\\'");
     const celebStroke = '';
     
-    // 설정에 따른 스타일 결정
+    // ???깆젧????⑤틲????????롪퍒???
     const avDisplay = avStyle === 'hidden' ? 'display:none;' : '';
     const avShape = avStyle === 'circle' ? 'border-radius:50%; width:min(25vw,80px); height:min(25vw,80px); aspect-ratio:1/1; max-height:80px;' : '';
     if (avStyle === 'circle' && circleThumb) {
@@ -3130,7 +3130,7 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
     
     const fmtContent = fmt(seg.content);
 
-    // AI 생성 이미지 감지 (마크다운 ![](url) 또는 plain URL)
+    // AI ??諛댁뎽 ????嶺뚯솘? ?띠룆흮? (嶺뚮씭?뉐칰???깅뮧 ![](url) ???裕?plain URL)
     const imgUrlRe = /https?:\/\/[^\s"')]+\.(?:jpg|jpeg|png|gif|webp)(?:[?#][^\s"')]*)?/gi;
     const imageUrls = [...(seg.content.matchAll(imgUrlRe))].map(m => m[0]);
     const hasImg = imageUrls.length > 0 || /<img/i.test(fmtContent);
@@ -3145,7 +3145,7 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
       ? `ai-bubble md-content has-img${isImageOnly ? ' ai-bubble-image-only' : ''}`
       : 'ai-bubble md-content';
 
-    // 클릭 시 팝업 연결 (이미지에 onclick 주입)
+    // ?????????諛몄뵜 ??⑤슡??(????嶺뚯솘???onclick ?낅슣???
     let renderedContent = fmtContent;
     if (hasImg && imageUrls.length > 0) {
       renderedContent = fmtContent.replace(
@@ -3153,19 +3153,19 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
         (_, pre, src, post) => {
           const safeSrc = String(src || '').replace(/'/g, "\\'");
           const safeKey = String(extractR2ImageKey(src) || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-          return `<div class="inline-image-wrap"><img${pre}src="${src}"${post} onclick="openImagePopup('${safeSrc}')" style="cursor:pointer"><div class="inline-image-actions"><button class="image-popup-action-btn" onclick="addImageSourceToComposer('${safeSrc}','generated.jpg')" title="소스로 추가"><svg viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></svg></button><button class="image-popup-action-btn" onclick="downloadImage('${safeSrc}','generated.jpg')" title="다운로드"><svg viewBox="0 0 24 24"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 21h16"/></svg></button></div></div>`;
+          return `<div class="inline-image-wrap"><img${pre}src="${src}"${post} onclick="openImagePopup('${safeSrc}')" style="cursor:pointer"><div class="inline-image-actions"><button class="image-popup-action-btn" onclick="addImageSourceToComposer('${safeSrc}','generated.jpg')" title="???裕욃슖??怨뺣뼺?"><svg viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></svg></button><button class="image-popup-action-btn" onclick="downloadImage('${safeSrc}','generated.jpg')" title="???깅뮧?β돦裕녻キ?><svg viewBox="0 0 24 24"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 21h16"/></svg></button></div></div>`;
         }
       );
     }
 
-    // 저장 버튼
+    // ?????뺢퀗???
     const dlBtn = '';
 
     html += `<div class="ai-msg ${hasImg ? 'ai-msg-img' : 'ai-msg-text'} ${isOneToOne ? 'one-to-one' : ''}" style="${opacity}">
       <div class="msg-av" style="background:hsl(${h},20%,11%);border-color:hsl(${h},28%,22%);${celebStroke};${avDisplay}${avShape}" onclick="openProfilePopup('${safePid}','${safeEmotion}',${h},'${safeThumb}','${safeSuffix}')">${baseImg}</div>
       <div class="bubble-col">
         <div class="msg-pname" style="color:hsl(${h},65%,72%)">
-          <span class="msg-pname-text">${esc(p.name)}${p._ghost?`<span style="font-size:9px;opacity:.5">(삭제)</span>`:''}</span>
+          <span class="msg-pname-text">${esc(p.name)}${p._ghost?`<span style="font-size:9px;opacity:.5">(????</span>`:''}</span>
           
         </div>
         <div class="${bubbleWrapClass}">
@@ -3211,18 +3211,18 @@ async function appendAIReplySequentially(reply, pList, suffixes, createdAt, tgtA
   }
 }
 
-// 콘텐츠에서 모델이 잘못 추가한 태그 제거
-// [worry]...[/worry], [emotion:worry], [p_xxx]...[/p_xxx] 등
+// ?袁⑷섰???럹?ル∥???嶺뚮ㅄ維?????濡?굘 ?怨뺣뼺?????蹂μ쟽 ??蹂ㅽ깴
+// [worry]...[/worry], [emotion:worry], [p_xxx]...[/p_xxx] ??
 function cleanContent(text) {
   const emotionPat = EMOTIONS.join('|');
   return text
-    // [emotionName]...[/emotionName] 감싸기 → 내용만 남김
+    // [emotionName]...[/emotionName] ?띠룆흮?瓘臾?????怨몃뮔嶺????
     .replace(new RegExp(`\\[(${emotionPat})\\]([\\s\\S]*?)\\[\\/(${emotionPat})\\]`, 'gi'), '$2')
-    // 단독 [emotionName] 또는 [/emotionName]
+    // ???살┫ [emotionName] ???裕?[/emotionName]
     .replace(new RegExp(`\\[\\/?(?:${emotionPat})\\]`, 'gi'), '')
-    // [emotion:xxx] 태그
+    // [emotion:xxx] ??蹂μ쟽
     .replace(/\[emotion:\s*\w+\s*\]/gi, '')
-    // 이름: 으로 시작하는 접두어 (pid 태그 없이 이름만 붙는 경우)
+    // ???藥? ??怨쀬Ŧ ??戮곗굚??濡ル츎 ??얜Ŧ???(pid ??蹂μ쟽 ??怨몃턄 ???藥꿔꺈彛??釉먮듋???롪퍔???
     .replace(/^\s*\w+\s*:\s*/, '')
     .trim();
 }
@@ -3252,7 +3252,7 @@ function parseResponse(text, pList) {
     if (idx !== -1) {
       const namePrefix = new RegExp(`^${pList[idx].name}\\s*:\\s*`, 'i');
       content = content.replace(namePrefix, '').trim();
-      content = cleanContent(content); // 잔여 감정태그 제거
+      content = cleanContent(content); // ??븐슜???띠룆흮???蹂μ쟽 ??蹂ㅽ깴
       if (content) parts.push({ idx, content, emotion });
     }
   }
@@ -3275,9 +3275,9 @@ function setMode(m) {
 }
 
 // ===============
-//  입력 탭 (채팅 / 이미지 / 컨텍스트)
+//  ???놁졑 ??(嶺????/ ????嶺뚯솘? / ???쳜????덈콦)
 // ===============
-let _inputTab = 'chat'; // 현재 입력 탭
+let _inputTab = 'chat'; // ?熬곣뫗?????놁졑 ??
 let _chatGeneration = null;
 let _lastImageModelValue = '';
 let _popupZoomed = false;
@@ -3296,7 +3296,7 @@ function setChatBusy(isBusy) {
   if (sendBtn) {
     sendBtn.disabled = false;
     sendBtn.onclick = isBusy ? stopGeneration : sendMessage;
-    sendBtn.title = isBusy ? '응답 중지' : '메시지 보내기';
+    sendBtn.title = isBusy ? '??얜Ŧ堉?繞벿살탳?' : '嶺뚮∥???낆?? ?곌랜?亦끸넂臾?;
     sendBtn.innerHTML = isBusy
       ? '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>'
       : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
@@ -3313,7 +3313,7 @@ function stopGeneration() {
   if (thinkEl) thinkEl.remove();
   isLoading = false;
   setChatBusy(false);
-  showToast('응답을 중지했어요.');
+  showToast('??얜Ŧ堉??繞벿살탳????곗꽑??');
 }
 
 function updateComposerToolButtonForMode(normalizedMode) {
@@ -3380,7 +3380,7 @@ function handleImageModelChanged() {
     if (session) clearImageWorkflowHistory(session);
     attachments = [];
     renderAttachmentPreviews();
-    showToast('모델 변경으로 이미지 참조/히스토리를 초기화했습니다.');
+    showToast('嶺뚮ㅄ維???곌떠??롪퍔????뿉?????嶺뚯솘? 嶺뚣볦굣?????곕츩??ル벣遊???貫?껆뵳??됀筌???鍮??');
   }
   _lastImageModelValue = nextModel;
   syncImageProviderButtonsFromSelect();
@@ -3402,7 +3402,7 @@ function switchInputTab(tab) {
       tabbar.classList.remove('image-enter');
     }
   }
-  // 탭 버튼 active 토글
+  // ???뺢퀗???active ???
   ['chat','image','context'].forEach(t => {
     document.getElementById('itab-' + t)?.classList.toggle('active', t === tab);
     const opts = document.getElementById('itab-opts-' + t);
@@ -3411,11 +3411,11 @@ function switchInputTab(tab) {
   // placeholder
   const input = document.getElementById('userInput');
   if (input) {
-    input.placeholder = tab === 'image' ? '이미지 생성 프롬프트...'
-      : tab === 'context' ? '질문하거나 분석을 요청해봐...'
-      : '메시지를 입력해봐...';
+    input.placeholder = tab === 'image' ? '????嶺뚯솘? ??諛댁뎽 ?熬곣뫅??熬곥굥諭?..'
+      : tab === 'context' ? '嶺뚯쉶?꾣룇???삵깴???釉뚯뫒?????븐슙??????..'
+      : '嶺뚮∥???낆???????놁졑?????..';
   }
-  // 도구 버튼/배지 UI 동기화
+  // ?熬곥룗???뺢퀗????꾩룄?? UI ???욋뵛??
   ['chat','image','project'].forEach(t => {
     document.getElementById('toolMode_' + t)?.classList.toggle('active', t === normalized);
   });
@@ -3424,10 +3424,10 @@ function switchInputTab(tab) {
   const chip = document.getElementById('composerModeChip');
   if (chip) {
     if (normalized === 'image') {
-      chip.textContent = '이미지 생성';
+      chip.textContent = '????嶺뚯솘? ??諛댁뎽';
       chip.classList.add('show');
     } else if (normalized === 'project') {
-      chip.textContent = '프로젝트 파일';
+      chip.textContent = '?熬곣뫁夷??釉띾콦 ???逾?;
       chip.classList.add('show');
     } else {
       chip.classList.remove('show');
@@ -3435,7 +3435,7 @@ function switchInputTab(tab) {
   }
   const menu = document.getElementById('composerToolsMenu');
   if (menu) menu.classList.add('hidden');
-// 영역 분리 제거: 뷰와 무관하게 항상 단일 chatArea 유지
+// ??⑤챶???釉뚯뫊????蹂ㅽ깴: ???? ??쒕뼬????우벟 ??疫???關逾?chatArea ???
 }
 
 function toggleComposerTools() {
@@ -3447,7 +3447,7 @@ function toggleComposerTools() {
 function selectToolMode(mode) {
   if (mode === 'project') {
     switchInputTab('context');
-    showToast('?프로젝트 기능은 준비중이야');
+    showToast('??熬곣뫁夷??釉띾콦 ?リ옇???? 繞벿뮻???닷ㅇ??怨룻뒍');
     return;
   }
   if (mode === 'image') {
@@ -3458,14 +3458,14 @@ function selectToolMode(mode) {
 }
 
 function addContextUrl() {
-  const url = prompt('URL을 입력해줘:');
+  const url = prompt('URL?????놁졑??怨멥돪:');
   if (!url) return;
-  showToast('URL 추가됨 (기능 준비중)');
+  showToast('URL ?怨뺣뼺???(?リ옇???繞벿뮻???닷ㅇ?');
 }
 
 function handleContextFile(input) {
   const files = [...input.files]; if (!files.length) return;
-  showToast(`${files.length}개 파일 추가됨 (기능 준비중)`);
+  showToast(`${files.length}?????逾??怨뺣뼺???(?リ옇???繞벿뮻???닷ㅇ?`);
   input.value = '';
 }
 function handleKey(e) {
@@ -3504,7 +3504,7 @@ function buildSystemPrompt(session, pListOverride = null) {
   if (uMode !== 'none') {
     const u = uMode === 'custom' && session.userOverride ? session.userOverride : userProfile;
     if (u.name || u.bio) {
-      userPart = `[사용자] ${u.name||'사용자'}`;
+      userPart = `[????? ${u.name||'?????}`;
       if (u.bio) userPart += `: ${u.bio}`;
       userPart += '\n\n';
     }
@@ -3512,30 +3512,30 @@ function buildSystemPrompt(session, pListOverride = null) {
 
   const isGroup = pList.length > 1;
   const modeInstr = !isGroup ? '' :
-	session.responseMode === 'all' ? '전원 응답.' :
-	session.responseMode === 'random' ? '한 명만 응답.' :
-	'한 명: 사실질문/단순확인. 전원: 의사결정/비교/논쟁/열린질문.';
+	session.responseMode === 'all' ? '?熬곣뫗????얜Ŧ堉?' :
+	session.responseMode === 'random' ? '??嶺뚮ㅏ援앭퐲???얜Ŧ堉?' :
+	'??嶺? ???濡녹??????貫??筌먦끉逾? ?熬곣뫗?? ??琉얩뀬?롪퍒??????????源놁럨/?????됱????';
 
   const personaPart = pList.map(p => {
-    let desc = `[${p.pid}] 이름:${p.name}`;
-    if (p.age) desc += `, 나이/생년:${p.age}`;
-    if (p.bio) desc += `\n소개: ${p.bio}`;
-    if (p.tags && p.tags.length) desc += `\n성격/말투: ${p.tags.join(', ')}`;
-    if (p.userTitle) desc += `\n나를 부르는 호칭: ${p.userTitle} (자연스러운 맥락에서만 가끔 사용. 매 발화마다 붙이지 말 것)`;
-    if (p.nicknames && p.nicknames.length) desc += `\n애칭: ${p.nicknames.join(', ')}`;
+    let desc = `[${p.pid}] ???藥?${p.name}`;
+    if (p.age) desc += `, ??瑜곷턄/??紐꺜?${p.age}`;
+    if (p.bio) desc += `\n???六? ${p.bio}`;
+    if (p.tags && p.tags.length) desc += `\n?繹먭퍒遊?嶺뚮씭??? ${p.tags.join(', ')}`;
+    if (p.userTitle) desc += `\n??? ?遊붋??????筌뤾쑬圭: ${p.userTitle} (???????댁몠??嶺뚮쓽?대뎅????ｇ춯??띠럾??????? 嶺??꾩룇裕?類㏃춹??덈펲 ?釉먮듌?醫묒?? 嶺???`;
+    if (p.nicknames && p.nicknames.length) desc += `\n??ル∥圭: ${p.nicknames.join(', ')}`;
     return desc;
   }).join('\n\n');
 
-const formatEx = pList.map(p => `[${p.pid}][emotion:감정]내용[/${p.pid}]`).join('\n');
+const formatEx = pList.map(p => `[${p.pid}][emotion:?띠룆흮????怨몃뮔[/${p.pid}]`).join('\n');
 
   return `${worldPart}${userPart}${personaPart}
 
-형식:
+?筌먦끇六?
 ${formatEx}
 emotion: ${EMOTIONS.join('/')}
-규칙: emotion 태그는 반드시 pid 태그 바로 뒤에 한 번만. 내용 안에 [감정명] 태그 넣기 금지. 이름: 접두사 금지.${modeInstr ? '\n' + modeInstr : ''}
-인칭은 자연스러운 맥락에서만 가급적 사용. 매 발화 시작에 붙이지 말 것
-필요한 태그 내용은 마크다운(**, 코드블록, 목록 등) 사용 가능`;
+?잙?裕?? emotion ??蹂μ쟽???꾩룇瑗띈キ??pid ??蹂μ쟽 ?꾩룆?餓????고뱺 ???뺢퀡?꾢퐲? ??怨몃뮔 ???고뱺 [?띠룆흮??뗭춻? ??蹂μ쟽 ?影?끸뵛 ?ル??. ???藥? ??얜Ŧ????ル??.${modeInstr ? '\n' + modeInstr : ''}
+?筌뤾쑬圭?? ???????댁몠??嶺뚮쓽?대뎅????ｇ춯??띠럾??ル留?????? 嶺??꾩룇裕????戮곗굚???釉먮듌?醫묒?? 嶺???
+?熬곣뫗?????蹂μ쟽 ??怨몃뮔?? 嶺뚮씭?뉐칰???깅뮧(**, ?袁⑤?獄?쓬?↓겫?좎Ŋ, 嶺뚮ㅄ維뽨빳??? ?????띠럾???;
 }
 
 function renderUserBubbleHTML(text, atts) {
@@ -3566,7 +3566,7 @@ function renderUserBubbleHTMLV2(text, atts) {
         <div class="inline-image-wrap">
           <img class="bubble-img" src="${viewUrl}" onclick="openImagePopup('${safeViewUrl}')">
           <div class="inline-image-actions">
-            <button class="image-popup-action-btn" onclick="downloadImage('${safeViewUrl}','${safeName}')" title="다운로드">
+            <button class="image-popup-action-btn" onclick="downloadImage('${safeViewUrl}','${safeName}')" title="???깅뮧?β돦裕녻キ?>
               <svg viewBox="0 0 24 24"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 21h16"/></svg>
             </button>
           </div>
@@ -3610,10 +3610,10 @@ function renderUserBubbleHTMLV3(text, atts) {
       <div class="inline-image-wrap">
         <img class="bubble-img" src="${viewUrl}" onclick="openImagePopup('${safeViewUrl}')">
         <div class="inline-image-actions">
-          <button class="image-popup-action-btn" onclick="addImageSourceToComposer('${safeViewUrl}','${safeName}')" title="소스로 추가">
+          <button class="image-popup-action-btn" onclick="addImageSourceToComposer('${safeViewUrl}','${safeName}')" title="???裕욃슖??怨뺣뼺?">
             <svg viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
           </button>
-          <button class="image-popup-action-btn" onclick="downloadImage('${safeViewUrl}','${safeName}')" title="다운로드">
+          <button class="image-popup-action-btn" onclick="downloadImage('${safeViewUrl}','${safeName}')" title="???깅뮧?β돦裕녻キ?>
             <svg viewBox="0 0 24 24"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 21h16"/></svg>
           </button>
         </div>
@@ -3638,7 +3638,7 @@ async function sendMessage() {
   const input = document.getElementById('userInput');
   const text = sanitizeUserInputValue(input.value).trim();
   if (!text && !attachments.length) return;
-  const shouldAutoMemorySave = /(기억해|기억해줘|remember this|note this|메모해|기록해)/i.test(text);
+  const shouldAutoMemorySave = /(?リ옇?ｅ젆???リ옇?ｅ젆??怨멥돪|remember this|note this|嶺뚮∥?????リ옇?▽빳??/i.test(text);
 
   const isImageReq = (_inputTab === 'image');
   const targetModel = getTargetModelForRequest(session, isImageReq);
@@ -3661,10 +3661,10 @@ async function sendMessage() {
   setChatBusy(true);
   input.value = ''; input.style.height = 'auto';
 
-  // 이미지 편집용 참조 이미지: attachments 클리어 전에 미리 캡처
+  // ????嶺뚯솘? ?筌뤾쑴異??嶺뚣볦굣??????嶺뚯솘?: attachments ???????熬곣뫖??亦껋꼶梨??嶺뚢븞??뜎?
   const userHTML = renderUserBubbleHTMLV3(text, attachments);
   
-  let msgContent = text || '(파일)';
+  let msgContent = text || '(???逾?';
   if (attachments.length > 0) {
     msgContent = [];
     if (text) msgContent.push({ type: 'text', text: text });
@@ -3677,7 +3677,7 @@ async function sendMessage() {
 
   msgContent = attachments.length > 0
     ? buildUserMessageContentV2(text, historyImageUrls, attachments.filter(a => !isImageAttachment(a)).map(a => ({ name: a.name || 'file', url: getAttachmentStoredUrl(a) })).filter(f => !!f.url))
-    : text || '(빈글)';
+    : text || '(????)';
   const requestFileRefs = [];
   for (const attachment of attachments.filter(a => !isImageAttachment(a))) {
     const fileUrl = await getAttachmentRequestUrl(attachment, targetModel, isImageReq);
@@ -3685,7 +3685,7 @@ async function sendMessage() {
   }
   const requestMsgContent = attachments.length > 0
     ? buildUserMessageContentV2(text, requestImageUrls, requestFileRefs)
-    : text || '(빈글)';
+    : text || '(????)';
 
   const nowTs = Date.now();
   const persistedAttachments = attachments.map(serializeAttachmentForHistory).filter(Boolean);
@@ -3704,13 +3704,13 @@ async function sendMessage() {
     saveIndex();
   }
 
-  // 이미지 편집용 참조 이미지: attachments 클리어 전에 미리 캡처
+  // ????嶺뚯솘? ?筌뤾쑴異??嶺뚣볦굣??????嶺뚯솘?: attachments ???????熬곣뫖??亦껋꼶梨??嶺뚢븞??뜎?
   const refImages = [...requestImageUrls];
 
   attachments = [];
   renderAttachmentPreviews();
 
-  // imageArea는 display:none — 탭 무관하게 항상 chatArea 사용
+  // imageArea??display:none ??????쒕뼬????우벟 ??疫?chatArea ????
   const area = document.getElementById('chatArea');
   area.classList.add('has-messages');
   document.getElementById('chatEmpty2').style.display = 'none';
@@ -3726,7 +3726,7 @@ async function sendMessage() {
     layoutHorizontalMasonryRows(area);
   }
 
-  // 로딩 플레이스홀더
+  // ?β돦裕녽???????怨룸츩????
   const thinkEl = document.createElement('div');
   thinkEl.className = 'thinking-bubble';
   if (isImageReq) {
@@ -3740,7 +3740,7 @@ async function sendMessage() {
           <rect x="28" y="11" width="24" height="10" rx="3" stroke="currentColor" stroke-width="2"/>
           <circle cx="62" cy="27" r="3" fill="currentColor" opacity=".6"/>
         </svg>
-        <span class="img-gen-label">이미지 생성 중</span>
+        <span class="img-gen-label">????嶺뚯솘? ??諛댁뎽 繞?/span>
         <div class="img-gen-dots"><span></span><span></span><span></span></div>
       </div>
     </div>`;
@@ -3753,7 +3753,7 @@ async function sendMessage() {
 
   const pListAll = getSessionPersonas(session);
 
-  if (text === '/감정') {
+  if (text === '/?띠룆흮??) {
     thinkEl.remove();
     const personaSnapshot = pListAll.map(p=>({pid:p.pid, name:p.name}));
     let html = '<div class="msg-group ai-msgs">';
@@ -3797,8 +3797,8 @@ async function sendMessage() {
     }
     area.scrollTop = area.scrollHeight;
 
-    session.history.push({ role:'assistant', content:'(감정 테스트)', createdAt: emotionTestCreatedAt, personaSnapshot, _suffixes: {} });
-    session.lastPreview = '(감정 테스트)'; session.updatedAt = Date.now();
+    session.history.push({ role:'assistant', content:'(?띠룆흮?????裕??', createdAt: emotionTestCreatedAt, personaSnapshot, _suffixes: {} });
+    session.lastPreview = '(?띠룆흮?????裕??'; session.updatedAt = Date.now();
     isLoading = false;
     _chatGeneration = null;
     setChatBusy(false);
@@ -3809,13 +3809,13 @@ async function sendMessage() {
     return;
   }
 
-  // 백그라운드 처리를 위한 분리된 비동기 함수
+  // ?꾩룄????源녿뮧??嶺뚳퐣瑗?怨?ご??熬곥굥由??釉뚯뫊??????х뙴?꾨Ь???貫??
   const processApiAndRender = async () => {
     let reply = '';
     let generatedImageUrl = '';
     if (session._demo) {
       await new Promise(r => setTimeout(r, 600));
-      reply = window.getDemoReply ? window.getDemoReply(session) : '데모 응답 오류';
+      reply = window.getDemoReply ? window.getDemoReply(session) : '??⑤틳嫄???얜Ŧ堉????댁쾼';
     } else {
       try {
         const apiMessages = [
@@ -3843,7 +3843,7 @@ async function sendMessage() {
             }
             const personaRequestMsgContent = sentAttachments.length > 0
               ? buildUserMessageContentV2(text, personaImageUrls, personaFileRefs)
-              : text || '(빈글)';
+              : text || '(????)';
             const personaMessages = [
               { role:'system', content: buildSystemPrompt(session, [persona]) },
               buildCurrentTimeSystemMessage(),
@@ -3860,7 +3860,7 @@ async function sendMessage() {
             });
             const data = await res.json();
             if (data.result !== 'success') {
-              parts.push(`[${persona.pid}]응답생성 오류: ${data.error||'알 수 없는 오류'}[/${persona.pid}]`);
+              parts.push(`[${persona.pid}]??얜Ŧ堉??諛댁뎽 ???댁쾼: ${data.error||'???????⑸츎 ???댁쾼'}[/${persona.pid}]`);
             } else {
               parts.push(wrapPersonaReply(persona.pid, sanitizeTextForUnicodeSafety(data.reply || '')));
             }
@@ -3869,7 +3869,7 @@ async function sendMessage() {
         } else {
         const ratio = typeof _selectedRatio !== 'undefined' ? _selectedRatio : "1:1";
 
-        // 모델별 파라미터 분기
+        // 嶺뚮ㅄ維??쇳돦????逾ф쾬?롮구???釉뚯뫅??
         const RATIO_TO_OPENAI_SIZE = {
           '1:1':'1024x1024', '16:9':'1536x1024', '9:16':'1024x1536',
           '4:3':'1536x1152', '3:4':'1152x1536', '3:2':'1536x1024',
@@ -3879,7 +3879,7 @@ async function sendMessage() {
 
         let reqBody;
         if (isImageReq) {
-          // 이미지 생성/편집: API는 messages 배열이 아닌 prompt 문자열 기대
+          // ????嶺뚯솘? ??諛댁뎽/?筌뤾쑴異? API??messages ?꾩룄?ｈ굢???熬곣뫀鍮?prompt ??쒖굣????リ옇??
           const promptText = text || '(image)';
           reqBody = {
             model: targetModel,
@@ -3892,7 +3892,7 @@ async function sendMessage() {
             ...(refImages.length > 0 ? { images: refImages } : {})
           };
         } else {
-          // 채팅: 기존 messages 배열
+          // 嶺???? ?リ옇???messages ?꾩룄?ｈ굢?
           reqBody = {
             messages: apiMessages,
             model: targetModel,
@@ -3900,7 +3900,7 @@ async function sendMessage() {
           };
         }
 
-       // 브라우저 타임아웃 없음 (Worker 30s 한계 주의)
+       // ??곗뒧???? ???熬곣뫖?????怨몃쾳 (Worker 30s ??蹂㎳??낅슣???
         const res = await fetch(wUrl + '/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -3910,7 +3910,7 @@ async function sendMessage() {
         const data = await res.json();
         if (data.result !== 'success') {
           const pid0 = session.participantPids?.[0] || 'p';
-          reply = `[${pid0}]생성 오류: ${data.error||'알 수 없는 오류'}[/${pid0}]`;
+          reply = `[${pid0}]??諛댁뎽 ???댁쾼: ${data.error||'???????⑸츎 ???댁쾼'}[/${pid0}]`;
         } else {
           reply = sanitizeTextForUnicodeSafety(data.reply || '');
           if (isImageReq) {
@@ -3923,7 +3923,7 @@ async function sendMessage() {
               generatedImageUrl = safeImageUrl;
               reply = `![generated](${safeImageUrl})`;
             } else {
-              throw new Error('이미지 URL 응답이 비어 있습니다.');
+              throw new Error('????嶺뚯솘? URL ??얜Ŧ堉?????닷젆????곕????덈펲.');
             }
           }
         }
@@ -3931,18 +3931,18 @@ async function sendMessage() {
       } catch(e) {
         if (e?.name === 'AbortError') throw e;
         const pid0 = session.participantPids?.[0] || 'p';
-        reply = sanitizeTextForUnicodeSafety(`[${pid0}]연결 실패: ${e.message}[/${pid0}]`);
+        reply = sanitizeTextForUnicodeSafety(`[${pid0}]??⑤슡?????덉넮: ${e.message}[/${pid0}]`);
       }
     }
     reply = normalizeGeneratedMarkdown(sanitizeTextForUnicodeSafety(reply));
 
     if (thinkEl.parentNode) thinkEl.remove();
     
-    // 백그라운드 처리 중 세션이 삭제되었는지 체크
+    // ?꾩룄????源녿뮧??嶺뚳퐣瑗??繞??筌뤾쑬????????琉???? 嶺뚳퐢?얍칰?
     const currentSession = sessions.find(s => s.id === session.id);
     if (!currentSession) return;
 
-    // 생성된 이미지의 data URL / 원격 URL 모두 R2에 업로드 후 교체
+    // ??諛댁뎽??????嶺뚯솘???data URL / ???遊?URL 嶺뚮ㅄ維筌?R2?????놁Ŧ??????흮??
     if (isImageReq && /!\[.*?\]\((data:image\/[^)]+|https?:\/\/[^)\s]+)\)/i.test(reply)) {
       const dataUrlRe = /!\[.*?\]\((data:image\/[^)]+|https?:\/\/[^)\s]+)\)/g;
       let m;
@@ -3982,7 +3982,7 @@ async function sendMessage() {
       : resolveSessionListPreview(currentSession, pList);
     currentSession.updatedAt = Date.now();
 
-    // 사용자가 해당 채팅방을 그대로 보고 있다면 화면에 즉시 렌더링
+    // ?????? ?????嶺????ㅼ낯?諭諭??잙갭梨????곌랜??????덈펲嶺???븐뻼???嶺뚯빖留???????춯?
       if (activeChatId === currentSession.id) {
       const tgtArea = document.getElementById('chatArea');
       tgtArea.classList.add('has-messages');
@@ -4011,18 +4011,18 @@ async function sendMessage() {
     }
     await cleanupAttachmentCaches(sentAttachments);
     
-    // 완료 후 항상 락 해제 (이미지/채팅 공통)
+    // ?熬곣뫁??????疫?????怨몄젷 (????嶺뚯솘?/嶺??????ㅻ쾹??
     isLoading = false;
     document.getElementById('sendBtn').disabled = false;
     setTimeout(() => input.focus(), 10);
   };
 
-  // 이미지/채팅 모두 await — 이미지 생성 중 추가 전송 차단
+  // ????嶺뚯솘?/嶺????嶺뚮ㅄ維筌?await ??????嶺뚯솘? ??諛댁뎽 繞??怨뺣뼺? ?熬곣뫖苑?嶺뚢뼰維??
   try { await processApiAndRender(); } catch (e) { if (e?.name !== 'AbortError') throw e; } finally { isLoading = false; _chatGeneration = null; setChatBusy(false); }
 }
 
 function handleFileSelect(input) {
-  addFilesToAttachments(input.files, 'picker').catch(e => showToast('파일 추가 실패: ' + e.message));
+  addFilesToAttachments(input.files, 'picker').catch(e => showToast('???逾??怨뺣뼺? ???덉넮: ' + e.message));
   input.value = '';
   return;
   [...input.files].forEach(file => {
@@ -4031,7 +4031,7 @@ function handleFileSelect(input) {
       const dataUrl = e.target.result;
       const isImg = file.type.startsWith('image/');
       let finalUrl = dataUrl;
-      // 이미지는 즉시 R2에 업로드
+      // ????嶺뚯솘???嶺뚯빖留??R2?????놁Ŧ??
       if (isImg) {
         const fname = makeImageFilename('uploaded') + '.jpg';
         finalUrl = await uploadToR2(dataUrl, 'img_uploaded', fname).catch(() => dataUrl);
@@ -4052,7 +4052,7 @@ function renderAttachmentPreviews() {
     if (a.uploadError) div.classList.add('upload-error');
     const media = a.type === 'image'
       ? `<img src="${getAttachmentPreviewUrl(a) || a.dataUrl || ''}">`
-      : `<div class="attachment-file">${a.name || '파일'}</div>`;
+      : `<div class="attachment-file">${a.name || '???逾?}</div>`;
     const status = a.uploading
       ? `<div class="attachment-status"><div class="attachment-spinner"></div></div>`
       : a.uploadError
@@ -4091,7 +4091,7 @@ function addImageSourceToComposer(url, name = '') {
     String(a?.dataUrl || '').trim() === target
   ));
   if (exists) {
-    showToast('이미 소스로 추가되어 있습니다.');
+    showToast('???? ???裕욃슖??怨뺣뼺???琉우꽑 ???곕????덈펲.');
     return;
   }
   attachments.push({
@@ -4108,7 +4108,7 @@ function addImageSourceToComposer(url, name = '') {
   });
   renderAttachmentPreviews();
   document.getElementById('userInput')?.focus();
-  showToast('이미지를 소스에 추가했습니다.');
+  showToast('????嶺뚯솘??????裕???怨뺣뼺????곕????덈펲.');
 }
 async function removeAttachment(i) {
   const removed = attachments.splice(i,1)[0];
@@ -4143,7 +4143,7 @@ return `
    <div style="display:flex;flex-direction:column;align-items:center;gap:5px">
      <div id="kickWrap_${p.pid}" style="position:relative;width:60px;height:60px;border-radius:50%;overflow:hidden;border:1.5px solid hsl(${p.hue},28%,22%);cursor:${isGroup?'pointer':'default'};flex-shrink:0" ${kickable}>
        ${imgHTML}
-       <div id="kickOverlay_${p.pid}" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,.55);align-items:center;justify-content:center;font-size:22px">🗑</div>
+       <div id="kickOverlay_${p.pid}" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,.55);align-items:center;justify-content:center;font-size:22px">???/div>
      </div>
      <div style="font-size:10px;color:var(--muted);text-align:center;width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</div>
    </div>`;
@@ -4157,7 +4157,7 @@ const inviteBtn = canInvite ? `
          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
        </svg>
      </div>
-     <div style="font-size:10px;color:var(--muted2);text-align:center">초대</div>
+     <div style="font-size:10px;color:var(--muted2);text-align:center">?貫??</div>
    </div>` : '';
 
 const uMode = s.userProfileMode || 'default';
@@ -4165,26 +4165,26 @@ const showCustom = uMode === 'custom';
 
 body.innerHTML = `
    <div>
-     <div class="field-label">대화방 이름</div>
+     <div class="field-label">????븐뼐而????藥?/div>
      <div style="display:flex;gap:7px">
        <input class="edit-input" id="drawerRoomName" value="${esc(s.roomName||'')}" placeholder="${esc(pList.map(p=>p.name).join(', '))}" style="font-size:13px;padding:8px 12px;flex:1">
-       <button onclick="saveRoomName()" style="padding:8px 14px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-family:'Pretendard',sans-serif;font-size:12px;cursor:pointer;white-space:nowrap">저장</button>
+       <button onclick="saveRoomName()" style="padding:8px 14px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-family:'Pretendard',sans-serif;font-size:12px;cursor:pointer;white-space:nowrap">????/button>
      </div>
    </div>
    <div>
-     <div class="field-label" style="margin-bottom:6px">이 채팅방 응답 모델</div>
+     <div class="field-label" style="margin-bottom:6px">??嶺????ㅼ낯???얜Ŧ堉?嶺뚮ㅄ維??/div>
      <div style="display:flex;gap:6px;align-items:center">
-       <div style="flex:1;display:flex;flex-direction:column;gap:6px">${pList.map(p => `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid var(--border2);border-radius:10px;background:var(--card)"><span style="font-size:12px;color:var(--text)">${esc(p.name)}</span><span style="font-size:11px;color:var(--muted)">${esc(p.defaultModel || '미설정')}</span></div>`).join('') || `<div style="font-size:11px;color:var(--muted)">참여 중인 페르소나가 없어</div>`}</div>
-       <button onclick="applyDrawerModel()" style="padding:7px 12px;border-radius:9px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-family:'Pretendard',sans-serif;font-size:11px;cursor:pointer;white-space:nowrap;flex-shrink:0">적용</button>
+       <div style="flex:1;display:flex;flex-direction:column;gap:6px">${pList.map(p => `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid var(--border2);border-radius:10px;background:var(--card)"><span style="font-size:12px;color:var(--text)">${esc(p.name)}</span><span style="font-size:11px;color:var(--muted)">${esc(p.defaultModel || '亦껋꼶梨룩땻??)}</span></div>`).join('') || `<div style="font-size:11px;color:var(--muted)">嶺뚣볦굣??繞벿살탳????濡〓????뚧뤆?쎛 ??怨룹꽑</div>`}</div>
+       <button onclick="applyDrawerModel()" style="padding:7px 12px;border-radius:9px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-family:'Pretendard',sans-serif;font-size:11px;cursor:pointer;white-space:nowrap;flex-shrink:0">??⑤챷??/button>
      </div>
-     <div style="font-size:10px;color:var(--muted);margin-top:4px">비워두면 페르소나 기본 모델 사용</div>
+     <div style="font-size:10px;color:var(--muted);margin-top:4px">???????????濡〓??????リ옇???嶺뚮ㅄ維??????/div>
    </div>
    <div>
-     <div class="field-label" style="margin-bottom:8px">내 프로필</div>
+     <div class="field-label" style="margin-bottom:8px">???熬곣뫁夷??/div>
      <div class="mode-btns" style="margin-bottom:${showCustom?'10px':'0'}">
-       <button class="mode-btn ${uMode==='default'?'on':''}" onclick="setUserProfileMode('default')">기본 프로필</button>
-       <button class="mode-btn ${uMode==='none'?'on':''}" onclick="setUserProfileMode('none')">정하지 않음</button>
-       <button class="mode-btn ${uMode==='custom'?'on':''}" onclick="setUserProfileMode('custom')">직접 입력</button>
+       <button class="mode-btn ${uMode==='default'?'on':''}" onclick="setUserProfileMode('default')">?リ옇????熬곣뫁夷??/button>
+       <button class="mode-btn ${uMode==='none'?'on':''}" onclick="setUserProfileMode('none')">?筌먐삳┃嶺뚯솘? ???곷쾳</button>
+       <button class="mode-btn ${uMode==='custom'?'on':''}" onclick="setUserProfileMode('custom')">嶺뚯쉳??????놁졑</button>
      </div>
      ${showCustom ? `
      <input type="file" id="drawerUserImgInput" style="display:none" accept="image/*" onchange="handleDrawerUserImage(this)">
@@ -4193,28 +4193,28 @@ body.innerHTML = `
          ${getUserAvatarHTML(s)}
        </div>
        <div style="flex:1;display:flex;flex-direction:column;gap:6px">
-         <input class="edit-input" id="drawerUserName" value="${esc(s.userOverride?.name||'')}" placeholder="이름" style="font-size:13px;padding:7px 10px">
-         <textarea class="edit-input" id="drawerUserBio" placeholder="이 채팅방에서의 나..." style="font-size:12px;padding:7px 10px;resize:none;height:56px;border-radius:10px;line-height:1.5">${esc(s.userOverride?.bio||'')}</textarea>
+         <input class="edit-input" id="drawerUserName" value="${esc(s.userOverride?.name||'')}" placeholder="???藥? style="font-size:13px;padding:7px 10px">
+         <textarea class="edit-input" id="drawerUserBio" placeholder="??嶺????ㅼ낯?諛명뱺??戮곕꺄 ??.." style="font-size:12px;padding:7px 10px;resize:none;height:56px;border-radius:10px;line-height:1.5">${esc(s.userOverride?.bio||'')}</textarea>
        </div>
      </div>
-     <button onclick="saveDrawerUserProfile()" style="width:100%;margin-top:8px;padding:8px;border-radius:9px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-family:'Pretendard',sans-serif;font-size:12px;cursor:pointer">저장</button>
+     <button onclick="saveDrawerUserProfile()" style="width:100%;margin-top:8px;padding:8px;border-radius:9px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-family:'Pretendard',sans-serif;font-size:12px;cursor:pointer">????/button>
      ` : ''}
    </div>
    ${isGroup ? `
    <div>
-     <div class="field-label">응답 방식</div>
+     <div class="field-label">??얜Ŧ堉??꾩렮維??/div>
      <div class="mode-btns">
-       <button class="mode-btn ${s.responseMode==='auto'?'on':''}" onclick="setDrawerMode('auto')">🎲 상황에 맞게</button>
-       <button class="mode-btn ${s.responseMode==='all'?'on':''}" onclick="setDrawerMode('all')">👥 전원</button>
-       <button class="mode-btn ${s.responseMode==='random'?'on':''}" onclick="setDrawerMode('random')">🎯 무작위</button>
+       <button class="mode-btn ${s.responseMode==='auto'?'on':''}" onclick="setDrawerMode('auto')">?????⑤????嶺뚮씮?녘떋?/button>
+       <button class="mode-btn ${s.responseMode==='all'?'on':''}" onclick="setDrawerMode('all')">?泳??熬곣뫗??/button>
+       <button class="mode-btn ${s.responseMode==='random'?'on':''}" onclick="setDrawerMode('random')">?????쒕샍???/button>
      </div>
    </div>` : ''}
    <div>
-     <div class="field-label">세계관 / 공통 지침</div>
-     <textarea class="world-input" oninput="syncWorldContext(this.value)" placeholder="모든 페르소나에게 적용할 설정이나 세계관을 입력하세요...">${esc(s.worldContext||'')}</textarea>
+     <div class="field-label">?筌롫챸?濡?슈? / ??ㅻ쾹??嶺뚯솘???/div>
+     <textarea class="world-input" oninput="syncWorldContext(this.value)" placeholder="嶺뚮ㅄ維獄???濡〓???????????⑤챷??????깆젧??????筌롫챸?濡?슈??????놁졑??琉얠돪??..">${esc(s.worldContext||'')}</textarea>
    </div>
    <div>
-     <div class="field-label">참여 페르소나${isGroup ? ' · 탭하면 추방' : ''}</div>
+     <div class="field-label">嶺뚣볦굣????濡〓?????{isGroup ? ' 鸚?????彛??怨뺣?揶? : ''}</div>
      <div style="display:flex;gap:10px;flex-wrap:wrap">${personaCards.join('')}${inviteBtn}</div>
    </div>`;
 }
@@ -4223,7 +4223,7 @@ function toggleKickOverlay(pid, el) {
 const overlay = document.getElementById(`kickOverlay_${pid}`);
 if (!overlay) return;
 if (overlay.style.display === 'flex') {
-if (confirm(`${getPersona(pid)?.name || pid}를 추방할까?\n대화 기록은 유지돼.`)) { kickPersona(pid); } else { overlay.style.display = 'none'; }
+if (confirm(`${getPersona(pid)?.name || pid}???怨뺣?揶??ル맪??\n?????リ옇?▽빳?? ?????`)) { kickPersona(pid); } else { overlay.style.display = 'none'; }
 } else {
 document.querySelectorAll('[id^="kickOverlay_"]').forEach(o => o.style.display = 'none');
 overlay.style.display = 'flex';
@@ -4232,9 +4232,9 @@ overlay.style.display = 'flex';
 
 function kickPersona(pid) {
 const s = getActiveSession(); if (!s) return;
-if (s.participantPids.length <= 1) { showToast('마지막 페르소나는 추방할 수 없어'); return; }
+if (s.participantPids.length <= 1) { showToast('嶺뚮씭??嶺???濡〓???????怨뺣?揶??????怨룹꽑'); return; }
 const p = getPersona(pid);
-if (!confirm(`${p?.name || pid}를 이 채팅방에서 추방할까?\n대화 기록은 유지돼.`)) return;
+if (!confirm(`${p?.name || pid}????嶺????ㅼ낯?諛명뱺???怨뺣?揶??ル맪??\n?????リ옇?▽빳?? ?????`)) return;
   s.participantPids = s.participantPids.filter(id => id !== pid);
   s.updatedAt = Date.now();
   saveIndex(); renderDrawerBody(s);
@@ -4261,7 +4261,7 @@ if (!confirm(`${p?.name || pid}를 이 채팅방에서 추방할까?\n대화 기
   }
   const namesEl = document.getElementById('chatHeaderNames');
   if (namesEl) namesEl.textContent = pList.map(p=>p.name).join(', ');
-  showToast(`${p?.name || '페르소나'} 추방됨`);
+  showToast(`${p?.name || '??濡〓?????} ?怨뺣?揶??);
 }
 
 function setUserProfileMode(mode) {
@@ -4288,13 +4288,13 @@ function saveDrawerUserProfile() {
   if (!s.userOverride) s.userOverride = {};
   s.userOverride.name = name; s.userOverride.bio = bio;
   if (prevImg) s.userOverride.image = prevImg;
-  saveIndex(); showToast('유저 프로필 저장됨'); renderDrawerBody(s);
+  saveIndex(); showToast('??? ?熬곣뫁夷?????縕ワ쭕?); renderDrawerBody(s);
 }
 
 function resetDrawerUserProfile() {
   const s = getActiveSession(); if (!s) return;
   delete s.userOverride;
-  saveIndex(); showToast('기본 프로필로 되돌림'); renderDrawerBody(s);
+  saveIndex(); showToast('?リ옇????熬곣뫁夷?熬곣뫁夷???濡レ┝??); renderDrawerBody(s);
 }
 
 function handleDrawerUserImage(input) {
@@ -4315,7 +4315,7 @@ function saveRoomName() {
   const s = getActiveSession(); if (!s) return;
   const val = document.getElementById('drawerRoomName')?.value.trim();
   s.roomName = val || '';
-  saveIndex(); renderChatList(); showToast('방 이름 저장됨');
+  saveIndex(); renderChatList(); showToast('?????藥????縕ワ쭕?);
 }
 
 function openInviteModal() {
@@ -4341,7 +4341,7 @@ async function renderInviteGrid(s) {
       <div class="check" style="position:absolute;top:4px;right:4px;width:16px;height:16px;border-radius:50%;background:var(--text);display:none;align-items:center;justify-content:center;font-size:10px"></div>`;
     grid.appendChild(card);
   }
-  if (!available.length) { grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--muted);font-size:13px;padding:20px">초대할 페르소나가 없어</div>`; }
+  if (!available.length) { grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--muted);font-size:13px;padding:20px">?貫??????濡〓????뚧뤆?쎛 ??怨룹꽑</div>`; }
   document.getElementById('inviteConfirmBtn').disabled = true;
 }
 
@@ -4352,7 +4352,7 @@ function toggleInvitePid(pid, card, s) {
     selectedPids.splice(idx, 1); card.classList.remove('selected');
     card.querySelector('.check').style.display = 'none';
   } else {
-    if (cur >= MAX_PARTICIPANTS) { showToast(`최대 ${MAX_PARTICIPANTS}명까지 가능해`); return; }
+    if (cur >= MAX_PARTICIPANTS) { showToast(`嶺뚣끉裕? ${MAX_PARTICIPANTS}嶺뚮ㅏ援??먯?? ?띠럾??繞③뜮?); return; }
     selectedPids.push(pid); card.classList.add('selected');
     card.querySelector('.check').style.display = 'flex';
   }
@@ -4363,7 +4363,7 @@ function confirmInvite() {
   const s = getActiveSession(); if (!s) return;
   s.participantPids = Array.from(new Set([...(s.participantPids || []), ...selectedPids]));
   s.updatedAt = Date.now();
-  saveIndex(); closeInviteModal(); closeDrawer(); openChat(s.id); showToast(`${selectedPids.length}명 초대됨`);
+  saveIndex(); closeInviteModal(); closeDrawer(); openChat(s.id); showToast(`${selectedPids.length}嶺??貫????);
 }
 
 function applyDrawerModel() {
@@ -4372,7 +4372,7 @@ function applyDrawerModel() {
   const effective = pList.find(p => p.defaultModel)?.defaultModel || document.getElementById('chatModeSelect')?.value || '';
   const sel = document.getElementById('chatModeSelect');
   if (sel && effective) sel.value = effective;
-  showToast('이제 채팅방 공통 모델 대신 각 페르소나 기본 모델을 사용해요.');
+  showToast('??怨몄젷 嶺????ㅼ낯???ㅻ쾹??嶺뚮ㅄ維??????????濡〓??????リ옇???嶺뚮ㅄ維????????怨몃뭵.');
 }
 
 function setDrawerMode(m) {
@@ -4389,7 +4389,7 @@ function showPromptModal() {
   const prompt = buildSystemPrompt(s);
   const est = Math.round(prompt.length / 3.5);
   document.getElementById('promptModalBody').textContent = prompt;
-  document.getElementById('promptTokenEst').textContent = `≈${est} 토큰`;
+  document.getElementById('promptTokenEst').textContent = `??{est} ??ルㅎ荑?;
   document.getElementById('promptModal').classList.add('open');
   closeDrawer();
 }
@@ -4401,17 +4401,17 @@ async function refreshChat() {
 }
 function resetChat() {
   const s = getActiveSession(); if (!s) return;
-  if (!confirm('대화 기록을 지울까? 페르소나 설정은 유지돼.')) return;
+  if (!confirm('?????リ옇?▽빳??嶺뚯솘??筌롫챸?? ??濡〓????????깆젧?? ?????')) return;
   s.history = []; s._loaded = true; s.lastPreview = ''; s.updatedAt = Date.now();
   closeDrawer(); renderChatArea(); saveSession(s.id); saveIndex();
 }
 async function compressChat() {
-  const s = getActiveSession(); if (!s || s.history.length < 4) { alert('압축할 대화가 부족해.'); return; }
-  if (!confirm('대화를 요약 압축할까?')) return;
-  const histText = s.history.map(m=>`${m.role==='user'?'사용자':'AI'}: ${typeof m.content==='string'?m.content:'(메시지)'}`).join('\n');
+  const s = getActiveSession(); if (!s || s.history.length < 4) { alert('?筌먦끋???????? ?遊붋?브퀗?꿴뜮?'); return; }
+  if (!confirm('????? ??븐슜???筌먦끋???ル맪??')) return;
+  const histText = s.history.map(m=>`${m.role==='user'?'?????:'AI'}: ${typeof m.content==='string'?m.content:'(嶺뚮∥???낆??)'}`).join('\n');
   try {
     const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-    if (!wUrl) { alert('Worker URL 없음'); return; }
+    if (!wUrl) { alert('Worker URL ??怨몃쾳'); return; }
     const pList = (s.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
     const compressModel = s.overrideModel
       || pList.find(p=>p.defaultModel)?.defaultModel
@@ -4424,19 +4424,19 @@ async function compressChat() {
         model: compressModel,
         participant_pids: Array.from(new Set(s.participantPids || [])),
         messages: [
-		{ role:'system', content:'대화를 핵심만 남겨 간결하게 요약해줘. 한국어로.' },
-		{ role:'user',   content:`아래 대화를 요약해줘.\n\n${histText}` }
+		{ role:'system', content:'????? ???堉롧춯???節딅낵 ?띠룄?①뙼???우벟 ??븐슜???怨멥돪. ??蹂λ윟???餓?' },
+		{ role:'user',   content:`?熬곣뫁??????? ??븐슜???怨멥돪.\n\n${histText}` }
         ]
       })
     });
 	const data = await res.json();
 		if (data?.result === 'success') {
-		s.history = [{ role:'assistant', content:`[이전 대화 요약]\n${data.reply}`,
+		s.history = [{ role:'assistant', content:`[??怨몄쓧 ??????븐슜??\n${data.reply}`,
 		personaSnapshot:(s.participantPids||[]).map(pid=>({pid,name:getPersona(pid)?.name||pid})) }];
-		s.updatedAt = Date.now(); s.lastPreview = '[압축됨]';
+		s.updatedAt = Date.now(); s.lastPreview = '[?筌먦끋???';
 		closeDrawer(); renderChatArea(); saveSession(s.id); saveIndex();
-		} else { alert('압축 실패: ' + (data?.error || '알 수 없는 오류')); }
-	} catch(e) { alert('압축 실패: ' + e.message); }
+		} else { alert('?筌먦끋?????덉넮: ' + (data?.error || '???????⑸츎 ???댁쾼')); }
+	} catch(e) { alert('?筌먦끋?????덉넮: ' + e.message); }
 }
 
 // ================================
@@ -4631,7 +4631,7 @@ function renderArchiveGrid() {
   if (!rows.length) {
     grid.innerHTML = '';
     empty.style.display = 'block';
-    empty.textContent = _archiveLoaded ? '아카이브 이미지가 없습니다.' : '이미지를 불러오는 중...';
+    empty.textContent = _archiveLoaded ? '?熬곣뫖異?????????嶺뚯솘??띠럾? ??怨룸????덈펲.' : '????嶺뚯솘????釉띾쐞????노츎 繞?..';
     return;
   }
   empty.style.display = 'none';
@@ -4643,15 +4643,15 @@ function renderArchiveGrid() {
     const selected = _archiveSelectedKeys.has(it.key) ? ' selected' : '';
     return `<div class="archive-card${selected}" onclick="handleArchiveCardTap('${safeKey}')" oncontextmenu="return false" onpointerdown="startArchiveLongPress(event,'${safeKey}')" onpointerup="cancelArchiveLongPress()" onpointerleave="cancelArchiveLongPress()" onpointercancel="cancelArchiveLongPress()">
       <img src="${it.url}" loading="lazy" onerror="handleArchiveImageError(this,'${safeKey}')">
-      <div class="archive-card-check">✓</div>
+      <div class="archive-card-check">??/div>
       <div class="archive-card-actions" onclick="event.stopPropagation()">
-        <button class="archive-action-btn icon" onclick="editArchiveImage('${safeKey}')" title="편집하기" aria-label="편집하기">
+        <button class="archive-action-btn icon" onclick="editArchiveImage('${safeKey}')" title="?筌뤾쑴異???얄뵛" aria-label="?筌뤾쑴異???얄뵛">
           <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
         </button>
-        <button class="archive-action-btn icon" onclick="jumpToImageConversation('${safeKey}')" title="대화로 이동" aria-label="대화로 이동">
+        <button class="archive-action-btn icon" onclick="jumpToImageConversation('${safeKey}')" title="????븐뼚夷?????? aria-label="????븐뼚夷??????>
           <svg viewBox="0 0 24 24"><path d="M4 6h16a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-8l-4 3v-3H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2"/><circle cx="9" cy="11.5" r="1"/><circle cx="12" cy="11.5" r="1"/><circle cx="15" cy="11.5" r="1"/></svg>
         </button>
-        <button class="archive-action-btn icon" onclick="downloadImage('${safeUrl}','${safeFile}')" title="다운로드" aria-label="다운로드">
+        <button class="archive-action-btn icon" onclick="downloadImage('${safeUrl}','${safeFile}')" title="???깅뮧?β돦裕녻キ? aria-label="???깅뮧?β돦裕녻キ?>
           <svg viewBox="0 0 24 24"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 21h16"/></svg>
         </button>
       </div>
@@ -4661,7 +4661,7 @@ function renderArchiveGrid() {
   updateArchiveSelectionUi();
   if (rows.length > visible.length) {
     empty.style.display = 'block';
-    empty.textContent = `스크롤하면 더 불러옵니다 (${visible.length}/${rows.length})`;
+    empty.textContent = `???꾩씩?β뼯?뗩뇡?彛????釉띾쐞????鍮??(${visible.length}/${rows.length})`;
   } else {
     empty.style.display = 'none';
   }
@@ -4710,19 +4710,19 @@ function handleArchiveImageError(imgEl, key) {
   imgEl.alt = 'broken';
   imgEl.dataset.broken = '1';
   const card = imgEl.closest('.archive-card');
-  if (card) card.title = `이미지를 불러오지 못했습니다: ${key}`;
+  if (card) card.title = `????嶺뚯솘????釉띾쐞???? 嶺뚮쪇沅?쭛???鍮?? ${key}`;
 }
 
 async function editArchiveImage(key) {
   const normalizedKey = normalizeArchiveKey(key);
   const hit = (_archiveItems || []).find((it) => normalizeArchiveKey(it.key) === normalizedKey);
   if (!hit?.url) {
-    showToast('이미지 정보를 찾을 수 없습니다.');
+    showToast('????嶺뚯솘? ?筌먲퐢沅??嶺뚢돦堉??????怨룸????덈펲.');
     return;
   }
   const persona1Pid = Array.isArray(personas) && personas[0]?.pid ? personas[0].pid : null;
   if (!persona1Pid) {
-    showToast('페르소나 1을 찾을 수 없습니다.');
+    showToast('??濡〓?????1??嶺뚢돦堉??????怨룸????덈펲.');
     return;
   }
   const session = {
@@ -4740,7 +4740,7 @@ async function editArchiveImage(key) {
   await openChat(session.id);
   switchInputTab('image');
   addImageSourceToComposer(hit.url, getFilenameFromR2Key(hit.key, 'image.jpg'));
-  showToast('편집용 새 채팅을 열었습니다.');
+  showToast('?筌뤾쑴異????嶺???????怨????鍮??');
 }
 
 function openArchiveImagePopup(key) {
@@ -4789,7 +4789,7 @@ function updateArchiveSelectionUi() {
   if (!btn) return;
   const cnt = _archiveSelectedKeys.size;
   btn.disabled = cnt <= 0;
-  btn.title = cnt > 0 ? `선택 삭제 (${cnt})` : '선택 삭제';
+  btn.title = cnt > 0 ? `??ルㅎ臾?????(${cnt})` : '??ルㅎ臾?????;
   if (cancelBtn) cancelBtn.style.display = _archiveSelectionMode ? 'inline-flex' : 'none';
 }
 
@@ -4802,7 +4802,7 @@ function clearArchiveSelection() {
 async function deleteSelectedArchiveImages() {
   const keys = [..._archiveSelectedKeys];
   if (!keys.length) return;
-  if (!confirm(`선택한 ${keys.length}개 이미지를 R2에서 삭제할까요?`)) return;
+  if (!confirm(`??ルㅎ臾??${keys.length}??????嶺뚯솘???R2??????????ル맪???`)) return;
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl) return;
   let deleted = 0;
@@ -4822,19 +4822,19 @@ async function deleteSelectedArchiveImages() {
   _archiveSelectedKeys = new Set();
   _archiveSelectionMode = false;
   renderArchiveGrid();
-  showToast(`${deleted}개 삭제했습니다.`);
+  showToast(`${deleted}????????곕????덈펲.`);
 }
 
 async function deletePopupImageFromArchive() {
   const ctx = _archivePopupContext;
   if (!ctx?.key) return;
-  if (!confirm('이 이미지를 아카이브와 R2에서 삭제할까요?')) return;
+  if (!confirm('??????嶺뚯솘????熬곣뫖異?????? R2??????????ル맪???')) return;
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl) return;
   const targetKey = normalizeArchiveKey(ctx.key);
   const res = await fetch(`${wUrl}/image/${encodeURIComponent(targetKey).replace(/%2F/gi, '/')}`, { method: 'DELETE' }).catch(() => null);
   if (!res || (!res.ok && res.status !== 404)) {
-    showToast('삭제에 실패했습니다.');
+    showToast('????????덉넮???곕????덈펲.');
     return;
   }
   _archiveItems = (_archiveItems || []).filter((it) => normalizeArchiveKey(it.key) !== targetKey);
@@ -4842,17 +4842,17 @@ async function deletePopupImageFromArchive() {
   closeImagePopup();
   renderArchiveGrid();
   if (res.status === 404) {
-    showToast('R2에는 이미 없는 항목이라 목록에서 정리했습니다.');
+    showToast('R2???裕????? ???⑸츎 ????????嶺뚮ㅄ維뽨빳??????筌먲퐘遊???곕????덈펲.');
     return;
   }
-  showToast('아카이브에서 삭제했습니다.');
+  showToast('?熬곣뫖異???????????????곕????덈펲.');
 }
 
 async function jumpToImageConversation(keyOrUrl) {
   const normalizedKey = extractR2ImageKey(keyOrUrl) || String(keyOrUrl || '');
   const hit = (_archiveItems || []).find((it) => it.key === normalizedKey || it.url === keyOrUrl);
   if (!hit?.chatId) {
-    showToast('대화 위치를 찾지 못했습니다.');
+    showToast('?????熬곣뫚???嶺뚢돦堉? 嶺뚮쪇沅?쭛???鍮??');
     return;
   }
   _pendingArchiveFocus = { key: hit.key || normalizedKey, url: hit.url };
@@ -4896,21 +4896,21 @@ async function openProfilePopup(pid, emotion, hue, fallbackSrc, suffix = '') {
   const target = suffix ? `${eid}_${suffix}` : eid;
 
   try {
-    // 1. 해당 감정의 HD 이미지 (투명도 포함)
+    // 1. ??????띠룆흮???HD ????嶺뚯솘? (??筌??????
     const hdUrl = await getEmotionImageHD(pid, eid, suffix);
     if (hdUrl && popup.classList.contains('open')) {
       imgEl.innerHTML = `<img src="${hdUrl}">`;
       return;
     }
 
-    // 2. 해당 감정의 해상도 전체 이미지 (em_full_)
+    // 2. ??????띠룆흮?????怨대쭜???熬곣뫕??????嶺뚯솘? (em_full_)
     const full = await idbGet(`em_full_${pid}_${target}`);
     if (full && popup.classList.contains('open')) {
       imgEl.innerHTML = `<img src="${full}">`;
       return;
     }
 
-    // 3. 마지막 하단: 무표정 해상도
+    // 3. 嶺뚮씭??嶺???濡ル펺: ??쒕샑筌????怨대쭜??
     if (eid !== 'neutral') {
       const neutralFull = await idbGet(`em_full_${pid}_neutral_a`) || await idbGet(`em_full_${pid}_neutral`);
       if (neutralFull && popup.classList.contains('open')) {
@@ -5121,10 +5121,10 @@ async function copyImageToClipboard(url) {
   if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') {
     const ok = await fallbackCopyText(target);
     if (ok) {
-      showToast('이미지 URL을 클립보드에 복사했습니다.');
+      showToast('????嶺뚯솘? URL??????怨꾪돦??獄???곌랜踰딀쾮???곕????덈펲.');
       return;
     }
-    showToast('클립보드 이미지 복사를 지원하지 않는 환경입니다.');
+    showToast('????怨꾪돦??獄?????嶺뚯솘? ?곌랜踰딀쾮?㏓ご?嶺뚯솘???믨퀡由?춯?뼿 ???낅츎 ???삵렱???낅퉵??');
     return;
   }
   try {
@@ -5135,18 +5135,18 @@ async function copyImageToClipboard(url) {
     const res = await fetch(proxied);
     const blob = await res.blob();
     await navigator.clipboard.write([new ClipboardItem({ [blob.type || 'image/png']: blob })]);
-    showToast('이미지를 클립보드에 복사했습니다.');
+    showToast('????嶺뚯솘???????怨꾪돦??獄???곌랜踰딀쾮???곕????덈펲.');
   } catch (e) {
     const ok = await fallbackCopyText(target);
     if (ok) {
-      showToast('이미지 URL을 클립보드에 복사했습니다.');
+      showToast('????嶺뚯솘? URL??????怨꾪돦??獄???곌랜踰딀쾮???곕????덈펲.');
       return;
     }
     try {
       await navigator.clipboard.writeText(target);
-      showToast('이미지 URL을 클립보드에 복사했습니다.');
+      showToast('????嶺뚯솘? URL??????怨꾪돦??獄???곌랜踰딀쾮???곕????덈펲.');
     } catch {
-      showToast('클립보드 복사에 실패했습니다.');
+      showToast('????怨꾪돦??獄??곌랜踰딀쾮?????덉넮???곕????덈펲.');
     }
   }
 }
@@ -5156,7 +5156,7 @@ async function copyImageToClipboard(url) {
   const target = String(url || '').trim();
   if (!target) return;
   if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') {
-    showToast('이 브라우저는 이미지 클립보드 복사를 지원하지 않습니다.');
+    showToast('????곗뒧??????????嶺뚯솘? ????怨꾪돦??獄??곌랜踰딀쾮?㏓ご?嶺뚯솘???믨퀡由?춯?뼿 ???용????덈펲.');
     return;
   }
   try {
@@ -5182,9 +5182,9 @@ async function copyImageToClipboard(url) {
       });
     })();
     await navigator.clipboard.write([new ClipboardItem({ 'image/png': imageBlob })]);
-    showToast('이미지를 클립보드에 복사했습니다.');
+    showToast('????嶺뚯솘???????怨꾪돦??獄???곌랜踰딀쾮???곕????덈펲.');
   } catch {
-    showToast('이미지 복사에 실패했습니다.');
+    showToast('????嶺뚯솘? ?곌랜踰딀쾮?????덉넮???곕????덈펲.');
   }
 }
 
@@ -5209,7 +5209,7 @@ async function downloadImage(url, filename = 'generated.jpg') {
     a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   } catch(e) {
-    // fetch 실패 (CORS 정책 위반으로 안됨)
+    // fetch ???덉넮 (CORS ?筌먦끉???熬곣뫁類??怨쀬Ŧ ???덉?)
     window.open(url, '_blank');
   }
 }
@@ -5233,7 +5233,7 @@ function selectRatio(ratio) {
   const label = btn?.querySelector('span');
   if (label) label.textContent = ratio;
   
-  // 활성시 스타일 적용
+  // ??戮?뎽?????????⑤챷??
   document.querySelectorAll('#ratioPopup .ratio-item').forEach(el => {
     el.classList.toggle('active', el.textContent === ratio);
   });
@@ -5241,7 +5241,7 @@ function selectRatio(ratio) {
   document.getElementById('ratioPopup').classList.add('hidden');
 }
 
-// 팝업 버튼 클릭 시 닫기
+// ??諛몄뵜 ?뺢퀗?????????????뗢뵛
 document.addEventListener('click', (e) => {
   const popup = document.getElementById('ratioPopup');
   const btn = document.getElementById('imgRatioBtn');
@@ -5273,12 +5273,13 @@ function ensureSettingsMemoryPanel() {
       <button onclick="addPublicMemoryManual()" style="padding:10px 12px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;font-family:'Pretendard',sans-serif">Save</button>
     </div>
     <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
-      <button onclick="optimizeMemoryNow()" style="padding:8px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;font-family:'Pretendard',sans-serif">메모리최적화</button>
+      <button onclick="optimizeMemoryNow()" style="padding:8px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;font-family:'Pretendard',sans-serif">嶺뚮∥???꾨뎨?????⑤???/button>
+      <button onclick="rebuildMemoryNow()" style="margin-left:8px;padding:8px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;font-family:'Pretendard',sans-serif">嶺뚮∥???꾨뎨????諛댁뎽</button>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:10px">
-      <button onclick="toggleMemorySelectAll('public_profile','global',true); renderPublicMemoryList();" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">전체선택</button>
-      <button onclick="clearMemorySelection('public_profile','global'); renderPublicMemoryList();" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">선택해제</button>
-      <button onclick="deleteSelectedMemories('public_profile','global')" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:#3a1f24;color:#ffd7dd;font-size:11px;cursor:pointer">선택삭제</button>
+      <button onclick="toggleMemorySelectAll('public_profile','global',true); renderPublicMemoryList();" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">?熬곣뫕???ルㅎ臾?/button>
+      <button onclick="clearMemorySelection('public_profile','global'); renderPublicMemoryList();" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">??ルㅎ臾??怨몄젷</button>
+      <button onclick="deleteSelectedMemories('public_profile','global')" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:#3a1f24;color:#ffd7dd;font-size:11px;cursor:pointer">??ルㅎ臾????/button>
     </div>
     <div id="publicMemoryList" style="display:flex;flex-direction:column;gap:8px"></div>
   `;
@@ -5368,7 +5369,7 @@ function memoryItemRowHTML(item, onDelete) {
   const displayText = String(item.text || '').replace(/^\s*profile\s*:\s*/i, '');
   const safeText = esc(displayText);
   const locked = !!item.locked;
-  const lockTitle = locked ? '잠금 해제' : '잠금';
+  const lockTitle = locked ? '??ル맪????怨몄젷' : '??ル맪??;
   const lockNext = locked ? 'false' : 'true';
   const deleteDisabled = locked ? 'disabled' : '';
   const editDisabled = locked ? 'disabled' : '';
@@ -5383,7 +5384,7 @@ function memoryItemRowHTML(item, onDelete) {
     </div>
     <button onclick="toggleMemoryLockItem('${item.id}','${item.scope || ''}','${item.owner || ''}',${lockNext})" title="${lockTitle}" style="flex-shrink:0;width:28px;height:28px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:${locked ? 'hsl(45,80%,68%)' : 'var(--muted)'};display:inline-flex;align-items:center;justify-content:center;cursor:pointer">${memoryLockIconSVG(locked)}</button>
     <button onclick="editMemoryItem('${item.id}','${item.scope || ''}','${item.owner || ''}')" title="Edit" ${editDisabled} style="flex-shrink:0;width:28px;height:28px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--muted);display:inline-flex;align-items:center;justify-content:center;${editOpacity}">${memoryEditIconSVG()}</button>
-    <button onclick="${onDelete}('${item.id}','${item.scope || ''}','${item.owner || ''}')" title="삭제" ${deleteDisabled} style="flex-shrink:0;width:28px;height:28px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--muted);display:inline-flex;align-items:center;justify-content:center;${deleteOpacity}">${memoryTrashIconSVG()}</button>
+    <button onclick="${onDelete}('${item.id}','${item.scope || ''}','${item.owner || ''}')" title="???? ${deleteDisabled} style="flex-shrink:0;width:28px;height:28px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--muted);display:inline-flex;align-items:center;justify-content:center;${deleteOpacity}">${memoryTrashIconSVG()}</button>
   </div>`;
 }
 
@@ -5397,7 +5398,7 @@ async function renderPublicMemoryList(force = false) {
   }
   const nextCursor = getMemoryNextCursor('public_profile', 'global');
   const moreBtn = nextCursor
-    ? `<button onclick="loadMorePublicMemories()" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">더보기</button>`
+    ? `<button onclick="loadMorePublicMemories()" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">??븐뼔沅뽫뼨?/button>`
     : '';
   wrap.innerHTML = items.map(item => memoryItemRowHTML(item, 'deletePublicMemoryItem')).join('') + (moreBtn ? `<div style="display:flex;justify-content:center;padding-top:6px">${moreBtn}</div>` : '');
 }
@@ -5438,7 +5439,7 @@ async function deleteSelectedMemories(scope = '', owner = '') {
   const set = getMemorySelectionSet(scope, owner);
   const ids = [...set];
   if (!ids.length) {
-    showToast('선택된 메모리가 없습니다.');
+    showToast('??ルㅎ臾??嶺뚮∥???꾨뎨?? ??怨룸????덈펲.');
     return;
   }
   const current = getMemoryListFromCache(scope, owner) || [];
@@ -5452,7 +5453,7 @@ async function deleteSelectedMemories(scope = '', owner = '') {
   } else if (scope === 'private_profile') {
     renderPrivateMemoryList(owner || editingPid);
   }
-  showToast(`삭제 진행중 (${ids.length}개)`);
+  showToast(`????嶺뚯쉳?듸쭛?뚮뭄?(${ids.length}??`);
 
   const res = await deleteMemoryBatchApi({ scope, owner, ids });
   if (!res?.ok) {
@@ -5464,10 +5465,10 @@ async function deleteSelectedMemories(scope = '', owner = '') {
     } else if (scope === 'private_profile') {
       renderPrivateMemoryList(owner || editingPid);
     }
-    showToast('선택삭제 실패 (복원됨)');
+    showToast('??ルㅎ臾???????덉넮 (?곌랜踰???');
     return;
   }
-  showToast(`삭제 완료 (${res.deleted || 0}/${ids.length})`);
+  showToast(`?????熬곣뫁??(${res.deleted || 0}/${ids.length})`);
 }
 
 async function deletePublicMemoryItem(id, scope = 'public_profile', owner = 'global') {
@@ -5477,17 +5478,17 @@ async function deletePublicMemoryItem(id, scope = 'public_profile', owner = 'glo
   toggleMemoryItemSelection(scope, owner, id, false);
   renderPublicMemoryList();
   renderMemoryMeta();
-  showToast('삭제 진행중...');
+  showToast('????嶺뚯쉳?듸쭛?뚮뭄?..');
 
   const res = await deleteMemoryApi({ scope, owner, id });
   if (res?.ok) {
-    showToast('삭제 완료');
+    showToast('?????熬곣뫁??);
     return;
   }
   setMemoryListToCache(scope, owner, current);
   renderPublicMemoryList();
   renderMemoryMeta();
-  showToast('삭제 실패. 항목 복원됨');
+  showToast('???????덉넮. ?????곌랜踰???);
 }
 
 function ensureEditPrivateMemoryPanel(pid) {
@@ -5500,16 +5501,16 @@ function ensureEditPrivateMemoryPanel(pid) {
   wrap.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
       <div class="edit-section-title" style="margin:0">Private Memory</div>
-      <button onclick="optimizePrivateMemoryNow('${esc(pid)}')" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer;font-family:'Pretendard',sans-serif">최적화</button>
+      <button onclick="optimizePrivateMemoryNow('${esc(pid)}')" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer;font-family:'Pretendard',sans-serif">嶺뚣끉裕???/button>
     </div>
     <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px">
       <textarea id="privateMemoryInput" class="edit-input" placeholder="Memory for ${esc(pid)}..." style="flex:1;height:64px;resize:none;line-height:1.5"></textarea>
       <button onclick="addPrivateMemoryManual('${esc(pid)}')" style="padding:10px 12px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;font-family:'Pretendard',sans-serif">Save</button>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:10px">
-      <button onclick="toggleMemorySelectAll('private_profile','${esc(pid)}',true); renderPrivateMemoryList('${esc(pid)}');" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">전체선택</button>
-      <button onclick="clearMemorySelection('private_profile','${esc(pid)}'); renderPrivateMemoryList('${esc(pid)}');" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">선택해제</button>
-      <button onclick="deleteSelectedMemories('private_profile','${esc(pid)}')" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:#3a1f24;color:#ffd7dd;font-size:11px;cursor:pointer">선택삭제</button>
+      <button onclick="toggleMemorySelectAll('private_profile','${esc(pid)}',true); renderPrivateMemoryList('${esc(pid)}');" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">?熬곣뫕???ルㅎ臾?/button>
+      <button onclick="clearMemorySelection('private_profile','${esc(pid)}'); renderPrivateMemoryList('${esc(pid)}');" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">??ルㅎ臾??怨몄젷</button>
+      <button onclick="deleteSelectedMemories('private_profile','${esc(pid)}')" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:#3a1f24;color:#ffd7dd;font-size:11px;cursor:pointer">??ルㅎ臾????/button>
     </div>
     <div id="privateMemoryList" style="display:flex;flex-direction:column;gap:8px"></div>
   `;
@@ -5526,7 +5527,7 @@ async function renderPrivateMemoryList(pid, force = false) {
   }
   const nextCursor = getMemoryNextCursor('private_profile', pid);
   const moreBtn = nextCursor
-    ? `<button onclick="loadMorePrivateMemories('${esc(pid)}')" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">더보기</button>`
+    ? `<button onclick="loadMorePrivateMemories('${esc(pid)}')" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">??븐뼔沅뽫뼨?/button>`
     : '';
   wrap.innerHTML = items.map(item => memoryItemRowHTML(item, 'deletePrivateMemoryItem')).join('') + (moreBtn ? `<div style="display:flex;justify-content:center;padding-top:6px">${moreBtn}</div>` : '');
 }
@@ -5568,8 +5569,8 @@ async function optimizePrivateMemoryNow(pid) {
   if (!pid) return;
   if (!confirm(`Optimize only ${pid} private memory?`)) return;
   const session = getActiveSession();
-  const ticker = startMemoryProgressTicker(`개인 메모리 최적화 (${pid})`);
-  showToast(`개인 메모리 최적화를 시작했습니다: ${pid}`);
+  const ticker = startMemoryProgressTicker(`?띠룇裕??嶺뚮∥???꾨뎨?嶺뚣끉裕???(${pid})`);
+  showToast(`?띠룇裕??嶺뚮∥???꾨뎨?嶺뚣끉裕???? ??戮곗굚???곕????덈펲: ${pid}`);
   try {
     const res = await optimizeMemoriesApi({
       sessionId: session?.id || '',
@@ -5578,7 +5579,7 @@ async function optimizePrivateMemoryNow(pid) {
     });
     if (res?.ok) {
       showToast(`Private optimize done: ${res.optimized || 0} merged, ${res.removed || 0} removed`);
-      setMemoryProgressLine(`개인 메모리 최적화 완료 (${pid}): ${res.optimized || 0} 정리, ${res.removed || 0} 제거`, false);
+      setMemoryProgressLine(`?띠룇裕??嶺뚮∥???꾨뎨?嶺뚣끉裕????熬곣뫁??(${pid}): ${res.optimized || 0} ?筌먲퐘遊? ${res.removed || 0} ??蹂ㅽ깴`, false);
       renderPrivateMemoryList(pid, true);
       return;
     }
@@ -5587,7 +5588,7 @@ async function optimizePrivateMemoryNow(pid) {
     const detail = String(res?.detail || '').trim();
     const msg = err || detail ? `: ${err || detail}` : '';
     showToast(`Private memory optimize failed${hint}${msg}`);
-    setMemoryProgressLine(`개인 메모리 최적화 실패 (${pid})`, false);
+    setMemoryProgressLine(`?띠룇裕??嶺뚮∥???꾨뎨?嶺뚣끉裕??????덉넮 (${pid})`, false);
     if (detail) showToast(`Detail: ${detail.slice(0, 120)}`);
     console.error('optimizePrivateMemoryNow failed', { pid, res, raw: JSON.stringify(res || {}) });
   } finally {
@@ -5603,7 +5604,7 @@ async function deletePrivateMemoryItem(id, scope = 'private_profile', owner = ''
   setMemoryListToCache(scope, pid, current.filter(it => it.id !== id));
   toggleMemoryItemSelection(scope, pid, id, false);
   renderPrivateMemoryList(pid);
-  showToast('삭제 진행중...');
+  showToast('????嶺뚯쉳?듸쭛?뚮뭄?..');
 
   const res = await deleteMemoryApi({
     scope,
@@ -5611,12 +5612,12 @@ async function deletePrivateMemoryItem(id, scope = 'private_profile', owner = ''
     id
   });
   if (res?.ok) {
-    showToast('삭제 완료');
+    showToast('?????熬곣뫁??);
     return;
   }
   setMemoryListToCache(scope, pid, current);
   renderPrivateMemoryList(pid);
-  showToast('삭제 실패. 항목 복원됨');
+  showToast('???????덉넮. ?????곌랜踰???);
 }
 
 async function toggleMemoryLockItem(id, scope = '', owner = '', locked = false) {
@@ -5634,10 +5635,10 @@ async function toggleMemoryLockItem(id, scope = '', owner = '', locked = false) 
     setMemoryListToCache(scope, cacheOwner, prev);
     if (scope === 'public_profile') renderPublicMemoryList();
     if (scope === 'private_profile') renderPrivateMemoryList(cacheOwner);
-    showToast('잠금 변경 실패');
+    showToast('??ル맪???곌떠??????덉넮');
     return;
   }
-  showToast(locked ? '메모리 잠금됨' : '메모리 잠금 해제');
+  showToast(locked ? '嶺뚮∥???꾨뎨???ル맪??? : '嶺뚮∥???꾨뎨???ル맪????怨몄젷');
   if (scope === 'public_profile') renderPublicMemoryList();
   if (scope === 'private_profile') renderPrivateMemoryList(cacheOwner);
 }
@@ -5653,11 +5654,11 @@ async function editMemoryItem(id, scope = '', owner = '') {
     return;
   }
 
-  const edited = prompt('메모리 수정', String(target.text || ''));
+  const edited = prompt('嶺뚮∥???꾨뎨???瑜곸젧', String(target.text || ''));
   if (edited === null) return;
   const clean = String(edited || '').replace(/^\s*profile\s*:\s*/i, '').trim();
   if (!clean) {
-    showToast('빈 메모리는 저장할 수 없습니다.');
+    showToast('??嶺뚮∥???꾨뎨??????繞③뇡?????怨룸????덈펲.');
     return;
   }
   if (clean === String(target.text || '').trim()) return;
@@ -5673,10 +5674,10 @@ async function editMemoryItem(id, scope = '', owner = '') {
     setMemoryListToCache(scope, cacheOwner, prev);
     if (scope === 'public_profile') renderPublicMemoryList();
     if (scope === 'private_profile') renderPrivateMemoryList(cacheOwner);
-    showToast('메모리 수정 실패');
+    showToast('嶺뚮∥???꾨뎨???瑜곸젧 ???덉넮');
     return;
   }
-  showToast('메모리 수정 완료');
+  showToast('嶺뚮∥???꾨뎨???瑜곸젧 ?熬곣뫁??);
 }
 
 async function saveMemoryFromCurrentChat() {
@@ -5721,12 +5722,12 @@ async function renderMemoryMeta() {
   const sessionId = activeChatId || '';
   const meta = await getMemoryMetaApi(sessionId);
   if (!meta?.ok) {
-    line.textContent = '메모리 상태를 불러오지 못했습니다.';
+    line.textContent = '嶺뚮∥???꾨뎨???⑤객臾???釉띾쐞???? 嶺뚮쪇沅?쭛???鍮??';
     return;
   }
   const lastExtract = formatMemoryMetaTime(meta?.session?.lastExtractedAt || 0);
   const lastOptimize = formatMemoryMetaTime(meta?.global?.lastOptimizedAt || 0);
-  line.textContent = `최근 정리: ${lastExtract} / 최근 최적화: ${lastOptimize}`;
+  line.textContent = `嶺뚣끉裕???筌먲퐘遊? ${lastExtract} / 嶺뚣끉裕??嶺뚣끉裕??? ${lastOptimize}`;
 }
 
 function setMemoryProgressLine(text = '', busy = false) {
@@ -5734,18 +5735,18 @@ function setMemoryProgressLine(text = '', busy = false) {
   if (!line) return;
   if (busy) {
     line.dataset.busy = '1';
-    line.textContent = text || '메모리 최적화 작업 중...';
+    line.textContent = text || '嶺뚮∥???꾨뎨?嶺뚣끉裕?????얜???繞?..';
     return;
   }
   delete line.dataset.busy;
   if (text) line.textContent = text;
 }
 
-function startMemoryProgressTicker(label = '메모리 최적화') {
+function startMemoryProgressTicker(label = '嶺뚮∥???꾨뎨?嶺뚣끉裕???) {
   const steps = [
-    `${label}: 백그라운드에서 작업 중입니다.`,
-    `${label}: 중복/유사 항목 분석 중...`,
-    `${label}: 병합 및 정리 적용 중...`,
+    `${label}: ?꾩룄????源녿뮧??戮?뱺????얜???繞벿살탳????덈펲.`,
+    `${label}: 繞벿살탮????ル―???????釉뚯뫒??繞?..`,
+    `${label}: ?곌랜理묌뜮? ???筌먲퐘遊???⑤챷??繞?..`,
   ];
   let idx = 0;
   setMemoryProgressLine(steps[0], true);
@@ -5756,24 +5757,60 @@ function startMemoryProgressTicker(label = '메모리 최적화') {
 }
 
 async function optimizeMemoryNow() {
-  if (!confirm('메모리를 최적화할까요? 중복/유사 항목을 정리합니다.')) return;
+  if (!confirm('嶺뚮∥???꾨뎨?? 嶺뚣끉裕???됀?됰！????? 繞벿살탮????ル―????????筌먲퐘遊??紐껊퉵??')) return;
   const session = getActiveSession();
   const participantPids = Array.from(new Set((personas || []).map(p => p.pid).filter(Boolean)));
-  const ticker = startMemoryProgressTicker('메모리 최적화');
-  showToast('메모리 최적화를 백그라운드에서 시작했습니다.');
+  const ticker = startMemoryProgressTicker('嶺뚮∥???꾨뎨?嶺뚣끉裕???);
+  showToast('嶺뚮∥???꾨뎨?嶺뚣끉裕???? ?꾩룄????源녿뮧??戮?뱺????戮곗굚???곕????덈펲.');
   try {
     const res = await optimizeMemoriesApi({
       sessionId: session?.id || '',
       participantPids
     });
     if (res?.ok) {
-      showToast(`최적화 완료: ${res.optimized || 0}개 정리, ${res.removed || 0}개 제거`);
-      setMemoryProgressLine(`메모리 최적화 완료: ${res.optimized || 0} 정리, ${res.removed || 0} 제거`, false);
+      showToast(`嶺뚣끉裕????熬곣뫁?? ${res.optimized || 0}???筌먲퐘遊? ${res.removed || 0}????蹂ㅽ깴`);
+      setMemoryProgressLine(`嶺뚮∥???꾨뎨?嶺뚣끉裕????熬곣뫁?? ${res.optimized || 0} ?筌먲퐘遊? ${res.removed || 0} ??蹂ㅽ깴`, false);
       renderPublicMemoryList(true);
       if (editingPid) renderPrivateMemoryList(editingPid, true);
     } else {
-      showToast('메모리 최적화 실패');
-      setMemoryProgressLine('메모리 최적화 실패', false);
+      showToast('嶺뚮∥???꾨뎨?嶺뚣끉裕??????덉넮');
+      setMemoryProgressLine('嶺뚮∥???꾨뎨?嶺뚣끉裕??????덉넮', false);
+    }
+  } finally {
+    clearInterval(ticker);
+    renderMemoryMeta();
+  }
+}
+
+async function rebuildMemoryNow() {
+  const session = getActiveSession();
+  if (!session) {
+    showToast('??戮?뎽 嶺???????怨룸????덈펲.');
+    return;
+  }
+  if (!confirm('?熬곣뫗??嶺?????リ옇?▽빳??リ옇????怨쀬Ŧ 嶺뚮∥???꾨뎨?? ??繹?繹먮봾留됬뭐癒?뒩?? ??濡レ쭢 嶺뚮∥???꾨뎨?????????겶????吏?chat) 嶺뚮∥???꾨뎨?壤?????繹먮굝彛???덈펲.')) return;
+  const participantPids = Array.from(new Set((session.participantPids || []).filter(Boolean)));
+  const ticker = startMemoryProgressTicker('嶺뚮∥???꾨뎨???繹??);
+  showToast('嶺뚮∥???꾨뎨???繹?繹먮냱諭??꾩룄????源녿뮧??戮?뱺????戮곗굚???곕????덈펲.');
+  try {
+    const res = await rebuildMemoriesApi({
+      sessionId: session.id,
+      participantPids,
+      history: (session.history || []).map(m => ({
+        role: m.role,
+        content: m.content,
+        createdAt: m.createdAt || Date.now()
+      })),
+      includePublic: true
+    });
+    if (res?.ok) {
+      showToast(`??繹???熬곣뫁?? ${res.cleared || 0} ??蹂ㅽ깴, ${res.saved || 0} ????);
+      setMemoryProgressLine(`嶺뚮∥???꾨뎨???繹???熬곣뫁?? ${res.cleared || 0} ??蹂ㅽ깴, ${res.saved || 0} ????, false);
+      renderPublicMemoryList(true);
+      if (editingPid) renderPrivateMemoryList(editingPid, true);
+    } else {
+      showToast('嶺뚮∥???꾨뎨???繹?????덉넮');
+      setMemoryProgressLine('嶺뚮∥???꾨뎨???繹?????덉넮', false);
     }
   } finally {
     clearInterval(ticker);

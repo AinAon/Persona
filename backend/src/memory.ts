@@ -684,7 +684,7 @@ export async function extractAndStoreMemories(
   const apiKey = env.GROK_KEY || "";
 
   const sessionMeta = sessionId ? await getSessionMeta(env, sessionId) : { lastExtractedAt: 0, lastOptimizedAt: 0 };
-  const cursorStart = forceFull ? 0 : sessionMeta.lastExtractedAt;
+  const cursorStart = forceFull ? 0 : Math.max(sessionMeta.lastExtractedAt || 0, sessionMeta.lastOptimizedAt || 0);
 
   const userLines: string[] = [];
   const personaLinesByPid: Record<string, string[]> = {};
@@ -797,6 +797,64 @@ export async function extractAndStoreMemories(
   }
 
   return { saved, duplicate, processed, cursor, usedFallback };
+}
+
+async function listAllMemories(
+  env: Env,
+  scope: MemoryScope,
+  owner: string,
+): Promise<MemoryItem[]> {
+  const out: MemoryItem[] = [];
+  let cursor = "";
+  for (;;) {
+    const page = await listMemories(env, scope, owner, 200, cursor);
+    out.push(...(page.items || []));
+    if (!page.nextCursor) break;
+    cursor = page.nextCursor;
+  }
+  return out;
+}
+
+export async function rebuildMemoriesFromSession(
+  env: Env,
+  args: {
+    history: Array<{ role?: string; content?: unknown; createdAt?: number }>;
+    participantPids?: string[];
+    sessionId?: string;
+    includePublic?: boolean;
+  },
+): Promise<{ ok: boolean; cleared: number; saved: number; duplicate: number; processed: number; cursor: number; usedFallback: boolean; error?: string }> {
+  try {
+    const participantPids = Array.isArray(args.participantPids) ? [...new Set(args.participantPids.filter(Boolean))] : [];
+    const includePublic = args.includePublic !== false;
+    const targets: Array<{ scope: MemoryScope; owner: string }> = [
+      ...(includePublic ? [{ scope: "public_profile" as MemoryScope, owner: "global" }] : []),
+      ...participantPids.map((pid) => ({ scope: "private_profile" as MemoryScope, owner: pid })),
+    ];
+
+    let cleared = 0;
+    for (const t of targets) {
+      const items = await listAllMemories(env, t.scope, t.owner);
+      for (const it of items) {
+        if (it.source !== "chat") continue;
+        if (it.locked) continue;
+        const ok = await deleteMemory(env, t.scope, t.owner, it.id, true);
+        if (ok) cleared++;
+      }
+    }
+
+    const extracted = await extractAndStoreMemories(env, {
+      history: Array.isArray(args.history) ? args.history : [],
+      participantPids,
+      sessionId: String(args.sessionId || ""),
+      forceFull: true,
+    });
+
+    return { ok: true, cleared, ...extracted };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error || "rebuild_failed");
+    return { ok: false, cleared: 0, saved: 0, duplicate: 0, processed: 0, cursor: 0, usedFallback: false, error: message };
+  }
 }
 
 export async function optimizeMemories(

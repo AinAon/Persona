@@ -6,6 +6,7 @@ import {
   listMemories,
   normalizeScopeOwner,
   optimizeMemories,
+  rebuildMemoriesFromSession,
   parseScope,
   setMemoryLock,
   setMemoryText,
@@ -343,6 +344,25 @@ export async function handleApiRoute(
   if (url.pathname === "/memory/optimize" && request.method === "POST") {
     const body = await request.json() as { participantPids?: string[]; sessionId?: string; includePublic?: boolean };
     const outcome = await optimizeMemories(env, {
+      participantPids: Array.isArray(body.participantPids) ? body.participantPids : [],
+      sessionId: String(body.sessionId || ""),
+      includePublic: body.includePublic !== false,
+    });
+    if (!outcome?.ok) {
+      return Response.json(outcome, { status: 500, headers: cors });
+    }
+    return Response.json(outcome, { headers: cors });
+  }
+
+  if (url.pathname === "/memory/rebuild" && request.method === "POST") {
+    const body = await request.json() as {
+      history?: Array<{ role?: string; content?: unknown; createdAt?: number }>;
+      participantPids?: string[];
+      sessionId?: string;
+      includePublic?: boolean;
+    };
+    const outcome = await rebuildMemoriesFromSession(env, {
+      history: Array.isArray(body.history) ? body.history : [],
       participantPids: Array.isArray(body.participantPids) ? body.participantPids : [],
       sessionId: String(body.sessionId || ""),
       includePublic: body.includePublic !== false,
