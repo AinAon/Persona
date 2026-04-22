@@ -2,18 +2,18 @@
 const CHAT_MODELS = [
   { value: '', label: '기본 (채팅방 설정 따름)' },
   { group: 'Google' },
-  { value: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Lite' },
-  { value: 'gemini-3.1-pro-preview',    label: 'Gemini 3.1 Pro' },
-  { value: 'gemini-2.5-flash',          label: 'Gemini 2.5 Flash' },  
+  { value: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Lite | In $0.25 / Out $1.50 (1M) | Flash-Lite 기반 고효율' },
+  { value: 'gemini-3.1-pro-preview',    label: 'Gemini 3.1 Pro | In $2.00 / Out $12.00 (1M) | 200K 이하 컨텍스트 기준' },
+  { value: 'gemini-2.5-flash',          label: 'Gemini 2.5 Flash | In $0.30 / Out $1.20 (1M) | 이전 세대 가성비' },  
   { group: 'OpenAI' },
-  { value: 'gpt-5.4-nano',  label: 'GPT-5.4 Nano' },
-  { value: 'gpt-5.4-mini',  label: 'GPT-5.4 Mini' },
-  { value: 'gpt-5.4',       label: 'GPT-5.4' },
+  { value: 'gpt-5.4-nano',  label: 'GPT-5.4 Nano | In $0.20 / Out $1.25 (1M) | 초경량/초저가' },
+  { value: 'gpt-5.4-mini',  label: 'GPT-5.4 Mini | In $0.75 / Out $4.50 (1M) | 성능-비용 균형' },
+  { value: 'gpt-5.4',       label: 'GPT-5.4 | In $2.50 / Out $15.00 (1M) | 주력 플래그십' },
   { group: 'xAI' },
-  { value: 'grok-4-1-fast-reasoning-latest',     label: 'Grok-4.1 Reason' },
-  { value: 'grok-4-1-fast-non-reasoning-latest', label: 'Grok-4.1 Non' },
-  { value: 'grok-4.20-reasoning-latest',         label: 'Grok-4.20 Reason' },
-  { value: 'grok-4.20-non-reasoning-latest',     label: 'Grok-4.20 Non' },
+  { value: 'grok-4-1-fast-reasoning-latest',     label: 'Grok-4.1 Reason | In $0.20 / Out $0.50 (1M) | 추론 최적화(Fast)' },
+  { value: 'grok-4-1-fast-non-reasoning-latest', label: 'Grok-4.1 Non | In $0.20 / Out $0.50 (1M) | 일반 응답(Fast)' },
+  { value: 'grok-4.20-reasoning-latest',         label: 'Grok-4.20 Reason | In $3.00 / Out $15.00 (1M) | 고성능 추론' },
+  { value: 'grok-4.20-non-reasoning-latest',     label: 'Grok-4.20 Non | In $3.00 / Out $15.00 (1M) | 고성능 일반' },
 ];
 let _editMultiUploadQueue = [];
 
