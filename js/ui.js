@@ -637,10 +637,45 @@ function getTargetModelForRequest(session, isImageReq) {
 function buildChatPreviewText(text) {
   const raw = sanitizeTextForUnicodeSafety(text).replace(/\n/g, ' ').trim();
   if (!raw) return '';
-  if (/(^|\s)(생성 오류|연결 실패)\s*:/.test(raw) || /API Error:|NOT_FOUND|INVALID_ARGUMENT|Gemini Image Error:/i.test(raw)) {
-    return '[오류] 이미지 생성 실패';
-  }
   return raw.slice(0, 120);
+}
+
+function isPreviewableAssistantText(text) {
+  const raw = sanitizeTextForUnicodeSafety(text).replace(/\n/g, ' ').trim();
+  if (!raw) return false;
+  if (/(^|\s)(생성 오류|연결 실패)\s*:/.test(raw)) return false;
+  if (/API Error:|RESOURCE_EXHAUSTED|NOT_FOUND|INVALID_ARGUMENT|Gemini Image Error:/i.test(raw)) return false;
+  return true;
+}
+
+function getMessagePrimaryText(message, personas = []) {
+  const content = message?.content;
+  if (typeof content === 'string') {
+    if (message?.role === 'assistant') {
+      const parsed = parseResponse(content, personas);
+      return parsed[0]?.content || '';
+    }
+    return content;
+  }
+  if (Array.isArray(content)) {
+    return content.find(c => c?.type === 'text')?.text || '';
+  }
+  return '';
+}
+
+function resolveSessionListPreview(session, personas = []) {
+  if (!session || !Array.isArray(session.history)) {
+    return sanitizeChatListPreview(buildChatPreviewText(session?.lastPreview || ''));
+  }
+  for (let i = session.history.length - 1; i >= 0; i--) {
+    const message = session.history[i];
+    if (message?.role !== 'assistant') continue;
+    const text = getMessagePrimaryText(message, personas);
+    if (!isPreviewableAssistantText(text)) continue;
+    const preview = sanitizeChatListPreview(buildChatPreviewText(text));
+    if (preview) return preview;
+  }
+  return sanitizeChatListPreview(buildChatPreviewText(session?.lastPreview || ''));
 }
 
 function getPersonaModel(persona) {
@@ -2398,6 +2433,7 @@ async function renderChatList() {
   for (const s of sorted) {
     const pList = (s.participantPids || []).map(pid => getPersona(pid)).filter(Boolean);
     const roomName = s.roomName || pList.map(p=>p.name).join(', ') || '채팅';
+    const listPreview = resolveSessionListPreview(s, pList) || '대화를 시작해봐';
 
     const wrap = document.createElement('div');
     wrap.className = 'chat-list-wrap';
@@ -2431,7 +2467,7 @@ async function renderChatList() {
       <div class="chat-avatars-row" style="width:${avWidth}px;flex-shrink:0">${avEls.join('')}</div>
       <div class="chat-list-info">
         <div class="chat-list-names">${esc(roomName)}</div>
-        <div class="chat-list-preview">${esc(s.lastPreview || '대화를 시작해봐')}</div>
+        <div class="chat-list-preview">${esc(listPreview)}</div>
       </div>
       <div class="chat-list-meta">
         <span class="chat-list-time">${timeLabel(s.updatedAt)}</span>
@@ -3327,11 +3363,8 @@ function clearImageWorkflowHistory(session) {
   const before = session.history.length;
   session.history = session.history.filter(m => !isImageWorkflowMessage(m));
   if (session.history.length === before) return;
-  const latest = session.history.at(-1);
-  const latestText = typeof latest?.content === 'string'
-    ? latest.content
-    : (Array.isArray(latest?.content) ? (latest.content.find(c => c?.type === 'text')?.text || '') : '');
-  session.lastPreview = sanitizeChatListPreview(buildChatPreviewText(latestText));
+  const personas = getSessionPersonas(session);
+  session.lastPreview = resolveSessionListPreview(session, personas);
   session.updatedAt = Date.now();
   renderChatArea().catch(() => {});
   renderChatList();
@@ -3944,7 +3977,9 @@ async function sendMessage() {
 
     const parsed = parseResponse(reply, pList);
     const firstContent = parsed[0]?.content || '';
-    currentSession.lastPreview = sanitizeChatListPreview(buildChatPreviewText(firstContent));
+    currentSession.lastPreview = isPreviewableAssistantText(firstContent)
+      ? sanitizeChatListPreview(buildChatPreviewText(firstContent))
+      : resolveSessionListPreview(currentSession, pList);
     currentSession.updatedAt = Date.now();
 
     // 사용자가 해당 채팅방을 그대로 보고 있다면 화면에 즉시 렌더링
