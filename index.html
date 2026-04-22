@@ -217,11 +217,26 @@ body {
 
 /* 페르소나 선택 → 채팅 시작 버튼 */
 .persona-start-chat-bar {
-  position: fixed; bottom: 0; left: 0; right: 0;
-  padding: 12px 16px; background: linear-gradient(to top, var(--bg) 60%, transparent); z-index: 5;
-  opacity: 0; transform: translateY(8px); pointer-events: none; transition: all .18s ease;
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  margin-top: auto;
+  padding: 0;
+  max-height: 0;
+  overflow: hidden;
+  background: linear-gradient(to top, var(--surface) 72%, rgba(0,0,0,0));
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  transition: all .18s ease;
 }
-.persona-start-chat-bar.visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
+.persona-start-chat-bar.visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+  max-height: 140px;
+  padding: 12px 0 6px;
+}
 .persona-start-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .persona-start-chat-btn {
   width: 100%; padding: 13px; border-radius: 12px; background: var(--text); color: var(--bg);

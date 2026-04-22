@@ -2591,7 +2591,7 @@ function selectPersonaForChat(pid) {
   if (newBtn) newBtn.classList.add('visible');
   if (editBtn) editBtn.classList.add('visible');
   const p = getPersona(pid);
-  if (newBtn) newBtn.textContent = p?.name ? `${p.name} 와 채팅` : '와(과) 채팅';
+  if (newBtn) newBtn.textContent = p?.name ? `${p.name}에게 말 걸기` : '말 걸기';
   document.querySelectorAll('.persona-card[data-pid]').forEach(c => {
     c.style.opacity = c.dataset.pid === pid ? '1' : '0.5';
   });
