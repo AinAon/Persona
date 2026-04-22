@@ -2,12 +2,14 @@ import type { Env } from "./index";
 import { generateGrokText } from "./model_grok";
 
 export type MemoryScope = "public_profile" | "private_profile";
+export type MemoryCategory = "profile" | "preference" | "finance" | "project" | "constraint" | "context" | "other";
 
 export type MemoryItem = {
   id: string;
   scope: MemoryScope;
   owner: string;
   text: string;
+  category?: MemoryCategory;
   source: "manual" | "chat";
   fingerprint: string;
   locked?: boolean;
@@ -208,8 +210,21 @@ async function getItem(env: Env, scope: MemoryScope, owner: string, id: string):
 function normalizeMemoryItemShape(item: MemoryItem): MemoryItem {
   return {
     ...item,
+    category: item.category || classifyMemoryCategory(item.text),
     locked: !!item.locked,
   };
+}
+
+function classifyMemoryCategory(text: string): MemoryCategory {
+  const t = normalizeText(text);
+  if (!t) return "other";
+  if (/(loan|mortgage|interest|apr|debt|asset|liability|budget|expense|income|salary|invest|etf|stock|bond|tax|cashflow|대출|이자|원금|자산|부채|예산|지출|수입|급여|투자|주식|채권|세금|현금흐름)/i.test(t)) return "finance";
+  if (/(allergy|must not|never|don'?t|forbid|금지|하지마|하지 말|알레르기|민감|제약|주의)/i.test(t)) return "constraint";
+  if (/(project|deadline|milestone|roadmap|repo|feature|bug|릴리즈|프로젝트|마감|일정|기능|버그)/i.test(t)) return "project";
+  if (/(name|birthday|mbti|job|role|사는|거주|직업|생일|이름)/i.test(t)) return "profile";
+  if (/(prefer|like|favorite|style|tone|좋아|선호|취향|말투|스타일)/i.test(t)) return "preference";
+  if (/(today|this week|temporary|for now|오늘|이번 주|임시|당분간)/i.test(t)) return "context";
+  return "other";
 }
 
 async function loadLegacyMemoryItems(env: Env, scope: MemoryScope, owner: string): Promise<MemoryItem[]> {
@@ -376,6 +391,7 @@ export async function upsertMemory(
     scope: MemoryScope;
     owner?: string;
     text: string;
+    category?: MemoryCategory;
     source?: "manual" | "chat";
     createdAt?: number;
   },
@@ -414,6 +430,7 @@ export async function upsertMemory(
     scope,
     owner,
     text,
+    category: args.category || classifyMemoryCategory(text),
     source: args.source || "manual",
     fingerprint,
     locked: false,
@@ -518,7 +535,7 @@ function shouldPersistFact(text: string): boolean {
   if (/[?？]/.test(base)) return false;
   if (/(오늘|지금|방금|이번|잠깐|나중|이따|조금\s*후|오늘만|이번만)/.test(base)) return false;
   if (/(해줘|해주세요|해줄래|할까|할게|부탁|please|can you|could you)/i.test(base)) return false;
-  return /(좋아|싫어|선호|취향|알레르기|생일|직업|mbti|이름|거주|사는|주로|항상|보통|prefer|like|allergic|birthday|job|name|live|usually|always)/i.test(base);
+  return /(좋아|싫어|선호|취향|알레르기|생일|직업|mbti|이름|거주|사는|주로|항상|보통|대출|이자|자산|부채|예산|지출|수입|투자|세금|prefer|like|allergic|birthday|job|name|live|usually|always|loan|interest|asset|debt|budget|expense|income|invest|tax)/i.test(base);
 }
 
 function findMentionedPersonaPids(text: string, participantPids: string[]): string[] {
@@ -954,7 +971,11 @@ export async function optimizeMemories(
 
 export async function buildMemorySystemPrompt(
   env: Env,
-  args: { participantPids?: string[]; profileLimit?: number },
+  args: {
+    participantPids?: string[];
+    profileLimit?: number;
+    personaCategoryPrefs?: Record<string, { focus?: MemoryCategory[]; avoid?: MemoryCategory[]; redirectTo?: string }>;
+  },
 ): Promise<string> {
   const pids = Array.isArray(args.participantPids) ? args.participantPids.filter(Boolean) : [];
   const profileLimit = Math.max(1, Math.min(30, args.profileLimit || 10));
@@ -972,8 +993,20 @@ export async function buildMemorySystemPrompt(
   lines.push("- Prefer newer memory when similar facts conflict.");
 
   if (pubProfile.length) {
+    const byCat: Record<string, MemoryItem[]> = {};
+    for (const m of pubProfile) {
+      const cat = m.category || classifyMemoryCategory(m.text);
+      if (!byCat[cat]) byCat[cat] = [];
+      byCat[cat].push(m);
+    }
     lines.push("Public user profile memory:");
-    pubProfile.forEach((m) => lines.push(`- ${m.text}`));
+    const ordered: MemoryCategory[] = ["finance", "constraint", "profile", "preference", "project", "context", "other"];
+    for (const cat of ordered) {
+      const rows = byCat[cat] || [];
+      if (!rows.length) continue;
+      lines.push(`- [${cat}]`);
+      rows.forEach((m) => lines.push(`  - ${m.text}`));
+    }
   }
 
   for (const pid of pids) {
@@ -981,6 +1014,10 @@ export async function buildMemorySystemPrompt(
     if (!pp.length) continue;
     lines.push(`Private persona memory for ${pid}:`);
     pp.forEach((m) => lines.push(`- ${m.text}`));
+    const pref = args.personaCategoryPrefs?.[pid];
+    if (pref?.focus?.length) lines.push(`- Persona focus categories: ${pref.focus.join(", ")}`);
+    if (pref?.avoid?.length) lines.push(`- Persona avoid categories: ${pref.avoid.join(", ")}`);
+    if (pref?.redirectTo) lines.push(`- If user asks avoid category, redirect to ${pref.redirectTo}.`);
   }
 
   const hasRealMemory = pubProfile.length || Object.values(privateProfileByPid).some((x) => x.length);

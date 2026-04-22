@@ -24,6 +24,13 @@ const RESPONSE_VARIANCE_PROMPT = [
   "Keep the persona consistent, but let the delivery feel alive and irregular.",
 ].join(" ");
 
+const ANTI_HALLUCINATION_GUARD = [
+  "Mandatory policy for all personas:",
+  "- Do not fabricate facts.",
+  "- If uncertain, explicitly say you are not sure and label assumptions.",
+  "- Do not state specific numbers/dates/names as certain without confidence.",
+].join(" ");
+
 type ChatBody = {
   messages?: any[];
   model?: string;
@@ -39,6 +46,7 @@ type ChatBody = {
   resolution?: string;
   images?: string[];
   participant_pids?: string[];
+  persona_memory_prefs?: Record<string, { focus?: string[]; avoid?: string[]; redirectTo?: string }>;
 };
 
 export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders): Promise<Response> {
@@ -52,6 +60,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     resolution,
     images = [],
     participant_pids = [],
+    persona_memory_prefs = {},
   } = reqBody;
 
   const apiKeys = {
@@ -66,9 +75,13 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
   try {
     const memPrompt = isImageReq
       ? ""
-      : await buildMemorySystemPrompt(env, { participantPids: participant_pids });
+      : await buildMemorySystemPrompt(env, {
+          participantPids: participant_pids,
+          personaCategoryPrefs: persona_memory_prefs as any,
+        });
     const effectiveMessages = (!isImageReq && memPrompt)
       ? [
+          { role: "system", content: ANTI_HALLUCINATION_GUARD },
           { role: "system", content: RESPONSE_VARIANCE_PROMPT },
           { role: "system", content: memPrompt },
           ...messages

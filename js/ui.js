@@ -1248,8 +1248,10 @@ function renderSettingsPane() {
   if (delBtn) delBtn.style.display = userProfile.image ? 'block' : 'none';
   const nameEl = document.getElementById('settingsUserName');
   const bioEl = document.getElementById('settingsUserBio');
+  const hpEl = document.getElementById('settingsHallucinationPolicy');
   if (nameEl) nameEl.value = userProfile.name || '';
   if (bioEl) bioEl.value = userProfile.bio || '';
+  if (hpEl) hpEl.value = userProfile.hallucinationPolicy || '';
   
   // 시작 화면 설정
   const tabEl = document.getElementById('settingsDefaultTab');
@@ -1284,6 +1286,7 @@ function applyFontSize(size) {
 function saveSettingsUserProfile() {
   userProfile.name = document.getElementById('settingsUserName')?.value.trim() || '';
   userProfile.bio = document.getElementById('settingsUserBio')?.value.trim() || '';
+  userProfile.hallucinationPolicy = document.getElementById('settingsHallucinationPolicy')?.value.trim() || '';
   userProfile.defaultTab = document.getElementById('settingsDefaultTab')?.value || 'persona';
   userProfile.chatAvatarStyle = document.getElementById('settingsAvatarStyle')?.value || 'square';
   userProfile.fontSize = parseInt(document.getElementById('settingsFontSize')?.value || 15);
@@ -3493,7 +3496,16 @@ function buildSystemPrompt(session, pListOverride = null) {
     return desc;
   }).join('\n\n');
 
-const formatEx = pList.map(p => `[${p.pid}][emotion:감정]내용[/${p.pid}]`).join('\n');
+  const formatEx = pList.map(p => `[${p.pid}][emotion:감정]내용[/${p.pid}]`).join('\n');
+  const antiHallucinationBase = [
+    '공통 지침(필수): 사실을 지어내지 말 것.',
+    '근거가 없거나 확실하지 않으면 모른다고 답하고, 추정/가정을 명확히 표시할 것.',
+    '수치/날짜/고유명사는 확신이 없으면 단정하지 말 것.',
+  ].join('\n');
+  const userHallucinationPolicy = (userProfile?.hallucinationPolicy || '').trim();
+  const antiHallucinationPart = userHallucinationPolicy
+    ? `${antiHallucinationBase}\n사용자 추가 지침: ${userHallucinationPolicy}`
+    : antiHallucinationBase;
 
   return `${worldPart}${userPart}${personaPart}
 
@@ -3502,7 +3514,9 @@ ${formatEx}
 emotion: ${EMOTIONS.join('/')}
 규칙: emotion 태그는 반드시 pid 태그 바로 뒤에 한 번만. 내용 안에 [감정명] 태그 넣기 금지. 이름: 접두사 금지.${modeInstr ? '\n' + modeInstr : ''}
 인칭은 자연스러운 맥락에서만 가급적 사용. 매 발화 시작에 붙이지 말 것
-필요한 태그 내용은 마크다운(**, 코드블록, 목록 등) 사용 가능`;
+필요한 태그 내용은 마크다운(**, 코드블록, 목록 등) 사용 가능
+
+${antiHallucinationPart}`;
 }
 
 function renderUserBubbleHTML(text, atts) {

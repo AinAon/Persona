@@ -64,7 +64,12 @@ const CACHE_INDEX_KEY = 'pc4_index';
 const CACHE_SESSION_PREFIX = 'pc4_sess_';
 const CACHE_USER_KEY = 'pc4_user';
 
-let userProfile = { name: '', bio: '', image: null };
+let userProfile = {
+  name: '',
+  bio: '',
+  image: null,
+  hallucinationPolicy: '',
+};
 
 const DEFAULT_PERSONAS = []; // celebrity.json에서 로드
 

@@ -305,6 +305,7 @@ export async function handleApiRoute(
       scope?: string;
       owner?: string;
       text?: string;
+      category?: "profile" | "preference" | "finance" | "project" | "constraint" | "context" | "other";
       source?: "manual" | "chat";
       createdAt?: number;
     };
@@ -315,6 +316,7 @@ export async function handleApiRoute(
       scope,
       owner,
       text: String(body.text || ""),
+      category: body.category,
       source: body.source || "manual",
       createdAt: Number(body.createdAt || 0) || undefined,
     });

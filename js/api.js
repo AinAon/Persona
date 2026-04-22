@@ -1178,14 +1178,14 @@ async function listMemoriesApi(scope, owner = '', limit = 50, cursor = '') {
   }
 }
 
-async function upsertMemoryApi({ scope, owner = '', text = '', source = 'manual', createdAt } = {}) {
+async function upsertMemoryApi({ scope, owner = '', text = '', category = '', source = 'manual', createdAt } = {}) {
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl) return { ok: false, duplicate: false, item: null };
   try {
     const res = await fetch(`${wUrl}/memory/upsert`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scope, owner, text, source, createdAt })
+      body: JSON.stringify({ scope, owner, text, category, source, createdAt })
     });
     return await res.json();
   } catch {
