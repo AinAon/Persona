@@ -3459,11 +3459,35 @@ function updateLiveStreamBubbleText(state, text, tgtArea) {
   const clean = String(text || '')
     .replace(pidRe, '')
     .replace(/\[emotion:\s*[^\]]+\]/gi, '')
+    .replace(/\[(?:emotion:[^\]]*)?$/i, '')
+    .replace(/\[\/?[a-zA-Z0-9_:-]{1,48}$/g, '')
     .trim();
   state.bubbleEl.innerHTML = fmt(clean || '...');
   renderMermaidBlocks(tgtArea);
   layoutHorizontalMasonryRows(tgtArea);
   stickChatToBottom(tgtArea);
+}
+
+async function finalizeLiveStreamBubble(state, reply, pList, suffixes, createdAt, tgtArea, renderSessionId) {
+  if (!state?.root || !tgtArea) return false;
+  if (_chatGeneration?.cancelled || activeChatId !== renderSessionId) return false;
+  const html = await renderAIResponseHTML(reply, pList, suffixes, createdAt, (pList || []).length <= 1);
+  const wrap = document.createElement('div');
+  wrap.innerHTML = html;
+  const nextRoot = wrap.firstElementChild;
+  if (!nextRoot) return false;
+  state.root.replaceWith(nextRoot);
+  nextRoot.classList.add('msg-enter');
+  enhanceRenderedMessage(nextRoot);
+  attachMessageMeta(nextRoot, createdAt, 'left');
+  updateChatBottomAnchor(tgtArea);
+  renderMermaidBlocks(tgtArea);
+  bindImageLoadBottomStick(tgtArea);
+  layoutHorizontalMasonryRows(tgtArea);
+  stickChatToBottom(tgtArea);
+  state.root = nextRoot;
+  state.bubbleEl = nextRoot.querySelector('.ai-bubble');
+  return true;
 }
 
 async function fetchChatStreamSSE(url, body, signal, onDelta) {
@@ -4056,6 +4080,7 @@ async function sendMessage() {
     let reply = '';
     let generatedImageUrl = '';
     let streamedInPlace = false;
+    let streamedLiveState = null;
     if (session._demo) {
       await new Promise(r => setTimeout(r, 600));
       reply = window.getDemoReply ? window.getDemoReply(session) : '데모 응답 오류';
@@ -4138,6 +4163,7 @@ async function sendMessage() {
                 if (liveArea) {
                   if (thinkEl?.parentNode) thinkEl.remove();
                   liveState = await createLiveStreamBubble(liveArea, persona, Date.now(), renderSessionId);
+                  streamedLiveState = liveState;
                 }
                 rawReply = await fetchChatStreamSSE(wUrl + '/chat', payload, _chatGeneration?.controller?.signal, (_delta, fullText) => {
                   liveText = fullText;
@@ -4322,7 +4348,18 @@ async function sendMessage() {
       const tgtArea = document.getElementById('chatArea');
       tgtArea.classList.add('has-messages');
       if (streamedInPlace && !isImageReq && (pList || []).length <= 1) {
-        // Live stream bubble already rendered in-place.
+        const replaced = await finalizeLiveStreamBubble(
+          streamedLiveState,
+          reply,
+          pList,
+          suffixes,
+          assistantCreatedAt,
+          tgtArea,
+          currentSession.id
+        );
+        if (!replaced) {
+          await appendAIReplyStreamingOneToOne(reply, pList, suffixes, assistantCreatedAt, tgtArea, currentSession.id);
+        }
       } else if (!isImageReq && (pList || []).length <= 1) {
         await appendAIReplyStreamingOneToOne(reply, pList, suffixes, assistantCreatedAt, tgtArea, currentSession.id);
       } else {
