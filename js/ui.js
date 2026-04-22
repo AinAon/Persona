@@ -4095,8 +4095,6 @@ async function sendMessage() {
   const processApiAndRender = async () => {
     let reply = '';
     let generatedImageUrl = '';
-    let streamedInPlace = false;
-    let streamedLiveState = null;
     if (session._demo) {
       await new Promise(r => setTimeout(r, 600));
       reply = window.getDemoReply ? window.getDemoReply(session) : '데모 응답 오류';
@@ -4163,44 +4161,13 @@ async function sendMessage() {
                   buildCurrentTimeSystemMessage(),
                   ...buildApiMessagesFromHistory(session.history, userMsg, personaRequestMsgContent, isImageReq, persona.pid)
                 ];
-              const canLiveStream = responders.length === 1 && supportsLiveStreamModel(model) && activeChatId === renderSessionId;
               const payload = {
                 messages: personaMessages,
                 model,
-                participant_pids: [persona.pid],
-                ...(canLiveStream ? { stream: true } : {})
+                participant_pids: [persona.pid]
               };
               let rawReply = '';
-              if (canLiveStream) {
-                let liveText = '';
-                let lastPaintAt = 0;
-                let liveState = null;
-                const liveArea = (activeChatId === renderSessionId) ? document.getElementById('chatArea') : null;
-                rawReply = await fetchChatStreamSSE(wUrl + '/chat', payload, _chatGeneration?.controller?.signal, async (_delta, fullText) => {
-                  liveText = fullText;
-                  const now = Date.now();
-                  const detectedEmotion = extractStreamingEmotion(fullText);
-                  if (liveArea && !liveState && detectedEmotion) {
-                    if (thinkEl?.parentNode) thinkEl.remove();
-                    liveState = await createLiveStreamBubble(liveArea, persona, Date.now(), renderSessionId, detectedEmotion);
-                    streamedLiveState = liveState;
-                  }
-                  if (now - lastPaintAt >= 70) {
-                    if (liveState && liveArea) updateLiveStreamBubbleText(liveState, liveText, liveArea);
-                    lastPaintAt = now;
-                  }
-                });
-                if (liveText && liveArea && !liveState) {
-                  if (thinkEl?.parentNode) thinkEl.remove();
-                  const detectedEmotion = extractStreamingEmotion(liveText) || 'neutral';
-                  liveState = await createLiveStreamBubble(liveArea, persona, Date.now(), renderSessionId, detectedEmotion);
-                  streamedLiveState = liveState;
-                }
-                if (liveText && liveState && liveArea) {
-                  updateLiveStreamBubbleText(liveState, liveText, liveArea);
-                  streamedInPlace = true;
-                }
-              } else {
+              {
                 const res = await fetch(wUrl + '/chat', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -4370,20 +4337,7 @@ async function sendMessage() {
     if (activeChatId === currentSession.id) {
       const tgtArea = document.getElementById('chatArea');
       tgtArea.classList.add('has-messages');
-      if (streamedInPlace && !isImageReq && (pList || []).length <= 1) {
-        const replaced = await finalizeLiveStreamBubble(
-          streamedLiveState,
-          reply,
-          pList,
-          suffixes,
-          assistantCreatedAt,
-          tgtArea,
-          currentSession.id
-        );
-        if (!replaced) {
-          await appendAIReplyStreamingOneToOne(reply, pList, suffixes, assistantCreatedAt, tgtArea, currentSession.id);
-        }
-      } else if (!isImageReq && (pList || []).length <= 1) {
+      if (!isImageReq && (pList || []).length <= 1) {
         await appendAIReplyStreamingOneToOne(reply, pList, suffixes, assistantCreatedAt, tgtArea, currentSession.id);
       } else {
         await appendAIReplySequentially(reply, pList, suffixes, assistantCreatedAt, tgtArea, currentSession.id);
