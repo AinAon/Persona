@@ -4189,10 +4189,14 @@ async function sendMessage() {
     currentSession.updatedAt = Date.now();
 
     // 사용자가 해당 채팅방을 그대로 보고 있다면 화면에 즉시 렌더링
-      if (activeChatId === currentSession.id) {
+    if (activeChatId === currentSession.id) {
       const tgtArea = document.getElementById('chatArea');
       tgtArea.classList.add('has-messages');
-      await appendAIReplySequentially(reply, pList, suffixes, assistantCreatedAt, tgtArea, currentSession.id);
+      if (!isImageReq && (pList || []).length <= 1) {
+        await appendAIReplyStreamingOneToOne(reply, pList, suffixes, assistantCreatedAt, tgtArea, currentSession.id);
+      } else {
+        await appendAIReplySequentially(reply, pList, suffixes, assistantCreatedAt, tgtArea, currentSession.id);
+      }
     }
 
     if (!currentSession._demo) { saveSession(currentSession.id); saveIndex(); }
@@ -6005,6 +6009,60 @@ async function optimizeMemoryNow() {
   } finally {
     clearInterval(ticker);
     renderMemoryMeta();
+  }
+}
+
+async function appendAIReplyStreamingOneToOne(reply, pList, suffixes, createdAt, tgtArea, renderSessionId) {
+  const segments = parseResponse(reply, pList);
+  if (!Array.isArray(segments) || segments.length !== 1) {
+    return appendAIReplySequentially(reply, pList, suffixes, createdAt, tgtArea, renderSessionId);
+  }
+  const seg = segments[0];
+  const segText = seg?.content?.trim?.() ? seg.content : '';
+  if (!segText) return;
+  const p = pList[seg.idx] || pList[0];
+  if (!p) return;
+
+  const container = document.createElement('div');
+  tgtArea.appendChild(container);
+  let mounted = null;
+  const emotion = seg.emotion || 'neutral';
+  const fullText = String(segText);
+  const lengths = [];
+  const total = fullText.length;
+  let cursor = 0;
+  while (cursor < total) {
+    const remaining = total - cursor;
+    const step = remaining > 500 ? 14 : (remaining > 200 ? 10 : 6);
+    cursor = Math.min(total, cursor + step);
+    lengths.push(cursor);
+  }
+
+  for (const len of lengths) {
+    if (_chatGeneration?.cancelled || activeChatId !== renderSessionId) return;
+    const partial = fullText.slice(0, len);
+    const segReply = `[${p.pid}][emotion:${emotion}]${partial}[/${p.pid}]`;
+    const html = await renderAIResponseHTML(segReply, [p], suffixes, createdAt, true);
+    if (_chatGeneration?.cancelled || activeChatId !== renderSessionId) return;
+    container.innerHTML = html;
+    const nextEl = container.firstElementChild;
+    if (!nextEl) continue;
+    if (mounted) {
+      mounted.replaceWith(nextEl);
+      mounted = nextEl;
+    } else {
+      mounted = nextEl;
+      mounted.classList.add('msg-enter');
+      tgtArea.appendChild(mounted);
+    }
+    enhanceRenderedMessage(mounted);
+    attachMessageMeta(mounted, createdAt, 'left');
+    updateChatBottomAnchor(tgtArea);
+    renderMermaidBlocks(tgtArea);
+    bindImageLoadBottomStick(tgtArea);
+    layoutHorizontalMasonryRows(tgtArea);
+    stickChatToBottom(tgtArea);
+    await sleep(18);
   }
 }
 
