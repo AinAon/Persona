@@ -233,6 +233,21 @@ async function refreshAllCaches(options = {}) {
   }
 }
 
+function preloadMemoryMetaLight() {
+  if (typeof getMemoryMetaApi !== 'function') return;
+  const sessionId = String(activeChatId || '');
+  getMemoryMetaApi(sessionId)
+    .then((meta) => {
+      if (!meta || typeof meta !== 'object') return;
+      window.__memoryMetaCache = {
+        sessionId,
+        meta,
+        fetchedAt: Date.now()
+      };
+    })
+    .catch(() => {});
+}
+
 window.refreshAllCachesManual = async function() {
   await refreshAllCaches({ force: true, showLoading: true, loadingLabel: '수동 새로고침 준비 중...' });
 };
@@ -319,6 +334,7 @@ async function init() {
     if (activeTab === 'settings') renderSettingsPane();
   }).catch(()=>{});
   await refreshAllCaches({ force: false, showLoading: true, loadingLabel: '로컬 캐시 로드 중...' });
+  preloadMemoryMetaLight();
   return;
 
   // neutral 이미지 IDB에서 로드 (neutral_a 우선)
