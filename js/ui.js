@@ -3419,6 +3419,70 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function supportsLiveStreamModel(model = '') {
+  const m = String(model || '');
+  return m.startsWith('grok') || m.startsWith('gpt-') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4');
+}
+
+function updateThinkingStreamPreview(thinkEl, text) {
+  if (!thinkEl) return;
+  const safe = esc(String(text || '').trim() || '...');
+  thinkEl.innerHTML = `<div class="thinking-stream-preview" style="white-space:pre-wrap;line-height:1.55;color:var(--text);max-width:min(78vw,740px)">${safe}</div>`;
+}
+
+async function fetchChatStreamSSE(url, body, signal, onDelta) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+    body: JSON.stringify(body),
+    signal
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(txt || `stream request failed (${res.status})`);
+  }
+  if (!res.body) return '';
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  let full = '';
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let sep = buf.indexOf('\n\n');
+    while (sep !== -1) {
+      const evt = buf.slice(0, sep);
+      buf = buf.slice(sep + 2);
+      const dataLine = evt.split('\n').map((l) => l.trim()).find((l) => l.startsWith('data:'));
+      if (!dataLine) {
+        sep = buf.indexOf('\n\n');
+        continue;
+      }
+      const payload = dataLine.slice(5).trim();
+      if (!payload) {
+        sep = buf.indexOf('\n\n');
+        continue;
+      }
+      try {
+        const obj = JSON.parse(payload);
+        if (obj?.type === 'delta' && typeof obj?.text === 'string') {
+          full += obj.text;
+          onDelta?.(obj.text, full);
+        } else if (obj?.type === 'done' && typeof obj?.reply === 'string') {
+          full = obj.reply;
+        } else if (obj?.type === 'error') {
+          throw new Error(obj?.error || 'stream error');
+        }
+      } catch (e) {
+        if (e instanceof Error) throw e;
+      }
+      sep = buf.indexOf('\n\n');
+    }
+  }
+  return full;
+}
+
 function setChatBusy(isBusy) {
   const sendBtn = document.getElementById('sendBtn');
   if (sendBtn) {
@@ -4021,40 +4085,59 @@ async function sendMessage() {
                   buildCurrentTimeSystemMessage(),
                   ...buildApiMessagesFromHistory(session.history, userMsg, personaRequestMsgContent, isImageReq, persona.pid)
                 ];
-              const res = await fetch(wUrl + '/chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  messages: personaMessages,
-                  model,
-                  participant_pids: [persona.pid]
-                })
-              });
-              const data = await res.json();
-              if (data.result !== 'success') {
-                replyByPid.set(persona.pid, `[${persona.pid}]응답생성 오류: ${data.error||'알 수 없는 오류'}[/${persona.pid}]`);
-              } else {
-                const rawReply = sanitizeTextForUnicodeSafety(data.reply || '');
-                const parsedSelf = parseResponse(rawReply, [persona]);
-                logGroupRouterDebug('send.non-image.persona.raw', {
-                  pid: persona.pid,
-                  model,
-                  rawPreview: rawReply.slice(0, 220),
-                  parsedSegments: Array.isArray(parsedSelf) ? parsedSelf.length : 0
+              const canLiveStream = responders.length === 1 && supportsLiveStreamModel(model) && activeChatId === renderSessionId;
+              const payload = {
+                messages: personaMessages,
+                model,
+                participant_pids: [persona.pid],
+                ...(canLiveStream ? { stream: true } : {})
+              };
+              let rawReply = '';
+              if (canLiveStream) {
+                let liveText = '';
+                let lastPaintAt = 0;
+                rawReply = await fetchChatStreamSSE(wUrl + '/chat', payload, _chatGeneration?.controller?.signal, (_delta, fullText) => {
+                  liveText = fullText;
+                  const now = Date.now();
+                  if (now - lastPaintAt >= 70) {
+                    updateThinkingStreamPreview(thinkEl, liveText);
+                    lastPaintAt = now;
+                  }
                 });
-                if (Array.isArray(parsedSelf) && parsedSelf.length > 0) {
-                  const mergedContent = parsedSelf
-                    .map((seg) => String(seg?.content || '').trim())
-                    .filter(Boolean)
-                    .join('\n')
-                    .trim();
-                  const chosenEmotion = String(parsedSelf[0]?.emotion || 'neutral');
-                  const safeEmotion = EMOTIONS.includes(chosenEmotion) ? chosenEmotion : 'neutral';
-                  const finalContent = mergedContent || rawReply || '...';
-                  replyByPid.set(persona.pid, `[${persona.pid}][emotion:${safeEmotion}]${finalContent}[/${persona.pid}]`);
-                } else {
-                  replyByPid.set(persona.pid, wrapPersonaReply(persona.pid, rawReply));
+                if (liveText) updateThinkingStreamPreview(thinkEl, liveText);
+              } else {
+                const res = await fetch(wUrl + '/chat', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.result !== 'success') {
+                  replyByPid.set(persona.pid, `[${persona.pid}]응답생성 오류: ${data.error||'알 수 없는 오류'}[/${persona.pid}]`);
+                  return;
                 }
+                rawReply = data.reply || '';
+              }
+              rawReply = sanitizeTextForUnicodeSafety(rawReply || '');
+              const parsedSelf = parseResponse(rawReply, [persona]);
+              logGroupRouterDebug('send.non-image.persona.raw', {
+                pid: persona.pid,
+                model,
+                rawPreview: rawReply.slice(0, 220),
+                parsedSegments: Array.isArray(parsedSelf) ? parsedSelf.length : 0
+              });
+              if (Array.isArray(parsedSelf) && parsedSelf.length > 0) {
+                const mergedContent = parsedSelf
+                  .map((seg) => String(seg?.content || '').trim())
+                  .filter(Boolean)
+                  .join('\n')
+                  .trim();
+                const chosenEmotion = String(parsedSelf[0]?.emotion || 'neutral');
+                const safeEmotion = EMOTIONS.includes(chosenEmotion) ? chosenEmotion : 'neutral';
+                const finalContent = mergedContent || rawReply || '...';
+                replyByPid.set(persona.pid, `[${persona.pid}][emotion:${safeEmotion}]${finalContent}[/${persona.pid}]`);
+              } else {
+                replyByPid.set(persona.pid, wrapPersonaReply(persona.pid, rawReply));
               }
             } catch (e) {
               replyByPid.set(persona.pid, `[${persona.pid}]응답생성 오류: 네트워크 또는 처리 오류[/${persona.pid}]`);
@@ -6062,7 +6145,9 @@ async function appendAIReplyStreamingOneToOne(reply, pList, suffixes, createdAt,
     bindImageLoadBottomStick(tgtArea);
     layoutHorizontalMasonryRows(tgtArea);
     stickChatToBottom(tgtArea);
-    await sleep(18);
+    const ch = partial.slice(-1);
+    const delay = /[.!?。！？]/.test(ch) ? 90 : 42;
+    await sleep(delay);
   }
 }
 

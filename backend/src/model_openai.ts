@@ -96,3 +96,59 @@ export async function generateOpenAIText(params: {
   const data = JSON.parse(text);
   return data.choices?.[0]?.message?.content || "";
 }
+
+export async function streamOpenAIText(params: {
+  model: string;
+  messages: unknown[];
+  apiKey: string;
+  onDelta: (delta: string) => Promise<void> | void;
+}): Promise<string> {
+  const { model, messages, apiKey, onDelta } = params;
+  const isNewOpenAI = model.startsWith("gpt-5") || model.startsWith("o1") || model.startsWith("o3") || model.startsWith("o4");
+  const tokenParam = isNewOpenAI ? { max_completion_tokens: 2000 } : { max_tokens: 2000 };
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({ model, messages, stream: true, ...tokenParam }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`OpenAI Text API Error: ${text}`);
+  }
+  if (!res.body) return "";
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let full = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let lineEnd = buffer.indexOf("\n");
+    while (lineEnd !== -1) {
+      const line = buffer.slice(0, lineEnd).trim();
+      buffer = buffer.slice(lineEnd + 1);
+      if (line.startsWith("data:")) {
+        const payload = line.slice(5).trim();
+        if (payload === "[DONE]") return full;
+        if (payload) {
+          try {
+            const data = JSON.parse(payload);
+            const delta = data?.choices?.[0]?.delta?.content;
+            if (typeof delta === "string" && delta) {
+              full += delta;
+              await onDelta(delta);
+            }
+          } catch {
+            // ignore malformed chunks
+          }
+        }
+      }
+      lineEnd = buffer.indexOf("\n");
+    }
+  }
+  return full;
+}

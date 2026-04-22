@@ -1,7 +1,7 @@
 import type { CorsHeaders, Env } from "./index";
 import { generateGeminiImage, generateGeminiText, generateImagenImage } from "./model_gemini";
-import { generateOpenAIImage, generateOpenAIText } from "./model_openai";
-import { generateGrokImage, generateGrokText } from "./model_grok";
+import { generateOpenAIImage, generateOpenAIText, streamOpenAIText } from "./model_openai";
+import { generateGrokImage, generateGrokText, streamGrokText } from "./model_grok";
 import { buildMemorySystemPrompt } from "./memory";
 
 const IMAGE_MODELS = ["gemini-3.1-flash-image-preview", "grok-imagine-image-pro", "gpt-image-1.5"];
@@ -47,6 +47,7 @@ type ChatBody = {
   images?: string[];
   participant_pids?: string[];
   persona_memory_prefs?: Record<string, { focus?: string[]; avoid?: string[]; redirectTo?: string }>;
+  stream?: boolean;
 };
 
 export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders): Promise<Response> {
@@ -61,6 +62,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     images = [],
     participant_pids = [],
     persona_memory_prefs = {},
+    stream = false,
   } = reqBody;
 
   const apiKeys = {
@@ -137,6 +139,46 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       if (!imageUrl) throw new Error("이미지 URL 응답이 없습니다.");
       imageUrlOut = imageUrl;
       reply = `![generated](${imageUrl})`;
+    } else if (stream && (model.startsWith("grok") || model.startsWith("gpt-") || model.startsWith("o1") || model.startsWith("o3") || model.startsWith("o4"))) {
+      const encoder = new TextEncoder();
+      const body = new ReadableStream<Uint8Array>({
+        async start(controller) {
+          const send = (obj: Record<string, unknown>) => {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
+          };
+          try {
+            send({ type: "start" });
+            if (model.startsWith("grok")) {
+              reply = await streamGrokText({
+                model,
+                messages: preparedMessages,
+                apiKey: apiKeys.grok,
+                onDelta: (delta) => send({ type: "delta", text: delta }),
+              });
+            } else {
+              reply = await streamOpenAIText({
+                model,
+                messages: preparedMessages,
+                apiKey: apiKeys.openai,
+                onDelta: (delta) => send({ type: "delta", text: delta }),
+              });
+            }
+            send({ type: "done", reply });
+          } catch (err: any) {
+            send({ type: "error", error: err?.message || "stream error" });
+          } finally {
+            controller.close();
+          }
+        },
+      });
+      return new Response(body, {
+        headers: {
+          ...cors,
+          "Content-Type": "text/event-stream; charset=utf-8",
+          "Cache-Control": "no-cache, no-transform",
+          Connection: "keep-alive",
+        },
+      });
     } else if (model.startsWith("gemini")) {
       reply = await generateGeminiText({
         model,
