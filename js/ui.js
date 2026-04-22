@@ -3441,12 +3441,20 @@ function extractStreamingEmotion(raw = '') {
 async function createLiveStreamBubble(tgtArea, persona, createdAt, renderSessionId, emotion = 'neutral') {
   if (!tgtArea || !persona) return null;
   const safeEmotion = EMOTIONS.includes(String(emotion || '').toLowerCase()) ? String(emotion).toLowerCase() : 'neutral';
+  let preferredCircle = '';
+  let preferredRect = '';
+  try { preferredCircle = await getEmotionCircleThumb(persona.pid, safeEmotion, '', 80) || ''; } catch {}
+  try { preferredRect = await getEmotionImage(persona.pid, safeEmotion, 200) || ''; } catch {}
   const seed = `[${persona.pid}][emotion:${safeEmotion}]...[/${persona.pid}]`;
   const html = await renderAIResponseHTML(seed, [persona], {}, createdAt, true);
   const wrap = document.createElement('div');
   wrap.innerHTML = html;
   const root = wrap.firstElementChild;
   if (!root) return null;
+  const avatarImg = root.querySelector('.msg-av img');
+  if (avatarImg && (preferredCircle || preferredRect)) {
+    avatarImg.setAttribute('src', preferredCircle || preferredRect);
+  }
   root.classList.add('msg-enter');
   enhanceRenderedMessage(root);
   attachMessageMeta(root, createdAt, 'left');
