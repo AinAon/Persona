@@ -3431,9 +3431,17 @@ function updateThinkingStreamPreview(thinkEl, text) {
   thinkEl.innerHTML = `<div class="thinking-stream-preview" style="white-space:pre-wrap;line-height:1.55;color:var(--text);max-width:min(78vw,740px)">${safe}</div>`;
 }
 
-async function createLiveStreamBubble(tgtArea, persona, createdAt, renderSessionId) {
+function extractStreamingEmotion(raw = '') {
+  const m = String(raw || '').match(/\[emotion:\s*([a-zA-Z]+)\s*\]/i);
+  if (!m) return '';
+  const e = String(m[1] || '').toLowerCase();
+  return EMOTIONS.includes(e) ? e : '';
+}
+
+async function createLiveStreamBubble(tgtArea, persona, createdAt, renderSessionId, emotion = 'neutral') {
   if (!tgtArea || !persona) return null;
-  const seed = `[${persona.pid}][emotion:neutral]...[/${persona.pid}]`;
+  const safeEmotion = EMOTIONS.includes(String(emotion || '').toLowerCase()) ? String(emotion).toLowerCase() : 'neutral';
+  const seed = `[${persona.pid}][emotion:${safeEmotion}]...[/${persona.pid}]`;
   const html = await renderAIResponseHTML(seed, [persona], {}, createdAt, true);
   const wrap = document.createElement('div');
   wrap.innerHTML = html;
@@ -4163,9 +4171,10 @@ async function sendMessage() {
                 rawReply = await fetchChatStreamSSE(wUrl + '/chat', payload, _chatGeneration?.controller?.signal, async (_delta, fullText) => {
                   liveText = fullText;
                   const now = Date.now();
-                  if (liveArea && !liveState && String(fullText || '').trim()) {
+                  const detectedEmotion = extractStreamingEmotion(fullText);
+                  if (liveArea && !liveState && detectedEmotion) {
                     if (thinkEl?.parentNode) thinkEl.remove();
-                    liveState = await createLiveStreamBubble(liveArea, persona, Date.now(), renderSessionId);
+                    liveState = await createLiveStreamBubble(liveArea, persona, Date.now(), renderSessionId, detectedEmotion);
                     streamedLiveState = liveState;
                   }
                   if (now - lastPaintAt >= 70) {
@@ -4175,7 +4184,8 @@ async function sendMessage() {
                 });
                 if (liveText && liveArea && !liveState) {
                   if (thinkEl?.parentNode) thinkEl.remove();
-                  liveState = await createLiveStreamBubble(liveArea, persona, Date.now(), renderSessionId);
+                  const detectedEmotion = extractStreamingEmotion(liveText) || 'neutral';
+                  liveState = await createLiveStreamBubble(liveArea, persona, Date.now(), renderSessionId, detectedEmotion);
                   streamedLiveState = liveState;
                 }
                 if (liveText && liveState && liveArea) {
