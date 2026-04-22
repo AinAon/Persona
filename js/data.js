@@ -69,6 +69,7 @@ let userProfile = {
   bio: '',
   image: null,
   hallucinationPolicy: '',
+  typingSpeed: 'fast',
 };
 
 const DEFAULT_PERSONAS = []; // celebrity.json에서 로드

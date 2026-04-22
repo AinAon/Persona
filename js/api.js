@@ -1102,7 +1102,7 @@ function makeImageFilename(prefix) {
 }
 
 // ── 기기별 로컬 전용 키 (KV 동기화 제외) ──
-const LOCAL_ONLY_PROFILE_KEYS = ['defaultTab', 'chatAvatarStyle', 'fontSize'];
+const LOCAL_ONLY_PROFILE_KEYS = ['defaultTab', 'chatAvatarStyle', 'fontSize', 'typingSpeed'];
 
 function saveUserProfile() {
   setLocalUserProfile(userProfile);

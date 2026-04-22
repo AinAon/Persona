@@ -1426,6 +1426,8 @@ function renderSettingsPane() {
   // 썸네일 스타일 설정 추가
   const avStyleEl = document.getElementById('settingsAvatarStyle');
   if (avStyleEl) avStyleEl.value = userProfile.chatAvatarStyle || 'square';
+  const typingEl = document.getElementById('settingsTypingSpeed');
+  if (typingEl) typingEl.value = getBubbleTypingSpeedPreset();
   ensureSettingsMemoryPanel();
   renderPublicMemoryList();
   renderMemoryMeta();
@@ -1442,12 +1444,28 @@ function applyFontSize(size) {
   document.documentElement.style.setProperty('--chat-font-size', (size || 15) + 'px');
 }
 
+function getBubbleTypingSpeedPreset() {
+  const speed = String(userProfile?.typingSpeed || 'fast');
+  if (speed === 'slow') return 'slow';
+  if (speed === 'medium') return 'medium';
+  return 'fast';
+}
+
+function getBubbleTypingDelay(ch = '') {
+  const punct = /[.!?。！？]/.test(String(ch || ''));
+  const speed = getBubbleTypingSpeedPreset();
+  if (speed === 'slow') return punct ? 180 : 84;
+  if (speed === 'medium') return punct ? 130 : 60;
+  return punct ? 90 : 42;
+}
+
 function saveSettingsUserProfile() {
   userProfile.name = document.getElementById('settingsUserName')?.value.trim() || '';
   userProfile.bio = document.getElementById('settingsUserBio')?.value.trim() || '';
   userProfile.hallucinationPolicy = document.getElementById('settingsHallucinationPolicy')?.value.trim() || '';
   userProfile.defaultTab = document.getElementById('settingsDefaultTab')?.value || 'persona';
   userProfile.chatAvatarStyle = document.getElementById('settingsAvatarStyle')?.value || 'square';
+  userProfile.typingSpeed = document.getElementById('settingsTypingSpeed')?.value || 'fast';
   userProfile.fontSize = parseInt(document.getElementById('settingsFontSize')?.value || 15);
   applyFontSize(userProfile.fontSize);
   saveUserProfile();
@@ -6211,8 +6229,7 @@ async function appendAIReplyStreamingOneToOne(reply, pList, suffixes, createdAt,
     layoutHorizontalMasonryRows(tgtArea);
     stickChatToBottom(tgtArea);
     const ch = partial.slice(-1);
-    const delay = /[.!?。！？]/.test(ch) ? 90 : 42;
-    await sleep(delay);
+    await sleep(getBubbleTypingDelay(ch));
   }
 }
 
