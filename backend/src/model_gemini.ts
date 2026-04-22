@@ -119,6 +119,81 @@ export async function generateGeminiText(params: {
   apiKey: string;
 }): Promise<string> {
   const { model, messages, apiKey } = params;
+  const body = await buildGeminiTextBody(messages);
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+  const text = await res.text();
+  if (!res.ok) throw new Error(`Gemini Text API Error: ${text}`);
+  const data = JSON.parse(text);
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+}
+
+export async function streamGeminiText(params: {
+  model: string;
+  messages: ChatMessage[];
+  apiKey: string;
+  onDelta: (delta: string) => Promise<void> | void;
+}): Promise<string> {
+  const { model, messages, apiKey, onDelta } = params;
+  const body = await buildGeminiTextBody(messages);
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Gemini Stream API Error: ${text}`);
+  }
+  if (!res.body) return "";
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let full = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let lineEnd = buffer.indexOf("\n");
+    while (lineEnd !== -1) {
+      const line = buffer.slice(0, lineEnd).trim();
+      buffer = buffer.slice(lineEnd + 1);
+      if (line.startsWith("data:")) {
+        const payload = line.slice(5).trim();
+        if (payload) {
+          try {
+            const data = JSON.parse(payload);
+            const parts = data?.candidates?.[0]?.content?.parts || [];
+            let delta = "";
+            for (const part of parts) {
+              if (typeof part?.text === "string") delta += part.text;
+            }
+            if (delta) {
+              full += delta;
+              await onDelta(delta);
+            }
+          } catch {
+            // ignore malformed chunks
+          }
+        }
+      }
+      lineEnd = buffer.indexOf("\n");
+    }
+  }
+  return full;
+}
+
+async function buildGeminiTextBody(messages: ChatMessage[]): Promise<Record<string, unknown>> {
   const contents = await Promise.all(
     messages
       .filter((m) => m.role !== "system")
@@ -142,17 +217,5 @@ export async function generateGeminiText(params: {
   if (systemMessages.length) {
     body.systemInstruction = { parts: [{ text: systemMessages.join("\n\n") }] };
   }
-
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    },
-  );
-  const text = await res.text();
-  if (!res.ok) throw new Error(`Gemini Text API Error: ${text}`);
-  const data = JSON.parse(text);
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  return body;
 }

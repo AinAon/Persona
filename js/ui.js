@@ -3421,7 +3421,7 @@ function sleep(ms) {
 
 function supportsLiveStreamModel(model = '') {
   const m = String(model || '');
-  return m.startsWith('grok') || m.startsWith('gpt-') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4');
+  return m.startsWith('gemini') || m.startsWith('grok') || m.startsWith('gpt-') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4');
 }
 
 function updateThinkingStreamPreview(thinkEl, text) {

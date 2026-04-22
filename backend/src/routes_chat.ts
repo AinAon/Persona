@@ -1,5 +1,5 @@
 import type { CorsHeaders, Env } from "./index";
-import { generateGeminiImage, generateGeminiText, generateImagenImage } from "./model_gemini";
+import { generateGeminiImage, generateGeminiText, generateImagenImage, streamGeminiText } from "./model_gemini";
 import { generateOpenAIImage, generateOpenAIText, streamOpenAIText } from "./model_openai";
 import { generateGrokImage, generateGrokText, streamGrokText } from "./model_grok";
 import { buildMemorySystemPrompt } from "./memory";
@@ -139,7 +139,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       if (!imageUrl) throw new Error("이미지 URL 응답이 없습니다.");
       imageUrlOut = imageUrl;
       reply = `![generated](${imageUrl})`;
-    } else if (stream && (model.startsWith("grok") || model.startsWith("gpt-") || model.startsWith("o1") || model.startsWith("o3") || model.startsWith("o4"))) {
+    } else if (stream && (model.startsWith("gemini") || model.startsWith("grok") || model.startsWith("gpt-") || model.startsWith("o1") || model.startsWith("o3") || model.startsWith("o4"))) {
       const encoder = new TextEncoder();
       const body = new ReadableStream<Uint8Array>({
         async start(controller) {
@@ -148,7 +148,14 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
           };
           try {
             send({ type: "start" });
-            if (model.startsWith("grok")) {
+            if (model.startsWith("gemini")) {
+              reply = await streamGeminiText({
+                model,
+                messages: preparedMessages,
+                apiKey: apiKeys.gemini,
+                onDelta: (delta) => send({ type: "delta", text: delta }),
+              });
+            } else if (model.startsWith("grok")) {
               reply = await streamGrokText({
                 model,
                 messages: preparedMessages,
