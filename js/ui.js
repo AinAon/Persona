@@ -3267,6 +3267,10 @@ async function openChat(id) {
   if (!s._demo) {
     await loadSession(id);
     if (openToken !== _chatOpenToken || activeChatId !== id) return;
+    if (typeof refreshCurrentChatIfStale === 'function') {
+      await refreshCurrentChatIfStale(id).catch(() => {});
+      if (openToken !== _chatOpenToken || activeChatId !== id) return;
+    }
     renderChatArea();
     return;
   }

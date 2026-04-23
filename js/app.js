@@ -382,7 +382,7 @@ async function init() {
   let loadingEscapeTimer = null;
   const cachedPersonas = getLocalPersonas();
   const cachedSessionIndex = getLocalSessionIndex();
-  const shouldBlockLoading = false;
+  const shouldBlockLoading = true;
   // Failsafe: loading overlay should not stay forever if init flow is interrupted.
   let loadingFailsafe = shouldBlockLoading ? setTimeout(() => {
     try {
@@ -408,8 +408,11 @@ async function init() {
   loadUserProfileKV().then(() => {
     if (activeTab === 'settings') renderSettingsPane();
   }).catch(()=>{});
-  await refreshAllCaches({ force: false, showLoading: false, loadingLabel: '로컬 캐시 로드 중...' });
+  await refreshAllCaches({ force: false, showLoading: true, loadingLabel: '로컬 캐시 로드 중...' });
   preloadMemoryMetaLight();
+  if (loadingEscapeTimer) clearTimeout(loadingEscapeTimer);
+  clearTimeout(loadingFailsafe);
+  if (typeof setLoadingEscapeVisible === 'function') setLoadingEscapeVisible(false);
   return;
 
   // neutral 이미지 IDB에서 로드 (neutral_a 우선)
