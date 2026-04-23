@@ -28,6 +28,9 @@ export interface Env {
   GROK_KEY?: string;
   OPENAI_KEY?: string;
   ANTHROPIC_KEY?: string;
+  DASHSCOPE_API_KEY?: string;
+  QWEN_API_KEY?: string;
+  DASHSCOPE_BASE_URL?: string;
 }
 
 const CORS: CorsHeaders = {

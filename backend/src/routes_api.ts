@@ -290,6 +290,66 @@ export async function handleApiRoute(
   cors: CorsHeaders,
 ): Promise<Response | null> {
   const noStoreHeaders = { ...cors, "Cache-Control": "no-store" };
+  if (url.pathname === "/tts" && request.method === "POST") {
+    const body = await request.json() as {
+      text?: string;
+      voice?: string;
+      model?: string;
+      format?: "mp3" | "wav" | "opus";
+    };
+    const text = String(body?.text || "").trim();
+    if (!text) return Response.json({ error: "text required" }, { status: 400, headers: cors });
+
+    const apiKey = String(env.DASHSCOPE_API_KEY || env.QWEN_API_KEY || "").trim();
+    if (!apiKey) return Response.json({ error: "server tts key missing" }, { status: 500, headers: cors });
+
+    const baseUrl = String(env.DASHSCOPE_BASE_URL || "https://dashscope-intl.aliyuncs.com/compatible-mode/v1").replace(/\/+$/, "");
+    const endpoint = `${baseUrl}/audio/speech`;
+
+    const requestedVoice = String(body?.voice || "").trim();
+    const voiceMap: Record<string, string> = {
+      lena: "Cherry",
+      aria: "Serena",
+      nova: "Cherry",
+      sora: "Serena",
+      yuna: "Cherry",
+    };
+    const voice = voiceMap[requestedVoice.toLowerCase()] || requestedVoice || "Cherry";
+    const model = String(body?.model || "").trim() || "qwen3-tts-flash-realtime";
+    const format = body?.format || "mp3";
+
+    const remote = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        voice,
+        input: text,
+        response_format: format,
+      }),
+    });
+
+    if (!remote.ok) {
+      const detail = await remote.text().catch(() => "");
+      return Response.json(
+        { error: "qwen tts failed", status: remote.status, detail: detail.slice(0, 600) },
+        { status: 502, headers: cors },
+      );
+    }
+
+    const contentType = (remote.headers.get("content-type") || "audio/mpeg").split(";")[0];
+    return new Response(remote.body, {
+      headers: {
+        ...cors,
+        "Content-Type": contentType,
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
   if (url.pathname === "/memory/list" && request.method === "GET") {
     const scope = parseScope(url.searchParams.get("scope"));
     if (!scope) return Response.json({ error: "invalid scope" }, { status: 400, headers: cors });

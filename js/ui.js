@@ -17,19 +17,19 @@ const CHAT_MODELS = [
 ];
 
 const TTS_MODELS = [
-  { value: '', label: '기본 (브라우저 TTS)' },
+  { value: '', label: '기본 (Qwen3 TTS 서버)' },
   { value: 'browser-webspeech', label: 'Browser WebSpeech' },
-  { value: 'google-gemini-tts', label: 'Google Gemini TTS' },
-  { value: 'google-cloud-tts', label: 'Google Cloud TTS' },
+  { value: 'qwen3-tts-flash-realtime', label: 'Qwen3 TTS Flash Realtime' },
+  { value: 'qwen3-tts-instruct-flash-realtime', label: 'Qwen3 TTS Instruct Realtime' },
 ];
 
 const TTS_VOICES = [
   { value: '', label: '기본 음성 (자동 선택)' },
-  { value: 'lena', label: 'Lena (Google 계열)' },
-  { value: 'aria', label: 'Aria' },
-  { value: 'nova', label: 'Nova' },
-  { value: 'sora', label: 'Sora' },
-  { value: 'yuna', label: 'Yuna' },
+  { value: 'Cherry', label: 'Cherry' },
+  { value: 'Serena', label: 'Serena' },
+  { value: 'Ethan', label: 'Ethan' },
+  { value: 'Chelsie', label: 'Chelsie' },
+  { value: 'Dylan', label: 'Dylan' },
 ];
 let _editMultiUploadQueue = [];
 
@@ -3612,6 +3612,8 @@ function sleep(ms) {
 
 let _ttsCurrentBtn = null;
 let _ttsCurrentUtter = null;
+let _ttsCurrentAudio = null;
+let _ttsCurrentAudioUrl = '';
 
 function ttsSpeakerIconSVG() {
   return '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h3l4-3v10l-4-3H3z"/><path d="M13 7.2a2.6 2.6 0 0 1 0 3.6"/><path d="M14.8 5.6a4.8 4.8 0 0 1 0 6.8"/></svg>';
@@ -3619,6 +3621,17 @@ function ttsSpeakerIconSVG() {
 
 function ttsStopCurrent() {
   try { window.speechSynthesis?.cancel?.(); } catch {}
+  try {
+    if (_ttsCurrentAudio) {
+      _ttsCurrentAudio.pause();
+      _ttsCurrentAudio.src = '';
+    }
+  } catch {}
+  _ttsCurrentAudio = null;
+  if (_ttsCurrentAudioUrl) {
+    try { URL.revokeObjectURL(_ttsCurrentAudioUrl); } catch {}
+  }
+  _ttsCurrentAudioUrl = '';
   if (_ttsCurrentBtn) _ttsCurrentBtn.classList.remove('speaking');
   _ttsCurrentBtn = null;
   _ttsCurrentUtter = null;
@@ -3671,6 +3684,61 @@ function speakTextWithBrowserTts(rawText, btn = null) {
   synth.speak(utter);
 }
 
+function resolveActiveTtsConfig() {
+  const s = sessions.find(x => x.id === activeChatId);
+  const pids = Array.isArray(s?.participantPids) ? s.participantPids : [];
+  const firstPersona = pids.length ? getPersona(pids[0]) : null;
+  const model = String(firstPersona?.ttsModel || '').trim();
+  const voice = String(firstPersona?.ttsVoice || '').trim();
+  return { model, voice };
+}
+
+async function speakTextWithServerTts(rawText, btn = null) {
+  const text = String(rawText || '').trim();
+  if (!text) return;
+  if (_ttsCurrentBtn && _ttsCurrentBtn === btn) {
+    ttsStopCurrent();
+    return;
+  }
+  ttsStopCurrent();
+
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) throw new Error('WORKER_URL missing');
+  const cfg = resolveActiveTtsConfig();
+  const payload = {
+    text,
+    model: cfg.model && cfg.model !== 'browser-webspeech' ? cfg.model : 'qwen3-tts-flash-realtime',
+    voice: cfg.voice || 'Cherry',
+    format: 'mp3',
+  };
+
+  _ttsCurrentBtn = btn || null;
+  if (_ttsCurrentBtn) _ttsCurrentBtn.classList.add('speaking');
+  const res = await fetch(`${wUrl}/tts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    _ttsCurrentBtn?.classList.remove('speaking');
+    _ttsCurrentBtn = null;
+    const detail = await res.text().catch(() => '');
+    throw new Error(detail || `TTS ${res.status}`);
+  }
+
+  const blob = await res.blob();
+  const audioUrl = URL.createObjectURL(blob);
+  const audio = new Audio(audioUrl);
+  _ttsCurrentAudio = audio;
+  _ttsCurrentAudioUrl = audioUrl;
+  audio.onended = () => ttsStopCurrent();
+  audio.onerror = () => {
+    ttsStopCurrent();
+    showToast('TTS 재생에 실패했습니다.');
+  };
+  await audio.play();
+}
+
 function createTtsButton(text = '') {
   const btn = document.createElement('button');
   btn.className = 'copy-btn tts-btn';
@@ -3678,9 +3746,14 @@ function createTtsButton(text = '') {
   btn.title = '읽어주기';
   btn.dataset.ttsText = encodeCopyPayload(text || '');
   btn.innerHTML = ttsSpeakerIconSVG();
-  btn.onclick = () => {
+  btn.onclick = async () => {
     const target = decodeCopyPayload(btn.dataset.ttsText || '') || String(text || '');
-    speakTextWithBrowserTts(target, btn);
+    try {
+      await speakTextWithServerTts(target, btn);
+    } catch (e) {
+      console.warn('[tts] server fallback to browser:', e?.message || e);
+      speakTextWithBrowserTts(target, btn);
+    }
   };
   return btn;
 }
