@@ -3527,8 +3527,8 @@ async function appendAIReplySequentially(reply, pList, suffixes, createdAt, tgtA
     replyEl.innerHTML = html;
     if (replyEl.firstElementChild) {
       replyEl.firstElementChild.classList.add('msg-enter');
-      enhanceRenderedMessage(replyEl.firstElementChild);
       attachMessageMeta(replyEl.firstElementChild, createdAt, 'left');
+      enhanceRenderedMessage(replyEl.firstElementChild);
       tgtArea.appendChild(replyEl.firstElementChild);
       updateChatBottomAnchor(tgtArea);
       renderMermaidBlocks(tgtArea);
@@ -3825,8 +3825,8 @@ async function createLiveStreamBubble(tgtArea, persona, createdAt, renderSession
     avatarImg.setAttribute('src', preferredCircle || preferredRect);
   }
   root.classList.add('msg-enter');
-  enhanceRenderedMessage(root);
   attachMessageMeta(root, createdAt, 'left');
+  enhanceRenderedMessage(root);
   tgtArea.appendChild(root);
   updateChatBottomAnchor(tgtArea);
   renderMermaidBlocks(tgtArea);
@@ -3863,8 +3863,8 @@ async function finalizeLiveStreamBubble(state, reply, pList, suffixes, createdAt
   if (!nextRoot) return false;
   state.root.replaceWith(nextRoot);
   nextRoot.classList.add('msg-enter');
-  enhanceRenderedMessage(nextRoot);
   attachMessageMeta(nextRoot, createdAt, 'left');
+  enhanceRenderedMessage(nextRoot);
   updateChatBottomAnchor(tgtArea);
   renderMermaidBlocks(tgtArea);
   bindImageLoadBottomStick(tgtArea);
@@ -4441,8 +4441,8 @@ async function sendMessage() {
     replyEl.innerHTML = html;
     if (replyEl.firstElementChild) {
       replyEl.firstElementChild.classList.add('msg-enter');
-      enhanceRenderedMessage(replyEl.firstElementChild);
       attachMessageMeta(replyEl.firstElementChild, emotionTestCreatedAt, 'left');
+      enhanceRenderedMessage(replyEl.firstElementChild);
       area.appendChild(replyEl.firstElementChild);
       updateChatBottomAnchor(area);
     }
@@ -6570,8 +6570,8 @@ async function appendAIReplyStreamingOneToOne(reply, pList, suffixes, createdAt,
       mounted.classList.add('msg-enter');
       tgtArea.appendChild(mounted);
     }
-    enhanceRenderedMessage(mounted);
     attachMessageMeta(mounted, createdAt, 'left');
+    enhanceRenderedMessage(mounted);
     updateChatBottomAnchor(tgtArea);
     renderMermaidBlocks(tgtArea);
     bindImageLoadBottomStick(tgtArea);
