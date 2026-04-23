@@ -30,6 +30,7 @@ export interface Env {
   ANTHROPIC_KEY?: string;
   DASHSCOPE_API_KEY?: string;
   QWEN_API_KEY?: string;
+  QWEN_KEY?: string;
   DASHSCOPE_BASE_URL?: string;
 }
 

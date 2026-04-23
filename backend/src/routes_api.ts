@@ -300,7 +300,7 @@ export async function handleApiRoute(
     const text = String(body?.text || "").trim();
     if (!text) return Response.json({ error: "text required" }, { status: 400, headers: cors });
 
-    const apiKey = String(env.DASHSCOPE_API_KEY || env.QWEN_API_KEY || "").trim();
+    const apiKey = String(env.DASHSCOPE_API_KEY || env.QWEN_API_KEY || env.QWEN_KEY || "").trim();
     if (!apiKey) return Response.json({ error: "server tts key missing" }, { status: 500, headers: cors });
 
     const baseUrl = String(env.DASHSCOPE_BASE_URL || "https://dashscope-intl.aliyuncs.com/compatible-mode/v1").replace(/\/+$/, "");
