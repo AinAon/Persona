@@ -32,6 +32,7 @@ export interface Env {
   QWEN_API_KEY?: string;
   QWEN_KEY?: string;
   DASHSCOPE_BASE_URL?: string;
+  DASHSCOPE_WS_URL?: string;
 }
 
 const CORS: CorsHeaders = {

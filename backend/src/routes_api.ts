@@ -303,8 +303,9 @@ export async function handleApiRoute(
     const apiKey = String(env.DASHSCOPE_API_KEY || env.QWEN_API_KEY || env.QWEN_KEY || "").trim();
     if (!apiKey) return Response.json({ error: "server tts key missing" }, { status: 500, headers: cors });
 
-    const baseUrl = String(env.DASHSCOPE_BASE_URL || "https://dashscope-intl.aliyuncs.com/compatible-mode/v1").replace(/\/+$/, "");
-    const fallbackBaseUrl = "https://dashscope.aliyuncs.com/compatible-mode/v1";
+    const defaultWsIntl = "wss://dashscope-intl.aliyuncs.com/api-ws/v1/realtime?model=qwen3-tts-flash-realtime";
+    const defaultWsCn = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime?model=qwen3-tts-flash-realtime";
+    const configuredWs = String(env.DASHSCOPE_WS_URL || "").trim();
 
     const requestedVoice = String(body?.voice || "").trim();
     const voiceMap: Record<string, string> = {
@@ -318,46 +319,129 @@ export async function handleApiRoute(
     const model = String(body?.model || "").trim() || "qwen3-tts-flash-realtime";
     const format = body?.format || "mp3";
 
-    const payload = JSON.stringify({
-      model,
-      voice,
-      input: text,
-      response_format: format,
-    });
-    const doCall = (targetBase: string) => fetch(`${targetBase.replace(/\/+$/, "")}/audio/speech`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: payload,
-    });
+    const wsTargets = configuredWs ? [configuredWs] : [defaultWsIntl, defaultWsCn];
 
-    let remote = await doCall(baseUrl);
-    let triedEndpoint = `${baseUrl}/audio/speech`;
-    if (remote.status === 404 && baseUrl !== fallbackBaseUrl) {
-      remote = await doCall(fallbackBaseUrl);
-      triedEndpoint = `${fallbackBaseUrl}/audio/speech`;
+    const decodeBase64ToBytes = (b64: string): Uint8Array => {
+      const bin = atob(b64);
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out;
+    };
+    const concatChunks = (chunks: Uint8Array[]): Uint8Array => {
+      const total = chunks.reduce((n, c) => n + c.length, 0);
+      const merged = new Uint8Array(total);
+      let offset = 0;
+      for (const c of chunks) {
+        merged.set(c, offset);
+        offset += c.length;
+      }
+      return merged;
+    };
+
+    const runRealtimeTts = async (wsUrl: string): Promise<{ bytes: Uint8Array; endpoint: string }> => {
+      const upgraded = await fetch(wsUrl, {
+        headers: {
+          Upgrade: "websocket",
+          Authorization: `Bearer ${apiKey}`,
+        },
+      });
+      if (upgraded.status !== 101 || !upgraded.webSocket) {
+        const detail = await upgraded.text().catch(() => "");
+        throw new Error(`ws_connect_failed:${upgraded.status}:${detail.slice(0, 200)}`);
+      }
+      const ws = upgraded.webSocket;
+      ws.accept();
+
+      const chunks: Uint8Array[] = [];
+      let done = false;
+      let errorMsg = "";
+
+      const eventId = () => `event_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const sendEvent = (evt: Record<string, unknown>) => ws.send(JSON.stringify({ ...evt, event_id: eventId() }));
+
+      const finished = new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error("ws_timeout"));
+        }, 45000);
+
+        ws.addEventListener("message", (evt: MessageEvent) => {
+          try {
+            const data = typeof evt.data === "string" ? JSON.parse(evt.data) : {};
+            const type = String(data?.type || "");
+            if (type === "response.audio.delta") {
+              const delta = String(data?.delta || "");
+              if (delta) chunks.push(decodeBase64ToBytes(delta));
+              return;
+            }
+            if (type === "response.done") {
+              done = true;
+              clearTimeout(timeout);
+              resolve();
+              return;
+            }
+            if (type === "error") {
+              errorMsg = JSON.stringify(data?.error || data).slice(0, 500);
+              clearTimeout(timeout);
+              reject(new Error(`ws_error:${errorMsg}`));
+            }
+          } catch (e) {
+            clearTimeout(timeout);
+            reject(e);
+          }
+        });
+        ws.addEventListener("close", () => {
+          if (done) return;
+          clearTimeout(timeout);
+          reject(new Error(errorMsg || "ws_closed_early"));
+        });
+      });
+
+      sendEvent({
+        type: "session.update",
+        session: {
+          mode: "commit",
+          voice,
+          response_format: format,
+          language_type: "Korean",
+        },
+      });
+      sendEvent({ type: "input_text_buffer.append", text });
+      sendEvent({ type: "input_text_buffer.commit" });
+
+      await finished;
+      try { sendEvent({ type: "session.finish" }); } catch {}
+      try { ws.close(1000, "done"); } catch {}
+
+      const bytes = concatChunks(chunks);
+      if (!bytes.length) throw new Error("empty_audio");
+      return { bytes, endpoint: wsUrl };
+    };
+
+    let lastErr = "";
+    let lastEndpoint = "";
+    for (const target of wsTargets) {
+      try {
+        const out = await runRealtimeTts(target);
+        const contentType = format === "wav" ? "audio/wav" : format === "opus" ? "audio/ogg" : "audio/mpeg";
+        return new Response(out.bytes, {
+          headers: {
+            ...cors,
+            "Content-Type": contentType,
+            "Cache-Control": "no-store",
+          },
+        });
+      } catch (e: any) {
+        lastErr = String(e?.message || e || "");
+        lastEndpoint = target;
+      }
     }
 
-    if (!remote.ok) {
-      const detail = await remote.text().catch(() => "");
-      return Response.json({
-        error: "qwen tts failed",
-        status: remote.status,
-        endpoint: triedEndpoint,
-        detail: detail.slice(0, 600),
-      }, { status: 502, headers: cors });
-    }
-
-    const contentType = (remote.headers.get("content-type") || "audio/mpeg").split(";")[0];
-    return new Response(remote.body, {
-      headers: {
-        ...cors,
-        "Content-Type": contentType,
-        "Cache-Control": "no-store",
-      },
-    });
+    return Response.json({
+      error: "qwen tts failed",
+      status: 502,
+      endpoint: lastEndpoint,
+      detail: lastErr.slice(0, 600),
+    }, { status: 502, headers: cors });
   }
 
   if (url.pathname === "/memory/list" && request.method === "GET") {
