@@ -342,8 +342,8 @@ function enhanceRenderedMessage(container) {
         existingTts.dataset.ttsText = encodeCopyPayload(aiBubble.innerText || '');
       }
 
-      const btn = aiActions.querySelector('.copy-btn') || document.createElement('button');
-      if (!aiActions.querySelector('.copy-btn')) {
+      const btn = aiActions.querySelector('.copy-btn:not(.tts-btn)') || document.createElement('button');
+      if (!aiActions.querySelector('.copy-btn:not(.tts-btn)')) {
         btn.className = 'copy-btn';
         btn.type = 'button';
         btn.innerHTML = '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="10" height="11" rx="2"/><path d="M13 5V3.5A1.5 1.5 0 0 0 11.5 2h-7A1.5 1.5 0 0 0 3 3.5v10A1.5 1.5 0 0 0 4.5 15H5"/></svg>';
