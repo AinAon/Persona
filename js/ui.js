@@ -203,6 +203,10 @@ function iconEyeClosedSVG() {
   return '<img src="assets/ui-icons/eye-close.svg" alt="">';
 }
 
+function iconCloseXSVG() {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><path d="M6 6l12 12"/><path d="M18 6l-12 12"/></svg>';
+}
+
 function iconTrashSVG() {
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>';
 }
@@ -260,7 +264,7 @@ function updateChatListAvatarVisibilityButton() {
   if (!btn) return;
   const on = getChatListAvatarVisibilityEnabled();
   btn.classList.toggle('on', on);
-  btn.innerHTML = on ? iconEyeOpenSVG() : iconEyeClosedSVG();
+  btn.innerHTML = iconCloseXSVG();
   btn.title = on ? '채팅 목록 썸네일 표시 중' : '채팅 목록 썸네일 숨김 중';
 }
 
@@ -2927,14 +2931,15 @@ function handleEscBackNavigation(event) {
 
 function handleGlobalShortcutKeys(event) {
   if (!event || isEditableElement(event.target)) return;
-  if (activeTab !== 'chat' || !activeChatId) return;
+  if (activeTab !== 'chat') return;
   if (!event.ctrlKey || event.altKey || event.shiftKey) return;
   if (event.code !== 'Backquote') return;
   try {
     if (window.matchMedia && !window.matchMedia('(pointer:fine)').matches) return;
   } catch {}
   event.preventDefault();
-  toggleChatProfileOverride();
+  if (activeChatId) toggleChatProfileOverride();
+  else toggleChatListAvatarVisibility();
 }
 
 function ensureGlobalBackHandler() {
