@@ -408,7 +408,7 @@ async function init() {
   loadUserProfileKV().then(() => {
     if (activeTab === 'settings') renderSettingsPane();
   }).catch(()=>{});
-  await refreshAllCaches({ force: false, showLoading: true, loadingLabel: '로컬 캐시 로드 중...' });
+  await refreshAllCaches({ force: false, showLoading: false, loadingLabel: '로컬 캐시 로드 중...' });
   preloadMemoryMetaLight();
   return;
 

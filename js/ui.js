@@ -15,6 +15,22 @@ const CHAT_MODELS = [
   { value: 'grok-4.20-reasoning-latest',         label: 'Grok-4.20 Reason $3.00 / $15.00' },
   { value: 'grok-4.20-non-reasoning-latest',     label: 'Grok-4.20 Non $3.00 / $15.00' },
 ];
+
+const TTS_MODELS = [
+  { value: '', label: '기본 (브라우저 TTS)' },
+  { value: 'browser-webspeech', label: 'Browser WebSpeech' },
+  { value: 'google-gemini-tts', label: 'Google Gemini TTS' },
+  { value: 'google-cloud-tts', label: 'Google Cloud TTS' },
+];
+
+const TTS_VOICES = [
+  { value: '', label: '기본 음성 (자동 선택)' },
+  { value: 'lena', label: 'Lena (Google 계열)' },
+  { value: 'aria', label: 'Aria' },
+  { value: 'nova', label: 'Nova' },
+  { value: 'sora', label: 'Sora' },
+  { value: 'yuna', label: 'Yuna' },
+];
 let _editMultiUploadQueue = [];
 
 function buildModelSelect(id, selectedValue, style = '') {
@@ -22,6 +38,14 @@ function buildModelSelect(id, selectedValue, style = '') {
     if (m.group) return `<optgroup label="${m.group}">`;
     const sel = m.value === (selectedValue || '') ? 'selected' : '';
     return `<option value="${m.value}" ${sel}>${m.label}</option>`;
+  }).join('');
+  return `<select class="edit-input" id="${id}" style="width:100%;${style}">${opts}</select>`;
+}
+
+function buildSimpleSelect(id, options, selectedValue, style = '') {
+  const opts = (options || []).map(o => {
+    const sel = String(o.value || '') === String(selectedValue || '') ? 'selected' : '';
+    return `<option value="${esc(o.value || '')}" ${sel}>${esc(o.label || o.value || '')}</option>`;
   }).join('');
   return `<select class="edit-input" id="${id}" style="width:100%;${style}">${opts}</select>`;
 }
@@ -2117,6 +2141,16 @@ function renderEditBody(p, hdImage = null) {
       <div class="edit-section-title">Model</div>
       <div class="edit-field-label">기본 응답 모델 (이 페르소나가 참여한 채팅의 기본값)</div>
       ${buildModelSelect('editDefaultModel', p.defaultModel || '')}
+      <div class="edit-field-row" style="margin-top:10px">
+        <div>
+          <div class="edit-field-label">음성 모델 (TTS)</div>
+          ${buildSimpleSelect('editTtsModel', TTS_MODELS, p.ttsModel || '')}
+        </div>
+        <div>
+          <div class="edit-field-label">음성 목소리</div>
+          ${buildSimpleSelect('editTtsVoice', TTS_VOICES, p.ttsVoice || '')}
+        </div>
+      </div>
     </div>`;
   ensureEditPrivateMemoryPanel(p.pid);
   renderPrivateMemoryList(p.pid);
@@ -2500,6 +2534,8 @@ async function savePersonaEdit() {
   p.gender = document.getElementById('editGender')?.value || '';
   p.mbti = document.getElementById('editMbti')?.value.trim() || '';
   p.defaultModel = document.getElementById('editDefaultModel')?.value || '';
+  p.ttsModel = document.getElementById('editTtsModel')?.value || '';
+  p.ttsVoice = document.getElementById('editTtsVoice')?.value || '';
   isNewPersona = false;
 
   if (p._pendingImage) {
