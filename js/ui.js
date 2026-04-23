@@ -317,6 +317,10 @@ function enhanceRenderedMessage(container) {
     const userMsg = group.querySelector('.user-msg');
     const userActions = group.querySelector('.msg-meta-right .msg-actions');
     if (userMsg && userActions && !userActions.querySelector('.user-copy-btn')) {
+      const ttsBtn = createTtsButton(userMsg.innerText || '');
+      ttsBtn.classList.add('user-tts-btn');
+      userActions.appendChild(ttsBtn);
+
       const btn = document.createElement('button');
       btn.className = 'copy-btn user-copy-btn';
       btn.type = 'button';
@@ -330,6 +334,14 @@ function enhanceRenderedMessage(container) {
     const aiActions = group.querySelector('.msg-meta-left .msg-actions');
     const aiBubble = group.querySelector('.ai-msg:last-child .bubble-col:last-child .ai-bubble');
     if (aiActions && aiBubble && !aiBubble.querySelector('img')) {
+      const existingTts = aiActions.querySelector('.tts-btn');
+      if (!existingTts) {
+        const ttsBtn = createTtsButton(aiBubble.innerText || '');
+        aiActions.appendChild(ttsBtn);
+      } else {
+        existingTts.dataset.ttsText = encodeCopyPayload(aiBubble.innerText || '');
+      }
+
       const btn = aiActions.querySelector('.copy-btn') || document.createElement('button');
       if (!aiActions.querySelector('.copy-btn')) {
         btn.className = 'copy-btn';
@@ -3560,6 +3572,81 @@ let _popupSuppressCloseUntil = 0;
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+let _ttsCurrentBtn = null;
+let _ttsCurrentUtter = null;
+
+function ttsSpeakerIconSVG() {
+  return '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h3l4-3v10l-4-3H3z"/><path d="M13 7.2a2.6 2.6 0 0 1 0 3.6"/><path d="M14.8 5.6a4.8 4.8 0 0 1 0 6.8"/></svg>';
+}
+
+function ttsStopCurrent() {
+  try { window.speechSynthesis?.cancel?.(); } catch {}
+  if (_ttsCurrentBtn) _ttsCurrentBtn.classList.remove('speaking');
+  _ttsCurrentBtn = null;
+  _ttsCurrentUtter = null;
+}
+
+function pickKoreanFemaleVoice() {
+  const synth = window.speechSynthesis;
+  if (!synth) return null;
+  const voices = synth.getVoices() || [];
+  if (!voices.length) return null;
+  const ko = voices.filter(v => /^ko(-|_)?/i.test(String(v.lang || '')) || /korean|ko-kr/i.test(String(v.name || '')));
+  const women = ko.filter(v => /female|woman|girl|yuna|sora|sunhi|jihye|nari/i.test(String(v.name || '')));
+  return women[0] || ko[0] || voices[0] || null;
+}
+
+function speakTextWithBrowserTts(rawText, btn = null) {
+  const text = String(rawText || '').trim();
+  if (!text) return;
+  const synth = window.speechSynthesis;
+  if (!synth || typeof SpeechSynthesisUtterance === 'undefined') {
+    showToast('이 브라우저는 TTS를 지원하지 않습니다.');
+    return;
+  }
+  if (_ttsCurrentBtn && _ttsCurrentBtn === btn) {
+    ttsStopCurrent();
+    return;
+  }
+  ttsStopCurrent();
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = 'ko-KR';
+  utter.rate = 1.0;
+  utter.pitch = 1.05;
+  utter.volume = 1.0;
+  const voice = pickKoreanFemaleVoice();
+  if (voice) utter.voice = voice;
+  utter.onend = () => {
+    if (_ttsCurrentBtn) _ttsCurrentBtn.classList.remove('speaking');
+    _ttsCurrentBtn = null;
+    _ttsCurrentUtter = null;
+  };
+  utter.onerror = () => {
+    if (_ttsCurrentBtn) _ttsCurrentBtn.classList.remove('speaking');
+    _ttsCurrentBtn = null;
+    _ttsCurrentUtter = null;
+    showToast('TTS 재생에 실패했습니다.');
+  };
+  _ttsCurrentBtn = btn || null;
+  _ttsCurrentUtter = utter;
+  if (_ttsCurrentBtn) _ttsCurrentBtn.classList.add('speaking');
+  synth.speak(utter);
+}
+
+function createTtsButton(text = '') {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn tts-btn';
+  btn.type = 'button';
+  btn.title = '읽어주기';
+  btn.dataset.ttsText = encodeCopyPayload(text || '');
+  btn.innerHTML = ttsSpeakerIconSVG();
+  btn.onclick = () => {
+    const target = decodeCopyPayload(btn.dataset.ttsText || '') || String(text || '');
+    speakTextWithBrowserTts(target, btn);
+  };
+  return btn;
 }
 
 function supportsLiveStreamModel(model = '') {
