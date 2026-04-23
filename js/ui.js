@@ -24,6 +24,19 @@ const TTS_VOICES = [
   { value: 'Cherry', label: 'Cherry (여성, 한국어 지원)' },
   { value: 'Serena', label: 'Serena (여성, 한국어 지원)' },
 ];
+const TTS_TONES = [
+  { value: '', label: '기본' },
+  { value: 'calm', label: '차분함' },
+  { value: 'warm', label: '따뜻함' },
+  { value: 'cool', label: '냉소/쿨톤' },
+  { value: 'bright', label: '밝고 경쾌함' },
+  { value: 'serious', label: '진지/단호함' },
+];
+const TTS_EMOTION_STRENGTHS = [
+  { value: 'low', label: '약하게' },
+  { value: 'medium', label: '중간' },
+  { value: 'high', label: '강하게' },
+];
 let _editMultiUploadQueue = [];
 
 function buildModelSelect(id, selectedValue, style = '') {
@@ -351,12 +364,15 @@ function enhanceRenderedMessage(container) {
     const aiActions = group.querySelector('.msg-meta-left .msg-actions');
     const aiBubble = group.querySelector('.ai-msg:last-child .bubble-col:last-child .ai-bubble');
     if (aiActions && aiBubble && !aiBubble.querySelector('img')) {
+      const aiMsg = group.querySelector('.ai-msg:last-child');
+      const aiEmotion = String(aiMsg?.dataset?.emotion || '').trim();
       const existingTts = aiActions.querySelector('.tts-btn');
       if (!existingTts) {
-        const ttsBtn = createTtsButton(aiBubble.innerText || '');
+        const ttsBtn = createTtsButton(aiBubble.innerText || '', { emotion: aiEmotion });
         aiActions.appendChild(ttsBtn);
       } else {
         existingTts.dataset.ttsText = encodeCopyPayload(aiBubble.innerText || '');
+        existingTts.dataset.ttsEmotion = aiEmotion;
       }
 
       const btn = aiActions.querySelector('.copy-btn:not(.tts-btn)') || document.createElement('button');
@@ -2160,6 +2176,20 @@ function renderEditBody(p, hdImage = null) {
       </div>
       <div class="edit-field-label" style="margin-top:10px">음성 톤 메모 (TTS Prompt)</div>
       <textarea class="edit-textarea" id="editTtsPrompt" placeholder="예: 한국어 여성 보이스. 차분하고 또렷하게. 감정 과장 없이 전달." style="height:90px">${esc(p.ttsPrompt || '')}</textarea>
+      <div class="edit-field-row" style="margin-top:10px">
+        <div>
+          <div class="edit-field-label">기본 톤 (TTS Tone)</div>
+          ${buildSimpleSelect('editTtsTone', TTS_TONES, p.ttsTone || '')}
+        </div>
+        <div>
+          <div class="edit-field-label">감정 반영 강도</div>
+          ${buildSimpleSelect('editTtsEmotionStrength', TTS_EMOTION_STRENGTHS, p.ttsEmotionStrength || 'medium')}
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;color:var(--muted)">
+        <input type="checkbox" id="editTtsEmotionEnabled" ${(p.ttsEmotionEnabled === false ? '' : 'checked')}>
+        말풍선 [emotion]을 TTS 톤에 반영
+      </label>
     </div>`;
   ensureEditPrivateMemoryPanel(p.pid);
   renderPrivateMemoryList(p.pid);
@@ -2546,6 +2576,9 @@ async function savePersonaEdit() {
   p.ttsModel = document.getElementById('editTtsModel')?.value || '';
   p.ttsVoice = document.getElementById('editTtsVoice')?.value || '';
   p.ttsPrompt = document.getElementById('editTtsPrompt')?.value.trim() || '';
+  p.ttsTone = document.getElementById('editTtsTone')?.value || '';
+  p.ttsEmotionEnabled = !!document.getElementById('editTtsEmotionEnabled')?.checked;
+  p.ttsEmotionStrength = document.getElementById('editTtsEmotionStrength')?.value || 'medium';
   isNewPersona = false;
 
   if (p._pendingImage) {
@@ -3494,7 +3527,7 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
     // 저장 버튼
     const dlBtn = '';
 
-    html += `<div class="ai-msg ${hasImg ? 'ai-msg-img' : 'ai-msg-text'} ${isOneToOne ? 'one-to-one' : ''}" style="${opacity}">
+    html += `<div class="ai-msg ${hasImg ? 'ai-msg-img' : 'ai-msg-text'} ${isOneToOne ? 'one-to-one' : ''}" data-pid="${esc(p.pid)}" data-emotion="${esc(safeEmotion)}" style="${opacity}">
       <div class="msg-av" style="background:hsl(${h},20%,11%);border-color:hsl(${h},28%,22%);${celebStroke};${avDisplay}${avShape}" onclick="openProfilePopup('${safePid}','${safeEmotion}',${h},'${safeThumb}','${safeSuffix}')">${baseImg}</div>
       <div class="bubble-col">
         <div class="msg-pname" style="color:hsl(${h},65%,72%)">
@@ -3702,27 +3735,16 @@ function resolveActiveTtsConfig() {
   const s = sessions.find(x => x.id === activeChatId);
   const pids = Array.isArray(s?.participantPids) ? s.participantPids : [];
   const firstPersona = pids.length ? getPersona(pids[0]) : null;
-  const pickVoiceFromPersona = (persona) => {
-    if (!persona) return 'Serena';
-    const explicit = String(persona.ttsVoice || '').trim();
-    if (explicit) return explicit;
-    const tags = Array.isArray(persona.tags) ? persona.tags.map(t => String(t || '').toLowerCase()) : [];
-    const bio = String(persona.bio || '').toLowerCase();
-    const gender = String(persona.gender || '').toLowerCase();
-    const cuteOrBright =
-      tags.some(t => /(cute|bright|playful|energetic|sweet|발랄|귀여움|귀여운|명랑|상큼|활발)/i.test(t)) ||
-      /(귀엽|발랄|명랑|상큼|활발|애교|밝은)/i.test(bio);
-    if (cuteOrBright) return 'Cherry';
-    if (/male|남/.test(gender)) return 'Serena';
-    return 'Serena';
-  };
   const model = String(firstPersona?.ttsModel || '').trim();
-  const voice = pickVoiceFromPersona(firstPersona);
+  const voice = String(firstPersona?.ttsVoice || '').trim() || 'Serena';
   const prompt = String(firstPersona?.ttsPrompt || '').trim();
-  return { model, voice, prompt };
+  const tone = String(firstPersona?.ttsTone || '').trim();
+  const emotionEnabled = firstPersona?.ttsEmotionEnabled !== false;
+  const emotionStrength = String(firstPersona?.ttsEmotionStrength || 'medium').trim() || 'medium';
+  return { model, voice, prompt, tone, emotionEnabled, emotionStrength };
 }
 
-async function speakTextWithServerTts(rawText, btn = null) {
+async function speakTextWithServerTts(rawText, btn = null, opts = {}) {
   const text = String(rawText || '').trim();
   if (!text) return;
   if (_ttsCurrentBtn && _ttsCurrentBtn === btn) {
@@ -3735,11 +3757,16 @@ async function speakTextWithServerTts(rawText, btn = null) {
   if (!wUrl) throw new Error('WORKER_URL missing');
   const cfg = resolveActiveTtsConfig();
   const model = 'qwen3-tts-flash-realtime';
+  const emotion = String(opts?.emotion || '').trim();
   const payload = {
     text,
     model,
     voice: cfg.voice || 'Cherry',
     prompt: cfg.prompt || '',
+    tone: cfg.tone || '',
+    emotion,
+    emotionEnabled: !!cfg.emotionEnabled,
+    emotionStrength: cfg.emotionStrength || 'medium',
     format: 'mp3',
   };
 
@@ -3770,17 +3797,19 @@ async function speakTextWithServerTts(rawText, btn = null) {
   await audio.play();
 }
 
-function createTtsButton(text = '') {
+function createTtsButton(text = '', opts = {}) {
   const btn = document.createElement('button');
   btn.className = 'copy-btn tts-btn';
   btn.type = 'button';
   btn.title = '읽어주기';
   btn.dataset.ttsText = encodeCopyPayload(text || '');
+  btn.dataset.ttsEmotion = String(opts?.emotion || '');
   btn.innerHTML = ttsSpeakerIconSVG();
   btn.onclick = async () => {
     const target = decodeCopyPayload(btn.dataset.ttsText || '') || String(text || '');
+    const emotion = String(btn.dataset.ttsEmotion || '').trim();
     try {
-      await speakTextWithServerTts(target, btn);
+      await speakTextWithServerTts(target, btn, { emotion });
     } catch (e) {
       console.warn('[tts] server fallback to browser:', e?.message || e);
       speakTextWithBrowserTts(target, btn);

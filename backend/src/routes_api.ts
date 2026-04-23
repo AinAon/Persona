@@ -295,6 +295,11 @@ export async function handleApiRoute(
       text?: string;
       voice?: string;
       model?: string;
+      prompt?: string;
+      tone?: string;
+      emotion?: string;
+      emotionEnabled?: boolean;
+      emotionStrength?: "low" | "medium" | "high";
       format?: "mp3" | "wav" | "opus";
     };
     const text = String(body?.text || "").trim();
@@ -303,8 +308,6 @@ export async function handleApiRoute(
     const apiKey = String(env.DASHSCOPE_API_KEY || env.QWEN_API_KEY || env.QWEN_KEY || "").trim();
     if (!apiKey) return Response.json({ error: "server tts key missing" }, { status: 500, headers: cors });
 
-    const defaultWsIntl = "wss://dashscope-intl.aliyuncs.com/api-ws/v1/realtime?model=qwen3-tts-flash-realtime";
-    const defaultWsCn = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime?model=qwen3-tts-flash-realtime";
     const configuredWs = String(env.DASHSCOPE_WS_URL || "").trim();
 
     const requestedVoice = String(body?.voice || "").trim();
@@ -318,6 +321,30 @@ export async function handleApiRoute(
     const voice = voiceMap[requestedVoice.toLowerCase()] || requestedVoice || "Cherry";
     const model = String(body?.model || "").trim() || "qwen3-tts-flash-realtime";
     const format = body?.format || "mp3";
+    const tone = String(body?.tone || "").trim();
+    const prompt = String(body?.prompt || "").trim();
+    const emotion = String(body?.emotion || "").trim().toLowerCase();
+    const emotionEnabled = body?.emotionEnabled !== false;
+    const emotionStrength = body?.emotionStrength || "medium";
+
+    const defaultWsIntl = `wss://dashscope-intl.aliyuncs.com/api-ws/v1/realtime?model=${encodeURIComponent(model)}`;
+    const defaultWsCn = `wss://dashscope.aliyuncs.com/api-ws/v1/realtime?model=${encodeURIComponent(model)}`;
+
+    const emotionMap: Record<string, Record<string, string>> = {
+      low: { happy: "밝기를 아주 약하게", sad: "차분함을 아주 약하게", angry: "강세를 아주 약하게", shy: "부드러움을 아주 약하게", neutral: "중립 톤을 유지" },
+      medium: { happy: "밝기를 적당히", sad: "차분함을 적당히", angry: "강세를 적당히", shy: "부드러움을 적당히", neutral: "중립 톤을 유지" },
+      high: { happy: "밝기를 비교적 뚜렷하게", sad: "차분함을 비교적 뚜렷하게", angry: "강세를 비교적 뚜렷하게", shy: "부드러움을 비교적 뚜렷하게", neutral: "중립 톤을 유지" },
+    };
+    const emotionHint =
+      emotionEnabled && emotion
+        ? (emotionMap[emotionStrength]?.[emotion] || `감정(${emotion})을 ${emotionStrength === "high" ? "비교적 뚜렷하게" : emotionStrength === "low" ? "아주 약하게" : "적당히"} 반영`)
+        : "";
+    const sessionPrompt = [
+      "한국어 여성 보이스를 유지하고, 인위적 연기 없이 자연스럽게 읽어주세요.",
+      tone ? `기본 톤: ${tone}.` : "",
+      emotionHint ? `현재 감정 반영: ${emotionHint}.` : "",
+      prompt ? `추가 지시: ${prompt}` : "",
+    ].filter(Boolean).join(" ");
 
     const wsTargets = configuredWs ? [configuredWs] : [defaultWsIntl, defaultWsCn];
 
@@ -404,6 +431,7 @@ export async function handleApiRoute(
           voice,
           response_format: format,
           language_type: "Korean",
+          prompt: sessionPrompt,
         },
       });
       sendEvent({ type: "input_text_buffer.append", text });
