@@ -204,7 +204,7 @@ function iconEyeClosedSVG() {
 }
 
 function iconCloseXSVG() {
-  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><path d="M6 6l12 12"/><path d="M18 6l-12 12"/></svg>';
+  return '<img src="assets/ui-icons/Invisible.svg" alt="">';
 }
 
 function iconTrashSVG() {
@@ -260,7 +260,7 @@ function updateChatListVisibilityButton() {
   if (!btn) return;
   const on = getChatHiddenFilterEnabled();
   btn.classList.toggle('on', on);
-  btn.innerHTML = on ? iconEyeOpenSVG() : iconEyeClosedSVG();
+  btn.innerHTML = iconCloseXSVG();
   btn.title = on ? '숨긴 채팅 보기 중' : '숨긴 채팅 숨기기';
 }
 
@@ -275,7 +275,7 @@ function updateChatListAvatarVisibilityButton() {
   if (!btn) return;
   const on = getChatListAvatarVisibilityEnabled();
   btn.classList.toggle('on', on);
-  btn.innerHTML = iconCloseXSVG();
+  btn.innerHTML = on ? iconEyeOpenSVG() : iconEyeClosedSVG();
   btn.title = on ? '채팅 목록 썸네일 표시 중' : '채팅 목록 썸네일 숨김 중';
 }
 
