@@ -88,6 +88,24 @@ function deletedSessionR2Key(id: string): string {
   return `${DELETED_SESSION_R2_PREFIX}${id}.json`;
 }
 
+async function sha256Hex(input: string): Promise<string> {
+  const data = new TextEncoder().encode(input);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function ttsFormatToExt(format: string): string {
+  if (format === "wav") return "wav";
+  if (format === "opus") return "opus";
+  return "mp3";
+}
+
+function ttsFormatToContentType(format: string): string {
+  if (format === "wav") return "audio/wav";
+  if (format === "opus") return "audio/ogg";
+  return "audio/mpeg";
+}
+
 function isAudioContentItem(item: unknown): boolean {
   if (!item || typeof item !== "object") return false;
   const rec = item as Record<string, unknown>;
@@ -337,6 +355,7 @@ export async function handleApiRoute(
   if (url.pathname === "/tts" && request.method === "POST") {
     const body = await request.json() as {
       text?: string;
+      sessionId?: string;
       voice?: string;
       model?: string;
       prompt?: string;
@@ -370,6 +389,37 @@ export async function handleApiRoute(
     const emotion = String(body?.emotion || "").trim().toLowerCase();
     const emotionEnabled = body?.emotionEnabled !== false;
     const emotionStrength = body?.emotionStrength || "medium";
+    const sessionIdRaw = String(body?.sessionId || "").trim();
+    const sessionIdSafe = sessionIdRaw.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80);
+    const contentType = ttsFormatToContentType(format);
+
+    const cacheBasis = JSON.stringify({
+      v: 1,
+      text,
+      model,
+      voice,
+      prompt,
+      tone,
+      emotion,
+      emotionEnabled: !!emotionEnabled,
+      emotionStrength,
+      format,
+      language: "Korean",
+    });
+    const cacheHash = await sha256Hex(cacheBasis);
+    const cachePrefix = sessionIdSafe ? `tts/session/${sessionIdSafe}` : "tts/global";
+    const cacheKey = `${cachePrefix}/${cacheHash}.${ttsFormatToExt(format)}`;
+    const cached = await env.R2.get(cacheKey);
+    if (cached?.body) {
+      return new Response(cached.body, {
+        headers: {
+          ...cors,
+          "Content-Type": cached.httpMetadata?.contentType || contentType,
+          "Cache-Control": "private, max-age=31536000",
+          "X-TTS-Cache": "HIT",
+        },
+      });
+    }
 
     const defaultWsIntl = `wss://dashscope-intl.aliyuncs.com/api-ws/v1/realtime?model=${encodeURIComponent(model)}`;
     const defaultWsCn = `wss://dashscope.aliyuncs.com/api-ws/v1/realtime?model=${encodeURIComponent(model)}`;
@@ -495,12 +545,13 @@ export async function handleApiRoute(
     for (const target of wsTargets) {
       try {
         const out = await runRealtimeTts(target);
-        const contentType = format === "wav" ? "audio/wav" : format === "opus" ? "audio/ogg" : "audio/mpeg";
+        await env.R2.put(cacheKey, out.bytes, { httpMetadata: { contentType } });
         return new Response(out.bytes, {
           headers: {
             ...cors,
             "Content-Type": contentType,
-            "Cache-Control": "no-store",
+            "Cache-Control": "private, max-age=31536000",
+            "X-TTS-Cache": "MISS",
           },
         });
       } catch (e: any) {

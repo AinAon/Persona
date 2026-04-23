@@ -3784,6 +3784,7 @@ async function speakTextWithServerTts(rawText, btn = null, opts = {}) {
   const emotion = String(opts?.emotion || '').trim();
   const payload = {
     text,
+    sessionId: String(activeChatId || ''),
     model,
     voice: cfg.voice || 'Cherry',
     prompt: cfg.prompt || '',
