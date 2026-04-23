@@ -2144,6 +2144,8 @@ function renderEditBody(p, hdImage = null) {
           ${buildSimpleSelect('editTtsVoice', TTS_VOICES, p.ttsVoice || '')}
         </div>
       </div>
+      <div class="edit-field-label" style="margin-top:10px">음성 톤 메모 (TTS Prompt)</div>
+      <textarea class="edit-textarea" id="editTtsPrompt" placeholder="예: 한국어 여성 보이스. 차분하고 또렷하게. 감정 과장 없이 전달." style="height:90px">${esc(p.ttsPrompt || '')}</textarea>
     </div>`;
   ensureEditPrivateMemoryPanel(p.pid);
   renderPrivateMemoryList(p.pid);
@@ -2529,6 +2531,7 @@ async function savePersonaEdit() {
   p.defaultModel = document.getElementById('editDefaultModel')?.value || '';
   p.ttsModel = document.getElementById('editTtsModel')?.value || '';
   p.ttsVoice = document.getElementById('editTtsVoice')?.value || '';
+  p.ttsPrompt = document.getElementById('editTtsPrompt')?.value.trim() || '';
   isNewPersona = false;
 
   if (p._pendingImage) {
@@ -3685,9 +3688,24 @@ function resolveActiveTtsConfig() {
   const s = sessions.find(x => x.id === activeChatId);
   const pids = Array.isArray(s?.participantPids) ? s.participantPids : [];
   const firstPersona = pids.length ? getPersona(pids[0]) : null;
+  const pickVoiceFromPersona = (persona) => {
+    if (!persona) return 'Serena';
+    const explicit = String(persona.ttsVoice || '').trim();
+    if (explicit) return explicit;
+    const tags = Array.isArray(persona.tags) ? persona.tags.map(t => String(t || '').toLowerCase()) : [];
+    const bio = String(persona.bio || '').toLowerCase();
+    const gender = String(persona.gender || '').toLowerCase();
+    const cuteOrBright =
+      tags.some(t => /(cute|bright|playful|energetic|sweet|발랄|귀여움|귀여운|명랑|상큼|활발)/i.test(t)) ||
+      /(귀엽|발랄|명랑|상큼|활발|애교|밝은)/i.test(bio);
+    if (cuteOrBright) return 'Cherry';
+    if (/male|남/.test(gender)) return 'Serena';
+    return 'Serena';
+  };
   const model = String(firstPersona?.ttsModel || '').trim();
-  const voice = String(firstPersona?.ttsVoice || '').trim();
-  return { model, voice };
+  const voice = pickVoiceFromPersona(firstPersona);
+  const prompt = String(firstPersona?.ttsPrompt || '').trim();
+  return { model, voice, prompt };
 }
 
 async function speakTextWithServerTts(rawText, btn = null) {
@@ -3707,6 +3725,7 @@ async function speakTextWithServerTts(rawText, btn = null) {
     text,
     model,
     voice: cfg.voice || 'Cherry',
+    prompt: cfg.prompt || '',
     format: 'mp3',
   };
 
