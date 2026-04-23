@@ -740,6 +740,10 @@ function savePersonas() {
 function buildIndex() {
   return sessions.filter(s=>!s._demo).map(s=>({
     id:s.id, updatedAt:s.updatedAt, lastPreview:s.lastPreview,
+    messageCount: Array.isArray(s.history) ? s.history.length : Number(s.messageCount || 0),
+    lastMessageAt: Array.isArray(s.history)
+      ? s.history.reduce((max, m) => Math.max(max, Number(m?.createdAt || 0)), 0)
+      : Number(s.lastMessageAt || 0),
     participantPids:Array.from(new Set(s.participantPids || [])), roomName:s.roomName||'',
     responseMode:s.responseMode, worldContext:s.worldContext,
     userOverride: s.userOverride || null,
@@ -749,6 +753,25 @@ function buildIndex() {
     chatProfileOverride: s.chatProfileOverride || null,
     hidden: !!s.hidden
   }));
+}
+
+function getSessionPreviewFromHistory(history) {
+  const list = Array.isArray(history) ? history : [];
+  for (let i = list.length - 1; i >= 0; i--) {
+    const msg = list[i];
+    if (!msg || msg.role === 'system') continue;
+    const content = msg.content;
+    let text = '';
+    if (typeof content === 'string') text = content;
+    else if (Array.isArray(content)) text = String(content.find((c) => c?.type === 'text')?.text || '');
+    text = String(text || '').trim();
+    if (!text) continue;
+    if (typeof sanitizeChatListPreview === 'function' && typeof buildChatPreviewText === 'function') {
+      return sanitizeChatListPreview(buildChatPreviewText(text)) || '';
+    }
+    return text.slice(0, 140);
+  }
+  return '';
 }
 
 async function saveIndex() {
@@ -774,6 +797,10 @@ async function saveIndex() {
 
 async function saveSession(id) {
   const s = sessions.find(x=>x.id===id); if (!s) return;
+  if (s._loaded !== true) {
+    console.warn('[session] skip save before load', { id });
+    return;
+  }
   const sanitizeMessageForStorage = (msg) => {
     const { _rendered, ...rest } = (msg || {});
     const out = { ...rest };
@@ -807,7 +834,11 @@ async function saveSession(id) {
     }
     return out;
   };
+  if (!Array.isArray(s.history)) s.history = [];
   const history = s.history.map(sanitizeMessageForStorage);
+  s.messageCount = history.length;
+  s.lastMessageAt = history.reduce((max, m) => Math.max(max, Number(m?.createdAt || 0)), 0);
+  s.lastPreview = getSessionPreviewFromHistory(history);
   const localSaved = setLocalSession(id, history);
   if (!localSaved) {
     console.warn('[session] local save failed', { id, historyLen: history.length });

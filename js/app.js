@@ -167,15 +167,24 @@ async function refreshCurrentChatIfStale(id) {
   if (!sid) return false;
   const session = sessions.find((x) => x.id === sid);
   if (!session) return false;
+  const localUpdatedAt = Number(session.updatedAt || 0);
+  const localCount = Array.isArray(session.history) ? session.history.length : Number(session.messageCount || 0);
   const localLastTs = Array.isArray(session.history) ? session.history.reduce((max, m) => Math.max(max, Number(m?.createdAt || 0)), 0) : 0;
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl) return false;
   try {
     const res = await fetch(wUrl + '/session/' + sid, { cache: 'no-store' });
     const data = await res.json().catch(() => ({}));
-    const remoteHistory = Array.isArray(data?.session?.history) ? data.session.history : [];
+    const remoteSession = data?.session || null;
+    const remoteHistory = Array.isArray(remoteSession?.history) ? remoteSession.history : [];
+    const remoteUpdatedAt = Number(remoteSession?.updatedAt || 0);
+    const remoteCount = remoteHistory.length;
     const remoteLastTs = remoteHistory.reduce((max, m) => Math.max(max, Number(m?.createdAt || 0)), 0);
-    if (remoteLastTs > localLastTs) {
+    if (
+      remoteUpdatedAt > localUpdatedAt ||
+      remoteCount > localCount ||
+      remoteLastTs > localLastTs
+    ) {
       await loadSession(sid);
       if (activeChatId === sid) renderChatArea();
       return true;
