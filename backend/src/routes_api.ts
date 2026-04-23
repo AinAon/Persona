@@ -106,6 +106,22 @@ function ttsFormatToContentType(format: string): string {
   return "audio/mpeg";
 }
 
+function isLikelyAudioBytes(format: string, bytes: Uint8Array): boolean {
+  if (!bytes || bytes.length < 64) return false;
+  if (format === "wav") {
+    return bytes.length >= 12
+      && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46
+      && bytes[8] === 0x57 && bytes[9] === 0x41 && bytes[10] === 0x56 && bytes[11] === 0x45;
+  }
+  if (format === "opus") {
+    return bytes.length >= 4
+      && bytes[0] === 0x4f && bytes[1] === 0x67 && bytes[2] === 0x67 && bytes[3] === 0x53;
+  }
+  const hasId3 = bytes.length >= 3 && bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33;
+  const hasMpegFrameSync = bytes.length >= 2 && bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0;
+  return hasId3 || hasMpegFrameSync;
+}
+
 function isAudioContentItem(item: unknown): boolean {
   if (!item || typeof item !== "object") return false;
   const rec = item as Record<string, unknown>;
@@ -410,15 +426,23 @@ export async function handleApiRoute(
     const cachePrefix = sessionIdSafe ? `tts/session/${sessionIdSafe}` : "tts/global";
     const cacheKey = `${cachePrefix}/${cacheHash}.${ttsFormatToExt(format)}`;
     const cached = await env.R2.get(cacheKey);
-    if (cached?.body) {
-      return new Response(cached.body, {
-        headers: {
-          ...cors,
-          "Content-Type": cached.httpMetadata?.contentType || contentType,
-          "Cache-Control": "private, max-age=31536000",
-          "X-TTS-Cache": "HIT",
-        },
-      });
+    if (cached) {
+      try {
+        const cachedBytes = new Uint8Array(await cached.arrayBuffer());
+        if (isLikelyAudioBytes(format, cachedBytes)) {
+          return new Response(cachedBytes, {
+            headers: {
+              ...cors,
+              "Content-Type": cached.httpMetadata?.contentType || contentType,
+              "Cache-Control": "private, max-age=31536000",
+              "X-TTS-Cache": "HIT",
+            },
+          });
+        }
+        await env.R2.delete(cacheKey);
+      } catch {
+        await env.R2.delete(cacheKey);
+      }
     }
 
     const defaultWsIntl = `wss://dashscope-intl.aliyuncs.com/api-ws/v1/realtime?model=${encodeURIComponent(model)}`;
@@ -545,6 +569,9 @@ export async function handleApiRoute(
     for (const target of wsTargets) {
       try {
         const out = await runRealtimeTts(target);
+        if (!isLikelyAudioBytes(format, out.bytes)) {
+          throw new Error("invalid_audio_bytes");
+        }
         await env.R2.put(cacheKey, out.bytes, { httpMetadata: { contentType } });
         return new Response(out.bytes, {
           headers: {
