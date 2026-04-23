@@ -82,6 +82,7 @@ function loadPersonasFromCache() {
           if (seen.has(p.pid)) return false;
           seen.add(p.pid); return true;
         });
+        applyPersonaTtsDefaults(personas);
         return true;
       }
     }
@@ -127,6 +128,28 @@ function personasSignature(list) {
     })));
   } catch(e) {
     return '';
+  }
+}
+
+function applyPersonaTtsDefaults(list = personas) {
+  const target = Array.isArray(list) ? list : [];
+  for (const p of target) {
+    if (!p || typeof p !== 'object') continue;
+    const name = String(p.name || '').trim();
+    const pid = String(p.pid || '').trim().toLowerCase();
+    if (name === 'Riley' || pid === 'p_riley' || pid === 'riley') {
+      p.ttsVoice = 'Maia';
+      p.ttsModel = 'qwen3-tts-flash-realtime';
+      p.ttsEmotionEnabled = true;
+    } else if (name === 'Avery' || pid === 'p_avery' || pid === 'avery') {
+      p.ttsVoice = 'Mia';
+      p.ttsModel = 'qwen3-tts-flash-realtime';
+      p.ttsEmotionEnabled = true;
+    } else if (name === '홍단' || pid === 'p_hongdan' || pid === 'hongdan' || pid === '홍단') {
+      p.ttsVoice = 'KaterinaMia';
+      p.ttsModel = 'qwen3-tts-flash-realtime';
+      p.ttsEmotionEnabled = true;
+    }
   }
 }
 
@@ -298,6 +321,7 @@ async function syncPersonasFromWorkerForStartup(wUrl, timeoutMs = 4000) {
     const samePersonas = personasSignature(nextPersonas) === personasSignature(personas);
     if (!samePersonas) {
       personas = nextPersonas;
+      applyPersonaTtsDefaults(personas);
       setLocalPersonas(personas);
       if (changedPids.length) {
         for (const pid of changedPids) {
@@ -324,6 +348,7 @@ async function syncPersonasFromWorkerForStartup(wUrl, timeoutMs = 4000) {
   if (!Array.isArray(celebs) || !celebs.length) return false;
 
   const nextCelebs = celebs.map(p => ({ ...p, type: p.type || 'celebrity' }));
+  applyPersonaTtsDefaults(nextCelebs);
   const sameCelebs = personasSignature(nextCelebs) === personasSignature(personas);
   if (!sameCelebs) {
     personas = nextCelebs;
@@ -517,6 +542,7 @@ window.forceRecoverApp = async function() {
       if (Array.isArray(pData.personas)) {
         const seen = new Set();
         personas = pData.personas.filter(p => p && p.pid && !seen.has(p.pid) && seen.add(p.pid));
+        applyPersonaTtsDefaults(personas);
         setLocalPersonas(personas);
       }
       await loadIndex();

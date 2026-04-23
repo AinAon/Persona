@@ -16,13 +16,26 @@ const CHAT_MODELS = [
   { value: 'grok-4.20-non-reasoning-latest',     label: 'Grok-4.20 Non $3.00 / $15.00' },
 ];
 
-const TTS_MODELS = [
-  { value: 'qwen3-tts-flash-realtime', label: 'Qwen3 TTS Flash Realtime' },
-];
-
 const TTS_VOICES = [
-  { value: 'Cherry', label: 'Cherry (여성, 한국어 지원)' },
-  { value: 'Serena', label: 'Serena (여성, 한국어 지원)' },
+  { value: 'Cherry', label: 'Cherry (밝고 긍정적이며 친근하고 자연스러운 젊은 여성)' },
+  { value: 'Serena', label: 'Serena (부드러운 젊은 여성)' },
+  { value: 'Chelsie', label: 'Chelsie (2D 가상 여자친구 스타일)' },
+  { value: 'Momo', label: 'Momo (장난기 가득하고 쾌활하게 기운을 북돋아 주는 여성)' },
+  { value: 'Vivian', label: 'Vivian (자신감 있고 귀여우며 약간 기세가 당당한 여성)' },
+  { value: 'Maia', label: 'Maia (지적임과 부드러움이 조화된 여성)' },
+  { value: 'Bella', label: 'Bella (술은 마시지만 취해도 주먹은 휘두르지 않는 어린 소녀)' },
+  { value: 'Jennifer', label: 'Jennifer (프리미엄 시네마틱 품질의 목소리, 미국 영어 톤 기반)' },
+  { value: 'Katerina', label: 'Katerina (리듬감이 풍부하고 기억에 남는 성숙한 여성)' },
+  { value: 'Mia', label: 'Mia (봄물처럼 부드럽고 갓 내린 눈처럼 고분고분한 여성)' },
+  { value: 'Bellona', label: 'Bellona (영웅적인 웅장함과 완벽한 발음을 가진 강력하고 명료한 목소리)' },
+  { value: 'Bunny', label: 'Bunny (귀여움이 넘치는 어린 소녀)' },
+  { value: 'Elias', label: 'Elias (학술적 엄격함과 스토리텔링에 능숙한 지적인 여성)' },
+  { value: 'Nini', label: 'Nini (인절미처럼 부드럽고 애교 섞인 목소리)' },
+  { value: 'Seren', label: 'Seren (잠들기 전 듣기 좋은 부드럽고 차분한 목소리)' },
+  { value: 'Stella', label: 'Stella (평소엔 멍한 10대 소녀 같지만 정의를 외칠 땐 강단 있는 목소리)' },
+  { value: 'Sonrisa', label: 'Sonrisa (쾌활하고 외향적인 스타일, 라틴 아메리카 톤 기반)' },
+  { value: 'Sohee', label: 'Sohee (따뜻하고 쾌활하며 감정 표현이 풍부한 한국인 언니)' },
+  { value: 'Ono Anna', label: 'Ono Anna (영리하고 활기찬 소꿉친구 스타일)' },
 ];
 const TTS_TONES = [
   { value: '', label: '기본' },
@@ -31,6 +44,7 @@ const TTS_TONES = [
   { value: 'cool', label: '냉소/쿨톤' },
   { value: 'bright', label: '밝고 경쾌함' },
   { value: 'serious', label: '진지/단호함' },
+  { value: '__custom__', label: '직접 입력' },
 ];
 const TTS_EMOTION_STRENGTHS = [
   { value: 'low', label: '약하게' },
@@ -2077,6 +2091,10 @@ function deletePersonaFromEdit() {
 function renderEditBody(p, hdImage = null) {
   const body = document.getElementById('editBody');
   const neutral = hdImage || _neutralCache[p.pid] || p.image;
+  const toneValues = new Set((TTS_TONES || []).map(x => String(x.value || '')));
+  const rawTone = String(p.ttsTone || '').trim();
+  const toneSelectValue = rawTone && !toneValues.has(rawTone) ? '__custom__' : rawTone;
+  const toneCustomValue = toneSelectValue === '__custom__' ? rawTone : '';
 
   body.innerHTML = `
     <div class="edit-big-img-wrap" onclick="document.getElementById('editImgInput').click()">
@@ -2164,33 +2182,37 @@ function renderEditBody(p, hdImage = null) {
       <div class="edit-section-title">Model</div>
       <div class="edit-field-label">기본 응답 모델 (이 페르소나가 참여한 채팅의 기본값)</div>
       ${buildModelSelect('editDefaultModel', p.defaultModel || '')}
-      <div class="edit-field-row" style="margin-top:10px">
-        <div>
-          <div class="edit-field-label">음성 모델 (TTS)</div>
-          ${buildSimpleSelect('editTtsModel', TTS_MODELS, p.ttsModel || '')}
-        </div>
-        <div>
-          <div class="edit-field-label">음성 목소리</div>
-          ${buildSimpleSelect('editTtsVoice', TTS_VOICES, p.ttsVoice || '')}
-        </div>
+      <div style="margin-top:10px">
+        <div class="edit-field-label">음성 목소리 (보이스 이름 + 설명)</div>
+        ${buildSimpleSelect('editTtsVoice', TTS_VOICES, p.ttsVoice || '')}
       </div>
       <div class="edit-field-label" style="margin-top:10px">음성 톤 메모 (TTS Prompt)</div>
       <textarea class="edit-textarea" id="editTtsPrompt" placeholder="예: 한국어 여성 보이스. 차분하고 또렷하게. 감정 과장 없이 전달." style="height:90px">${esc(p.ttsPrompt || '')}</textarea>
       <div class="edit-field-row" style="margin-top:10px">
         <div>
           <div class="edit-field-label">기본 톤 (TTS Tone)</div>
-          ${buildSimpleSelect('editTtsTone', TTS_TONES, p.ttsTone || '')}
+          ${buildSimpleSelect('editTtsTone', TTS_TONES, toneSelectValue)}
         </div>
         <div>
-          <div class="edit-field-label">감정 반영 강도</div>
-          ${buildSimpleSelect('editTtsEmotionStrength', TTS_EMOTION_STRENGTHS, p.ttsEmotionStrength || 'medium')}
+          <div class="edit-field-label">기본 톤 (직접 입력)</div>
+          <input class="edit-input" id="editTtsToneCustom" placeholder="예: 낮고 담백하게, 문장 끝은 짧게 끊기" value="${esc(toneCustomValue)}" style="width:100%;${toneSelectValue === '__custom__' ? '' : 'display:none;'}">
         </div>
       </div>
-      <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;color:var(--muted)">
-        <input type="checkbox" id="editTtsEmotionEnabled" ${(p.ttsEmotionEnabled === false ? '' : 'checked')}>
-        말풍선 [emotion]을 TTS 톤에 반영
-      </label>
+      <div style="margin-top:10px">
+        <div class="edit-field-label">감정 반영 강도</div>
+        ${buildSimpleSelect('editTtsEmotionStrength', TTS_EMOTION_STRENGTHS, p.ttsEmotionStrength || 'medium')}
+      </div>
     </div>`;
+  const ttsToneSel = document.getElementById('editTtsTone');
+  if (ttsToneSel) {
+    ttsToneSel.onchange = () => {
+      const custom = document.getElementById('editTtsToneCustom');
+      if (!custom) return;
+      const isCustom = ttsToneSel.value === '__custom__';
+      custom.style.display = isCustom ? '' : 'none';
+      if (!isCustom) custom.value = '';
+    };
+  }
   ensureEditPrivateMemoryPanel(p.pid);
   renderPrivateMemoryList(p.pid);
 }
@@ -2573,11 +2595,13 @@ async function savePersonaEdit() {
   p.gender = document.getElementById('editGender')?.value || '';
   p.mbti = document.getElementById('editMbti')?.value.trim() || '';
   p.defaultModel = document.getElementById('editDefaultModel')?.value || '';
-  p.ttsModel = document.getElementById('editTtsModel')?.value || '';
+  p.ttsModel = 'qwen3-tts-flash-realtime';
   p.ttsVoice = document.getElementById('editTtsVoice')?.value || '';
   p.ttsPrompt = document.getElementById('editTtsPrompt')?.value.trim() || '';
-  p.ttsTone = document.getElementById('editTtsTone')?.value || '';
-  p.ttsEmotionEnabled = !!document.getElementById('editTtsEmotionEnabled')?.checked;
+  const ttsToneSel = document.getElementById('editTtsTone')?.value || '';
+  const ttsToneCustom = document.getElementById('editTtsToneCustom')?.value.trim() || '';
+  p.ttsTone = ttsToneSel === '__custom__' ? ttsToneCustom : ttsToneSel;
+  p.ttsEmotionEnabled = true;
   p.ttsEmotionStrength = document.getElementById('editTtsEmotionStrength')?.value || 'medium';
   isNewPersona = false;
 
@@ -3735,11 +3759,11 @@ function resolveActiveTtsConfig() {
   const s = sessions.find(x => x.id === activeChatId);
   const pids = Array.isArray(s?.participantPids) ? s.participantPids : [];
   const firstPersona = pids.length ? getPersona(pids[0]) : null;
-  const model = String(firstPersona?.ttsModel || '').trim();
+  const model = 'qwen3-tts-flash-realtime';
   const voice = String(firstPersona?.ttsVoice || '').trim() || 'Serena';
   const prompt = String(firstPersona?.ttsPrompt || '').trim();
   const tone = String(firstPersona?.ttsTone || '').trim();
-  const emotionEnabled = firstPersona?.ttsEmotionEnabled !== false;
+  const emotionEnabled = true;
   const emotionStrength = String(firstPersona?.ttsEmotionStrength || 'medium').trim() || 'medium';
   return { model, voice, prompt, tone, emotionEnabled, emotionStrength };
 }
