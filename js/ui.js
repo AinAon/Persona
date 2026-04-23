@@ -3694,6 +3694,8 @@ function ttsStopCurrent() {
   try { window.speechSynthesis?.cancel?.(); } catch {}
   try {
     if (_ttsCurrentAudio) {
+      _ttsCurrentAudio.onended = null;
+      _ttsCurrentAudio.onerror = null;
       _ttsCurrentAudio.pause();
       _ttsCurrentAudio.src = '';
     }
@@ -3836,8 +3838,10 @@ function createTtsButton(text = '', opts = {}) {
     try {
       await speakTextWithServerTts(target, btn, { emotion });
     } catch (e) {
-      console.warn('[tts] server fallback to browser:', e?.message || e);
-      speakTextWithBrowserTts(target, btn);
+      console.warn('[tts] server failed:', e?.message || e);
+      if (_ttsCurrentBtn) _ttsCurrentBtn.classList.remove('speaking');
+      _ttsCurrentBtn = null;
+      showToast('TTS 재생에 실패했습니다.');
     }
   };
   return btn;
