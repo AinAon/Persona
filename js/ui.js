@@ -17,19 +17,12 @@ const CHAT_MODELS = [
 ];
 
 const TTS_MODELS = [
-  { value: '', label: '기본 (Qwen3 TTS 서버)' },
-  { value: 'browser-webspeech', label: 'Browser WebSpeech' },
   { value: 'qwen3-tts-flash-realtime', label: 'Qwen3 TTS Flash Realtime' },
-  { value: 'qwen3-tts-instruct-flash-realtime', label: 'Qwen3 TTS Instruct Realtime' },
 ];
 
 const TTS_VOICES = [
-  { value: '', label: '기본 음성 (자동 선택)' },
-  { value: 'Cherry', label: 'Cherry' },
-  { value: 'Serena', label: 'Serena' },
-  { value: 'Ethan', label: 'Ethan' },
-  { value: 'Chelsie', label: 'Chelsie' },
-  { value: 'Dylan', label: 'Dylan' },
+  { value: 'Cherry', label: 'Cherry (여성, 한국어 지원)' },
+  { value: 'Serena', label: 'Serena (여성, 한국어 지원)' },
 ];
 let _editMultiUploadQueue = [];
 
@@ -3709,9 +3702,10 @@ async function speakTextWithServerTts(rawText, btn = null) {
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl) throw new Error('WORKER_URL missing');
   const cfg = resolveActiveTtsConfig();
+  const model = 'qwen3-tts-flash-realtime';
   const payload = {
     text,
-    model: cfg.model && cfg.model !== 'browser-webspeech' ? cfg.model : 'qwen3-tts-flash-realtime',
+    model,
     voice: cfg.voice || 'Cherry',
     format: 'mp3',
   };

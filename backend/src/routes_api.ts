@@ -304,7 +304,7 @@ export async function handleApiRoute(
     if (!apiKey) return Response.json({ error: "server tts key missing" }, { status: 500, headers: cors });
 
     const baseUrl = String(env.DASHSCOPE_BASE_URL || "https://dashscope-intl.aliyuncs.com/compatible-mode/v1").replace(/\/+$/, "");
-    const endpoint = `${baseUrl}/audio/speech`;
+    const fallbackBaseUrl = "https://dashscope.aliyuncs.com/compatible-mode/v1";
 
     const requestedVoice = String(body?.voice || "").trim();
     const voiceMap: Record<string, string> = {
@@ -318,26 +318,36 @@ export async function handleApiRoute(
     const model = String(body?.model || "").trim() || "qwen3-tts-flash-realtime";
     const format = body?.format || "mp3";
 
-    const remote = await fetch(endpoint, {
+    const payload = JSON.stringify({
+      model,
+      voice,
+      input: text,
+      response_format: format,
+    });
+    const doCall = (targetBase: string) => fetch(`${targetBase.replace(/\/+$/, "")}/audio/speech`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
-        model,
-        voice,
-        input: text,
-        response_format: format,
-      }),
+      body: payload,
     });
+
+    let remote = await doCall(baseUrl);
+    let triedEndpoint = `${baseUrl}/audio/speech`;
+    if (remote.status === 404 && baseUrl !== fallbackBaseUrl) {
+      remote = await doCall(fallbackBaseUrl);
+      triedEndpoint = `${fallbackBaseUrl}/audio/speech`;
+    }
 
     if (!remote.ok) {
       const detail = await remote.text().catch(() => "");
-      return Response.json(
-        { error: "qwen tts failed", status: remote.status, detail: detail.slice(0, 600) },
-        { status: 502, headers: cors },
-      );
+      return Response.json({
+        error: "qwen tts failed",
+        status: remote.status,
+        endpoint: triedEndpoint,
+        detail: detail.slice(0, 600),
+      }, { status: 502, headers: cors });
     }
 
     const contentType = (remote.headers.get("content-type") || "audio/mpeg").split(";")[0];
