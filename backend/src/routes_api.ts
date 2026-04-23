@@ -339,7 +339,8 @@ export async function handleApiRoute(
     };
 
     const runRealtimeTts = async (wsUrl: string): Promise<{ bytes: Uint8Array; endpoint: string }> => {
-      const upgraded = await fetch(wsUrl, {
+      const fetchableUrl = String(wsUrl || "").replace(/^wss:\/\//i, "https://").replace(/^ws:\/\//i, "http://");
+      const upgraded = await fetch(fetchableUrl, {
         headers: {
           Upgrade: "websocket",
           Authorization: `Bearer ${apiKey}`,
