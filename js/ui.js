@@ -236,6 +236,10 @@ function getChatHiddenFilterEnabled() {
   return !!window._showHiddenChats;
 }
 
+function getChatListAvatarVisibilityEnabled() {
+  return window._showChatListAvatars !== false;
+}
+
 function updateChatListVisibilityButton() {
   const btn = document.getElementById('chatHiddenToggleBtn');
   if (!btn) return;
@@ -248,6 +252,21 @@ function updateChatListVisibilityButton() {
 function toggleChatHiddenVisibility() {
   window._showHiddenChats = !getChatHiddenFilterEnabled();
   updateChatListVisibilityButton();
+  renderChatList();
+}
+
+function updateChatListAvatarVisibilityButton() {
+  const btn = document.getElementById('chatListAvatarToggleBtn');
+  if (!btn) return;
+  const on = getChatListAvatarVisibilityEnabled();
+  btn.classList.toggle('on', on);
+  btn.innerHTML = on ? iconEyeOpenSVG() : iconEyeClosedSVG();
+  btn.title = on ? '채팅 목록 썸네일 표시 중' : '채팅 목록 썸네일 숨김 중';
+}
+
+function toggleChatListAvatarVisibility() {
+  window._showChatListAvatars = !getChatListAvatarVisibilityEnabled();
+  updateChatListAvatarVisibilityButton();
   renderChatList();
 }
 
@@ -2559,6 +2578,7 @@ async function renderChatList() {
   const signature = JSON.stringify({
     search: _chatSearchQuery || '',
     showHidden: getChatHiddenFilterEnabled(),
+    showListAvatars: getChatListAvatarVisibilityEnabled(),
     activeChatId: activeChatId || '',
     sessions: (sessions || []).map(s => ({
       id: s?.id || '',
@@ -2601,6 +2621,7 @@ async function renderChatList() {
 
   for (const s of sorted) {
     const pList = (s.participantPids || []).map(pid => getPersona(pid)).filter(Boolean);
+    const showListAvatars = getChatListAvatarVisibilityEnabled();
     const roomName = s.roomName || pList.map(p=>p.name).join(', ') || '채팅';
 
     const wrap = document.createElement('div');
@@ -2622,18 +2643,18 @@ async function renderChatList() {
     item.className = 'chat-list-item';
     item.onclick = () => openChat(s.id);
 
-    const avEls = await Promise.all(pList.map(async p => {
+    const avEls = showListAvatars ? await Promise.all(pList.map(async p => {
       const neutral = await getNeutralImageThumb(p.pid, 80);
       const imgSrc = neutral || p.image;
       const imgHTML = imgSrc ? `<img src="${imgSrc}">` : defaultAvatar(p.hue);
       return `<div class="chat-av-item" style="background:hsl(${p.hue},22%,14%);border-color:hsl(${p.hue},30%,26%)">${imgHTML}</div>`;
-    }));
+    })) : [];
     if (myVersion !== _chatListRenderVersion) return;
-    const avWidth = pList.length > 0 ? (80 + (pList.length - 1) * 52) : 80;
+    const avWidth = showListAvatars ? (pList.length > 0 ? (80 + (pList.length - 1) * 52) : 80) : 0;
 
     const previewText = s.lastPreview || buildSessionPreviewFallback(s) || '대화를 시작해봐';
     item.innerHTML = `
-      <div class="chat-avatars-row" style="width:${avWidth}px;flex-shrink:0">${avEls.join('')}</div>
+      <div class="chat-avatars-row" style="width:${avWidth}px;flex-shrink:0;${showListAvatars ? '' : 'display:none;'}">${avEls.join('')}</div>
       <div class="chat-list-info">
         <div class="chat-list-names">${esc(roomName)}</div>
         <div class="chat-list-preview">${esc(previewText)}</div>
@@ -2650,6 +2671,7 @@ async function renderChatList() {
   list.querySelectorAll('.chat-list-wrap').forEach(e => e.remove());
   list.appendChild(frag);
   updateChatListVisibilityButton();
+  updateChatListAvatarVisibilityButton();
 }
 
 let _chatSearchQuery = '';
@@ -2903,10 +2925,23 @@ function handleEscBackNavigation(event) {
   if (handleInAppBackNavigation()) event.preventDefault();
 }
 
+function handleGlobalShortcutKeys(event) {
+  if (!event || isEditableElement(event.target)) return;
+  if (activeTab !== 'chat' || !activeChatId) return;
+  if (!event.ctrlKey || event.altKey || event.shiftKey) return;
+  if (event.code !== 'Backquote') return;
+  try {
+    if (window.matchMedia && !window.matchMedia('(pointer:fine)').matches) return;
+  } catch {}
+  event.preventDefault();
+  toggleChatProfileOverride();
+}
+
 function ensureGlobalBackHandler() {
   if (window.__personaBackBound) return;
   window.__personaBackBound = true;
   document.addEventListener('keydown', handleEscBackNavigation);
+  document.addEventListener('keydown', handleGlobalShortcutKeys);
   window.addEventListener('popstate', () => {
     if (handleInAppBackNavigation()) {
       try { history.pushState({ personaBackGuard: 1 }, '', location.href); } catch {}
