@@ -42,6 +42,7 @@ const SESSION_INDEX_R2_KEY = "session/index.json";
 const DELETED_SESSION_INDEX_R2_KEY = "session/deleted_index.json";
 const SESSION_R2_PREFIX = "session/data/";
 const DELETED_SESSION_R2_PREFIX = "session/deleted/";
+const SESSION_AUDIO_R2_PREFIXES = ["tts/session/", "audio/session/"];
 
 function buildSessionMeta(session: Record<string, unknown>): SessionMeta {
   return {
@@ -85,6 +86,39 @@ function sessionR2Key(id: string): string {
 
 function deletedSessionR2Key(id: string): string {
   return `${DELETED_SESSION_R2_PREFIX}${id}.json`;
+}
+
+function isAudioContentItem(item: unknown): boolean {
+  if (!item || typeof item !== "object") return false;
+  const rec = item as Record<string, unknown>;
+  const type = String(rec.type || "").toLowerCase();
+  if (type.includes("audio")) return true;
+  if (typeof rec.audio === "string" || typeof rec.audio_url === "string" || typeof rec.audioUrl === "string") return true;
+  return false;
+}
+
+function sanitizeSessionForRestorePayload(session: Record<string, unknown>): Record<string, unknown> {
+  const next: Record<string, unknown> = { ...session };
+  const history = Array.isArray(session.history) ? session.history : [];
+  next.history = history.map((msg) => {
+    if (!msg || typeof msg !== "object") return msg as unknown;
+    const m = { ...(msg as Record<string, unknown>) };
+    if (Array.isArray(m.content)) {
+      m.content = (m.content as unknown[]).filter((item) => !isAudioContentItem(item));
+    }
+    delete m.audio;
+    delete m.audioUrl;
+    delete m.audio_url;
+    delete m.audioKey;
+    delete m.ttsAudioUrl;
+    delete m.ttsAudioKey;
+    delete m.ttsCacheKey;
+    return m;
+  });
+  delete next.ttsAudio;
+  delete next.ttsAudioMap;
+  delete next.audioMap;
+  return next;
 }
 
 async function r2Text(env: Env, key: string): Promise<string | null> {
@@ -263,10 +297,17 @@ async function restoreSessionById(env: Env, sessionId: string): Promise<{ ok: bo
   const raw = deletedRaw || activeRaw;
   if (!raw) return { ok: false, error: "session not found" };
 
-  const meta = parseSessionLike(raw);
-  if (!meta) return { ok: false, error: "invalid session payload" };
+  let parsedSession: Record<string, unknown>;
+  try {
+    parsedSession = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    return { ok: false, error: "invalid session payload" };
+  }
+  const sanitizedSession = sanitizeSessionForRestorePayload(parsedSession);
+  const meta = buildSessionMeta(sanitizedSession);
+  const sanitizedRaw = JSON.stringify(sanitizedSession);
 
-  await env.R2.put(sessionR2Key(id), raw, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
+  await env.R2.put(sessionR2Key(id), sanitizedRaw, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
   await env.KV.delete(`session:${id}`);
 
   const index = await getSessionIndex(env);
@@ -279,6 +320,9 @@ async function restoreSessionById(env: Env, sessionId: string): Promise<{ ok: bo
   await putDeletedSessionIndex(env, deletedIndex.filter((s) => s.id !== id));
   await env.KV.delete(`deleted:session:${id}`);
   await env.R2.delete(deletedSessionR2Key(id));
+  for (const base of SESSION_AUDIO_R2_PREFIXES) {
+    await deleteR2ByPrefix(env, `${base}${id}/`);
+  }
 
   return { ok: true, session: meta };
 }
@@ -760,6 +804,9 @@ export async function handleApiRoute(
     await env.KV.delete(`deleted:session:${sessionId}`);
     await env.R2.delete(sessionR2Key(sessionId));
     await env.R2.delete(deletedSessionR2Key(sessionId));
+    for (const base of SESSION_AUDIO_R2_PREFIXES) {
+      await deleteR2ByPrefix(env, `${base}${sessionId}/`);
+    }
 
     const index = await getSessionIndex(env);
     await putSessionIndex(env, index.filter((s) => s.id !== sessionId));
@@ -931,6 +978,9 @@ async function handleSessionRoute(
 
     await env.KV.delete(`session:${id}`);
     await env.R2.delete(sessionR2Key(id));
+    for (const base of SESSION_AUDIO_R2_PREFIXES) {
+      await deleteR2ByPrefix(env, `${base}${id}/`);
+    }
     let index = await getSessionIndex(env);
     index = index.filter((s) => s.id !== id);
     await putSessionIndex(env, index);
