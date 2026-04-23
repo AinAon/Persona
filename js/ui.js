@@ -1490,6 +1490,7 @@ function renderSettingsPane() {
   setSettingsSegmentValue('settingsChatListAvatarStyle', listAvVal, 'settingsChatListAvatarSeg');
   const typingEl = document.getElementById('settingsTypingSpeed');
   if (typingEl) typingEl.value = getBubbleTypingSpeedPreset();
+  setSettingsSegmentValue('settingsTypingSpeed', getBubbleTypingSpeedPreset(), 'settingsTypingSpeedSeg');
   ensureSettingsMemoryPanel();
   renderPublicMemoryList();
   renderMemoryMeta();
