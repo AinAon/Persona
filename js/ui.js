@@ -5784,11 +5784,9 @@ function ensureSettingsMemoryPanel() {
         <button onclick="addPublicMemoryManual()" style="height:78px;min-width:72px;padding:0 12px;border-radius:12px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;font-family:'Pretendard',sans-serif;font-weight:600">Save</button>
       </div>
     </div>
-    <div style="display:flex;justify-content:flex-end;gap:8px;margin:10px 0">
+    <div style="display:flex;gap:8px;justify-content:flex-start;flex-wrap:wrap;margin:10px 0 10px">
       <button onclick="optimizeMemoryNow()" style="padding:8px 12px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;font-family:'Pretendard',sans-serif;font-weight:600">메모리최적화</button>
       <button onclick="rebuildMemoryNow()" style="padding:8px 12px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;font-family:'Pretendard',sans-serif;font-weight:600">메모리재생성</button>
-    </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:10px">
       <button onclick="toggleMemorySelectAll('public_profile','global',true); renderPublicMemoryList();" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">전체선택</button>
       <button onclick="clearMemorySelection('public_profile','global'); renderPublicMemoryList();" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">선택해제</button>
       <button onclick="deleteSelectedMemories('public_profile','global')" style="padding:7px 10px;border-radius:10px;border:1px solid hsl(0,28%,32%);background:hsl(0,24%,16%);color:#ffd7dd;font-size:11px;cursor:pointer">선택삭제</button>

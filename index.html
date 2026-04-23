@@ -1541,6 +1541,7 @@ list-style-position: outside;
         <input type="hidden" id="settingsDefaultTab" value="persona">
         <input type="hidden" id="settingsAvatarStyle" value="square">
         <input type="hidden" id="settingsChatListAvatarStyle" value="show">
+        <input type="hidden" id="settingsTypingSpeed" value="fast">
         <div class="settings-seg-row">
           <div class="settings-seg-label">시작화면</div>
           <div class="settings-seg" id="settingsDefaultTabSeg">
@@ -1564,6 +1565,14 @@ list-style-position: outside;
             <button class="settings-seg-btn" type="button" data-value="hide" onclick="setSettingsSegmentValue('settingsChatListAvatarStyle','hide','settingsChatListAvatarSeg')">숨기기</button>
           </div>
         </div>
+        <div class="settings-seg-row">
+          <div class="settings-seg-label">말풍선출력속도</div>
+          <div class="settings-seg" id="settingsTypingSpeedSeg">
+            <button class="settings-seg-btn" type="button" data-value="fast" onclick="setSettingsSegmentValue('settingsTypingSpeed','fast','settingsTypingSpeedSeg')">빠름</button>
+            <button class="settings-seg-btn" type="button" data-value="medium" onclick="setSettingsSegmentValue('settingsTypingSpeed','medium','settingsTypingSpeedSeg')">중간</button>
+            <button class="settings-seg-btn" type="button" data-value="slow" onclick="setSettingsSegmentValue('settingsTypingSpeed','slow','settingsTypingSpeedSeg')">느림</button>
+          </div>
+        </div>
       </div>
 
       <div>
@@ -1575,19 +1584,9 @@ list-style-position: outside;
         </div>
       </div>
 
-      <div>
-        <div class="edit-field-label" style="margin-bottom:8px">말풍선 출력 속도</div>
-        <select id="settingsTypingSpeed" class="edit-input" style="width:100%;">
-          <option value="fast">가장 빠름</option>
-          <option value="medium">중간</option>
-          <option value="slow">느림</option>
-        </select>
-      </div>
-
       <div style="padding-top:20px; border-top:1px solid var(--border);">
         <div class="field-label" style="margin-bottom:12px">앱 데이터 관리</div>
         <button onclick="clearImageCache()" style="width:100%;padding:12px;border-radius:11px;background:var(--card);color:var(--text);border:1px solid var(--border2);font-family:'Pretendard',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:border-color .15s;margin-bottom:8px" onmouseover="this.style.borderColor='var(--muted)'" onmouseout="this.style.borderColor='var(--border2)'">🖼 이미지 캐시 초기화</button>
-        <button onclick="openMarkdownDemo()" style="width:100%;padding:12px;border-radius:11px;background:var(--card);color:var(--muted);border:1px solid var(--border2);font-family:'Pretendard',sans-serif;font-size:13px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--muted)'" onmouseout="this.style.borderColor='var(--border2)'">✦ 렌더링 데모 채팅 시작</button>
       </div>
     </div>
 
