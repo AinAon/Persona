@@ -1344,9 +1344,9 @@ function setLoading(show, text = 'Loading...') {
   overlay.classList.toggle('hidden', !show);
 }
 function setLoadingEscapeVisible(show) {
-  const btn = document.getElementById('loadingEscapeBtn');
-  if (!btn) return;
-  btn.classList.toggle('show', !!show);
+  const logo = document.getElementById('loadingLogo');
+  if (!logo) return;
+  logo.classList.toggle('escape-available', !!show);
 }
 
 function updateMicButtonState(active) {
@@ -5785,12 +5785,12 @@ function ensureSettingsMemoryPanel() {
         <button onclick="addPublicMemoryManual()" style="height:78px;min-width:72px;padding:0 12px;border-radius:12px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;font-family:'Pretendard',sans-serif;font-weight:600">Save</button>
       </div>
     </div>
-    <div style="display:flex;gap:8px;justify-content:flex-start;flex-wrap:wrap;margin:10px 0 10px">
-      <button onclick="optimizeMemoryNow()" style="padding:8px 12px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;font-family:'Pretendard',sans-serif;font-weight:600">메모리최적화</button>
-      <button onclick="rebuildMemoryNow()" style="padding:8px 12px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;font-family:'Pretendard',sans-serif;font-weight:600">메모리재생성</button>
-      <button onclick="toggleMemorySelectAll('public_profile','global',true); renderPublicMemoryList();" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">전체선택</button>
-      <button onclick="clearMemorySelection('public_profile','global'); renderPublicMemoryList();" style="padding:7px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer">선택해제</button>
-      <button onclick="deleteSelectedMemories('public_profile','global')" style="padding:7px 10px;border-radius:10px;border:1px solid hsl(0,28%,32%);background:hsl(0,24%,16%);color:#ffd7dd;font-size:11px;cursor:pointer">선택삭제</button>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:8px;margin:10px 0 10px">
+      <button onclick="optimizeMemoryNow()" style="width:100%;height:34px;padding:0 8px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer;font-family:'Pretendard',sans-serif;font-weight:600;white-space:nowrap">메모리최적화</button>
+      <button onclick="rebuildMemoryNow()" style="width:100%;height:34px;padding:0 8px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer;font-family:'Pretendard',sans-serif;font-weight:600;white-space:nowrap">메모리재생성</button>
+      <button onclick="toggleMemorySelectAll('public_profile','global',true); renderPublicMemoryList();" style="width:100%;height:34px;padding:0 8px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer;white-space:nowrap">전체선택</button>
+      <button onclick="clearMemorySelection('public_profile','global'); renderPublicMemoryList();" style="width:100%;height:34px;padding:0 8px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer;white-space:nowrap">선택해제</button>
+      <button onclick="deleteSelectedMemories('public_profile','global')" style="width:100%;height:34px;padding:0 8px;border-radius:10px;border:1px solid hsl(0,28%,32%);background:hsl(0,24%,16%);color:#ffd7dd;font-size:11px;cursor:pointer;white-space:nowrap">선택삭제</button>
     </div>
     <div id="publicMemoryList" style="display:flex;flex-direction:column;gap:8px"></div>
   `;
