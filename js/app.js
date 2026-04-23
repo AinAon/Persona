@@ -185,13 +185,15 @@ async function refreshCurrentChatIfStale(id) {
 }
 
 async function refreshAllCaches(options = {}) {
+  const loadingStartedAt = Date.now();
   const { force = false, showLoading = true, loadingLabel = '로컬 캐시 확인 중...' } = options;
-  if (showLoading) {
+  const showLoadingNow = !!(showLoading || !window.__personaStartupCacheRefreshed);
+  if (showLoadingNow) {
     setLoading(true, loadingLabel);
     if (typeof setLoadingEscapeVisible === 'function') setLoadingEscapeVisible(true);
   }
   try {
-    if (showLoading) setLoading(true, '로컬 캐시 로드 중...');
+    if (showLoadingNow) setLoading(true, '로컬 캐시 로드 중...');
     const hasLocalPersonas = loadPersonasFromCache();
     if (!hasLocalPersonas) personas = DEFAULT_PERSONAS.map(p => ({ ...p, tags: [...p.tags] }));
     loadSessionsFromCache();
@@ -203,11 +205,11 @@ async function refreshAllCaches(options = {}) {
     const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
     if (!wUrl) return;
 
-    if (showLoading) setLoading(true, '페르소나 비교 중...');
+    if (showLoadingNow) setLoading(true, '페르소나 비교 중...');
     const personasChanged = await syncPersonasFromWorkerForStartup(wUrl, 12000).catch(() => false);
     if (personasChanged && typeof renderPersonaGrid === 'function') await renderPersonaGrid();
 
-    if (showLoading) setLoading(true, '채팅 목록 비교 중...');
+    if (showLoadingNow) setLoading(true, '채팅 목록 비교 중...');
     const localIndexSig = sessionIndexSignature(getLocalSessionIndex() || []);
     const remoteIndex = await fetchRemoteSessionIndex();
     const remoteIndexSig = sessionIndexSignature(remoteIndex);
@@ -216,7 +218,7 @@ async function refreshAllCaches(options = {}) {
     }
     if (typeof renderChatList === 'function') await renderChatList();
 
-    if (showLoading) setLoading(true, '아카이브 비교 중...');
+    if (showLoadingNow) setLoading(true, '아카이브 비교 중...');
     const localArchiveSig = await getLocalArchiveManifestSignature();
     const remoteArchiveChanged = typeof refreshArchiveManifestIfChanged === 'function'
       ? await refreshArchiveManifestIfChanged(force || !localArchiveSig)
@@ -224,12 +226,18 @@ async function refreshAllCaches(options = {}) {
     if (remoteArchiveChanged && activeTab === 'archive' && typeof renderArchiveGrid === 'function') renderArchiveGrid();
 
     if (activeChatId) {
-      if (showLoading) setLoading(true, '현재 채팅 비교 중...');
+      if (showLoadingNow) setLoading(true, '현재 채팅 비교 중...');
       await refreshCurrentChatIfStale(activeChatId);
     }
   } finally {
     if (typeof setLoadingEscapeVisible === 'function') setLoadingEscapeVisible(false);
-    if (showLoading) setLoading(false);
+    if (showLoadingNow) {
+      const minVisibleMs = Math.max(0, Number(options?.minVisibleMs || 0));
+      const remain = Math.max(0, minVisibleMs - (Date.now() - loadingStartedAt));
+      if (remain > 0) await new Promise((resolve) => setTimeout(resolve, remain));
+      setLoading(false);
+    }
+    window.__personaStartupCacheRefreshed = true;
   }
 }
 
@@ -382,7 +390,7 @@ async function init() {
   let loadingEscapeTimer = null;
   const cachedPersonas = getLocalPersonas();
   const cachedSessionIndex = getLocalSessionIndex();
-  const shouldBlockLoading = false;
+  const shouldBlockLoading = true;
   // Failsafe: loading overlay should not stay forever if init flow is interrupted.
   let loadingFailsafe = shouldBlockLoading ? setTimeout(() => {
     try {
@@ -408,7 +416,7 @@ async function init() {
   loadUserProfileKV().then(() => {
     if (activeTab === 'settings') renderSettingsPane();
   }).catch(()=>{});
-  await refreshAllCaches({ force: false, showLoading: false, loadingLabel: '로컬 캐시 로드 중...' });
+  await refreshAllCaches({ force: false, showLoading: true, loadingLabel: '로컬 캐시 로드 중...', minVisibleMs: 900 });
   preloadMemoryMetaLight();
   return;
 
