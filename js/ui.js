@@ -241,7 +241,18 @@ function getChatHiddenFilterEnabled() {
 }
 
 function getChatListAvatarVisibilityEnabled() {
-  return window._showChatListAvatars !== false;
+  if (typeof window._showChatListAvatars === 'boolean') return window._showChatListAvatars;
+  return userProfile?.chatListAvatarVisibility !== false;
+}
+
+function setSettingsSegmentValue(inputId, value, groupId) {
+  const input = document.getElementById(inputId);
+  if (input) input.value = value;
+  const group = document.getElementById(groupId);
+  if (!group) return;
+  group.querySelectorAll('.settings-seg-btn').forEach(btn => {
+    btn.classList.toggle('on', btn.dataset.value === value);
+  });
 }
 
 function updateChatListVisibilityButton() {
@@ -270,6 +281,8 @@ function updateChatListAvatarVisibilityButton() {
 
 function toggleChatListAvatarVisibility() {
   window._showChatListAvatars = !getChatListAvatarVisibilityEnabled();
+  userProfile.chatListAvatarVisibility = window._showChatListAvatars;
+  saveUserProfile();
   updateChatListAvatarVisibilityButton();
   renderChatList();
 }
@@ -1460,6 +1473,7 @@ function renderSettingsPane() {
   // 시작 화면 설정
   const tabEl = document.getElementById('settingsDefaultTab');
   if (tabEl) tabEl.value = userProfile.defaultTab || 'persona';
+  setSettingsSegmentValue('settingsDefaultTab', userProfile.defaultTab || 'persona', 'settingsDefaultTabSeg');
 
   // 글씨 크기 슬라이더
   const fs = userProfile.fontSize || 15;
@@ -1471,6 +1485,9 @@ function renderSettingsPane() {
   // 썸네일 스타일 설정 추가
   const avStyleEl = document.getElementById('settingsAvatarStyle');
   if (avStyleEl) avStyleEl.value = userProfile.chatAvatarStyle || 'square';
+  setSettingsSegmentValue('settingsAvatarStyle', userProfile.chatAvatarStyle || 'square', 'settingsAvatarStyleSeg');
+  const listAvVal = getChatListAvatarVisibilityEnabled() ? 'show' : 'hide';
+  setSettingsSegmentValue('settingsChatListAvatarStyle', listAvVal, 'settingsChatListAvatarSeg');
   const typingEl = document.getElementById('settingsTypingSpeed');
   if (typingEl) typingEl.value = getBubbleTypingSpeedPreset();
   ensureSettingsMemoryPanel();
@@ -1510,11 +1527,16 @@ function saveSettingsUserProfile() {
   userProfile.hallucinationPolicy = document.getElementById('settingsHallucinationPolicy')?.value.trim() || '';
   userProfile.defaultTab = document.getElementById('settingsDefaultTab')?.value || 'persona';
   userProfile.chatAvatarStyle = document.getElementById('settingsAvatarStyle')?.value || 'square';
+  const listAvSetting = document.getElementById('settingsChatListAvatarStyle')?.value || 'show';
+  userProfile.chatListAvatarVisibility = listAvSetting !== 'hide';
+  window._showChatListAvatars = userProfile.chatListAvatarVisibility;
   userProfile.typingSpeed = document.getElementById('settingsTypingSpeed')?.value || 'fast';
   userProfile.fontSize = parseInt(document.getElementById('settingsFontSize')?.value || 15);
   applyFontSize(userProfile.fontSize);
   saveUserProfile();
   saveUserProfileKV();
+  updateChatListAvatarVisibilityButton();
+  renderChatList();
   showToast('설정 저장됨 ✓');
 }
 

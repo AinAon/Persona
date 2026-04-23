@@ -487,6 +487,11 @@ body {
 .mode-btns { display: flex; gap: 6px; }
 .mode-btn { flex: 1; padding: 8px 6px; border-radius: 9px; border: 1px solid var(--border2); background: transparent; color: var(--muted); font-family: 'Pretendard', sans-serif; font-size: 11px; cursor: pointer; transition: all .15s; text-align: center; }
 .mode-btn.on { background: var(--card); border-color: var(--muted2); color: var(--text); }
+.settings-seg-row { display:flex; align-items:center; gap:12px; }
+.settings-seg-label { min-width:120px; font-size:13px; color:var(--muted); font-weight:600; }
+.settings-seg { flex:1; display:flex; align-items:center; justify-content:flex-end; gap:6px; padding:4px; border-radius:999px; background:var(--card); border:1px solid var(--border2); }
+.settings-seg-btn { height:32px; padding:0 12px; border-radius:999px; border:1px solid transparent; background:transparent; color:var(--muted); font-family:'Pretendard',sans-serif; font-size:12px; font-weight:600; cursor:pointer; transition:all .15s; white-space:nowrap; }
+.settings-seg-btn.on { color:var(--text); border-color:var(--muted2); background:rgba(255,255,255,.04); }
 .world-input { width: 100%; background: var(--card); border: 1px solid var(--border2); border-radius: 10px; padding: 9px 12px; color: var(--text); font-family: 'Pretendard', sans-serif; font-size: 12px; resize: none; outline: none; line-height: 1.65; height: 160px; }
 .world-input:focus { border-color: var(--muted); }
 .world-input::placeholder { color: var(--muted); }
@@ -1532,22 +1537,33 @@ list-style-position: outside;
         <textarea class="edit-input" id="settingsHallucinationPolicy" placeholder="예: 모르는 사실은 모른다고 말하고, 확실하지 않은 내용은 추정임을 명시해라." style="font-size:13px;padding:9px 12px;resize:none;height:78px;border-radius:10px;line-height:1.6"></textarea>
       </div>
       
-      <div>
-        <div class="edit-field-label" style="margin-bottom:8px">시작 화면</div>
-        <select id="settingsDefaultTab" class="edit-input" style="width:100%;">
-          <option value="persona">페르소나 목록</option>
-          <option value="chat">채팅 목록</option>
-          <option value="archive">Archive</option>
-        </select>
-      </div>
-
-      <div>
-        <div class="edit-field-label" style="margin-bottom:8px">채팅방 썸네일 스타일</div>
-        <select id="settingsAvatarStyle" class="edit-input" style="width:100%;">
-          <option value="square">사각 (기본)</option>
-          <option value="circle">원형</option>
-          <option value="hidden">숨김</option>
-        </select>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <input type="hidden" id="settingsDefaultTab" value="persona">
+        <input type="hidden" id="settingsAvatarStyle" value="square">
+        <input type="hidden" id="settingsChatListAvatarStyle" value="show">
+        <div class="settings-seg-row">
+          <div class="settings-seg-label">시작화면</div>
+          <div class="settings-seg" id="settingsDefaultTabSeg">
+            <button class="settings-seg-btn" type="button" data-value="persona" onclick="setSettingsSegmentValue('settingsDefaultTab','persona','settingsDefaultTabSeg')">페르소나</button>
+            <button class="settings-seg-btn" type="button" data-value="chat" onclick="setSettingsSegmentValue('settingsDefaultTab','chat','settingsDefaultTabSeg')">채팅목록</button>
+            <button class="settings-seg-btn" type="button" data-value="archive" onclick="setSettingsSegmentValue('settingsDefaultTab','archive','settingsDefaultTabSeg')">아카이브</button>
+          </div>
+        </div>
+        <div class="settings-seg-row">
+          <div class="settings-seg-label">채팅방썸네일</div>
+          <div class="settings-seg" id="settingsAvatarStyleSeg">
+            <button class="settings-seg-btn" type="button" data-value="square" onclick="setSettingsSegmentValue('settingsAvatarStyle','square','settingsAvatarStyleSeg')">사각</button>
+            <button class="settings-seg-btn" type="button" data-value="circle" onclick="setSettingsSegmentValue('settingsAvatarStyle','circle','settingsAvatarStyleSeg')">원형</button>
+            <button class="settings-seg-btn" type="button" data-value="hidden" onclick="setSettingsSegmentValue('settingsAvatarStyle','hidden','settingsAvatarStyleSeg')">숨김</button>
+          </div>
+        </div>
+        <div class="settings-seg-row">
+          <div class="settings-seg-label">채팅목록썸네일</div>
+          <div class="settings-seg" id="settingsChatListAvatarSeg">
+            <button class="settings-seg-btn" type="button" data-value="show" onclick="setSettingsSegmentValue('settingsChatListAvatarStyle','show','settingsChatListAvatarSeg')">보기</button>
+            <button class="settings-seg-btn" type="button" data-value="hide" onclick="setSettingsSegmentValue('settingsChatListAvatarStyle','hide','settingsChatListAvatarSeg')">숨기기</button>
+          </div>
+        </div>
       </div>
 
       <div>
