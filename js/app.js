@@ -418,6 +418,9 @@ async function init() {
   }).catch(()=>{});
   await refreshAllCaches({ force: false, showLoading: true, loadingLabel: '로컬 캐시 로드 중...', minVisibleMs: 900 });
   preloadMemoryMetaLight();
+  if (loadingEscapeTimer) clearTimeout(loadingEscapeTimer);
+  clearTimeout(loadingFailsafe);
+  if (typeof setLoadingEscapeVisible === 'function') setLoadingEscapeVisible(false);
   return;
 
   // neutral 이미지 IDB에서 로드 (neutral_a 우선)
