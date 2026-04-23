@@ -1507,7 +1507,7 @@ function applyFontSize(size) {
 }
 
 function getBubbleTypingSpeedPreset() {
-  const speed = String(userProfile?.typingSpeed || 'fast');
+  const speed = String(userProfile?.typingSpeed || 'medium');
   if (speed === 'slow') return 'slow';
   if (speed === 'medium') return 'medium';
   return 'fast';
@@ -1530,7 +1530,7 @@ function saveSettingsUserProfile() {
   const listAvSetting = document.getElementById('settingsChatListAvatarStyle')?.value || 'show';
   userProfile.chatListAvatarVisibility = listAvSetting !== 'hide';
   window._showChatListAvatars = userProfile.chatListAvatarVisibility;
-  userProfile.typingSpeed = document.getElementById('settingsTypingSpeed')?.value || 'fast';
+  userProfile.typingSpeed = document.getElementById('settingsTypingSpeed')?.value || 'medium';
   userProfile.fontSize = parseInt(document.getElementById('settingsFontSize')?.value || 15);
   applyFontSize(userProfile.fontSize);
   saveUserProfile();
