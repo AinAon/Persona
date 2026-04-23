@@ -1170,18 +1170,6 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .loading-spinner { width: 26px; height: 26px; border: 2px solid rgba(255,255,255,.15); border-top-color: rgba(255,255,255,.7); border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .loading-text { font-size: 11px; color: rgba(255,255,255,.4); letter-spacing: .06em; }
-.loading-actions { display: flex; gap: 8px; }
-.loading-escape-btn {
-  display: none;
-  border: 1px solid rgba(255,255,255,.28);
-  background: rgba(255,255,255,.08);
-  color: rgba(255,255,255,.9);
-  border-radius: 999px;
-  padding: 6px 12px;
-  font-size: 11px;
-  cursor: pointer;
-}
-.loading-escape-btn.show { display: inline-flex; align-items: center; }
 
 /* ── 토스트 ── */
 .toast { position: fixed; bottom: 90px; left: 50%; transform: translate(-50%, 8px); background: var(--card); border: 1px solid var(--border2); padding: 6px 14px; border-radius: 100px; font-size: 11px; color: var(--muted); z-index: 500; pointer-events: none; opacity: 0; transition: opacity .2s, transform .2s; white-space: nowrap; }
@@ -1391,12 +1379,9 @@ list-style-position: outside;
 <body>
 
 <div class="loading-overlay hidden" id="loadingOverlay">
-  <div class="loading-icon"><img src="icon.png" alt=""></div>
+  <div class="loading-icon" id="loadingLogo"><img src="icon.png" alt=""></div>
   <div class="loading-spinner"></div>
   <div class="loading-text" id="loadingText">Loading...</div>
-  <div class="loading-actions">
-    <button type="button" class="loading-escape-btn" id="loadingEscapeBtn" onclick="forceRecoverApp()">강제 진입</button>
-  </div>
 </div>
 <div class="toast" id="toast"></div>
 

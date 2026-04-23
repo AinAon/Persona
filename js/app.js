@@ -331,8 +331,54 @@ async function syncPersonasFromWorkerForStartup(wUrl, timeoutMs = 4000) {
 }
 
 const ENABLE_STARTUP_CACHE_PROCEDURES = true;
+let _loadingLogoHoldBound = false;
+
+function bindLoadingLogoHoldToRecover() {
+  if (_loadingLogoHoldBound) return;
+  const logo = document.getElementById('loadingLogo');
+  const overlay = document.getElementById('loadingOverlay');
+  if (!logo || !overlay) return;
+  _loadingLogoHoldBound = true;
+
+  const HOLD_MS = 1000;
+  let timer = null;
+  let activePointerId = null;
+  let triggered = false;
+
+  const clearHold = () => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    activePointerId = null;
+  };
+
+  const startHold = (pointerId = null) => {
+    if (overlay.classList.contains('hidden')) return;
+    triggered = false;
+    clearHold();
+    activePointerId = pointerId;
+    timer = setTimeout(() => {
+      triggered = true;
+      clearHold();
+      if (typeof window.forceRecoverApp === 'function') window.forceRecoverApp();
+    }, HOLD_MS);
+  };
+
+  logo.addEventListener('pointerdown', (e) => {
+    startHold(e.pointerId);
+  });
+  logo.addEventListener('pointerup', () => clearHold());
+  logo.addEventListener('pointercancel', () => clearHold());
+  logo.addEventListener('pointerleave', () => clearHold());
+  logo.addEventListener('pointermove', (e) => {
+    if (activePointerId == null || e.pointerId !== activePointerId) return;
+    if (e.buttons === 0 && !triggered) clearHold();
+  });
+}
 
 async function init() {
+  bindLoadingLogoHoldToRecover();
   let loadingEscapeTimer = null;
   const cachedPersonas = getLocalPersonas();
   const cachedSessionIndex = getLocalSessionIndex();
@@ -341,7 +387,7 @@ async function init() {
   let loadingFailsafe = shouldBlockLoading ? setTimeout(() => {
     try {
       if (typeof setLoadingEscapeVisible === 'function') setLoadingEscapeVisible(true);
-      setLoading(true, '로딩이 지연되고 있습니다. 강제 진입을 눌러 진행하세요.');
+      setLoading(true, '로딩이 지연되고 있습니다. 로고를 1초 이상 길게 눌러 진입하세요.');
     } catch(e) {}
   }, 15000) : null;
   if (shouldBlockLoading) setLoading(true, '캐시 상태 점검 준비...');

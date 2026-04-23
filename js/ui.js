@@ -5785,7 +5785,7 @@ function ensureSettingsMemoryPanel() {
         <button onclick="addPublicMemoryManual()" style="height:78px;min-width:72px;padding:0 12px;border-radius:12px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;font-family:'Pretendard',sans-serif;font-weight:600">Save</button>
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:8px;margin:10px 0 10px">
+    <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:10px 0 10px">
       <button onclick="optimizeMemoryNow()" style="width:100%;height:34px;padding:0 8px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer;font-family:'Pretendard',sans-serif;font-weight:600;white-space:nowrap">메모리최적화</button>
       <button onclick="rebuildMemoryNow()" style="width:100%;height:34px;padding:0 8px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer;font-family:'Pretendard',sans-serif;font-weight:600;white-space:nowrap">메모리재생성</button>
       <button onclick="toggleMemorySelectAll('public_profile','global',true); renderPublicMemoryList();" style="width:100%;height:34px;padding:0 8px;border-radius:10px;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:11px;cursor:pointer;white-space:nowrap">전체선택</button>
