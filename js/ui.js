@@ -726,8 +726,22 @@ function getPersonaModel(sessionOrPersona, maybePersona = null) {
     || 'grok-4.20-non-reasoning-latest';
 }
 
-function sanitizeChatListPreview(text) {
-  const raw = sanitizeTextForUnicodeSafety(text).trim();
+function stripPersonaTagsForPreview(text, session = null) {
+  let out = String(text || '');
+  out = out.replace(/\[emotion:\s*[^\]]+\]/gi, '');
+  const pids = Array.isArray(session?.participantPids) ? session.participantPids : [];
+  for (const pid of pids) {
+    const safePid = String(pid || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (!safePid) continue;
+    const openTag = new RegExp(`\\[${safePid}\\]`, 'gi');
+    const closeTag = new RegExp(`\\[\\/${safePid}\\]`, 'gi');
+    out = out.replace(openTag, '').replace(closeTag, '');
+  }
+  return out;
+}
+
+function sanitizeChatListPreview(text, session = null) {
+  const raw = sanitizeTextForUnicodeSafety(stripPersonaTagsForPreview(text, session)).trim();
   if (/!\[[^\]]*\]\((data:image\/[^)]+|https?:\/\/[^)\s]+)\)/i.test(raw)) {
     return '[이미지]';
   }
@@ -752,8 +766,8 @@ function buildSessionPreviewFallback(session) {
       text = '[이미지]';
     }
   }
-  const built = sanitizeChatListPreview(buildChatPreviewText(text));
-  return built || sanitizeChatListPreview(text) || '';
+  const built = sanitizeChatListPreview(buildChatPreviewText(text), session);
+  return built || sanitizeChatListPreview(text, session) || '';
 }
 
 function shuffleArray(list) {
@@ -2723,7 +2737,7 @@ async function renderChatList() {
     if (myVersion !== _chatListRenderVersion) return;
     const avWidth = showListAvatars ? (pList.length > 0 ? (80 + (pList.length - 1) * 52) : 80) : 0;
 
-    const previewText = s.lastPreview || buildSessionPreviewFallback(s) || '대화를 시작해봐';
+    const previewText = sanitizeChatListPreview(s.lastPreview || buildSessionPreviewFallback(s), s) || '대화를 시작해봐';
     item.innerHTML = `
       <div class="chat-avatars-row" style="width:${avWidth}px;flex-shrink:0;${showListAvatars ? '' : 'display:none;'}">${avEls.join('')}</div>
       <div class="chat-list-info">
@@ -3990,7 +4004,7 @@ function clearImageWorkflowHistory(session) {
   const latestText = typeof latest?.content === 'string'
     ? latest.content
     : (Array.isArray(latest?.content) ? (latest.content.find(c => c?.type === 'text')?.text || '') : '');
-  session.lastPreview = sanitizeChatListPreview(buildChatPreviewText(latestText));
+  session.lastPreview = sanitizeChatListPreview(buildChatPreviewText(latestText), session);
   session.updatedAt = Date.now();
   renderChatArea().catch(() => {});
   renderChatList();
@@ -4685,7 +4699,7 @@ async function sendMessage() {
 
     const parsed = parseResponse(reply, pList);
     const firstContent = parsed[0]?.content || '';
-    currentSession.lastPreview = sanitizeChatListPreview(buildChatPreviewText(firstContent));
+    currentSession.lastPreview = sanitizeChatListPreview(buildChatPreviewText(firstContent), currentSession);
     currentSession.updatedAt = Date.now();
 
     // 사용자가 해당 채팅방을 그대로 보고 있다면 화면에 즉시 렌더링
