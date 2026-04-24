@@ -1224,11 +1224,11 @@ window.addEventListener('load', () => {
 });
 
 let _chatListRefreshTimer = null;
-function scheduleChatListRefresh(delay = 120) {
+function scheduleChatListRefresh(delay = 120, force = false) {
   if (_chatListRefreshTimer) clearTimeout(_chatListRefreshTimer);
   _chatListRefreshTimer = setTimeout(() => {
     _chatListRefreshTimer = null;
-    renderChatList().catch(() => {});
+    renderChatList({ force }).catch(() => {});
   }, delay);
 }
 
@@ -1376,7 +1376,7 @@ async function runActiveChatWarmup(sessionId) {
 
 window.addEventListener('persona-cache-updated', () => {
   if (_startupWarmupRunning || _globalWarmupRunning) return;
-  scheduleChatListRefresh(100);
+  scheduleChatListRefresh(100, true);
   scheduleChatAreaRefresh(110);
 });
 
@@ -2710,7 +2710,14 @@ function _showDemoSlide(area) {
 
 let _chatListRenderVersion = 0;
 
-async function renderChatList() {
+async function getChatListNeutralThumb(p) {
+  if (!p?.pid) return '';
+  const circle = await getEmotionCircleThumb(p.pid, 'neutral', '', 80).catch(() => null);
+  return circle || p.neutral_thumb || '';
+}
+
+async function renderChatList(options = {}) {
+  const force = !!options?.force;
   const list = document.getElementById('chatList');
   const empty = document.getElementById('chatEmpty');
   const signature = JSON.stringify({
@@ -2730,13 +2737,14 @@ async function renderChatList() {
           pid,
           name: p?.name || '',
           image: p?.image || '',
+          neutral_thumb: p?.neutral_thumb || '',
           hue: Number(p?.hue || 0),
           updatedAt: Number(p?.updatedAt || 0)
         };
       })
     }))
   });
-  if (list && list.children.length && signature === _lastChatListSignature) return;
+  if (!force && list && list.children.length && signature === _lastChatListSignature) return;
   _lastChatListSignature = signature;
   const myVersion = ++_chatListRenderVersion;
   list.querySelectorAll('.chat-list-wrap').forEach(e => e.remove());
@@ -2782,8 +2790,7 @@ async function renderChatList() {
     item.onclick = () => openChat(s.id);
 
     const avEls = showListAvatars ? await Promise.all(pList.map(async p => {
-      const neutral = await getNeutralImageThumb(p.pid, 80);
-      const imgSrc = neutral || p.image;
+      const imgSrc = await getChatListNeutralThumb(p);
       const imgHTML = imgSrc ? `<img src="${imgSrc}">` : defaultAvatar(p.hue);
       return `<div class="chat-av-item" style="background:hsl(${p.hue},22%,14%);border-color:hsl(${p.hue},30%,26%)">${imgHTML}</div>`;
     })) : [];
