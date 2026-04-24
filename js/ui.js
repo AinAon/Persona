@@ -361,10 +361,6 @@ function enhanceRenderedMessage(container) {
     const userMsg = group.querySelector('.user-msg');
     const userActions = group.querySelector('.msg-meta-right .msg-actions');
     if (userMsg && userActions && !userActions.querySelector('.user-copy-btn')) {
-      const ttsBtn = createTtsButton(userMsg.innerText || '');
-      ttsBtn.classList.add('user-tts-btn');
-      userActions.appendChild(ttsBtn);
-
       const btn = document.createElement('button');
       btn.className = 'copy-btn user-copy-btn';
       btn.type = 'button';
@@ -3779,9 +3775,15 @@ async function speakTextWithServerTts(rawText, btn = null, opts = {}) {
     emotionStrength: cfg.emotionStrength || 'medium',
     format: 'mp3',
   };
+  const localCacheKey = await makeLocalTtsCacheKey(payload);
 
   _ttsCurrentBtn = btn || null;
   if (_ttsCurrentBtn) _ttsCurrentBtn.classList.add('speaking');
+  const cachedBlob = await getLocalTtsAudioBlob(localCacheKey);
+  if (cachedBlob) {
+    await playTtsBlob(cachedBlob);
+    return;
+  }
   const res = await fetch(`${wUrl}/tts`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -3795,6 +3797,43 @@ async function speakTextWithServerTts(rawText, btn = null, opts = {}) {
   }
 
   const blob = await res.blob();
+  await idbSet(localCacheKey, blob).catch(() => {});
+  await playTtsBlob(blob);
+}
+
+async function sha256HexBrowser(input = '') {
+  const data = new TextEncoder().encode(String(input || ''));
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function makeLocalTtsCacheKey(payload = {}) {
+  const basis = JSON.stringify({
+    v: 1,
+    sessionId: String(payload.sessionId || ''),
+    text: String(payload.text || ''),
+    model: String(payload.model || ''),
+    voice: String(payload.voice || ''),
+    prompt: String(payload.prompt || ''),
+    tone: String(payload.tone || ''),
+    emotion: String(payload.emotion || ''),
+    emotionEnabled: !!payload.emotionEnabled,
+    emotionStrength: String(payload.emotionStrength || ''),
+    format: String(payload.format || 'mp3'),
+    language: 'Korean',
+  });
+  return `tts_audio_${await sha256HexBrowser(basis)}`;
+}
+
+async function getLocalTtsAudioBlob(key = '') {
+  if (!key) return null;
+  const cached = await idbGet(key).catch(() => null);
+  if (cached instanceof Blob) return cached;
+  if (cached instanceof ArrayBuffer) return new Blob([cached], { type: 'audio/mpeg' });
+  return null;
+}
+
+async function playTtsBlob(blob) {
   const audioUrl = URL.createObjectURL(blob);
   const audio = new Audio(audioUrl);
   _ttsCurrentAudio = audio;
@@ -3805,6 +3844,12 @@ async function speakTextWithServerTts(rawText, btn = null, opts = {}) {
     showToast('TTS 재생에 실패했습니다.');
   };
   await audio.play();
+}
+
+async function clearTtsAudioCache() {
+  if (!confirm('로컬 보이스 캐시를 전부 삭제할까?')) return;
+  const deleted = await idbDelByPrefix('tts_audio_').catch(() => 0);
+  showToast(`보이스 캐시 삭제됨: ${deleted || 0}개`);
 }
 
 function createTtsButton(text = '', opts = {}) {
