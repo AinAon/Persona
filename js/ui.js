@@ -3273,6 +3273,15 @@ async function openChat(id) {
   runActiveChatWarmup(id).catch(() => {});
   const openToken = ++_chatOpenToken;
   const s = getActiveSession(); if (!s) return;
+  if (!s._loaded) {
+    try {
+      const cached = getLocalSession(id);
+      if (Array.isArray(cached)) {
+        s.history = cached;
+        s._loaded = true;
+      }
+    } catch(e) {}
+  }
   const pList = getSessionPersonas(s);
   const area = document.getElementById('chatArea');
   const empty = document.getElementById('chatEmpty2');
@@ -3326,45 +3335,19 @@ async function openChat(id) {
     if (effectiveModel) modelEl.value = effectiveModel;
   }
 
-  await Promise.race([
-    Promise.all(pList.map(p => getNeutralImageThumb(p.pid, 42))),
-    new Promise(r => setTimeout(r, 2000))
-  ]);
-  if (openToken !== _chatOpenToken || activeChatId !== id) return;
-  if (!s._demo) {
+  renderChatArea();
+  if (s._demo) return;
+  if (!s._loaded) {
     await loadSession(id);
     if (openToken !== _chatOpenToken || activeChatId !== id) return;
-    if (typeof refreshCurrentChatIfStale === 'function') {
-      await refreshCurrentChatIfStale(id).catch(() => {});
-      if (openToken !== _chatOpenToken || activeChatId !== id) return;
-    }
     renderChatArea();
-    return;
   }
-  renderChatArea();
-
-  // _loaded 없으면 무조건 로드
-  if (!s._loaded) {
-    loadSession(id);
-    return;
-  }
-
-  // KV updatedAt 비교 후 로컬보다 최신이면 강제 리프레시
-  if (!s._demo && typeof refreshCurrentChatIfStale === 'function') {
-    refreshCurrentChatIfStale(id).catch(() => {});
-    return;
-  }
-  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-  if (wUrl && !s._demo) {
-    fetch(wUrl + '/session/' + id)
-      .then(r => r.json())
-      .then(data => {
-        const kvUpdatedAt = data.session?.updatedAt;
-        if (kvUpdatedAt && kvUpdatedAt > (s.updatedAt || 0)) {
-          loadSession(id); // 최신 내용으로 교체
-        }
-      })
-      .catch(() => {});
+  if (typeof refreshCurrentChatIfStale === 'function') {
+    refreshCurrentChatIfStale(id).then((changed) => {
+      if (!changed) return;
+      if (openToken !== _chatOpenToken || activeChatId !== id) return;
+      renderChatArea();
+    }).catch(() => {});
   }
 }
 

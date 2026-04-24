@@ -135,6 +135,7 @@ function applyPersonaTtsDefaults(list = personas) {
   const target = Array.isArray(list) ? list : [];
   for (const p of target) {
     if (!p || typeof p !== 'object') continue;
+    if (String(p.ttsVoice || '').trim()) continue;
     const name = String(p.name || '').trim();
     const pid = String(p.pid || '').trim().toLowerCase();
     if (name === 'Riley' || pid === 'p_riley' || pid === 'riley') {
@@ -558,6 +559,10 @@ window.forceRecoverApp = async function() {
     setLoading(false);
   }
 };
+try {
+  setLoading(true, '로딩 준비 중...');
+  if (typeof setLoadingEscapeVisible === 'function') setLoadingEscapeVisible(false);
+} catch(e) {}
 init().catch((e) => {
   console.error('init failed:', e);
   try { setLoading(false); } catch(err) {}
