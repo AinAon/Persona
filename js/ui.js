@@ -3245,7 +3245,8 @@ function closeNewChatModal() { document.getElementById('newChatModal').classList
 async function renderSelectGrid() {
   const grid = document.getElementById('selectGrid');
   grid.innerHTML = '';
-  for (const p of personas) {
+  const available = (personas || []).filter(p => !p?.hidden);
+  for (const p of available) {
     const card = document.createElement('div');
     card.className = 'select-card'; card.style.position = 'relative';
     card.onclick = () => toggleSelectPid(p.pid, card);
@@ -5400,7 +5401,7 @@ function closeInviteModal() { document.getElementById('inviteModal').classList.r
 async function renderInviteGrid(s) {
   const grid = document.getElementById('inviteGrid');
   grid.innerHTML = '';
-  const available = personas.filter(p => !(s.participantPids||[]).includes(p.pid));
+  const available = (personas || []).filter(p => !p?.hidden && !(s.participantPids||[]).includes(p.pid));
   for (const p of available) {
     const card = document.createElement('div');
     card.className = 'select-card'; card.style.position = 'relative';
