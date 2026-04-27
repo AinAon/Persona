@@ -4555,6 +4555,13 @@ async function sendMessage() {
 
   // 백그라운드 처리를 위한 분리된 비동기 함수
   const processApiAndRender = async () => {
+    const CHAT_REQUEST_TIMEOUT_MS = 65000;
+    const fetchWithTimeout = async (url, options = {}, timeoutMs = CHAT_REQUEST_TIMEOUT_MS) => {
+      return await Promise.race([
+        fetch(url, options),
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`request timeout (${timeoutMs}ms)`)), timeoutMs))
+      ]);
+    };
     let reply = '';
     let generatedImageUrl = '';
     if (session._demo) {
@@ -4630,7 +4637,7 @@ async function sendMessage() {
               };
               let rawReply = '';
               {
-                const res = await fetch(wUrl + '/chat', {
+                const res = await fetchWithTimeout(wUrl + '/chat', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify(payload)
@@ -4716,12 +4723,12 @@ async function sendMessage() {
         }
 
        // 브라우저 타임아웃 없음 (Worker 30s 한계 주의)
-        const res = await fetch(wUrl + '/chat', {
+        const res = await fetchWithTimeout(wUrl + '/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(reqBody),
           signal: _chatGeneration.controller.signal
-        });
+        }, CHAT_REQUEST_TIMEOUT_MS);
         const data = await res.json();
         if (data.result !== 'success') {
           const pid0 = session.participantPids?.[0] || 'p';
