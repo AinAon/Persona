@@ -12,6 +12,7 @@ import {
   setMemoryText,
   upsertMemory,
 } from "./memory";
+import { getAveryWorklogSnapshot, reconcileAveryWorklog } from "./avery_worklog";
 import { getRileyWealthSnapshot, reconcileRileyWealth } from "./riley_wealth";
 
 type SessionMeta = {
@@ -841,6 +842,21 @@ export async function handleApiRoute(
 
   if (url.pathname === "/riley/wealth/reconcile" && request.method === "POST") {
     const result = await reconcileRileyWealth(env);
+    return Response.json(result, { headers: { ...cors, "Cache-Control": "no-store" } });
+  }
+
+  if (url.pathname === "/avery/worklog" && request.method === "GET") {
+    const tail = Math.max(1, Math.min(200, Number(url.searchParams.get("tail") || 30)));
+    const snapshot = await getAveryWorklogSnapshot(env, tail);
+    return Response.json({
+      ok: true,
+      state: snapshot.state,
+      events: snapshot.events,
+    }, { headers: { ...cors, "Cache-Control": "no-store" } });
+  }
+
+  if (url.pathname === "/avery/worklog/reconcile" && request.method === "POST") {
+    const result = await reconcileAveryWorklog(env);
     return Response.json(result, { headers: { ...cors, "Cache-Control": "no-store" } });
   }
 

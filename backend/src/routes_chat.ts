@@ -4,6 +4,13 @@ import { generateOpenAIImage, generateOpenAIText, streamOpenAIText } from "./mod
 import { generateGrokImage, generateGrokText, streamGrokText } from "./model_grok";
 import { buildMemorySystemPrompt } from "./memory";
 import {
+  appendAveryWorklogEvent,
+  buildAverySystemPrompt,
+  getAveryWorklogSnapshot,
+  isAveryParticipant,
+  isWorklogMutationText,
+} from "./avery_worklog";
+import {
   appendRileyWealthEvent,
   buildRileySystemPrompt,
   extractLatestUserText,
@@ -44,6 +51,13 @@ const RILEY_NUMERIC_PRIORITY_GUARD = [
   "- For finance numbers, always prioritize Riley wealth state snapshot over memory text.",
   "- Use private/public memory only as qualitative context, not numeric source of truth.",
   "- If memory numbers conflict with state numbers, explicitly follow state numbers.",
+].join(" ");
+
+const AVERY_WORKLOG_GUARD = [
+  "Avery worklog policy:",
+  "- Treat Avery worklog snapshot as persistent source for tasks/errors/solutions/reminders.",
+  "- When user asks to record/update/remove/complete work items, respond consistently with snapshot.",
+  "- If uncertain, ask one short clarification before destructive removal.",
 ].join(" ");
 
 type ChatBody = {
@@ -89,12 +103,17 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
 
   const isImageReq = IMAGE_MODELS.includes(model) || !!prompt;
   const inRileyChat = isRileyParticipant(participant_pids || []);
+  const inAveryChat = isAveryParticipant(participant_pids || []);
   const latestUserText = extractLatestUserText(messages);
   const shouldWriteRileyEvent = inRileyChat && isWealthMutationText(latestUserText);
+  const shouldWriteAveryEvent = inAveryChat && isWorklogMutationText(latestUserText);
 
   try {
     const rileySnapshot = (!isImageReq && inRileyChat)
       ? await getRileyWealthSnapshot(env, 10)
+      : null;
+    const averySnapshot = (!isImageReq && inAveryChat)
+      ? await getAveryWorklogSnapshot(env, 20)
       : null;
     const memPrompt = isImageReq
       ? ""
@@ -107,14 +126,18 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
           { role: "system", content: ANTI_HALLUCINATION_GUARD },
           { role: "system", content: RESPONSE_VARIANCE_PROMPT },
           ...(inRileyChat ? [{ role: "system", content: RILEY_NUMERIC_PRIORITY_GUARD }] : []),
+          ...(inAveryChat ? [{ role: "system", content: AVERY_WORKLOG_GUARD }] : []),
           ...(rileySnapshot ? [{ role: "system", content: buildRileySystemPrompt(rileySnapshot.state) }] : []),
+          ...(averySnapshot ? [{ role: "system", content: buildAverySystemPrompt(averySnapshot.state) }] : []),
           { role: "system", content: memPrompt },
           ...messages
         ]
-      : ((!isImageReq && rileySnapshot)
+      : ((!isImageReq && (rileySnapshot || averySnapshot))
           ? [
               ...(inRileyChat ? [{ role: "system", content: RILEY_NUMERIC_PRIORITY_GUARD }] : []),
-              { role: "system", content: buildRileySystemPrompt(rileySnapshot.state) },
+              ...(inAveryChat ? [{ role: "system", content: AVERY_WORKLOG_GUARD }] : []),
+              ...(rileySnapshot ? [{ role: "system", content: buildRileySystemPrompt(rileySnapshot.state) }] : []),
+              ...(averySnapshot ? [{ role: "system", content: buildAverySystemPrompt(averySnapshot.state) }] : []),
               ...messages,
             ]
           : messages);
@@ -202,6 +225,9 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
             if (shouldWriteRileyEvent) {
               await appendRileyWealthEvent(env, latestUserText);
             }
+            if (shouldWriteAveryEvent) {
+              await appendAveryWorklogEvent(env, latestUserText);
+            }
             send({ type: "done", reply });
           } catch (err: any) {
             send({ type: "error", error: err?.message || "stream error" });
@@ -246,6 +272,9 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
 
     if (shouldWriteRileyEvent) {
       await appendRileyWealthEvent(env, latestUserText);
+    }
+    if (shouldWriteAveryEvent) {
+      await appendAveryWorklogEvent(env, latestUserText);
     }
 
     if (imageUrlOut) {
