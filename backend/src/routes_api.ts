@@ -301,6 +301,67 @@ async function deleteR2ByPrefix(env: Env, prefix: string, batchMax = 5000): Prom
   return keys.length;
 }
 
+function buildMemoryBackupKey(tag: string): string {
+  const now = new Date();
+  const y = now.getUTCFullYear();
+  const m = String(now.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(now.getUTCDate()).padStart(2, "0");
+  const ts = now.toISOString().replace(/[:.]/g, "-");
+  const rand = Math.random().toString(36).slice(2, 8);
+  return `memory_backups/${y}-${m}-${d}/${ts}_${tag}_${rand}.json`;
+}
+
+async function saveMemoryBackup(env: Env, tag: string, payload: unknown): Promise<string | null> {
+  try {
+    const key = buildMemoryBackupKey(tag);
+    await env.R2.put(
+      key,
+      JSON.stringify(payload),
+      { httpMetadata: { contentType: "application/json; charset=utf-8" } },
+    );
+    return key;
+  } catch {
+    return null;
+  }
+}
+
+async function findMemoryItemById(
+  env: Env,
+  scope: "public_profile" | "private_profile",
+  owner: string,
+  id: string,
+): Promise<unknown | null> {
+  let cursor = "";
+  for (let i = 0; i < 50; i++) {
+    const page = await listMemories(env, scope, owner, 200, cursor);
+    const hit = (page.items || []).find((x) => String((x as any)?.id || "") === id);
+    if (hit) return hit;
+    if (!page.nextCursor) break;
+    cursor = page.nextCursor;
+  }
+  return null;
+}
+
+async function listMemoriesForBackup(
+  env: Env,
+  scope: "public_profile" | "private_profile",
+  owner: string,
+  maxItems = 2000,
+): Promise<{ items: unknown[]; truncated: boolean }> {
+  const out: unknown[] = [];
+  let cursor = "";
+  for (;;) {
+    const page = await listMemories(env, scope, owner, 200, cursor);
+    for (const item of (page.items || [])) {
+      out.push(item);
+      if (out.length >= maxItems) return { items: out, truncated: true };
+    }
+    if (!page.nextCursor) break;
+    cursor = page.nextCursor;
+  }
+  return { items: out, truncated: false };
+}
+
 async function getRecoverableSessions(env: Env): Promise<RecoverableSessionMeta[]> {
   const activeIndex = await getSessionIndex(env);
   const activeIds = new Set(activeIndex.map((s) => String(s.id || "")));
@@ -727,8 +788,20 @@ export async function handleApiRoute(
     const owner = normalizeScopeOwner(scope, body.owner || null);
     const id = String(body.id || "").trim();
     if (!id) return Response.json({ error: "id required" }, { status: 400, headers: cors });
+    const before = await findMemoryItemById(env, scope, owner, id);
+    const backupKey = before
+      ? await saveMemoryBackup(env, "delete", {
+          op: "memory/delete",
+          at: new Date().toISOString(),
+          scope,
+          owner,
+          id,
+          force: !!body.force,
+          before,
+        })
+      : null;
     const ok = await deleteMemory(env, scope, owner, id, !!body.force);
-    return Response.json({ ok }, { headers: cors });
+    return Response.json({ ok, backupKey }, { headers: cors });
   }
 
   if (url.pathname === "/memory/delete-batch" && request.method === "POST") {
@@ -738,12 +811,28 @@ export async function handleApiRoute(
     const owner = normalizeScopeOwner(scope, body.owner || null);
     const ids = Array.isArray(body.ids) ? body.ids.map((x) => String(x || "").trim()).filter(Boolean) : [];
     if (!ids.length) return Response.json({ ok: false, deleted: 0, error: "ids required" }, { status: 400, headers: cors });
+    const beforeItems: unknown[] = [];
+    for (const id of ids) {
+      const hit = await findMemoryItemById(env, scope, owner, id);
+      if (hit) beforeItems.push(hit);
+    }
+    const backupKey = beforeItems.length
+      ? await saveMemoryBackup(env, "delete_batch", {
+          op: "memory/delete-batch",
+          at: new Date().toISOString(),
+          scope,
+          owner,
+          force: !!body.force,
+          ids,
+          beforeItems,
+        })
+      : null;
     let deleted = 0;
     for (const id of ids) {
       const ok = await deleteMemory(env, scope, owner, id, !!body.force);
       if (ok) deleted++;
     }
-    return Response.json({ ok: true, deleted, requested: ids.length }, { headers: cors });
+    return Response.json({ ok: true, deleted, requested: ids.length, backupKey }, { headers: cors });
   }
 
   if (url.pathname === "/memory/lock" && request.method === "POST") {
@@ -766,8 +855,20 @@ export async function handleApiRoute(
     const text = String(body.text || "").trim();
     if (!id) return Response.json({ error: "id required" }, { status: 400, headers: cors });
     if (!text) return Response.json({ error: "text required" }, { status: 400, headers: cors });
+    const before = await findMemoryItemById(env, scope, owner, id);
+    const backupKey = before
+      ? await saveMemoryBackup(env, "update", {
+          op: "memory/update",
+          at: new Date().toISOString(),
+          scope,
+          owner,
+          id,
+          before,
+          patch: { text },
+        })
+      : null;
     const item = await setMemoryText(env, scope, owner, id, text);
-    return Response.json({ ok: !!item, item }, { headers: cors });
+    return Response.json({ ok: !!item, item, backupKey }, { headers: cors });
   }
 
   if (url.pathname === "/memory/purge" && request.method === "POST") {
@@ -777,6 +878,25 @@ export async function handleApiRoute(
     const deletedPrefixes: string[] = [];
 
     if (purgeAll) {
+      const backupKvPrefixes = [
+        "memory:item:",
+        "memory:index:",
+        "memory:fp:",
+        "memory:meta:session:",
+        "memory:meta:global",
+      ];
+      const backupR2Prefix = "memory/";
+      const kvKeyBuckets: Record<string, string[]> = {};
+      for (const p of backupKvPrefixes) kvKeyBuckets[p] = await listKvByPrefix(env, p, 5000);
+      const r2Keys = await listR2ByPrefix(env, backupR2Prefix, 5000);
+      const backupKey = await saveMemoryBackup(env, "purge_all", {
+        op: "memory/purge",
+        at: new Date().toISOString(),
+        purgeAll: true,
+        kvKeyBuckets,
+        r2Keys,
+        note: "Key-level backup before purge_all. Use keys to restore manually if needed.",
+      });
       const prefixes = [
         "memory:item:",
         "memory:index:",
@@ -797,12 +917,22 @@ export async function handleApiRoute(
         deletedPrefixes.push(`R2:memory/* (${r2Deleted})`);
         deleted += r2Deleted;
       }
-      return Response.json({ ok: true, deleted, deletedPrefixes }, { headers: cors });
+      return Response.json({ ok: true, deleted, deletedPrefixes, backupKey }, { headers: cors });
     }
 
     const scope = parseScope(body.scope || null);
     if (!scope) return Response.json({ error: "invalid scope" }, { status: 400, headers: cors });
     const owner = normalizeScopeOwner(scope, body.owner || null);
+    const beforeSnapshot = await listMemoriesForBackup(env, scope, owner, 2000);
+    const backupKey = await saveMemoryBackup(env, "purge_scope", {
+      op: "memory/purge",
+      at: new Date().toISOString(),
+      purgeAll: false,
+      scope,
+      owner,
+      beforeItems: beforeSnapshot.items,
+      truncated: beforeSnapshot.truncated,
+    });
     const base = `${scope}:${owner}`;
 
     const targetPrefixes = [
@@ -827,7 +957,7 @@ export async function handleApiRoute(
       deleted += r2Deleted;
     }
 
-    return Response.json({ ok: true, deleted, deletedPrefixes }, { headers: cors });
+    return Response.json({ ok: true, deleted, deletedPrefixes, backupKey }, { headers: cors });
   }
 
   if (url.pathname === "/riley/wealth" && request.method === "GET") {
