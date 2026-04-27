@@ -516,6 +516,10 @@ body {
 .edit-cancel-btn:hover { color: var(--text); border-color: var(--muted2); }
 .edit-delete-btn { flex: 1; padding: 13px; background: hsl(0,20%,10%); color: hsl(0,60%,60%); border: 1px solid hsl(0,30%,22%); border-radius: 12px; font-family: 'Pretendard', sans-serif; font-size: 14px; cursor: pointer; transition: all .15s; }
 .edit-delete-btn:hover { background: hsl(0,25%,14%); }
+.persona-title-icon.danger,
+.chat-restore-icon-btn.danger { background: var(--title-btn-danger-bg); color: var(--title-btn-danger-text); }
+.persona-title-icon.danger:hover,
+.chat-restore-icon-btn.danger:hover { background: var(--title-btn-danger-bg-hover); }
 
 /* 에디터 아바타 */
 .edit-avatar-wrap { width: 90px; aspect-ratio: 2/3; border-radius: 12px; overflow: hidden; background: var(--card); border: 1px solid var(--border2); cursor: pointer; position: relative; flex-shrink: 0; }
@@ -1680,6 +1684,9 @@ list-style-position: outside;
       </svg>
     </button>
     <span class="persona-edit-title" id="editTitle">페르소나 편집</span>
+    <button class="persona-title-icon danger" id="editDeleteTitleBtn" onclick="deletePersonaFromEdit()" title="페르소나 삭제" aria-label="페르소나 삭제" style="display:none">
+      <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+    </button>
   </div>
   <div class="persona-edit-body" id="editBody"></div>
   <div class="persona-edit-footer" id="editFooter"></div>

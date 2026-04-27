@@ -2059,10 +2059,10 @@ function createNewPersona() {
 
 function renderEditFooter(isExisting) {
   const footer = document.getElementById('editFooter');
-  const p = getPersona(editingPid);
+  const deleteBtn = document.getElementById('editDeleteTitleBtn');
+  if (deleteBtn) deleteBtn.style.display = isExisting ? 'inline-flex' : 'none';
   if (isExisting) {
     footer.innerHTML = `
-      <button class="edit-delete-btn" onclick="deletePersonaFromEdit()">삭제</button>
       <button class="edit-cancel-btn" onclick="cancelPersonaEdit()">취소</button>
       <button class="edit-save-btn" onclick="savePersonaEdit()">저장</button>`;
   } else {
@@ -2080,6 +2080,7 @@ function cancelPersonaEdit() {
 function deletePersonaFromEdit() {
   if (personas.length <= 1) { showToast('마지막 페르소나는 삭제할 수 없어'); return; }
   if (!confirm('이 페르소나를 삭제할까?')) return;
+  if (!confirm('정말 삭제할까? 이 작업은 되돌릴 수 없어.')) return;
   personas = personas.filter(p => p.pid !== editingPid);
   savePersonas(); renderPersonaGrid(); goMain();
 }
