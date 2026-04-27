@@ -1012,6 +1012,10 @@ function render(){
         render();
         await loadImagesFromIDB({ onlyPid: pid, merge: true }).catch(() => {});
         render();
+        showStatus(`Syncing ${pid} from R2...`);
+        await reloadPersonaFromR2(pid, false).catch(() => {});
+        await loadImagesFromIDB({ onlyPid: pid, merge: true }).catch(() => {});
+        render();
         showStatus(`Selected ${pid} (IDB cache)`);
       };
     });
@@ -1578,11 +1582,15 @@ async function generateFourEmotionSet(pid, defs, opts = {}) {
 async function generateFourEmotionTest(){
   const pid = state.activePid;
   if (!pid) return;
+  const happySlot = getNextAvailableSlots(pid, 'happy', 1)[0] || 'a';
+  const sadSlot = getNextAvailableSlots(pid, 'sad', 1)[0] || 'a';
+  const angrySlot = getNextAvailableSlots(pid, 'angry', 1)[0] || 'a';
+  const surpriseSlot = getNextAvailableSlots(pid, 'surprise', 1)[0] || 'a';
   const defs = [
-    { eid: 'happy', slot: 'a', prompt: EMOTION_PROMPTS.happy || '행복한 표정' },
-    { eid: 'sad', slot: 'a', prompt: EMOTION_PROMPTS.sad || '슬픈 표정' },
-    { eid: 'angry', slot: 'a', prompt: EMOTION_PROMPTS.angry || '분노한 표정' },
-    { eid: 'surprise', slot: 'a', prompt: EMOTION_PROMPTS.surprise || '놀란 표정' },
+    { eid: 'happy', slot: happySlot, prompt: EMOTION_PROMPTS.happy || '행복한 표정' },
+    { eid: 'sad', slot: sadSlot, prompt: EMOTION_PROMPTS.sad || '슬픈 표정' },
+    { eid: 'angry', slot: angrySlot, prompt: EMOTION_PROMPTS.angry || '분노한 표정' },
+    { eid: 'surprise', slot: surpriseSlot, prompt: EMOTION_PROMPTS.surprise || '놀란 표정' },
   ];
   return generateFourEmotionSet(pid, defs, { label: 'Free Emo', model: DEFAULT_IMAGE_MODEL });
 }
@@ -1979,8 +1987,14 @@ function init(){
       const hasRequested = requestedPid && state.personas.some(p => p.pid === requestedPid);
       state.activePid = hasRequested ? requestedPid : state.personas[0].pid;
     }
+    showStatus('Loading all local caches...');
+    await loadImagesFromIDB({ merge: false }).catch(() => {});
     render();
-    await loadImagesFromIDB(state.activePid ? { onlyPid: state.activePid, merge: true } : {}).catch(() => {});
+    if (state.activePid) {
+      showStatus(`Syncing ${state.activePid} from R2...`);
+      await reloadPersonaFromR2(state.activePid, false).catch(() => {});
+      await loadImagesFromIDB({ onlyPid: state.activePid, merge: true }).catch(() => {});
+    }
     render();
     resetProgress();
   })();

@@ -3381,6 +3381,7 @@ async function renderChatArea() {
   }, 2600);
 
   const fragment = document.createDocumentFragment();
+  let shouldSavePatchedSuffix = false;
   for (const msg of session.history) {
     const el = document.createElement('div');
     if (msg.role === 'user') {
@@ -3391,7 +3392,9 @@ async function renderChatArea() {
       const renderPersonas = msg.personaSnapshot
         ? msg.personaSnapshot.map(snap => getPersona(snap.pid) || { pid:snap.pid, name:snap.name, image:null, hue:0, _ghost:true })
         : pList;
-      el.innerHTML = await renderAIResponseHTML(msg.content, renderPersonas, msg._suffixes || {});
+      if (!msg._suffixes || typeof msg._suffixes !== 'object') msg._suffixes = {};
+      el.innerHTML = await renderAIResponseHTML(msg.content, renderPersonas, msg._suffixes);
+      if (renderAIResponseHTML._lastSuffixPatched) shouldSavePatchedSuffix = true;
     }
     if (activeChatId !== renderSessionId) return;
     if (el.firstElementChild) {
@@ -3410,6 +3413,11 @@ async function renderChatArea() {
   layoutHorizontalMasonryRows(area);
   requestAnimationFrame(() => { stickChatToBottom(area); });
   if (_pendingArchiveFocus) setTimeout(() => focusPendingArchiveMessage(), 40);
+  if (shouldSavePatchedSuffix && !session._demo) {
+    session.updatedAt = Date.now();
+    saveSession(session.id);
+    saveIndex();
+  }
 }
 
 function buildEmotionCard(p, emotion, letter, dataUrl) {
@@ -3458,6 +3466,7 @@ function copyBubble(btn, text, encoded = false) {
 }
 
 async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = null, forceOneToOne = null) {
+  let suffixPatched = false;
   const segments = parseResponse(rawText, pList);
   const isOneToOne = forceOneToOne == null ? (pList || []).length <= 1 : !!forceOneToOne;
   let html = '';
@@ -3472,12 +3481,32 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
     const circleDisplayPx = 80;
     let baseImg = avatarHTML(p);
     let thumbSrc = p.neutral_thumb || p.image || '';
-    const suffix = suffixes[`${p.pid}:${seg.emotion}`] || '';
-    const dataUrl = avStyle !== 'circle'
+    const suffixKey = `${p.pid}:${seg.emotion}`;
+    let suffix = suffixes[suffixKey] || '';
+    let dataUrl = avStyle !== 'circle'
       ? (suffix
         ? await getEmotionImageSuffixed(p.pid, seg.emotion, suffix, rectDisplayPx)
         : await getEmotionImage(p.pid, seg.emotion, rectDisplayPx))
       : null;
+    if (!dataUrl) {
+      const fallbackSuffix = await resolveFallbackSuffixForMissingEmotion(p.pid, seg.emotion, suffix);
+      if (fallbackSuffix !== null && fallbackSuffix !== suffix) {
+        suffix = fallbackSuffix;
+        suffixes[suffixKey] = fallbackSuffix;
+        suffixPatched = true;
+        dataUrl = avStyle !== 'circle'
+          ? (suffix
+            ? await getEmotionImageSuffixed(p.pid, seg.emotion, suffix, rectDisplayPx)
+            : await getEmotionImage(p.pid, seg.emotion, rectDisplayPx))
+          : null;
+      }
+    }
+    if (!dataUrl) {
+      suffix = '';
+      suffixes[suffixKey] = '';
+      suffixPatched = true;
+      dataUrl = await getEmotionImage(p.pid, 'neutral', rectDisplayPx);
+    }
     const circleThumb = await getPersonaCircleThumb(p.pid, seg.emotion, suffix, circleDisplayPx);
     
     if (dataUrl) { 
@@ -3545,6 +3574,7 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
       </div>
     </div>`;
   }
+  renderAIResponseHTML._lastSuffixPatched = suffixPatched;
   return `<div class="msg-group ai-msgs">${html}</div>`;
 }
 
@@ -3606,6 +3636,18 @@ function clampEmotionForPid(parsedEmotion, pid, allowedEmotionMap = null) {
   if (allowed.includes(safe)) return safe;
   if (allowed.includes('neutral')) return 'neutral';
   return String(allowed[0] || 'neutral');
+}
+
+async function resolveFallbackSuffixForMissingEmotion(pid, emotion, requestedSuffix = '') {
+  try {
+    const keys = await getImageList(pid);
+    const info = getSuffixesForEmotion(keys, pid, emotion);
+    const req = String(requestedSuffix || '').toLowerCase();
+    if (req && Array.isArray(info?.suffixed) && info.suffixed.includes(req)) return req;
+    if (Array.isArray(info?.suffixed) && info.suffixed.length > 0) return info.suffixed[0];
+    if (info?.hasBase) return '';
+  } catch {}
+  return null;
 }
 
 async function buildPersonaAvailableEmotionMap(pList) {
