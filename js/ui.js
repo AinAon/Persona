@@ -3821,6 +3821,10 @@ function normalizeTtsReadableText(rawText) {
     .replace(/[_=]{2,}/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+  text = text.replace(/(-?\d[\d,]*)(년|월|일|시|분|초)/g, (_, n, unit) => {
+    const spoken = toKoreanSinoInteger(n);
+    return `${spoken || n}${unit}`;
+  });
   text = text.replace(/\d[\d,]*/g, (m) => toKoreanNumberForTtsToken(m));
   text = text.replace(/\s+/g, ' ').trim();
   return text;
