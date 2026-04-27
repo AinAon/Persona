@@ -3809,6 +3809,32 @@ function toKoreanNumberForTtsToken(token) {
   return toKoreanSinoInteger(n) || token;
 }
 
+function toKoreanPhoneDigits(token) {
+  const digits = String(token || '').replace(/\D/g, '');
+  if (!digits) return token;
+  const map = ['공', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
+  return digits.split('').map((d) => map[Number(d)] || d).join('');
+}
+
+function toKoreanCounterUnder100(n) {
+  const num = Math.trunc(Number(n || 0));
+  if (!Number.isFinite(num) || num <= 0 || num >= 100) return '';
+  if (num === 20) return '스무';
+  return toKoreanNativeUnder100(num);
+}
+
+function toKoreanSinoDecimal(raw) {
+  const s = String(raw || '').replace(/,/g, '');
+  if (!/^-?\d+(\.\d+)?$/.test(s)) return raw;
+  if (!s.includes('.')) return toKoreanSinoInteger(s);
+  const negative = s.startsWith('-');
+  const [intPart, fracPart = ''] = (negative ? s.slice(1) : s).split('.');
+  const digitMap = ['영', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
+  const left = toKoreanSinoInteger(intPart);
+  const right = fracPart.split('').map((d) => digitMap[Number(d)] || d).join('');
+  return `${negative ? '마이너스 ' : ''}${left}점${right}`;
+}
+
 function normalizeTtsReadableText(rawText) {
   let text = sanitizeTextForUnicodeSafety(String(rawText || ''));
   text = text
@@ -3821,9 +3847,42 @@ function normalizeTtsReadableText(rawText) {
     .replace(/[_=]{2,}/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  text = text.replace(/(-?\d[\d,]*)(년|월|일|시|분|초)/g, (_, n, unit) => {
-    const spoken = toKoreanSinoInteger(n);
-    return `${spoken || n}${unit}`;
+  text = text.replace(/\b(0\d{1,2})[-\s]?(\d{3,4})[-\s]?(\d{4})\b/g, (_, a, b, c) => {
+    return `${toKoreanPhoneDigits(a)}에 ${toKoreanPhoneDigits(b)}에 ${toKoreanPhoneDigits(c)}`;
+  });
+  text = text.replace(/(\d{2,4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일/g, (_, y, m, d) => {
+    const year = toKoreanSinoInteger(y);
+    const monthNum = Number(String(m).replace(/,/g, ''));
+    const month = monthNum === 6 ? '유월' : (monthNum === 10 ? '시월' : `${toKoreanSinoInteger(m)}월`);
+    const day = `${toKoreanSinoInteger(d)}일`;
+    return `${year}년 ${month} ${day}`;
+  });
+  text = text.replace(/(\d{1,2})\s*월/g, (_, m) => {
+    const monthNum = Number(String(m).replace(/,/g, ''));
+    if (monthNum === 6) return '유월';
+    if (monthNum === 10) return '시월';
+    return `${toKoreanSinoInteger(m)}월`;
+  });
+  text = text.replace(/(\d{1,2})\s*시/g, (_, h) => {
+    const hourNum = Number(String(h).replace(/,/g, ''));
+    const spoken = toKoreanNativeUnder100(hourNum) || toKoreanSinoInteger(h);
+    return `${spoken}시`;
+  });
+  text = text.replace(/(-?\d[\d,]*)\s*(분|초|년|일)/g, (_, n, unit) => {
+    return `${toKoreanSinoInteger(n)}${unit}`;
+  });
+  text = text.replace(/(\d{1,2})\s*(개|명|마리|대|권|살|병|잔|장|번)/g, (_, n, unit) => {
+    const spoken = toKoreanCounterUnder100(n) || toKoreanSinoInteger(n);
+    return `${spoken} ${unit}`;
+  });
+  text = text.replace(/(-?\d[\d,]*(?:\.\d+)?)\s*(원|달러|kg|g|km|cm|mm|m²|m2|m|L|l|ml|%|℃|도)/g, (_, n, unit) => {
+    const unitMap = {
+      kg: '킬로그램', g: '그램', km: '킬로미터', cm: '센티미터', mm: '밀리미터',
+      m: '미터', m2: '제곱미터', 'm²': '제곱미터', L: '리터', l: '리터', ml: '밀리리터',
+      '%': '퍼센트', '℃': '도', 원: '원', 달러: '달러', 도: '도',
+    };
+    const spoken = toKoreanSinoDecimal(n);
+    return `${spoken} ${unitMap[unit] || unit}`;
   });
   text = text.replace(/\d[\d,]*/g, (m) => toKoreanNumberForTtsToken(m));
   text = text.replace(/\s+/g, ' ').trim();
