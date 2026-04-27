@@ -1,5 +1,6 @@
 import type { Env } from "./index";
 import { generateGrokText } from "./model_grok";
+import { classifyAveryConversation } from "./avery_worklog";
 
 export type MemoryScope = "public_profile" | "private_profile";
 export type MemoryCategory = "profile" | "preference" | "finance" | "project" | "constraint" | "context" | "other";
@@ -50,6 +51,8 @@ const PROFILE_HINTS = [
   "birthday",
   "mbti",
 ];
+
+const AVERY_IDS = new Set(["p_avery", "avery"]);
 
 function nowTs(): number {
   return Date.now();
@@ -549,6 +552,16 @@ function findMentionedPersonaPids(text: string, participantPids: string[]): stri
   return [...new Set(out)];
 }
 
+function isAveryPid(pid: string): boolean {
+  return AVERY_IDS.has(String(pid || "").trim().toLowerCase());
+}
+
+function shouldSkipAveryPrivateMemory(text: string, pid: string): boolean {
+  if (!isAveryPid(pid)) return false;
+  const cls = classifyAveryConversation(text);
+  return cls === "work" || cls === "mixed";
+}
+
 function fallbackExtractFacts(lines: string[]): string[] {
   const out = new Set<string>();
   for (const line of lines) {
@@ -753,7 +766,8 @@ export async function extractAndStoreMemories(
   for (const text of userFacts) {
     const mentionedPids = findMentionedPersonaPids(text, participantPids);
     if (mentionedPids.length) {
-      for (const pid of mentionedPids) {
+      const targets = mentionedPids.filter((pid) => !shouldSkipAveryPrivateMemory(text, pid));
+      for (const pid of targets) {
         const pr = await upsertMemory(env, {
           scope: "private_profile",
           owner: pid,
@@ -763,7 +777,7 @@ export async function extractAndStoreMemories(
         });
         if (pr.item) (pr.duplicate ? duplicate++ : saved++);
       }
-      continue;
+      if (targets.length) continue;
     }
     const r = await upsertMemory(env, {
       scope: "public_profile",
@@ -791,6 +805,7 @@ export async function extractAndStoreMemories(
     personaFacts = filterPersonaFactsByPid(personaFacts, pid, participantPids);
     personaFacts = [...new Set(personaFacts.map((x) => clampText(String(x || "").trim())).filter(shouldPersistFact))].slice(0, 40);
     for (const text of personaFacts) {
+      if (shouldSkipAveryPrivateMemory(text, pid)) continue;
       const r = await upsertMemory(env, {
         scope: "private_profile",
         owner: pid,
