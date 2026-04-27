@@ -19,7 +19,7 @@ The primary executor should handle, by default:
 
 ## Model Routing Policy
 - Default execution model is fixed to **gpt-5.3-codex**.
-- Escalate to **gpt-5.4** only when one or more of the following are true:
+- Escalate to **gpt-5.5** only when one or more of the following are true:
   - the same issue failed after 2 or more attempts
   - root cause is still unclear
   - architecture branching or broad side effects are expected
