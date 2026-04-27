@@ -1196,6 +1196,28 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .ratio-grid-9 {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 180px;
 }
+.ratio-res-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.ratio-res-btn {
+  flex: 1;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--border2);
+  background: var(--card);
+  color: var(--muted);
+  font-family: 'Pretendard', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ratio-res-btn.active {
+  border-color: #38bdf8;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.1);
+}
 .ratio-item {
   background: var(--card); border: 1px solid var(--border2); border-radius: 8px;
   aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
@@ -1720,6 +1742,10 @@ list-style-position: outside;
             <svg viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></svg>
           </button>
           <div id="ratioPopup" class="ratio-popup-container hidden">
+            <div class="ratio-res-row">
+              <button class="ratio-res-btn active" data-resolution="1k" onclick="selectImageResolution('1k')">1K</button>
+              <button class="ratio-res-btn" data-resolution="2k" onclick="selectImageResolution('2k')">2K</button>
+            </div>
             <div class="ratio-grid-9">
               <div class="ratio-item" onclick="selectRatio('21:9')">21:9</div>
               <div class="ratio-item" onclick="selectRatio('16:9')">16:9</div>

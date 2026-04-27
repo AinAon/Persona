@@ -4701,6 +4701,7 @@ async function sendMessage() {
             model: targetModel,
             prompt: promptText,
             participant_pids: Array.from(new Set(session.participantPids || [])),
+            resolution: _selectedImageResolution,
             ...(isGptImg && refImages.length === 0
               ? { size: RATIO_TO_OPENAI_SIZE[ratio] || '1024x1024' }
               : { aspect_ratio: ratio }
@@ -6045,6 +6046,7 @@ async function downloadImage(url, filename = 'generated.jpg') {
 //  RATIO MODAL (UI)
 // ================================
 let _selectedRatio = '1:1';
+let _selectedImageResolution = '1k';
 
 function openRatioModal() { document.getElementById('ratioModal')?.classList.add('open'); }
 function closeRatioModal() { document.getElementById('ratioModal')?.classList.remove('open'); }
@@ -6066,6 +6068,13 @@ function selectRatio(ratio) {
   });
   
   document.getElementById('ratioPopup').classList.add('hidden');
+}
+
+function selectImageResolution(level) {
+  _selectedImageResolution = (String(level || '').toLowerCase() === '2k') ? '2k' : '1k';
+  document.querySelectorAll('#ratioPopup .ratio-res-btn').forEach((el) => {
+    el.classList.toggle('active', String(el.dataset.resolution || '').toLowerCase() === _selectedImageResolution);
+  });
 }
 
 // 팝업 버튼 클릭 시 닫기
