@@ -2807,6 +2807,8 @@ async function renderChatList(options = {}) {
     const pList = (s.participantPids || []).map(pid => getPersona(pid)).filter(Boolean);
     const showListAvatars = getChatListAvatarVisibilityEnabled();
     const roomName = s.roomName || pList.map(p=>p.name).join(', ') || '채팅';
+    const isSinglePersonaChat = pList.length === 1;
+    const accentHue = Number(pList[0]?.hue || 220);
 
     const wrap = document.createElement('div');
     wrap.className = 'chat-list-wrap';
@@ -2839,11 +2841,11 @@ async function renderChatList(options = {}) {
     item.innerHTML = `
       <div class="chat-avatars-row" style="width:${avWidth}px;flex-shrink:0;${showListAvatars ? '' : 'display:none;'}">${avEls.join('')}</div>
       <div class="chat-list-info">
-        <div class="chat-list-names">${esc(roomName)}</div>
-        <div class="chat-list-preview">${esc(previewText)}</div>
+        <div class="chat-list-names" style="${isSinglePersonaChat ? `color:hsl(${accentHue},72%,78%);` : ''}">${esc(roomName)}</div>
+        <div class="chat-list-preview" style="${isSinglePersonaChat ? `color:hsl(${accentHue},32%,72%);` : ''}">${esc(previewText)}</div>
       </div>
       <div class="chat-list-meta">
-        <span class="chat-list-time">${timeLabel(s.updatedAt)}</span>
+        <span class="chat-list-time" style="${isSinglePersonaChat ? `color:hsl(${accentHue},24%,62%);` : ''}">${timeLabel(s.updatedAt)}</span>
       </div>`;
 
     setupSwipeDelete(item, wrap, s.id);
