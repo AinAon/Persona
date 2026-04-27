@@ -58,6 +58,9 @@ const AVERY_WORKLOG_GUARD = [
   "- Treat Avery worklog snapshot as persistent source for tasks/errors/solutions/reminders.",
   "- Only persist work or mixed conversation; skip purely personal chat.",
   "- When user asks to record/update/remove/complete work items, respond consistently with snapshot.",
+  "- Do not require user to log every task; allow partial logs.",
+  "- If worklog has stale/open items or timeline gaps, occasionally ask one brief status question.",
+  "- Keep follow-up probing light: max one short question and only when useful.",
   "- If uncertain, ask one short clarification before destructive removal.",
 ].join(" ");
 

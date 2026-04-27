@@ -77,6 +77,12 @@ type AveryEvent = {
   source_text: string;
 };
 
+type AveryFollowupHints = {
+  stale_active: string[];
+  unresolved_errors: string[];
+  likely_gaps: string[];
+};
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -189,6 +195,52 @@ function buildDaily(items: AveryItem[]): Record<string, AveryDaySummary> {
     out[d].topic_groups.sort((a, b) => b.count - a.count);
   }
   return out;
+}
+
+function daysAgoFromIso(ts: string): number {
+  const n = Date.parse(String(ts || ""));
+  if (!Number.isFinite(n)) return 0;
+  const diff = Date.now() - n;
+  if (diff <= 0) return 0;
+  return Math.floor(diff / 86400000);
+}
+
+function buildFollowupHints(state: AveryState): AveryFollowupHints {
+  const items = Array.isArray(state.items) ? state.items : [];
+  const active = items.filter((x) => x.status === "active");
+  const stale_active = active
+    .filter((x) => daysAgoFromIso(x.updated_at || x.first_seen_at) >= 2)
+    .sort((a, b) => Date.parse(a.updated_at || a.first_seen_at) - Date.parse(b.updated_at || b.first_seen_at))
+    .slice(0, 4)
+    .map((x) => `${x.title} (${daysAgoFromIso(x.updated_at || x.first_seen_at)}d)`);
+
+  const solvedTopics = new Set(
+    items
+      .filter((x) => x.kind === "solution" || x.status === "done")
+      .map((x) => norm(x.topic_key)),
+  );
+  const unresolved_errors = active
+    .filter((x) => x.kind === "error" && !solvedTopics.has(norm(x.topic_key)))
+    .slice(0, 4)
+    .map((x) => x.title);
+
+  const likely_gaps: string[] = [];
+  if ((state.stats?.days_without_work || 0) >= 2) {
+    likely_gaps.push(`worklog blank days=${state.stats.days_without_work}`);
+  }
+  const days = Object.keys(state.daily || {}).sort();
+  for (let i = 1; i < days.length; i++) {
+    const prev = Date.parse(`${days[i - 1]}T00:00:00Z`);
+    const cur = Date.parse(`${days[i]}T00:00:00Z`);
+    if (!Number.isFinite(prev) || !Number.isFinite(cur)) continue;
+    const gap = Math.floor((cur - prev) / 86400000) - 1;
+    if (gap >= 2) {
+      likely_gaps.push(`${days[i - 1]} -> ${days[i]} (gap ${gap}d)`);
+      if (likely_gaps.length >= 3) break;
+    }
+  }
+
+  return { stale_active, unresolved_errors, likely_gaps };
 }
 
 function defaultState(): AveryState {
@@ -480,6 +532,7 @@ export function buildAverySystemPrompt(state: AveryState): string {
     const topics = (day?.topic_groups || []).slice(0, 3).map((x) => x.topic).join(",");
     return `${d}:count=${day?.count || 0},office=${day?.office_count || 0},home=${day?.home_count || 0},topics=${topics || "none"}`;
   });
+  const hints = buildFollowupHints(state);
   return [
     "Avery worklog snapshot (persistent):",
     `as_of_date=${state.as_of_date}`,
@@ -492,7 +545,14 @@ export function buildAverySystemPrompt(state: AveryState): string {
     `todos=${topTodos.join(" | ") || "none"}`,
     `reminders=${topReminders.join(" | ") || "none"}`,
     `daily_recent=${dayLines.join(" || ") || "none"}`,
+    `followup_candidates.stale_active=${hints.stale_active.join(" | ") || "none"}`,
+    `followup_candidates.unresolved_errors=${hints.unresolved_errors.join(" | ") || "none"}`,
+    `followup_candidates.gaps=${hints.likely_gaps.join(" | ") || "none"}`,
     "When user asks to record/update/remove tasks or lessons learned, keep this snapshot consistent.",
+    "Do not force logging every turn.",
+    "If there are stale active items, unresolved errors, or timeline gaps, occasionally ask one short check question.",
+    "Ask at most one follow-up question in a reply, and only when it helps fill missing history (status, blocker, workaround, solved_at).",
+    "When user asks unrelated casual chat, prioritize normal conversation and skip follow-up probing.",
   ].join("\n");
 }
 
