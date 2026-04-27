@@ -1,0 +1,22 @@
+{
+  "version": "1.0.0",
+  "as_of_date": "2026-04-27",
+  "currency": "KRW",
+  "totals": {
+    "assets": 0,
+    "liabilities": 0,
+    "net_worth": 0
+  },
+  "assets": [],
+  "liabilities": [],
+  "retirement": [],
+  "fixed_cashflow": {
+    "monthly_income": 0,
+    "monthly_expense": 0
+  },
+  "meta": {
+    "last_event_id": "seed-2026-04-27-0001",
+    "last_updated_at": "2026-04-27T00:00:00+09:00",
+    "source_log": "riley_memory.log.jsonl"
+  }
+}
