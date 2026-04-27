@@ -186,10 +186,10 @@
     <div class="brand-mark">E</div>
     <div>
       <div class="brand-title">Emotion Manager</div>
-      <div class="brand-sub">image-only / neutral_a / gemini</div>
+      <div class="brand-sub">image-only / neutral_a / gemini + grok(adult)</div>
     </div>
   </div>
-  <div class="section-note">Generate with `gemini-3.1-flash-image-preview` and `1k`</div>
+  <div class="section-note">Generate with `gemini` by default, `grok` for `arousal/orgasm`.</div>
 </div>
 
 <div class="layout">
@@ -294,10 +294,24 @@ const EMOTION_PROMPTS = (globalThis.EMOTION_PROMPTS_KO && typeof globalThis.EMOT
       pain: '고통스러운 표정. 얼굴 근육이 수축된 불편감.',
       sleepy: '졸린 표정. 무거운 눈꺼풀과 나른한 분위기.',
     };
-const BUILTIN_BY_CAT = {
-  basic: ['neutral','subtlesmile','happy','sad','angry','surprise'],
-  premium: ['arousal','confusion','cry','disgust','contempt','horror','laugh','orgasm','playful','relief','shy','worry','pain','sleepy'],
-};
+const EMOTION_PLAN = (globalThis.EMOTION_PLAN_KO && typeof globalThis.EMOTION_PLAN_KO === 'object')
+  ? globalThis.EMOTION_PLAN_KO
+  : { free: [], premium: [], adult: [] };
+const EMOTION_MODEL_BY_ID = (globalThis.EMOTION_MODEL_BY_ID && typeof globalThis.EMOTION_MODEL_BY_ID === 'object')
+  ? globalThis.EMOTION_MODEL_BY_ID
+  : {};
+const DEFAULT_IMAGE_MODEL = 'gemini-3.1-flash-image-preview';
+function getEmotionTier(id = '') {
+  const key = String(id || '').toLowerCase();
+  if ((EMOTION_PLAN.adult || []).includes(key)) return 'adult';
+  if ((EMOTION_PLAN.premium || []).includes(key)) return 'premium';
+  if ((EMOTION_PLAN.free || []).includes(key)) return 'free';
+  return 'free';
+}
+function getEmotionModel(id = '') {
+  const key = String(id || '').toLowerCase();
+  return String(EMOTION_MODEL_BY_ID[key] || DEFAULT_IMAGE_MODEL);
+}
 function emotionLabelFromId(id = '') {
   const v = String(id || '').trim();
   if (!v) return '';
@@ -311,7 +325,7 @@ function buildPromptEmotionList() {
   return Object.keys(EMOTION_PROMPTS || {})
     .map((id) => String(id || '').trim().toLowerCase())
     .filter((id) => /^[a-z][a-z0-9_]*$/.test(id))
-    .map((id) => ({ id, label: emotionLabelFromId(id), category: 'basic' }));
+    .map((id) => ({ id, label: emotionLabelFromId(id), category: getEmotionTier(id) }));
 }
 function mergeEmotionList(stored = [], promptList = []) {
   const byId = new Map();
@@ -1229,10 +1243,11 @@ async function generateEmotion(pid, eid, slot){
   const ref = rawDataUrl;
 
   const prompt = buildEmotionPrompt(pid, eid, slot);
+  const model = getEmotionModel(eid);
 
   const body = {
     action: 'chat',
-    model: 'gemini-3.1-flash-image-preview',
+    model,
     prompt,
     images: [ref],
     aspect_ratio: '2:3',
@@ -1242,7 +1257,7 @@ async function generateEmotion(pid, eid, slot){
   const controller = new AbortController();
   state.pendingAbort = controller;
   setBusy(true);
-  showStatus(`Generating ${pid}/${eid}/${slot.toUpperCase()}.`);
+  showStatus(`Generating ${pid}/${eid}/${slot.toUpperCase()} (${model}).`);
 
   try {
     showStatus(`Sending request for ${pid}/${eid}/${slot.toUpperCase()}.`);
@@ -1337,9 +1352,10 @@ async function generateEmotionQuadBatch(pid, eid){
   ]);
 
   const controller = new AbortController();
+  const model = getEmotionModel(eid);
   state.pendingAbort = controller;
   setBusy(true);
-  showStatus(`Generating batch ${pid}/${eid}.`);
+  showStatus(`Generating batch ${pid}/${eid} (${model}).`);
 
   try {
     const res = await fetchNoCache(`${WORKER_URL}/chat`, {
@@ -1347,7 +1363,7 @@ async function generateEmotionQuadBatch(pid, eid){
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'chat',
-        model: 'gemini-3.1-flash-image-preview',
+        model,
         prompt,
         images: [rawDataUrl],
         aspect_ratio: '2:3',

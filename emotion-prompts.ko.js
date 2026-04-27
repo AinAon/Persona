@@ -22,3 +22,14 @@ globalThis.EMOTION_PROMPTS_KO = {
   pain: '고통 (Pain): 입을 앞으로 벌리며 신음하듯 얼굴을 찡그리고, 신체적 혹은 정신적으로 강한 고통을 느끼는 표정으로 변경',
   sleepy: '졸림 (Sleepy): 눈이 반쯤 감기고 눈꺼풀이 무겁게 내려앉은 채로 시선이 흐릿하게 풀리는 표정. 입술이 살짝 벌어지고 얼굴 전체가 나른하게 늘어진 얼굴로 변경(종종 하품으로 변경)',
 };
+
+globalThis.EMOTION_PLAN_KO = {
+  free: ['happy', 'sad', 'angry', 'surprise'],
+  premium: ['subtlesmile', 'confusion', 'cry', 'disgust', 'contempt', 'horror', 'laugh', 'playful', 'relief', 'shy', 'worry', 'pain', 'sleepy'],
+  adult: ['arousal', 'orgasm'],
+};
+
+globalThis.EMOTION_MODEL_BY_ID = {
+  arousal: 'grok-imagine-image-pro',
+  orgasm: 'grok-imagine-image-pro',
+};

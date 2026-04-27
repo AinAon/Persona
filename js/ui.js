@@ -3548,8 +3548,8 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
   return `<div class="msg-group ai-msgs">${html}</div>`;
 }
 
-async function appendAIReplySequentially(reply, pList, suffixes, createdAt, tgtArea, renderSessionId) {
-  const segments = parseResponse(reply, pList);
+async function appendAIReplySequentially(reply, pList, suffixes, createdAt, tgtArea, renderSessionId, allowedEmotionMap = null) {
+  const segments = parseResponse(reply, pList, allowedEmotionMap);
   const delays = segments.length > 1 ? 240 : 0;
   for (let i = 0; i < segments.length; i++) {
     if (_chatGeneration?.cancelled || activeChatId !== renderSessionId) return;
@@ -3598,7 +3598,43 @@ function cleanContent(text) {
     .trim();
 }
 
-function parseResponse(text, pList) {
+function clampEmotionForPid(parsedEmotion, pid, allowedEmotionMap = null) {
+  const e = String(parsedEmotion || '').toLowerCase();
+  const safe = EMOTIONS.includes(e) ? e : 'neutral';
+  const allowed = allowedEmotionMap && pid ? allowedEmotionMap[pid] : null;
+  if (!Array.isArray(allowed) || !allowed.length) return safe;
+  if (allowed.includes(safe)) return safe;
+  if (allowed.includes('neutral')) return 'neutral';
+  return String(allowed[0] || 'neutral');
+}
+
+async function buildPersonaAvailableEmotionMap(pList) {
+  const out = {};
+  const list = Array.isArray(pList) ? pList : [];
+  for (const p of list) {
+    const pid = String(p?.pid || '');
+    if (!pid) continue;
+    try {
+      const keys = await getImageList(pid);
+      const allowed = [];
+      const hasNeutralA = keys.includes(`profile/${pid}/${pid}_neutral_a.jpg`);
+      const hasNeutral = keys.includes(`profile/${pid}/${pid}_neutral.jpg`);
+      if (hasNeutralA || hasNeutral) allowed.push('neutral');
+      for (const emotion of EMOTIONS) {
+        if (emotion === 'neutral') continue;
+        const { suffixed, hasBase } = getSuffixesForEmotion(keys, pid, emotion);
+        if ((suffixed && suffixed.length) || hasBase) allowed.push(emotion);
+      }
+      out[pid] = [...new Set(allowed)];
+      if (!out[pid].length) out[pid] = ['neutral'];
+    } catch {
+      out[pid] = ['neutral'];
+    }
+  }
+  return out;
+}
+
+function parseResponse(text, pList, allowedEmotionMap = null) {
   const tagPattern = pList.map(p => p.pid).join('|');
   if (!tagPattern) return [{ idx:0, content:text.trim(), emotion:'neutral' }];
   const cleaned = text.replace(/\([^)]+\)\s*(?=\[)/g, '');
@@ -3609,7 +3645,6 @@ function parseResponse(text, pList) {
   while ((m = segRegex.exec(cleaned)) !== null) {
     const pid = m[1];
     const parsedEmotion = m[2] ? m[2].toLowerCase() : 'neutral';
-    const emotion = EMOTIONS.includes(parsedEmotion) ? parsedEmotion : 'neutral';
     
     let content = m[3].trim();
     const pidWrapRe = new RegExp(`^\\[${pid}\\]([\\s\\S]*?)\\[\\/${pid}\\]$`, 'i');
@@ -3621,6 +3656,7 @@ function parseResponse(text, pList) {
     if (!content) continue;
     const idx = pList.findIndex(p => p.pid === pid);
     if (idx !== -1) {
+      const emotion = clampEmotionForPid(parsedEmotion, pid, allowedEmotionMap);
       const namePrefix = new RegExp(`^${pList[idx].name}\\s*:\\s*`, 'i');
       content = content.replace(namePrefix, '').trim();
       content = cleanContent(content); // 잔여 감정태그 제거
@@ -4361,7 +4397,7 @@ function autoResize(el) {
   el.style.height = Math.min(el.scrollHeight, 220) + 'px';
 }
 
-function buildSystemPrompt(session, pListOverride = null) {
+function buildSystemPrompt(session, pListOverride = null, availableEmotionMap = null) {
   const pList = pListOverride || (session.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
   const worldPart = session.worldContext ? `${session.worldContext}\n\n` : '';
   
@@ -4389,6 +4425,10 @@ function buildSystemPrompt(session, pListOverride = null) {
     if (p.tags && p.tags.length) desc += `\n성격/말투: ${p.tags.join(', ')}`;
     if (p.userTitle) desc += `\n나를 부르는 호칭: ${p.userTitle} (자연스러운 맥락에서만 가끔 사용. 매 발화마다 붙이지 말 것)`;
     if (p.nicknames && p.nicknames.length) desc += `\n애칭: ${p.nicknames.join(', ')}`;
+    const allowed = availableEmotionMap?.[p.pid];
+    if (Array.isArray(allowed) && allowed.length) {
+      desc += `\n사용 가능한 감정: ${allowed.join('/')}`;
+    }
     return desc;
   }).join('\n\n');
 
@@ -4408,7 +4448,8 @@ function buildSystemPrompt(session, pListOverride = null) {
 형식:
 ${formatEx}
 emotion: ${EMOTIONS.join('/')}
-규칙: emotion 태그는 반드시 pid 태그 바로 뒤에 한 번만. 내용 안에 [감정명] 태그 넣기 금지. 이름: 접두사 금지.${modeInstr ? '\n' + modeInstr : ''}
+규칙: emotion 태그는 반드시 pid 태그 바로 뒤에 한 번만. 내용 안에 [감정명] 태그 넣기 금지. 이름: 접두사 금지.
+각 pid는 자신의 "사용 가능한 감정" 목록 안에서만 emotion을 선택.${modeInstr ? '\n' + modeInstr : ''}
 인칭은 자연스러운 맥락에서만 가급적 사용. 매 발화 시작에 붙이지 말 것
 필요한 태그 내용은 마크다운(**, 코드블록, 목록 등) 사용 가능
 
@@ -4697,13 +4738,15 @@ async function sendMessage() {
     };
     let reply = '';
     let generatedImageUrl = '';
+    let availableEmotionMap = null;
     if (session._demo) {
       await new Promise(r => setTimeout(r, 600));
       reply = window.getDemoReply ? window.getDemoReply(session) : '데모 응답 오류';
     } else {
       try {
+        availableEmotionMap = await buildPersonaAvailableEmotionMap(pListAll);
         const apiMessages = [
-          { role:'system', content: buildSystemPrompt(session) },
+          { role:'system', content: buildSystemPrompt(session, null, availableEmotionMap) },
           buildCurrentTimeSystemMessage(),
           ...buildApiMessagesFromHistory(session.history, userMsg, requestMsgContent, isImageReq)
         ];
@@ -4759,7 +4802,7 @@ async function sendMessage() {
                 ? buildUserMessageContentV2(text, groupImageUrls, groupFileRefs)
                 : text || '(빈글)';
                 const personaMessages = [
-                  { role:'system', content: buildSystemPrompt(session, [persona]) },
+                  { role:'system', content: buildSystemPrompt(session, [persona], availableEmotionMap) },
                   buildCurrentTimeSystemMessage(),
                   ...buildApiMessagesFromHistory(session.history, userMsg, personaRequestMsgContent, isImageReq, persona.pid)
                 ];
@@ -4783,7 +4826,7 @@ async function sendMessage() {
                 rawReply = data.reply || '';
               }
               rawReply = sanitizeTextForUnicodeSafety(rawReply || '');
-              const parsedSelf = parseResponse(rawReply, [persona]);
+              const parsedSelf = parseResponse(rawReply, [persona], availableEmotionMap);
               logGroupRouterDebug('send.non-image.persona.raw', {
                 pid: persona.pid,
                 model,
@@ -4931,7 +4974,7 @@ async function sendMessage() {
       _imageWorkflow: !!isImageReq
     });
 
-    const parsed = parseResponse(reply, pList);
+    const parsed = parseResponse(reply, pList, availableEmotionMap);
     const firstContent = parsed[0]?.content || '';
     currentSession.lastPreview = sanitizeChatListPreview(buildChatPreviewText(firstContent), currentSession);
     currentSession.updatedAt = Date.now();
@@ -4941,9 +4984,9 @@ async function sendMessage() {
       const tgtArea = document.getElementById('chatArea');
       tgtArea.classList.add('has-messages');
       if (!isImageReq && (pList || []).length <= 1) {
-        await appendAIReplyStreamingOneToOne(reply, pList, suffixes, assistantCreatedAt, tgtArea, currentSession.id);
+        await appendAIReplyStreamingOneToOne(reply, pList, suffixes, assistantCreatedAt, tgtArea, currentSession.id, availableEmotionMap);
       } else {
-        await appendAIReplySequentially(reply, pList, suffixes, assistantCreatedAt, tgtArea, currentSession.id);
+        await appendAIReplySequentially(reply, pList, suffixes, assistantCreatedAt, tgtArea, currentSession.id, availableEmotionMap);
       }
     }
 
@@ -6790,10 +6833,10 @@ async function optimizeMemoryNow() {
   }
 }
 
-async function appendAIReplyStreamingOneToOne(reply, pList, suffixes, createdAt, tgtArea, renderSessionId) {
-  const segments = parseResponse(reply, pList);
+async function appendAIReplyStreamingOneToOne(reply, pList, suffixes, createdAt, tgtArea, renderSessionId, allowedEmotionMap = null) {
+  const segments = parseResponse(reply, pList, allowedEmotionMap);
   if (!Array.isArray(segments) || segments.length !== 1) {
-    return appendAIReplySequentially(reply, pList, suffixes, createdAt, tgtArea, renderSessionId);
+    return appendAIReplySequentially(reply, pList, suffixes, createdAt, tgtArea, renderSessionId, allowedEmotionMap);
   }
   const seg = segments[0];
   const segText = seg?.content?.trim?.() ? seg.content : '';
