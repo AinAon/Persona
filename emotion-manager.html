@@ -147,7 +147,7 @@
 .queue-item.done,.queue-item.fail{opacity:.9}
 .sidebar-actions{
   display:grid;
-  grid-template-columns:1fr 1fr;
+  grid-template-columns:1fr 1fr 1fr;
   gap:8px;
   margin-top:6px;
   flex:0 0 auto;
@@ -199,6 +199,7 @@
     <div class="persona-grid" id="personaGrid"></div>
     <div class="sidebar-actions">
       <button class="btn btn-ghost" id="reloadBtn">RELOAD</button>
+      <button class="btn btn-ghost" id="testBatchBtn">TEST</button>
       <button class="btn btn-ghost" id="pushAllBtn">PUSH ALL</button>
       <button class="btn btn-danger" id="stopBtn" style="display:none;grid-column:1 / -1">STOP</button>
     </div>
@@ -333,6 +334,7 @@ const state = {
 
 const els = {
   reloadBtn: document.getElementById('reloadBtn'),
+  testBatchBtn: document.getElementById('testBatchBtn'),
   pushAllBtn: document.getElementById('pushAllBtn'),
   generateAllBtn: document.getElementById('generateAllBtn'),
   deleteAllBtn: document.getElementById('deleteAllBtn'),
@@ -1058,6 +1060,41 @@ function dataUrlToBlob(dataUrl){
   return new Blob([bytes], { type: mime });
 }
 
+async function imageUrlToDataUrl(url){
+  if (String(url || '').startsWith('data:image/')) return url;
+  const proxied = `${WORKER_URL}/image-fetch?url=${encodeURIComponent(url)}`;
+  const blob = await fetchNoCache(proxied).then(r => {
+    if (!r.ok) throw new Error(`Download proxy failed: ${r.status}`);
+    return r.blob();
+  });
+  if (!blob || !blob.size) throw new Error('Downloaded image is empty.');
+  return await new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function splitFourPanelDataUrls(dataUrl){
+  const img = await loadImageElement(dataUrl);
+  const halfW = Math.floor(img.naturalWidth / 2);
+  const halfH = Math.floor(img.naturalHeight / 2);
+  if (halfW < 1 || halfH < 1) throw new Error('Generated image is too small to split.');
+  const cells = [
+    ['happy', 0, 0],
+    ['sad', halfW, 0],
+    ['angry', 0, halfH],
+    ['surprise', halfW, halfH],
+  ];
+  return cells.map(([eid, sx, sy]) => {
+    const cv = document.createElement('canvas');
+    cv.width = halfW;
+    cv.height = halfH;
+    cv.getContext('2d').drawImage(img, sx, sy, halfW, halfH, 0, 0, halfW, halfH);
+    return { eid, slot: 'a', dataUrl: cv.toDataURL('image/jpeg', 0.92) };
+  });
+}
+
 async function uploadBase64ToR2(pid, eid, slot, base64){
   const fd = new FormData();
   fd.append('folder', `profile/${pid}`);
@@ -1218,6 +1255,101 @@ async function generateEmotion(pid, eid, slot){
     showStatus(`Generate failed: ${msg}`);
     console.error('generateEmotion failed', { pid, eid, slot, err });
     queueSet(qid, 'fail', `Generate failed ${eid}/${slot.toUpperCase()}`);
+  } finally {
+    state.pendingAbort = null;
+    setBusy(false);
+  }
+}
+
+async function generateFourEmotionTest(){
+  if (state.busy || !state.activePid) return;
+  const pid = state.activePid;
+  const qid = queueAdd(`Test batch ${pid}`);
+  queueSet(qid, 'running');
+
+  const neutralUrl = originalImagePath(pid, 'neutral', 'a');
+  const controller = new AbortController();
+  state.pendingAbort = controller;
+  setBusy(true);
+  showStatus(`Checking neutral_a for ${pid}.`);
+
+  try {
+    const neutralResp = await fetchNoCache(neutralUrl, { signal: controller.signal });
+    if (!neutralResp.ok) throw new Error(`Missing neutral_a on R2: HTTP ${neutralResp.status}`);
+    const neutralBlob = await neutralResp.blob();
+    if (!neutralBlob || !neutralBlob.size) throw new Error('neutral_a on R2 is empty.');
+    const neutralDataUrl = await new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.readAsDataURL(neutralBlob);
+    });
+
+    const prompt = [
+      '[Task]',
+      'Create one single 2x2 contact-sheet image from the reference character.',
+      'Top-left: Happy expression.',
+      'Top-right: Sad expression.',
+      'Bottom-left: Angry expression.',
+      'Bottom-right: Surprise expression.',
+      '',
+      '[Rules]',
+      'Each quadrant must be a complete 2:3 portrait of the same person.',
+      'Preserve identity, hairstyle, face structure, outfit style, lighting, and background concept.',
+      'No text, no labels, no borders, no collage frames, no gutters.',
+      'Keep face size and framing consistent across all four quadrants.',
+      '',
+      '[Quality]',
+      'Photorealistic, clean eyes, detailed skin and hair, no blur, no artifacts.',
+      '',
+      '[Output]',
+      'One 2K image, 2:3 aspect ratio, arranged as a 2x2 grid.',
+    ].join('\n');
+
+    showStatus(`Generating 4-panel test image for ${pid}.`);
+    const res = await fetchNoCache(`${WORKER_URL}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'chat',
+        model: 'gemini-3.1-flash-image-preview',
+        prompt,
+        images: [neutralDataUrl],
+        aspect_ratio: '2:3',
+        resolution: '2k',
+      }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const raw = await res.text();
+      throw new Error(raw || `HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    const imageUrl = String(data.image_url || '').trim();
+    const match = String(data.reply || data.content || '').match(/\((https?:\/\/[^)]+)\)|!\[[^\]]*\]\((https?:\/\/[^)]+)\)|https?:\/\/\S+/);
+    const url = imageUrl || (match ? (match[1] || match[2] || match[0]) : '');
+    if (!url) throw new Error(data.error || 'No image URL returned.');
+
+    showStatus(`Splitting 4-panel test image for ${pid}.`);
+    const generatedDataUrl = await imageUrlToDataUrl(url);
+    const pieces = await splitFourPanelDataUrls(generatedDataUrl);
+
+    for (const item of pieces) {
+      showStatus(`Saving ${pid}/${item.eid}/A.`);
+      state.slotMaxByEmotion[item.eid] = Math.max(Number(state.slotMaxByEmotion[item.eid]) || 0, 0);
+      await saveSlotImage(pid, item.eid, item.slot, item.dataUrl);
+      await uploadBase64ToR2(pid, item.eid, item.slot, item.dataUrl);
+    }
+    try { localStorage.setItem('em_slot_max_by_emotion', JSON.stringify(state.slotMaxByEmotion)); } catch {}
+
+    render();
+    showStatus(`Test batch saved and pushed: happy/sad/angry/surprise A.`);
+    queueSet(qid, 'done', `Test batch saved ${pid}`);
+  } catch (err) {
+    const msg = err?.message || String(err || 'unknown error');
+    showStatus(`Test batch failed: ${msg}`);
+    console.error('generateFourEmotionTest failed', { pid, err });
+    queueSet(qid, 'fail', `Test batch failed ${pid}`);
   } finally {
     state.pendingAbort = null;
     setBusy(false);
@@ -1502,6 +1634,7 @@ async function reloadAll(){
 
 function init(){
   if (els.reloadBtn) els.reloadBtn.onclick = () => reloadAll();
+  if (els.testBatchBtn) els.testBatchBtn.onclick = generateFourEmotionTest;
   if (els.generateAllBtn) els.generateAllBtn.onclick = generateAll;
   if (els.pushAllBtn) els.pushAllBtn.onclick = pushAll;
   if (els.deleteAllBtn) els.deleteAllBtn.onclick = deleteAll;
