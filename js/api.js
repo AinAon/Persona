@@ -945,6 +945,10 @@ async function loadIndex() {
 
 async function loadSession(id) {
   const s = sessions.find(x=>x.id===id); if (!s) return;
+  if (s._loaded && Array.isArray(s.history)) {
+    if (activeChatId === id) renderChatArea();
+    return;
+  }
   let hadLocalCache = false;
   const messageKey = (m) => {
     try {
