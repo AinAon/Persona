@@ -8,8 +8,18 @@ const HUE_PRESETS = [
   250, 270, 290, 310, 330, 350
 ];
 
-const EMOTIONS = ['angry','arousal','confusion','contempt','cry','disgust','sleepy','happy','horror',
-  'laugh','neutral','orgasm','pain','playful','relief','sad','shy','subtlesmile','surprise','worry'];
+function getPromptEmotionIds() {
+  const src = (globalThis.EMOTION_PROMPTS_KO && typeof globalThis.EMOTION_PROMPTS_KO === 'object')
+    ? globalThis.EMOTION_PROMPTS_KO
+    : {};
+  const ids = Object.keys(src)
+    .map((k) => String(k || '').trim().toLowerCase())
+    .filter((k) => /^[a-z][a-z0-9_]*$/.test(k));
+  if (ids.length) return ids;
+  return ['neutral','subtlesmile','happy','sad','angry','surprise'];
+}
+
+const EMOTIONS = getPromptEmotionIds();
 
 const EMOTION_PROFILE_MAP = { 'p_riley': 'riley' };
 const MAX_PARTICIPANTS = 4;

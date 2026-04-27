@@ -119,7 +119,9 @@
 .cat-head strong{font-size:11px;text-transform:uppercase;letter-spacing:.12em}
 .slot-grid{display:grid;grid-template-columns:1fr;gap:10px}
 .emotion-section{margin-bottom:14px}
-.emotion-title{font-size:12px;font-weight:700;color:var(--text);margin:0 0 4px 2px}
+.emotion-head{display:flex;align-items:center;gap:8px;margin:0 0 4px 0}
+.emotion-title{font-size:12px;font-weight:700;color:var(--text);margin:0}
+.emotion-batch-btn{width:22px;height:22px;border-radius:999px;padding:0;display:inline-flex;align-items:center;justify-content:center}
 .emotion-rule{height:1px;background:rgba(255,255,255,.18);margin:0 0 8px 0}
 .emotion-row{display:flex;gap:10px;overflow-x:auto;overflow-y:hidden;padding:2px 2px 8px 2px;scrollbar-width:thin}
 .emotion-row .slot-card{flex:0 0 auto}
@@ -199,7 +201,7 @@
     <div class="persona-grid" id="personaGrid"></div>
     <div class="sidebar-actions">
       <button class="btn btn-ghost" id="reloadBtn">RELOAD</button>
-      <button class="btn btn-ghost" id="testBatchBtn">TEST</button>
+      <button class="btn btn-ghost" id="testBatchBtn">BASIC EMO</button>
       <button class="btn btn-ghost" id="pushAllBtn">PUSH ALL</button>
       <button class="btn btn-danger" id="stopBtn" style="display:none;grid-column:1 / -1">STOP</button>
     </div>
@@ -251,6 +253,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@panzoom/panzoom@4.6.1/dist/panzoom.min.js"></script>
 <script src="js/ui_crop.js"></script>
+<script src="emotion-prompts.ko.js"></script>
 <script>
 // Hotfix guard: ensure esc exists even on mixed/stale script states.
 globalThis.esc = globalThis.esc || function(s){
@@ -266,59 +269,72 @@ console.log('[EmotionManager]', window.__EM_MANAGER_VERSION__);
 const WORKER_URL = 'https://persona-worker.persona-worker.workers.dev';
 const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbwc2pNBmXpeDLHqc7tGff4kVByDbcG1ijLRzxNTiKjSklSo4dcm61R5XNOAghaAGozz/exec';
 const R2_UPLOAD_ENDPOINT = `${WORKER_URL}/image`;
-const DEFAULT_EMOTIONS = [
-  { id:'neutral', label:'Neutral', category:'basic' },
-  { id:'subtlesmile', label:'Subtle Smile', category:'basic' },
-  { id:'happy', label:'Happy', category:'basic' },
-  { id:'sad', label:'Sad', category:'basic' },
-  { id:'angry', label:'Angry', category:'basic' },
-  { id:'surprise', label:'Surprise', category:'basic' },
-  { id:'arousal', label:'Arousal', category:'premium' },
-  { id:'confusion', label:'Confusion', category:'premium' },
-  { id:'cry', label:'Cry', category:'premium' },
-  { id:'disgust', label:'Disgust', category:'premium' },
-  { id:'contempt', label:'Contempt', category:'premium' },
-  { id:'horror', label:'Horror', category:'premium' },
-  { id:'laugh', label:'Laugh', category:'premium' },
-  { id:'orgasm', label:'Orgasm', category:'premium' },
-  { id:'playful', label:'Playful', category:'premium' },
-  { id:'relief', label:'Relief', category:'premium' },
-  { id:'shy', label:'Shy', category:'premium' },
-  { id:'worry', label:'Worry', category:'premium' },
-  { id:'pain', label:'Pain', category:'premium' },
-  { id:'sleepy', label:'Sleepy', category:'premium' },
-];
 const DEFAULT_SLOT_KEYS = ['a','b','c','d','e'];
-const EMOTION_PROMPTS = {
-  neutral: 'Neutral portrait, calm face, no smile, keep identity and framing.',
-  subtlesmile: 'Subtle smile with relaxed eyes, gentle and natural expression.',
-  happy: 'Bright happy smile, cheerful expression, lively eyes.',
-  sad: 'Sad expression, lowered gaze, soft tension around lips and brows.',
-  angry: 'Angry expression, tightened jaw, furrowed brows, strong intensity.',
-  surprise: 'Surprised expression, widened eyes, slightly open mouth.',
-  arousal: 'Aroused expression, heightened emotion, confident intensity.',
-  confusion: 'Confused expression, uncertain eyes, slight brow tension.',
-  cry: 'Crying expression with visible tears and emotional tension.',
-  disgust: 'Disgusted expression, nose wrinkle and slight lip curl.',
-  contempt: 'Contempt expression, one-sided smirk and dismissive gaze.',
-  horror: 'Horrified expression, fear and shock with tense facial muscles.',
-  laugh: 'Laughing expression, open smile and natural joyful energy.',
-  orgasm: 'Ecstatic climax-like expression with intense emotional release.',
-  playful: 'Playful teasing expression with mischievous smile.',
-  relief: 'Relieved expression, tension released, calm exhale feeling.',
-  shy: 'Shy expression, soft smile, averted gaze, gentle blush mood.',
-  worry: 'Worried expression, uneasy eyes and tightened brow.',
-  pain: 'Pain expression, clenched features with visible discomfort.',
-  sleepy: 'Sleepy expression, heavy eyelids, relaxed and drowsy mood.',
-};
+const EMOTION_PROMPTS = (globalThis.EMOTION_PROMPTS_KO && typeof globalThis.EMOTION_PROMPTS_KO === 'object')
+  ? globalThis.EMOTION_PROMPTS_KO
+  : {
+      neutral: '중립적인 표정. 미소 없이 차분하고 안정적인 얼굴.',
+      subtlesmile: '은은한 미소. 과하지 않게 자연스럽고 부드러운 표정.',
+      happy: '밝고 즐거운 미소. 생기 있고 긍정적인 행복한 표정.',
+      sad: '슬픈 표정. 눈빛과 입가에 가벼운 우울감과 처짐이 느껴지게.',
+      angry: '분노한 표정. 눈썹과 턱에 힘이 들어간 강한 긴장감.',
+      surprise: '놀란 표정. 눈이 커지고 입이 살짝 벌어진 순간.',
+      arousal: '고조된 감정이 느껴지는 표정. 강한 몰입감과 긴장감.',
+      confusion: '혼란스러운 표정. 확신 없는 시선과 미세한 찌푸림.',
+      cry: '울음을 참지 못한 표정. 감정이 터진 듯한 눈가와 입가.',
+      disgust: '불쾌한 표정. 코와 입 주변에 거부감이 드러나게.',
+      contempt: '경멸하는 표정. 한쪽 입꼬리와 냉소적인 시선.',
+      horror: '공포에 질린 표정. 경직된 얼굴 근육과 극도의 긴장감.',
+      laugh: '웃는 표정. 자연스럽고 활기찬 웃음의 에너지.',
+      orgasm: '강한 쾌감이 드러나는 절정의 표정.',
+      playful: '장난기 있는 표정. 가볍고 도발적인 미소.',
+      relief: '안도한 표정. 긴장이 풀리며 편안해진 얼굴.',
+      shy: '수줍은 표정. 시선 회피와 부드러운 미소.',
+      worry: '걱정스러운 표정. 불안한 눈빛과 이마의 긴장.',
+      pain: '고통스러운 표정. 얼굴 근육이 수축된 불편감.',
+      sleepy: '졸린 표정. 무거운 눈꺼풀과 나른한 분위기.',
+    };
 const BUILTIN_BY_CAT = {
   basic: ['neutral','subtlesmile','happy','sad','angry','surprise'],
   premium: ['arousal','confusion','cry','disgust','contempt','horror','laugh','orgasm','playful','relief','shy','worry','pain','sleepy'],
 };
+function emotionLabelFromId(id = '') {
+  const v = String(id || '').trim();
+  if (!v) return '';
+  if (v === 'subtlesmile') return 'Subtle Smile';
+  return v
+    .split('_')
+    .map(part => part ? part[0].toUpperCase() + part.slice(1) : '')
+    .join(' ');
+}
+function buildPromptEmotionList() {
+  return Object.keys(EMOTION_PROMPTS || {})
+    .map((id) => String(id || '').trim().toLowerCase())
+    .filter((id) => /^[a-z][a-z0-9_]*$/.test(id))
+    .map((id) => ({ id, label: emotionLabelFromId(id), category: 'basic' }));
+}
+function mergeEmotionList(stored = [], promptList = []) {
+  const byId = new Map();
+  for (const p of promptList) byId.set(p.id, { ...p });
+  for (const raw of (Array.isArray(stored) ? stored : [])) {
+    const id = String(raw?.id || '').trim().toLowerCase();
+    if (!/^[a-z][a-z0-9_]*$/.test(id)) continue;
+    const prev = byId.get(id) || { id, label: emotionLabelFromId(id), category: 'basic' };
+    byId.set(id, {
+      ...prev,
+      ...raw,
+      id,
+      label: String(raw?.label || prev.label || emotionLabelFromId(id)),
+    });
+  }
+  return [...byId.values()];
+}
+const PROMPT_EMOTIONS = buildPromptEmotionList();
+const STORED_EMOTIONS = JSON.parse(localStorage.getItem('em_emotions') || 'null');
 
 const state = {
   personas: JSON.parse(localStorage.getItem('em_personas') || '[]'),
-  emotions: JSON.parse(localStorage.getItem('em_emotions') || 'null') || DEFAULT_EMOTIONS.map(x => ({...x})),
+  emotions: mergeEmotionList(STORED_EMOTIONS, PROMPT_EMOTIONS),
   gasUrl: DEFAULT_GAS_URL,
   activePid: null,
   activeCat: 'basic',
@@ -391,6 +407,17 @@ function getRenderedSlotsForEmotion(pid, eid) {
   const slots = [];
   for (let i = 0; i <= max; i++) slots.push(indexToSlot(i));
   return slots;
+}
+function getNextAvailableSlots(pid, eid, count = 1){
+  const used = new Set(Object.keys(state.images?.[pid]?.[eid] || {}).map(s => String(s || '').toLowerCase()));
+  const out = [];
+  let idx = 0;
+  while (out.length < count && idx < 26) {
+    const slot = indexToSlot(idx);
+    if (!used.has(slot)) out.push(slot);
+    idx += 1;
+  }
+  return out;
 }
 function addSlotForEmotion(eid, pid) {
   const currentSlots = getRenderedSlotsForEmotion(pid, eid);
@@ -931,9 +958,18 @@ function render(){
   for (const emo of items) {
     const section = document.createElement('div');
     section.className = 'emotion-section';
-    section.innerHTML = `<div class="emotion-title">${esc(emo.label || emo.id)}</div><div class="emotion-rule"></div>`;
+    section.innerHTML = `
+      <div class="emotion-head">
+        <button class="btn btn-ghost btn-sm btn-icon emotion-batch-btn" title="Batch Generate" aria-label="Batch Generate">${ICONS.generate}</button>
+        <div class="emotion-title">${esc(emo.label || emo.id)}</div>
+      </div>
+      <div class="emotion-rule"></div>`;
     const row = document.createElement('div');
     row.className = 'emotion-row';
+    section.querySelector('.emotion-batch-btn').onclick = (ev) => {
+      ev.stopPropagation();
+      generateEmotionQuadBatch(state.activePid, emo.id);
+    };
     const rowSlots = getRenderedSlotsForEmotion(state.activePid, emo.id);
     for (const slot of rowSlots) {
         const img = getEmotionImage(state.activePid, emo.id, slot);
@@ -1129,6 +1165,45 @@ async function deleteRemoteImageVariants(pid, eid, slot){
   }
 }
 
+function buildEmotionPrompt(pid, eid, slot, extraLines = []){
+  return [
+    '[Character]',
+    `${pid}`,
+    'Preserve the exact identity: face structure, hairstyle, skin tone, and overall appearance from the reference.',
+    'Do not change who the person is.',
+    '',
+    '[Background]',
+    "'이미지1'과 같은 배경을 사용한다. 카메라 앵글 변화에 따라 바뀔 수 있다.",
+    'Do not introduce new background elements or drastically change the lighting.',
+    '',
+    '[Pose]',
+    "'Expression'에 어울리는 새로운 포즈를 취한다.",
+    "'이미지1'의 포즈와 다른 창의적인 포즈를 취한다.",
+    'Natural, expressive body language is encouraged.',
+    '',
+    '[Task]',
+    EMOTION_PROMPTS[eid] || `${eid} expression`,
+    '',
+    '[Layout]',
+    "Output의 얼굴 위치는 '이미지1'의 얼굴 위치(가운데상단)를 최대한 유지한다.",
+    'Do not zoom in or out significantly. Maintain 2:3 portrait framing.',
+    '',
+    '[Variation]',
+    `This is slot ${String(slot || '').toUpperCase()}. Make this variant visually distinct from other slots of the same emotion.`,
+    'Vary the exact pose, micro-expression, or slight angle ??while keeping identity and layout stable.',
+    ...(extraLines.length ? ['', ...extraLines] : []),
+    '',
+    '[Quality]',
+    'Photorealistic, highly detailed skin and hair, clean eyes, natural lighting, no blur, no artifacts.',
+    '',
+    '[Ratio]',
+    '2:3',
+    '',
+    '[Resolution]',
+    '1K',
+  ].join('\n');
+}
+
 async function generateEmotion(pid, eid, slot){
   if (state.busy) return;
 
@@ -1153,42 +1228,7 @@ async function generateEmotion(pid, eid, slot){
 
   const ref = rawDataUrl;
 
-  const prompt = [
-    '[Character]',
-    `${pid}`,
-    'Preserve the exact identity: face structure, hairstyle, skin tone, and overall appearance from the reference.',
-    'Do not change who the person is.',
-    '',
-    '[Background]',
-    'Use the same background concept as the reference (indoor/outdoor, lighting mood, color palette).',
-    'If the camera angle or body pose changes, the background may rotate or extend naturally to fit.',
-    'Do not introduce new background elements or drastically change the lighting.',
-    '',
-    '[Pose]',
-    'Freely change the body pose and gesture to match the emotion.',
-    'Try to vary the pose at least slightly from the reference ??avoid copying it exactly.',
-    'Natural, expressive body language is encouraged.',
-    '',
-    '[Task]',
-    EMOTION_PROMPTS[eid] || `${eid} expression`,
-    '',
-    '[Layout]',
-    'Even if the pose or body angle changes, keep the face at roughly the same screen position and size as in the reference.',
-    'Do not zoom in or out significantly. Maintain 2:3 portrait framing.',
-    '',
-    '[Variation]',
-    `This is slot ${slot.toUpperCase()}. Make this variant visually distinct from other slots of the same emotion.`,
-    'Vary the exact pose, micro-expression, or slight angle ??while keeping identity and layout stable.',
-    '',
-    '[Quality]',
-    'Photorealistic, highly detailed skin and hair, clean eyes, natural lighting, no blur, no artifacts.',
-    '',
-    '[Ratio]',
-    '2:3',
-    '',
-    '[Resolution]',
-    '1K',
-  ].join('\n');
+  const prompt = buildEmotionPrompt(pid, eid, slot);
 
   const body = {
     action: 'chat',
@@ -1255,6 +1295,96 @@ async function generateEmotion(pid, eid, slot){
     showStatus(`Generate failed: ${msg}`);
     console.error('generateEmotion failed', { pid, eid, slot, err });
     queueSet(qid, 'fail', `Generate failed ${eid}/${slot.toUpperCase()}`);
+  } finally {
+    state.pendingAbort = null;
+    setBusy(false);
+  }
+}
+
+async function generateEmotionQuadBatch(pid, eid){
+  if (state.busy) return;
+  const qid = queueAdd(`Batch ${eid}`);
+  queueSet(qid, 'running');
+
+  const rawNeutralKey = fullKey(pid, 'neutral', 'a');
+  const neutralKey = `emotion_${pid}_neutral_a`;
+  const fallbackNeutralKey = `emotion_${pid}_neutral`;
+  const rawDataUrl =
+    await idbGet(rawNeutralKey) ||
+    await idbGet(`${neutralKey}_hd`) ||
+    await idbGet(neutralKey) ||
+    await idbGet(fallbackNeutralKey);
+
+  if (!rawDataUrl) {
+    queueSet(qid, 'fail', `Missing neutral_a for ${pid}`);
+    showStatus(`Missing neutral_a cache for ${pid}. Upload or generate neutral first.`);
+    return;
+  }
+
+  const targetSlots = getNextAvailableSlots(pid, eid, 4);
+  if (targetSlots.length < 4) {
+    queueSet(qid, 'fail', `No free slots for ${eid}`);
+    showStatus(`Not enough free slots for ${eid}.`);
+    return;
+  }
+
+  const prompt = buildEmotionPrompt(pid, eid, `${targetSlots[0]}-${targetSlots[3]}`, [
+    '[Batch Layout]',
+    'Create one single image arranged as a 2x2 grid with four panel variants for this same emotion.',
+    'Each of the four panels must satisfy the same emotion task.',
+    'All four panels must use different body pose and gesture. No repeated pose across panels.',
+    'No text, no labels, no borders, no separators, no gutters.',
+  ]);
+
+  const controller = new AbortController();
+  state.pendingAbort = controller;
+  setBusy(true);
+  showStatus(`Generating batch ${pid}/${eid}.`);
+
+  try {
+    const res = await fetchNoCache(`${WORKER_URL}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'chat',
+        model: 'gemini-3.1-flash-image-preview',
+        prompt,
+        images: [rawDataUrl],
+        aspect_ratio: '2:3',
+        resolution: '2k',
+      }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const raw = await res.text();
+      throw new Error(raw || `HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    const imageUrl = String(data.image_url || '').trim();
+    const match = String(data.reply || data.content || '').match(/\((https?:\/\/[^)]+)\)|!\[[^\]]*\]\((https?:\/\/[^)]+)\)|https?:\/\/\S+/);
+    const url = imageUrl || (match ? (match[1] || match[2] || match[0]) : '');
+    if (!url) throw new Error(data.error || 'No image URL returned.');
+
+    const generatedDataUrl = await imageUrlToDataUrl(url);
+    const pieces = await splitFourPanelDataUrls(generatedDataUrl);
+    for (let i = 0; i < pieces.length; i++) {
+      const slot = targetSlots[i];
+      const item = pieces[i];
+      await saveSlotImage(pid, eid, slot, item.dataUrl);
+      await uploadBase64ToR2(pid, eid, slot, item.dataUrl);
+      state.slotMaxByEmotion[eid] = Math.max(Number(state.slotMaxByEmotion[eid]) || -1, slotToIndex(slot));
+    }
+    try { localStorage.setItem('em_slot_max_by_emotion', JSON.stringify(state.slotMaxByEmotion)); } catch {}
+
+    render();
+    showStatus(`Generated ${eid}: ${targetSlots.map(s => s.toUpperCase()).join(', ')}`);
+    queueSet(qid, 'done', `Batch ${eid} done`);
+  } catch (err) {
+    const msg = err?.message || String(err || 'unknown error');
+    showStatus(`Batch failed: ${msg}`);
+    console.error('generateEmotionQuadBatch failed', { pid, eid, err });
+    queueSet(qid, 'fail', `Batch ${eid} failed`);
   } finally {
     state.pendingAbort = null;
     setBusy(false);
