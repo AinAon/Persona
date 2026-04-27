@@ -4062,7 +4062,7 @@ function setImageProvider(provider) {
   if (!select) return;
   const valueMap = {
     gemini: 'gemini-3.1-flash-image-preview',
-    openai: 'gpt-image-1.5',
+    openai: 'gpt-image-2',
     xai: 'grok-imagine-image-pro'
   };
   const selectedValue = valueMap[provider] || valueMap.xai;

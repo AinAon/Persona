@@ -19,7 +19,7 @@ import {
   isRileyParticipant,
 } from "./riley_wealth";
 
-const IMAGE_MODELS = ["gemini-3.1-flash-image-preview", "grok-imagine-image-pro", "gpt-image-1.5"];
+const IMAGE_MODELS = ["gemini-3.1-flash-image-preview", "grok-imagine-image-pro", "gpt-image-2"];
 const RATIO_TO_SIZE: Record<string, string> = {
   "1:1": "1024x1024",
   "16:9": "1536x1024",
