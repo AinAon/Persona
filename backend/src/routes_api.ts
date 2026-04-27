@@ -156,6 +156,38 @@ function sanitizeSessionForRestorePayload(session: Record<string, unknown>): Rec
   return next;
 }
 
+function stableMessageKey(msg: unknown): string {
+  try {
+    if (!msg || typeof msg !== "object") return String(msg || "");
+    const m = msg as Record<string, unknown>;
+    const role = String(m.role || "");
+    const createdAt = Number(m.createdAt || 0);
+    const content = JSON.stringify(m.content ?? null);
+    return `${role}|${createdAt}|${content}`;
+  } catch {
+    return String(msg || "");
+  }
+}
+
+function mergeSessionHistory(existingHistory: unknown, incomingHistory: unknown): unknown[] {
+  const a = Array.isArray(existingHistory) ? existingHistory : [];
+  const b = Array.isArray(incomingHistory) ? incomingHistory : [];
+  const out: unknown[] = [];
+  const seen = new Set<string>();
+  for (const msg of [...a, ...b]) {
+    const key = stableMessageKey(msg);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(msg);
+  }
+  out.sort((x, y) => {
+    const tx = Number((x as any)?.createdAt || 0);
+    const ty = Number((y as any)?.createdAt || 0);
+    return tx - ty;
+  });
+  return out;
+}
+
 async function r2Text(env: Env, key: string): Promise<string | null> {
   try {
     const obj = await env.R2.get(key);
@@ -1016,29 +1048,29 @@ async function handleSessionRoute(
   if (request.method === "PUT") {
     const { session } = (await request.json()) as { session: Record<string, unknown> };
     const incomingUpdatedAt = Number((session as any)?.updatedAt || 0);
-    const incomingHistoryLen = Array.isArray((session as any)?.history) ? (session as any).history.length : 0;
     const existingRaw = await getSessionPayloadText(env, id);
+    let mergedSession: Record<string, unknown> = { ...(session || {}) };
     if (existingRaw) {
       try {
         const existing = JSON.parse(existingRaw) as Record<string, unknown>;
+        const mergedHistory = mergeSessionHistory(existing?.history, session?.history);
         const existingUpdatedAt = Number(existing?.updatedAt || 0);
-        const existingHistoryLen = Array.isArray(existing?.history) ? (existing as any).history.length : 0;
-        const incomingIsStale =
-          (incomingUpdatedAt > 0 && existingUpdatedAt > incomingUpdatedAt) ||
-          (incomingUpdatedAt > 0 && existingUpdatedAt === incomingUpdatedAt && existingHistoryLen > incomingHistoryLen);
-        if (incomingIsStale) {
-          return Response.json({ ok: true, skipped: "stale_write" }, { headers: cors });
-        }
+        mergedSession = {
+          ...existing,
+          ...session,
+          history: mergedHistory,
+          updatedAt: Math.max(existingUpdatedAt, incomingUpdatedAt, Date.now()),
+        };
       } catch {
-        // ignore parse failure and proceed with overwrite
+        // ignore parse failure and proceed with incoming payload
       }
     }
-    const payload = JSON.stringify(session);
+    const payload = JSON.stringify(mergedSession);
     await env.R2.put(sessionR2Key(id), payload, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
     await env.KV.delete(`session:${id}`);
 
     const index = await getSessionIndex(env);
-    const meta: SessionMeta = buildSessionMeta(session);
+    const meta: SessionMeta = buildSessionMeta(mergedSession);
 
     const existingIndex = index.findIndex((s) => s.id === id);
     if (existingIndex >= 0) index[existingIndex] = meta;
