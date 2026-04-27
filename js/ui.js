@@ -2713,7 +2713,7 @@ let _chatListRenderVersion = 0;
 async function getChatListNeutralThumb(p) {
   if (!p?.pid) return '';
   const circle = await getEmotionCircleThumb(p.pid, 'neutral', '', 80).catch(() => null);
-  return circle || p.neutral_thumb || '';
+  return circle || p.neutral_thumb || await getNeutralImageThumb(p.pid, 80).catch(() => null) || '';
 }
 
 async function renderChatList(options = {}) {
