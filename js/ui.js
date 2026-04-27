@@ -1266,6 +1266,14 @@ let _activeChatWarmupToken = 0;
 let _startupWarmupRunning = false;
 let _globalWarmupRunning = false;
 
+function getSessionLastMessageSortTs(session) {
+  if (!session || typeof session !== 'object') return 0;
+  if (Array.isArray(session.history) && session.history.length > 0) {
+    return session.history.reduce((max, m) => Math.max(max, Number(m?.createdAt || 0)), 0);
+  }
+  return Number(session.lastMessageAt || session.updatedAt || 0);
+}
+
 async function runGlobalCacheWarmup() {
   const token = ++_globalCacheWarmupToken;
   _globalWarmupRunning = true;
@@ -1277,8 +1285,8 @@ async function runGlobalCacheWarmup() {
       await getNeutralABaseImageHD(p.pid).catch(() => null);
     }
 
-    // 2) Chat list priority: by updatedAt desc
-    const sorted = [...(sessions || [])].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    // 2) Chat list priority: by last message time desc
+    const sorted = [...(sessions || [])].sort((a, b) => getSessionLastMessageSortTs(b) - getSessionLastMessageSortTs(a));
     const seen = new Set();
     for (const s of sorted) {
       if (token !== _globalCacheWarmupToken) return;
@@ -1303,7 +1311,7 @@ async function runStartupVisualWarmup(onProgress) {
 
   try {
     const personaList = Array.isArray(personas) ? personas : [];
-    const sortedSessions = [...(sessions || [])].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    const sortedSessions = [...(sessions || [])].sort((a, b) => getSessionLastMessageSortTs(b) - getSessionLastMessageSortTs(a));
 
     const chatThumbPids = [];
     const seen = new Set();
@@ -2781,7 +2789,7 @@ async function renderChatList(options = {}) {
   list.querySelectorAll('.chat-list-item').forEach(e => e.remove());
   if (!sessions.length) { empty.style.display = 'flex'; return; }
   empty.style.display = 'none';
-  let sorted = [...sessions].sort((a,b) => b.updatedAt - a.updatedAt);
+  let sorted = [...sessions].sort((a,b) => getSessionLastMessageSortTs(b) - getSessionLastMessageSortTs(a));
   if (_chatSearchQuery) {
     sorted = sorted.filter(s => {
       const name = (s.roomName || (s.participantPids||[]).map(pid=>getPersona(pid)?.name||'').join(' ')).toLowerCase();
