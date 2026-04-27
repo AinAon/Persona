@@ -346,6 +346,11 @@ function buildPromptEmotionList() {
 function isGrokModel(model = '') {
   return String(model || '').toLowerCase().includes('grok');
 }
+function getModelMaxInputImages(model = '') {
+  const m = String(model || '').toLowerCase();
+  if (m.includes('grok-imagine-image-pro')) return 1;
+  return 5;
+}
 function getExistingEmotionRef(pid, eid, exceptSlot = '') {
   const slots = Object.keys(state.images?.[pid]?.[eid] || {}).sort();
   for (const s of slots) {
@@ -356,7 +361,7 @@ function getExistingEmotionRef(pid, eid, exceptSlot = '') {
   }
   return '';
 }
-function collectGrokReferenceImages(pid, eid, slot, neutralRef = '') {
+function collectGrokReferenceImages(pid, eid, slot, neutralRef = '', model = '') {
   const refs = [];
   const seen = new Set();
   const pushUnique = (u) => {
@@ -372,7 +377,12 @@ function collectGrokReferenceImages(pid, eid, slot, neutralRef = '') {
   pushUnique(getExistingEmotionRef(pid, eid, slot));
   // 3) fallback neutral
   pushUnique(state.images?.[pid]?.neutral?.a?.raw || state.images?.[pid]?.neutral?.a?.full);
-  return refs.slice(0, 5);
+  const limit = getModelMaxInputImages(model);
+  if (limit <= 1) {
+    const best = refs[1] || refs[0] || '';
+    return best ? [best] : [];
+  }
+  return refs.slice(0, limit);
 }
 function buildConsistencyLockBlock() {
   return [
@@ -1364,7 +1374,7 @@ async function generateEmotion(pid, eid, slot){
   );
   const model = getEmotionModel(eid);
   const refs = isGrokModel(model)
-    ? collectGrokReferenceImages(pid, eid, slot, ref)
+    ? collectGrokReferenceImages(pid, eid, slot, ref, model)
     : [ref];
 
   const body = {
@@ -1483,7 +1493,7 @@ async function generateEmotionQuadBatch(pid, eid){
 
   try {
     const refs = isGrokModel(model)
-      ? collectGrokReferenceImages(pid, eid, targetSlots[0], rawDataUrl)
+      ? collectGrokReferenceImages(pid, eid, targetSlots[0], rawDataUrl, model)
       : [rawDataUrl];
     const res = await fetchNoCache(`${WORKER_URL}/chat`, {
       method: 'POST',
@@ -1595,7 +1605,7 @@ async function generateFourEmotionSet(pid, defs, opts = {}) {
       }
     }
     const refs = isGrokModel(model)
-      ? [neutralDataUrl, ...extraRefs].filter(Boolean).slice(0, 5)
+      ? [neutralDataUrl, ...extraRefs].filter(Boolean).slice(0, getModelMaxInputImages(model))
       : [neutralDataUrl];
     const res = await fetchNoCache(`${WORKER_URL}/chat`, {
       method: 'POST',
