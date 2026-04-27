@@ -3654,6 +3654,8 @@ let _popupZoomed = false;
 let _popupPanning = false;
 let _popupPanOffset = { x: 0, y: 0 };
 let _popupPanLast = { x: 0, y: 0 };
+let _popupPanStart = { x: 0, y: 0 };
+let _popupPanMoved = false;
 let _popupZoomLevel = 1;
 let _popupSuppressCloseUntil = 0;
 
@@ -5774,6 +5776,8 @@ function openImagePopup(url) {
   _popupPanning = false;
   _popupPanOffset = { x: 0, y: 0 };
   _popupPanLast = { x: 0, y: 0 };
+  _popupPanStart = { x: 0, y: 0 };
+  _popupPanMoved = false;
   applyPopupImageTransform();
   updatePopupZoomButtonIcon();
   overlay.classList.add('active');
@@ -5782,6 +5786,11 @@ function openImagePopup(url) {
 function closeImagePopup(e = null) {
   if (e?.stopPropagation) e.stopPropagation();
   if (Date.now() < _popupSuppressCloseUntil) return;
+  if (_popupPanMoved) {
+    _popupPanMoved = false;
+    _popupSuppressCloseUntil = Date.now() + 180;
+    return;
+  }
   const img = document.getElementById('popupImg');
   if (img) {
     img.classList.remove('zoomed');
@@ -5792,6 +5801,8 @@ function closeImagePopup(e = null) {
   _popupPanning = false;
   _popupPanOffset = { x: 0, y: 0 };
   _popupPanLast = { x: 0, y: 0 };
+  _popupPanStart = { x: 0, y: 0 };
+  _popupPanMoved = false;
   applyPopupImageTransform();
   document.getElementById('imagePopup')?.classList.remove('active');
   document.getElementById('popupDeleteBtn')?.style && (document.getElementById('popupDeleteBtn').style.display = 'none');
@@ -5801,6 +5812,11 @@ function closeImagePopup(e = null) {
 
 function handlePopupImageTap(e = null) {
   if (e?.stopPropagation) e.stopPropagation();
+  if (_popupPanMoved) {
+    _popupPanMoved = false;
+    _popupSuppressCloseUntil = Date.now() + 180;
+    return;
+  }
   if (_popupZoomed) {
     togglePopupImageZoom();
     _popupSuppressCloseUntil = Date.now() + 180;
@@ -5852,6 +5868,8 @@ function startPopupPan(e) {
   const p = getPopupPanPoint(e);
   _popupPanning = true;
   _popupPanLast = p;
+  _popupPanStart = p;
+  _popupPanMoved = false;
   img.classList.add('panning');
   if (e?.cancelable) e.preventDefault();
 }
@@ -5864,6 +5882,11 @@ function movePopupPan(e) {
   _popupPanLast = p;
   _popupPanOffset.x += dx;
   _popupPanOffset.y += dy;
+  if (!_popupPanMoved) {
+    const movedX = Math.abs(p.x - _popupPanStart.x);
+    const movedY = Math.abs(p.y - _popupPanStart.y);
+    if (movedX > 4 || movedY > 4) _popupPanMoved = true;
+  }
   _popupSuppressCloseUntil = Date.now() + 220;
   applyPopupImageTransform();
   if (e?.cancelable) e.preventDefault();
