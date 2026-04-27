@@ -212,7 +212,10 @@
       <button class="btn btn-ghost" id="pushAllBtn">PUSH ALL</button>
       <span class="spacer" aria-hidden="true"></span>
       <button class="btn btn-ghost" id="testBatchBtn">Free Emo</button>
-      <button class="btn btn-ghost" id="premiumBatchBtn">Premium Emo</button>
+      <button class="btn btn-ghost" id="premiumBatchBtn1">Premium 1</button>
+      <button class="btn btn-ghost" id="premiumBatchBtn2">Premium 2</button>
+      <button class="btn btn-ghost" id="premiumBatchBtn3">Premium 3</button>
+      <button class="btn btn-ghost" id="premiumBatchBtn4">Premium 4</button>
       <button class="btn btn-ghost" id="adultBatchBtn">Adult Emo</button>
       <button class="btn btn-danger" id="stopBtn" style="display:none;grid-column:1 / -1">STOP</button>
     </div>
@@ -340,6 +343,47 @@ function buildPromptEmotionList() {
     .filter((id) => /^[a-z][a-z0-9_]*$/.test(id))
     .map((id) => ({ id, label: emotionLabelFromId(id), category: getEmotionTier(id) }));
 }
+function isGrokModel(model = '') {
+  return String(model || '').toLowerCase().includes('grok');
+}
+function getExistingEmotionRef(pid, eid, exceptSlot = '') {
+  const slots = Object.keys(state.images?.[pid]?.[eid] || {}).sort();
+  for (const s of slots) {
+    if (String(s) === String(exceptSlot || '')) continue;
+    const hit = state.images?.[pid]?.[eid]?.[s];
+    const src = hit?.raw || hit?.full || hit?.md || '';
+    if (src) return src;
+  }
+  return '';
+}
+function collectGrokReferenceImages(pid, eid, slot, neutralRef = '') {
+  const refs = [];
+  const seen = new Set();
+  const pushUnique = (u) => {
+    const v = String(u || '').trim();
+    if (!v || seen.has(v)) return;
+    seen.add(v);
+    refs.push(v);
+  };
+  // 1) 기준 neutral_a
+  pushUnique(neutralRef);
+  pushUnique(state.images?.[pid]?.neutral_a?.a?.raw || state.images?.[pid]?.neutral_a?.a?.full);
+  // 2) 같은 emotion 기존 샘플 (얼굴/의상 일관성 앵커)
+  pushUnique(getExistingEmotionRef(pid, eid, slot));
+  // 3) fallback neutral
+  pushUnique(state.images?.[pid]?.neutral?.a?.raw || state.images?.[pid]?.neutral?.a?.full);
+  return refs.slice(0, 5);
+}
+function buildConsistencyLockBlock() {
+  return [
+    '',
+    '[Identity Lock - Mandatory]',
+    '얼굴 정체성 고정: 얼굴형, 눈/코/입 비율, 헤어라인, 피부톤을 기준 이미지와 동일하게 유지.',
+    '의상 고정: 상의/하의/액세서리(목걸이 포함) 디자인과 색상을 변경하지 않는다.',
+    '금지: 다른 사람처럼 보이게 만들기, 의상 교체, 장신구 추가/삭제, 체형 과장 변화.',
+    '허용: 표정, 시선, 손동작, 포즈, 카메라 미세 각도 변화.',
+  ];
+}
 function mergeEmotionList(stored = [], promptList = []) {
   const byId = new Map();
   for (const p of promptList) byId.set(p.id, { ...p });
@@ -380,7 +424,10 @@ const state = {
 const els = {
   reloadBtn: document.getElementById('reloadBtn'),
   testBatchBtn: document.getElementById('testBatchBtn'),
-  premiumBatchBtn: document.getElementById('premiumBatchBtn'),
+  premiumBatchBtn1: document.getElementById('premiumBatchBtn1'),
+  premiumBatchBtn2: document.getElementById('premiumBatchBtn2'),
+  premiumBatchBtn3: document.getElementById('premiumBatchBtn3'),
+  premiumBatchBtn4: document.getElementById('premiumBatchBtn4'),
   adultBatchBtn: document.getElementById('adultBatchBtn'),
   pushAllBtn: document.getElementById('pushAllBtn'),
   generateAllBtn: document.getElementById('generateAllBtn'),
@@ -1309,14 +1356,22 @@ async function generateEmotion(pid, eid, slot){
 
   const ref = rawDataUrl;
 
-  const prompt = buildEmotionPrompt(pid, eid, slot);
+  const prompt = buildEmotionPrompt(
+    pid,
+    eid,
+    slot,
+    isGrokModel(getEmotionModel(eid)) ? buildConsistencyLockBlock() : []
+  );
   const model = getEmotionModel(eid);
+  const refs = isGrokModel(model)
+    ? collectGrokReferenceImages(pid, eid, slot, ref)
+    : [ref];
 
   const body = {
     action: 'chat',
     model,
     prompt,
-    images: [ref],
+    images: refs.length ? refs : [ref],
     aspect_ratio: '2:3',
     resolution: '1k',
   };
@@ -1417,6 +1472,7 @@ async function generateEmotionQuadBatch(pid, eid){
     'Each of the four panels must satisfy the same emotion task.',
     'All four panels must use different body pose and gesture. No repeated pose across panels.',
     'No text, no labels, no borders, no separators, no gutters.',
+    ...(isGrokModel(getEmotionModel(eid)) ? buildConsistencyLockBlock() : []),
   ]);
 
   const controller = new AbortController();
@@ -1426,6 +1482,9 @@ async function generateEmotionQuadBatch(pid, eid){
   showStatus(`Generating batch ${pid}/${eid} (${model}).`);
 
   try {
+    const refs = isGrokModel(model)
+      ? collectGrokReferenceImages(pid, eid, targetSlots[0], rawDataUrl)
+      : [rawDataUrl];
     const res = await fetchNoCache(`${WORKER_URL}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1433,7 +1492,7 @@ async function generateEmotionQuadBatch(pid, eid){
         action: 'chat',
         model,
         prompt,
-        images: [rawDataUrl],
+        images: refs.length ? refs : [rawDataUrl],
         aspect_ratio: '2:3',
         resolution: '2k',
       }),
@@ -1524,9 +1583,20 @@ async function generateFourEmotionSet(pid, defs, opts = {}) {
       '',
       '[Output]',
       'One 2K image, 2:3 aspect ratio, arranged as a 2x2 grid.',
+      ...(isGrokModel(model) ? buildConsistencyLockBlock() : []),
     ].join('\n');
 
     showStatus(`Generating ${label} set for ${pid} (${model}).`);
+    const extraRefs = [];
+    if (isGrokModel(model)) {
+      for (const d of defs) {
+        const r = getExistingEmotionRef(pid, String(d?.eid || '').toLowerCase(), String(d?.slot || ''));
+        if (r) extraRefs.push(r);
+      }
+    }
+    const refs = isGrokModel(model)
+      ? [neutralDataUrl, ...extraRefs].filter(Boolean).slice(0, 5)
+      : [neutralDataUrl];
     const res = await fetchNoCache(`${WORKER_URL}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1534,7 +1604,7 @@ async function generateFourEmotionSet(pid, defs, opts = {}) {
         action: 'chat',
         model,
         prompt,
-        images: [neutralDataUrl],
+        images: refs.length ? refs : [neutralDataUrl],
         aspect_ratio: '2:3',
         resolution: '2k',
       }),
@@ -1610,11 +1680,32 @@ async function runBatchSetByGroups(pid, allEmotionIds, label, model = DEFAULT_IM
   }
 }
 
-async function generatePremiumEmotionBatches(){
+async function generatePremiumEmotionBatch1(){
   const pid = state.activePid;
   if (!pid) return;
-  const ids = ['subtlesmile', 'confusion', 'cry', 'disgust', 'horror', 'laugh', 'playful', 'relief', 'shy', 'worry', 'pain', 'sleepy', 'hunger', 'absentminded', 'expecting', 'contempt'];
-  return runBatchSetByGroups(pid, ids, 'Premium Emo', DEFAULT_IMAGE_MODEL);
+  const ids = ['subtlesmile', 'laugh', 'playful', 'relief'];
+  return runBatchSetByGroups(pid, ids, 'Premium 1', DEFAULT_IMAGE_MODEL);
+}
+
+async function generatePremiumEmotionBatch2(){
+  const pid = state.activePid;
+  if (!pid) return;
+  const ids = ['shy', 'worry', 'pain', 'sleepy'];
+  return runBatchSetByGroups(pid, ids, 'Premium 2', DEFAULT_IMAGE_MODEL);
+}
+
+async function generatePremiumEmotionBatch3(){
+  const pid = state.activePid;
+  if (!pid) return;
+  const ids = ['confusion', 'cry', 'disgust', 'contempt'];
+  return runBatchSetByGroups(pid, ids, 'Premium 3', DEFAULT_IMAGE_MODEL);
+}
+
+async function generatePremiumEmotionBatch4(){
+  const pid = state.activePid;
+  if (!pid) return;
+  const ids = ['horror', 'hunger', 'absentminded', 'expecting'];
+  return runBatchSetByGroups(pid, ids, 'Premium 4', DEFAULT_IMAGE_MODEL);
 }
 
 async function generateAdultEmotionBatch(){
@@ -1907,7 +1998,10 @@ async function reloadAll(){
 function init(){
   if (els.reloadBtn) els.reloadBtn.onclick = () => reloadAll();
   if (els.testBatchBtn) els.testBatchBtn.onclick = generateFourEmotionTest;
-  if (els.premiumBatchBtn) els.premiumBatchBtn.onclick = generatePremiumEmotionBatches;
+  if (els.premiumBatchBtn1) els.premiumBatchBtn1.onclick = generatePremiumEmotionBatch1;
+  if (els.premiumBatchBtn2) els.premiumBatchBtn2.onclick = generatePremiumEmotionBatch2;
+  if (els.premiumBatchBtn3) els.premiumBatchBtn3.onclick = generatePremiumEmotionBatch3;
+  if (els.premiumBatchBtn4) els.premiumBatchBtn4.onclick = generatePremiumEmotionBatch4;
   if (els.adultBatchBtn) els.adultBatchBtn.onclick = generateAdultEmotionBatch;
   if (els.generateAllBtn) els.generateAllBtn.onclick = generateAll;
   if (els.pushAllBtn) els.pushAllBtn.onclick = pushAll;
