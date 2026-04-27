@@ -12,7 +12,7 @@ import {
   setMemoryText,
   upsertMemory,
 } from "./memory";
-import { getRileyWealthSnapshot } from "./riley_wealth";
+import { getRileyWealthSnapshot, reconcileRileyWealth } from "./riley_wealth";
 
 type SessionMeta = {
   id: string;
@@ -837,6 +837,11 @@ export async function handleApiRoute(
       state: snapshot.state,
       events: snapshot.events,
     }, { headers: { ...cors, "Cache-Control": "no-store" } });
+  }
+
+  if (url.pathname === "/riley/wealth/reconcile" && request.method === "POST") {
+    const result = await reconcileRileyWealth(env);
+    return Response.json(result, { headers: { ...cors, "Cache-Control": "no-store" } });
   }
 
   if (url.pathname === "/personas") {

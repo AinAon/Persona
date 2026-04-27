@@ -8,8 +8,8 @@ import {
   buildRileySystemPrompt,
   extractLatestUserText,
   getRileyWealthSnapshot,
+  isWealthMutationText,
   isRileyParticipant,
-  isWealthIntentText,
 } from "./riley_wealth";
 
 const IMAGE_MODELS = ["gemini-3.1-flash-image-preview", "grok-imagine-image-pro", "gpt-image-1.5"];
@@ -90,7 +90,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
   const isImageReq = IMAGE_MODELS.includes(model) || !!prompt;
   const inRileyChat = isRileyParticipant(participant_pids || []);
   const latestUserText = extractLatestUserText(messages);
-  const shouldWriteRileyEvent = inRileyChat && isWealthIntentText(latestUserText);
+  const shouldWriteRileyEvent = inRileyChat && isWealthMutationText(latestUserText);
 
   try {
     const rileySnapshot = (!isImageReq && inRileyChat)

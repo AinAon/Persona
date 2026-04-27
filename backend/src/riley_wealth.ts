@@ -46,11 +46,17 @@ type WealthEvent = {
   actor: "riley";
   active: boolean;
   payload: {
+    schema_version: "1.1.0";
     action: WealthAction;
     bucket: WealthBucket;
+    asset_id: string;
     label: string;
+    currency: "KRW";
     amount: number | null;
+    effective_date: string;
+    source: "chat_text";
     text: string;
+    note?: string;
   };
   source_text: string;
 };
@@ -65,6 +71,15 @@ function todayYmd(iso: string): string {
 
 function makeId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function toAssetId(bucket: WealthBucket, label: string): string {
+  const key = String(label || "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 48);
+  return `${bucket}:${key || "unnamed"}`;
 }
 
 function safeNumber(v: unknown): number {
@@ -152,6 +167,12 @@ export function isWealthIntentText(text: string): boolean {
   return /(자산|부채|대출|연금|퇴직|etf|주식|채권|부동산|포트폴리오|지출|수입|가계|투자|상환|매수|매도|리밸런싱|현금흐름|asset|liabilit|loan|debt|portfolio|expense|income|invest)/i.test(t);
 }
 
+export function isWealthMutationText(text: string): boolean {
+  const t = String(text || "").toLowerCase();
+  if (!isWealthIntentText(t)) return false;
+  return /(추가|등록|기록|저장|수정|변경|업데이트|갱신|삭제|제거|해지|매도|update|add|set|change|edit|remove|delete|sell)/i.test(t);
+}
+
 function classifyBucket(text: string): WealthBucket {
   const t = String(text || "").toLowerCase();
   if (/(대출|부채|상환|loan|debt|mortgage|liabilit)/i.test(t)) return "liabilities";
@@ -187,10 +208,12 @@ function parseKrwAmount(text: string): number | null {
   }
 
   const wonNum = raw.match(/(\d+(?:\.\d+)?)(원)?/);
-  if (!wonNum) return null;
-  const v = safeNumber(wonNum[1]);
-  if (!v) return null;
-  if (v >= 1000) return Math.round(v);
+  if (wonNum) {
+    const v = safeNumber(wonNum[1]);
+    if (v >= 1000) return Math.round(v);
+  }
+  const nums = [...raw.matchAll(/\d{4,}/g)].map((m) => safeNumber(m[0])).filter((n) => n > 0);
+  if (nums.length) return Math.max(...nums);
   return null;
 }
 
@@ -225,7 +248,19 @@ function sumActive(list: WealthEntry[]): number {
   return list.filter((x) => x.active).reduce((acc, x) => acc + safeNumber(x.amount), 0);
 }
 
+function isValidWealthEvent(event: WealthEvent): boolean {
+  if (!event?.payload) return false;
+  const p = event.payload;
+  if (!p.schema_version || !p.asset_id || !p.label || !p.effective_date) return false;
+  if (!["assets", "liabilities", "retirement", "fixed_cashflow"].includes(p.bucket)) return false;
+  if (!["add", "update", "remove"].includes(p.action)) return false;
+  if (p.currency !== "KRW") return false;
+  if (p.amount != null && (!Number.isFinite(Number(p.amount)) || Number(p.amount) < 0)) return false;
+  return true;
+}
+
 function applyEventToState(state: RileyState, event: WealthEvent): RileyState {
+  if (!isValidWealthEvent(event)) return state;
   const next: RileyState = {
     ...state,
     assets: [...(state.assets || [])],
@@ -278,13 +313,27 @@ function applyEventToState(state: RileyState, event: WealthEvent): RileyState {
   return next;
 }
 
-function buildEventFromText(text: string): WealthEvent {
+function parseEffectiveDate(text: string, ts: string): string {
+  const m = String(text || "").match(/\b(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})\b/);
+  if (!m) return todayYmd(ts);
+  const y = m[1];
+  const mo = String(Number(m[2])).padStart(2, "0");
+  const d = String(Number(m[3])).padStart(2, "0");
+  return `${y}-${mo}-${d}`;
+}
+
+function parseStructuredFromText(text: string): WealthEvent | null {
+  const raw = String(text || "").trim();
+  if (!raw) return null;
   const ts = nowIso();
-  const action = classifyAction(text);
-  const bucket = classifyBucket(text);
-  const amount = parseKrwAmount(text);
+  const action = classifyAction(raw);
+  const bucket = classifyBucket(raw);
+  const amount = parseKrwAmount(raw);
+  const label = extractLabel(raw);
+  const assetId = toAssetId(bucket, label);
+  const effectiveDate = parseEffectiveDate(raw, ts);
   const eventType = `${bucket}_${action}`;
-  return {
+  const event: WealthEvent = {
     event_id: makeId("evt"),
     timestamp: ts,
     mode: "wealth_action",
@@ -292,14 +341,21 @@ function buildEventFromText(text: string): WealthEvent {
     actor: "riley",
     active: action !== "remove",
     payload: {
+      schema_version: "1.1.0",
       action,
       bucket,
-      label: extractLabel(text),
+      asset_id: assetId,
+      label,
+      currency: "KRW",
       amount,
-      text: String(text || "").trim(),
+      effective_date: effectiveDate,
+      source: "chat_text",
+      text: raw,
+      note: amount == null ? "non_numeric_context" : undefined,
     },
-    source_text: String(text || "").trim(),
+    source_text: raw,
   };
+  return isValidWealthEvent(event) ? event : null;
 }
 
 async function appendLogLine(env: Env, event: WealthEvent): Promise<void> {
@@ -320,7 +376,8 @@ export async function loadRileyState(env: Env): Promise<RileyState> {
 export async function appendRileyWealthEvent(env: Env, text: string): Promise<{ ok: true; eventId: string } | { ok: false; error: string }> {
   const raw = String(text || "").trim();
   if (!raw) return { ok: false, error: "empty text" };
-  const event = buildEventFromText(raw);
+  const event = parseStructuredFromText(raw);
+  if (!event) return { ok: false, error: "parse_failed" };
   const prev = await loadRileyState(env);
   const next = applyEventToState(prev, event);
   await appendLogLine(env, event);
@@ -348,17 +405,58 @@ export function buildRileySystemPrompt(state: RileyState): string {
 
 export async function getRileyWealthSnapshot(env: Env, tail = 30): Promise<{ state: RileyState; events: WealthEvent[] }> {
   const state = await loadRileyState(env);
+  const allEvents = await loadAllRileyEvents(env);
+  return { state, events: allEvents.slice(-Math.max(1, tail)) };
+}
+
+async function loadAllRileyEvents(env: Env): Promise<WealthEvent[]> {
   const raw = await r2Text(env, RILEY_LOG_KEY);
   const lines = raw
     ? raw.split(/\r?\n/).map((x) => x.trim()).filter(Boolean)
     : [];
   const parsed: WealthEvent[] = [];
-  for (const line of lines.slice(-Math.max(1, tail))) {
+  for (const line of lines) {
     try {
-      parsed.push(JSON.parse(line) as WealthEvent);
+      const event = JSON.parse(line) as WealthEvent;
+      if (isValidWealthEvent(event)) parsed.push(event);
     } catch {
       // skip broken line
     }
   }
-  return { state, events: parsed };
+  return parsed;
+}
+
+export async function reconcileRileyWealth(env: Env): Promise<{
+  ok: true;
+  changed: boolean;
+  report: {
+    events: number;
+    oldTotals: RileyState["totals"];
+    newTotals: RileyState["totals"];
+  };
+}> {
+  const oldState = await loadRileyState(env);
+  const events = await loadAllRileyEvents(env);
+  let rebuilt = defaultState();
+  for (const e of events) rebuilt = applyEventToState(rebuilt, e);
+  rebuilt.meta.last_event_id = events.length ? events[events.length - 1].event_id : "";
+  rebuilt.meta.last_updated_at = events.length ? events[events.length - 1].timestamp : nowIso();
+  rebuilt.meta.source_log = "riley_memory.log.jsonl";
+  const changed = JSON.stringify(oldState.totals) !== JSON.stringify(rebuilt.totals)
+    || JSON.stringify(oldState.fixed_cashflow) !== JSON.stringify(rebuilt.fixed_cashflow)
+    || oldState.assets.length !== rebuilt.assets.length
+    || oldState.liabilities.length !== rebuilt.liabilities.length
+    || oldState.retirement.length !== rebuilt.retirement.length;
+  if (changed) {
+    await r2PutJson(env, RILEY_STATE_KEY, rebuilt);
+  }
+  return {
+    ok: true,
+    changed,
+    report: {
+      events: events.length,
+      oldTotals: oldState.totals,
+      newTotals: rebuilt.totals,
+    },
+  };
 }
