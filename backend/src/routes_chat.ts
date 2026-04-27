@@ -3,6 +3,14 @@ import { generateGeminiImage, generateGeminiText, generateImagenImage, streamGem
 import { generateOpenAIImage, generateOpenAIText, streamOpenAIText } from "./model_openai";
 import { generateGrokImage, generateGrokText, streamGrokText } from "./model_grok";
 import { buildMemorySystemPrompt } from "./memory";
+import {
+  appendRileyWealthEvent,
+  buildRileySystemPrompt,
+  extractLatestUserText,
+  getRileyWealthSnapshot,
+  isRileyParticipant,
+  isWealthIntentText,
+} from "./riley_wealth";
 
 const IMAGE_MODELS = ["gemini-3.1-flash-image-preview", "grok-imagine-image-pro", "gpt-image-1.5"];
 const RATIO_TO_SIZE: Record<string, string> = {
@@ -73,8 +81,14 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
   };
 
   const isImageReq = IMAGE_MODELS.includes(model) || !!prompt;
+  const inRileyChat = isRileyParticipant(participant_pids || []);
+  const latestUserText = extractLatestUserText(messages);
+  const shouldWriteRileyEvent = inRileyChat && isWealthIntentText(latestUserText);
 
   try {
+    const rileySnapshot = (!isImageReq && inRileyChat)
+      ? await getRileyWealthSnapshot(env, 10)
+      : null;
     const memPrompt = isImageReq
       ? ""
       : await buildMemorySystemPrompt(env, {
@@ -85,10 +99,13 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       ? [
           { role: "system", content: ANTI_HALLUCINATION_GUARD },
           { role: "system", content: RESPONSE_VARIANCE_PROMPT },
+          ...(rileySnapshot ? [{ role: "system", content: buildRileySystemPrompt(rileySnapshot.state) }] : []),
           { role: "system", content: memPrompt },
           ...messages
         ]
-      : messages;
+      : ((!isImageReq && rileySnapshot)
+          ? [{ role: "system", content: buildRileySystemPrompt(rileySnapshot.state) }, ...messages]
+          : messages);
     const preparedMessages = isImageReq
       ? effectiveMessages
       : await inlineImageUrlsInMessages(effectiveMessages);
@@ -170,6 +187,9 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
                 onDelta: (delta) => send({ type: "delta", text: delta }),
               });
             }
+            if (shouldWriteRileyEvent) {
+              await appendRileyWealthEvent(env, latestUserText);
+            }
             send({ type: "done", reply });
           } catch (err: any) {
             send({ type: "error", error: err?.message || "stream error" });
@@ -210,6 +230,10 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
         messages: preparedMessages,
         apiKey: apiKeys.openai,
       });
+    }
+
+    if (shouldWriteRileyEvent) {
+      await appendRileyWealthEvent(env, latestUserText);
     }
 
     if (imageUrlOut) {
