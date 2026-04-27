@@ -1011,13 +1011,14 @@ async function loadSession(id, options = {}) {
     const remoteSession = data?.session || null;
     if (!remoteSession) {
       const localSession = getLocalSession(id);
-      const shouldKeepLocal = hadLocalCache || Array.isArray(localSession) || Array.isArray(s.history);
+      const localHistory = Array.isArray(localSession)
+        ? localSession
+        : (Array.isArray(s.history) ? s.history : []);
+      const shouldKeepLocal = localHistory.length > 0;
       if (shouldKeepLocal) {
-        s.history = Array.isArray(s.history) ? s.history : [];
+        s.history = localHistory;
         s._loaded = true;
         setLocalSession(id, s.history);
-        saveSession(id);
-        saveIndex();
         if (activeChatId === id) renderChatArea();
         return;
       }
