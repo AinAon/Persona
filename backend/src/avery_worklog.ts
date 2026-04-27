@@ -218,13 +218,26 @@ export function isWorklogIntentText(text: string): boolean {
   return /(작업|작업내역|에러|오류|버그|해결|수정|할일|todo|to-do|다음|리마인더|알림|마감|업무|worklog|issue|error|fix|resolve|task|reminder|deadline|next)/i.test(t);
 }
 
-export function isWorklogMutationText(text: string): boolean {
+function isPersonalChatText(text: string): boolean {
   const t = String(text || "").trim().toLowerCase();
   if (!t) return false;
-  if (t.length < 6 && /^(ㅇㅇ|ok|okay|thanks|thx|감사|고마워|네|응|ㅇㅋ|ㅎㅇ|hi|hello)$/i.test(t)) return false;
-  if (isWorklogIntentText(t)) return true;
-  // Avery chat is work-journal oriented: persist most meaningful user turns.
-  return t.length >= 8;
+  return /(안녕|ㅎㅇ|하이|hello|hi|뭐해|배고|졸리|심심|주말|영화|드라마|연애|날씨|저녁|점심|아침|놀자|수다)/i.test(t);
+}
+
+export function classifyAveryConversation(text: string): "work" | "personal" | "mixed" {
+  const t = String(text || "").trim();
+  if (!t) return "personal";
+  const hasWork = isWorklogIntentText(t)
+    || /(배포|deploy|push|commit|브랜치|branch|코드|리팩터|테스트|test|빌드|build|로그|log|api|모듈|성능|최적화|리그레션|버전|릴리스|회의|요건|요구사항|기획|문서|spec)/i.test(t);
+  const hasPersonal = isPersonalChatText(t);
+  if (hasWork && hasPersonal) return "mixed";
+  if (hasWork) return "work";
+  return "personal";
+}
+
+export function shouldPersistAveryWorklogText(text: string): boolean {
+  const cls = classifyAveryConversation(text);
+  return cls === "work" || cls === "mixed";
 }
 
 function classifyKind(text: string): WorkKind {

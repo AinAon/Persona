@@ -8,7 +8,7 @@ import {
   buildAverySystemPrompt,
   getAveryWorklogSnapshot,
   isAveryParticipant,
-  isWorklogMutationText,
+  shouldPersistAveryWorklogText,
 } from "./avery_worklog";
 import {
   appendRileyWealthEvent,
@@ -56,6 +56,7 @@ const RILEY_NUMERIC_PRIORITY_GUARD = [
 const AVERY_WORKLOG_GUARD = [
   "Avery worklog policy:",
   "- Treat Avery worklog snapshot as persistent source for tasks/errors/solutions/reminders.",
+  "- Only persist work or mixed conversation; skip purely personal chat.",
   "- When user asks to record/update/remove/complete work items, respond consistently with snapshot.",
   "- If uncertain, ask one short clarification before destructive removal.",
 ].join(" ");
@@ -106,7 +107,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
   const inAveryChat = isAveryParticipant(participant_pids || []);
   const latestUserText = extractLatestUserText(messages);
   const shouldWriteRileyEvent = inRileyChat && isWealthMutationText(latestUserText);
-  const shouldWriteAveryEvent = inAveryChat && isWorklogMutationText(latestUserText);
+  const shouldWriteAveryEvent = inAveryChat && shouldPersistAveryWorklogText(latestUserText);
 
   try {
     const rileySnapshot = (!isImageReq && inRileyChat)
