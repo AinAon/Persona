@@ -943,9 +943,10 @@ async function loadIndex() {
   } catch(e) {}
 }
 
-async function loadSession(id) {
+async function loadSession(id, options = {}) {
   const s = sessions.find(x=>x.id===id); if (!s) return;
-  if (s._loaded && Array.isArray(s.history)) {
+  const forceRemote = !!options?.forceRemote;
+  if (!forceRemote && s._loaded && Array.isArray(s.history)) {
     if (activeChatId === id) renderChatArea();
     return;
   }

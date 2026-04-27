@@ -209,7 +209,7 @@ async function refreshCurrentChatIfStale(id) {
       remoteCount > localCount ||
       remoteLastTs > localLastTs
     ) {
-      await loadSession(sid);
+      await loadSession(sid, { forceRemote: true });
       if (activeChatId === sid) renderChatArea();
       return true;
     }

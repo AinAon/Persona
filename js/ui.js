@@ -338,7 +338,7 @@ async function refreshCurrentChat() {
     showToast('데모 채팅은 새로고침 대상이 아니야');
     return;
   }
-  await loadSession(activeChatId);
+  await loadSession(activeChatId, { forceRemote: true });
   renderChatArea();
   showToast('대화를 새로고침했어');
 }
