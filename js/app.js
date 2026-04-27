@@ -445,6 +445,7 @@ async function init() {
   }).catch(()=>{});
   await refreshAllCaches({ force: false, showLoading: true, loadingLabel: '로컬 캐시 로드 중...' });
   preloadMemoryMetaLight();
+  try { if (window.reminders && typeof window.reminders.init === 'function') window.reminders.init(); } catch(e) {}
   if (loadingEscapeTimer) clearTimeout(loadingEscapeTimer);
   clearTimeout(loadingFailsafe);
   if (typeof setLoadingEscapeVisible === 'function') setLoadingEscapeVisible(false);
