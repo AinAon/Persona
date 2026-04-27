@@ -284,6 +284,25 @@ function getChatHiddenFilterEnabled() {
   return !!window._showHiddenChats;
 }
 
+function getPersonaHiddenFilterEnabled() {
+  return !!window._showHiddenPersonas;
+}
+
+function updatePersonaListVisibilityButton() {
+  const btn = document.getElementById('personaHiddenToggleBtn');
+  if (!btn) return;
+  const on = getPersonaHiddenFilterEnabled();
+  btn.classList.toggle('on', on);
+  btn.innerHTML = iconCloseXSVG();
+  btn.title = on ? '숨긴 페르소나 보기 중' : '숨긴 페르소나 숨기기';
+}
+
+function togglePersonaHiddenVisibility() {
+  window._showHiddenPersonas = !getPersonaHiddenFilterEnabled();
+  updatePersonaListVisibilityButton();
+  renderPersonaGrid();
+}
+
 function getChatListAvatarVisibilityEnabled() {
   if (typeof window._showChatListAvatars === 'boolean') return window._showChatListAvatars;
   return userProfile?.chatListAvatarVisibility !== false;
@@ -1701,22 +1720,24 @@ async function preloadImageDecode(src) {
 async function renderPersonaGrid() {
   const COLS = 3;
   const grid = document.getElementById('personaGrid');
+  const sourcePersonas = getPersonaHiddenFilterEnabled() ? (personas || []) : (personas || []).filter(p => !p?.hidden);
   const signature = JSON.stringify((personas || []).map((p) => ({
     pid: p?.pid || '',
     name: p?.name || '',
     hue: Number(p?.hue || 0),
     type: p?.type || '',
     image: p?.image || '',
+    hidden: !!p?.hidden,
     updatedAt: Number(p?.updatedAt || 0)
-  })));
+  })).concat([`showHidden:${getPersonaHiddenFilterEnabled()}`]));
   if (grid && grid.children.length && signature === _lastPersonaGridSignature) return;
   _lastPersonaGridSignature = signature;
   const fragment = document.createDocumentFragment();
 
   const myVersion = ++_personaGridRenderVersion;
 
-  for (let i = 0; i < personas.length; i++) {
-    const p = personas[i];
+  for (let i = 0; i < sourcePersonas.length; i++) {
+    const p = sourcePersonas[i];
     const card = document.createElement('div');
     card.className = 'persona-card';
     card.dataset.pid = p.pid;
@@ -1777,6 +1798,7 @@ async function renderPersonaGrid() {
 
   setupTouchDrag(grid);
   setupPersonaGridBlankTapClear(grid);
+  updatePersonaListVisibilityButton();
 }
 
 function setupPersonaGridBlankTapClear(grid) {
@@ -2049,7 +2071,7 @@ async function openPersonaEdit(pid) {
 }
 
 function createNewPersona() {
-  const p = { pid: nextPid(), name: '', bio: '', tags: [], hue: 200, image: null };
+  const p = { pid: nextPid(), name: '', bio: '', tags: [], hue: 200, image: null, hidden: false };
   isNewPersona = true; editingPid = p.pid;
   personas.push(p);
   document.getElementById('editTitle').textContent = '새 페르소나';
@@ -2122,6 +2144,12 @@ function renderEditBody(p, hdImage = null) {
 
       <div class="edit-field-label">NAME</div>
       <input class="edit-input" id="editName" value="${esc(p.name)}" placeholder="이름" style="width:100%">
+
+      <div class="edit-field-label">VISIBILITY</div>
+      <select class="edit-input" id="editHidden" style="width:100%">
+        <option value="false" ${!p.hidden ? 'selected' : ''}>표시</option>
+        <option value="true" ${p.hidden ? 'selected' : ''}>숨김</option>
+      </select>
 
       <div class="edit-field-row" style="margin-top:0">
         <div>
@@ -2591,6 +2619,7 @@ async function savePersonaEdit() {
   p.age = document.getElementById('editAge')?.value.trim() || '';
   p.gender = document.getElementById('editGender')?.value || '';
   p.mbti = document.getElementById('editMbti')?.value.trim() || '';
+  p.hidden = document.getElementById('editHidden')?.value === 'true';
   p.defaultModel = document.getElementById('editDefaultModel')?.value || '';
   p.ttsModel = 'qwen3-tts-flash-realtime';
   p.ttsVoice = document.getElementById('editTtsVoice')?.value || '';

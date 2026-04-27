@@ -124,6 +124,7 @@ function personasSignature(list) {
       name: p?.name || '',
       image: p?.image || '',
       neutral_md: p?.neutral_md || '',
+      hidden: !!p?.hidden,
       updatedAt: Number(p?.updatedAt || 0)
     })));
   } catch(e) {
