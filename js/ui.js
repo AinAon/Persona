@@ -3752,8 +3752,81 @@ function resolveActiveTtsConfig() {
   return { model, voice, prompt, tone, emotionEnabled, emotionStrength };
 }
 
+function toKoreanNativeUnder100(n) {
+  const num = Math.trunc(Number(n || 0));
+  if (!Number.isFinite(num) || num <= 0 || num >= 100) return '';
+  const ones = ['', '한', '두', '세', '네', '다섯', '여섯', '일곱', '여덟', '아홉'];
+  const tens = ['', '열', '스물', '서른', '마흔', '쉰', '예순', '일흔', '여든', '아흔'];
+  const t = Math.floor(num / 10);
+  const o = num % 10;
+  return `${tens[t]}${ones[o]}`;
+}
+
+function toKoreanSinoInteger(n) {
+  let num = Math.trunc(Number(n || 0));
+  if (!Number.isFinite(num)) return '';
+  if (num === 0) return '영';
+  const negative = num < 0;
+  if (negative) num = Math.abs(num);
+  const digits = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
+  const smallUnits = ['', '십', '백', '천'];
+  const bigUnits = ['', '만', '억', '조', '경'];
+  let group = 0;
+  let out = '';
+  while (num > 0 && group < bigUnits.length) {
+    const part = num % 10000;
+    if (part > 0) {
+      const p1 = Math.floor(part / 1000);
+      const p2 = Math.floor((part % 1000) / 100);
+      const p3 = Math.floor((part % 100) / 10);
+      const p4 = part % 10;
+      const vals = [p1, p2, p3, p4];
+      let chunk = '';
+      vals.forEach((v, i) => {
+        if (!v) return;
+        const unitIdx = 3 - i;
+        chunk += `${v === 1 && unitIdx > 0 ? '' : digits[v]}${smallUnits[unitIdx]}`;
+      });
+      out = `${chunk}${bigUnits[group]}${out}`;
+    }
+    num = Math.floor(num / 10000);
+    group += 1;
+  }
+  return negative ? `마이너스 ${out}` : out;
+}
+
+function toKoreanNumberForTtsToken(token) {
+  const raw = String(token || '').replace(/,/g, '');
+  if (!/^-?\d+$/.test(raw)) return token;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return token;
+  const abs = Math.abs(n);
+  if (abs >= 1 && abs <= 99) {
+    const native = toKoreanNativeUnder100(abs);
+    if (native) return n < 0 ? `마이너스 ${native}` : native;
+  }
+  return toKoreanSinoInteger(n) || token;
+}
+
+function normalizeTtsReadableText(rawText) {
+  let text = sanitizeTextForUnicodeSafety(String(rawText || ''));
+  text = text
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`[^`]*`/g, ' ')
+    .replace(/https?:\/\/\S+/gi, ' ')
+    .replace(/\(([^)]*)\)|\[([^\]]*)\]|\{([^}]*)\}/g, ' ')
+    .replace(/^\s*\|.*\|\s*$/gm, ' ')
+    .replace(/[*_#|~<>]/g, ' ')
+    .replace(/[_=]{2,}/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  text = text.replace(/\d[\d,]*/g, (m) => toKoreanNumberForTtsToken(m));
+  text = text.replace(/\s+/g, ' ').trim();
+  return text;
+}
+
 async function speakTextWithServerTts(rawText, btn = null, opts = {}) {
-  const text = String(rawText || '').trim();
+  const text = normalizeTtsReadableText(rawText);
   if (!text) return;
   if (_ttsCurrentBtn && _ttsCurrentBtn === btn) {
     ttsStopCurrent();
