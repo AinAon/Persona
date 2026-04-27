@@ -3225,7 +3225,7 @@ async function renderSelectGrid() {
     const card = document.createElement('div');
     card.className = 'select-card'; card.style.position = 'relative';
     card.onclick = () => toggleSelectPid(p.pid, card);
-    const neutral = await getEmotionImage(p.pid, 'neutral', 200);
+    const neutral = await getEmotionImage(p.pid, 'neutral', 200) || await getNeutralImage(p.pid);
     const imgSrc = neutral || p.image;
     card.innerHTML = `
       <div class="select-card-img">${imgSrc ? `<img src="${imgSrc}">` : defaultAvatar(p.hue)}</div>
@@ -5150,7 +5150,7 @@ async function renderInviteGrid(s) {
     const card = document.createElement('div');
     card.className = 'select-card'; card.style.position = 'relative';
     card.onclick = () => toggleInvitePid(p.pid, card, s);
-    const neutral = await getEmotionImage(p.pid, 'neutral', 200);
+    const neutral = await getEmotionImage(p.pid, 'neutral', 200) || await getNeutralImage(p.pid);
     const imgSrc = neutral || p.image;
     card.innerHTML = `
       <div class="select-card-img">${imgSrc ? `<img src="${imgSrc}">` : defaultAvatar(p.hue)}</div>
