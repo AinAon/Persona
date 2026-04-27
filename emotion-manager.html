@@ -158,6 +158,7 @@
   background:linear-gradient(to top, rgba(15,15,19,.98), rgba(15,15,19,.86));
   padding:6px 0 2px;
 }
+.sidebar-actions .spacer{display:block}
 .sidebar-actions .btn{
   width:100%;
   padding:8px 0;
@@ -201,8 +202,11 @@
     <div class="persona-grid" id="personaGrid"></div>
     <div class="sidebar-actions">
       <button class="btn btn-ghost" id="reloadBtn">RELOAD</button>
-      <button class="btn btn-ghost" id="testBatchBtn">BASIC EMO</button>
       <button class="btn btn-ghost" id="pushAllBtn">PUSH ALL</button>
+      <span class="spacer" aria-hidden="true"></span>
+      <button class="btn btn-ghost" id="testBatchBtn">Free Emo</button>
+      <button class="btn btn-ghost" id="premiumBatchBtn">Premium Emo</button>
+      <button class="btn btn-ghost" id="adultBatchBtn">Adult Emo</button>
       <button class="btn btn-danger" id="stopBtn" style="display:none;grid-column:1 / -1">STOP</button>
     </div>
   </aside>
@@ -310,6 +314,7 @@ function getEmotionTier(id = '') {
 }
 function getEmotionModel(id = '') {
   const key = String(id || '').toLowerCase();
+  if (getEmotionTier(key) === 'adult') return 'grok-imagine-image-pro';
   return String(EMOTION_MODEL_BY_ID[key] || DEFAULT_IMAGE_MODEL);
 }
 function emotionLabelFromId(id = '') {
@@ -365,6 +370,8 @@ const state = {
 const els = {
   reloadBtn: document.getElementById('reloadBtn'),
   testBatchBtn: document.getElementById('testBatchBtn'),
+  premiumBatchBtn: document.getElementById('premiumBatchBtn'),
+  adultBatchBtn: document.getElementById('adultBatchBtn'),
   pushAllBtn: document.getElementById('pushAllBtn'),
   generateAllBtn: document.getElementById('generateAllBtn'),
   deleteAllBtn: document.getElementById('deleteAllBtn'),
@@ -1407,10 +1414,11 @@ async function generateEmotionQuadBatch(pid, eid){
   }
 }
 
-async function generateFourEmotionTest(){
-  if (state.busy || !state.activePid) return;
-  const pid = state.activePid;
-  const qid = queueAdd(`Test batch ${pid}`);
+async function generateFourEmotionSet(pid, defs, opts = {}) {
+  if (state.busy || !pid || !Array.isArray(defs) || defs.length !== 4) return;
+  const model = String(opts.model || DEFAULT_IMAGE_MODEL);
+  const label = String(opts.label || 'Batch');
+  const qid = queueAdd(`${label} ${pid}`);
   queueSet(qid, 'running');
 
   const neutralUrl = originalImagePath(pid, 'neutral', 'a');
@@ -1430,17 +1438,22 @@ async function generateFourEmotionTest(){
       reader.readAsDataURL(neutralBlob);
     });
 
+    const topLeft = defs[0];
+    const topRight = defs[1];
+    const bottomLeft = defs[2];
+    const bottomRight = defs[3];
     const prompt = [
       '[Task]',
       'Create one single 2x2 contact-sheet image from the reference character.',
-      'Top-left: Happy expression.',
-      'Top-right: Sad expression.',
-      'Bottom-left: Angry expression.',
-      'Bottom-right: Surprise expression.',
+      `Top-left: ${topLeft.prompt}`,
+      `Top-right: ${topRight.prompt}`,
+      `Bottom-left: ${bottomLeft.prompt}`,
+      `Bottom-right: ${bottomRight.prompt}`,
       '',
       '[Rules]',
       'Each quadrant must be a complete 2:3 portrait of the same person.',
       'Preserve identity, hairstyle, face structure, outfit style, lighting, and background concept.',
+      'Each panel must use a different body pose and gesture from the others.',
       'No text, no labels, no borders, no collage frames, no gutters.',
       'Keep face size and framing consistent across all four quadrants.',
       '',
@@ -1451,13 +1464,13 @@ async function generateFourEmotionTest(){
       'One 2K image, 2:3 aspect ratio, arranged as a 2x2 grid.',
     ].join('\n');
 
-    showStatus(`Generating 4-panel test image for ${pid}.`);
+    showStatus(`Generating ${label} set for ${pid} (${model}).`);
     const res = await fetchNoCache(`${WORKER_URL}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'chat',
-        model: 'gemini-3.1-flash-image-preview',
+        model,
         prompt,
         images: [neutralDataUrl],
         aspect_ratio: '2:3',
@@ -1476,30 +1489,72 @@ async function generateFourEmotionTest(){
     const url = imageUrl || (match ? (match[1] || match[2] || match[0]) : '');
     if (!url) throw new Error(data.error || 'No image URL returned.');
 
-    showStatus(`Splitting 4-panel test image for ${pid}.`);
     const generatedDataUrl = await imageUrlToDataUrl(url);
     const pieces = await splitFourPanelDataUrls(generatedDataUrl);
-
-    for (const item of pieces) {
-      showStatus(`Saving ${pid}/${item.eid}/A.`);
-      state.slotMaxByEmotion[item.eid] = Math.max(Number(state.slotMaxByEmotion[item.eid]) || 0, 0);
-      await saveSlotImage(pid, item.eid, item.slot, item.dataUrl);
-      await uploadBase64ToR2(pid, item.eid, item.slot, item.dataUrl);
+    for (let i = 0; i < pieces.length; i++) {
+      const target = defs[i];
+      const slot = String(target.slot || 'a');
+      const eid = String(target.eid || '').toLowerCase();
+      if (!eid) continue;
+      const item = pieces[i];
+      await saveSlotImage(pid, eid, slot, item.dataUrl);
+      await uploadBase64ToR2(pid, eid, slot, item.dataUrl);
+      state.slotMaxByEmotion[eid] = Math.max(Number(state.slotMaxByEmotion[eid]) || -1, slotToIndex(slot));
     }
     try { localStorage.setItem('em_slot_max_by_emotion', JSON.stringify(state.slotMaxByEmotion)); } catch {}
-
     render();
-    showStatus(`Test batch saved and pushed: happy/sad/angry/surprise A.`);
-    queueSet(qid, 'done', `Test batch saved ${pid}`);
+    queueSet(qid, 'done', `${label} done`);
+    showStatus(`${label} done for ${pid}.`);
   } catch (err) {
     const msg = err?.message || String(err || 'unknown error');
-    showStatus(`Test batch failed: ${msg}`);
-    console.error('generateFourEmotionTest failed', { pid, err });
-    queueSet(qid, 'fail', `Test batch failed ${pid}`);
+    showStatus(`${label} failed: ${msg}`);
+    console.error('generateFourEmotionSet failed', { pid, defs, err });
+    queueSet(qid, 'fail', `${label} failed`);
   } finally {
     state.pendingAbort = null;
     setBusy(false);
   }
+}
+
+async function generateFourEmotionTest(){
+  const pid = state.activePid;
+  if (!pid) return;
+  const defs = [
+    { eid: 'happy', slot: 'a', prompt: EMOTION_PROMPTS.happy || '행복한 표정' },
+    { eid: 'sad', slot: 'a', prompt: EMOTION_PROMPTS.sad || '슬픈 표정' },
+    { eid: 'angry', slot: 'a', prompt: EMOTION_PROMPTS.angry || '분노한 표정' },
+    { eid: 'surprise', slot: 'a', prompt: EMOTION_PROMPTS.surprise || '놀란 표정' },
+  ];
+  return generateFourEmotionSet(pid, defs, { label: 'Free Emo', model: DEFAULT_IMAGE_MODEL });
+}
+
+async function runBatchSetByGroups(pid, allEmotionIds, label, model = DEFAULT_IMAGE_MODEL){
+  if (!pid || !Array.isArray(allEmotionIds) || !allEmotionIds.length) return;
+  const ids = allEmotionIds.map(x => String(x || '').toLowerCase()).filter(Boolean);
+  for (let i = 0; i < ids.length; i += 4) {
+    const group = ids.slice(i, i + 4);
+    if (group.length < 4) break;
+    const defs = [];
+    for (const eid of group) {
+      const next = getNextAvailableSlots(pid, eid, 1)[0] || 'a';
+      defs.push({ eid, slot: next, prompt: EMOTION_PROMPTS[eid] || `${eid} 표정` });
+    }
+    await generateFourEmotionSet(pid, defs, { label: `${label} ${Math.floor(i / 4) + 1}`, model });
+  }
+}
+
+async function generatePremiumEmotionBatches(){
+  const pid = state.activePid;
+  if (!pid) return;
+  const ids = ['subtlesmile', 'confusion', 'cry', 'disgust', 'horror', 'laugh', 'playful', 'relief', 'shy', 'worry', 'pain', 'sleepy', 'hunger', 'absentminded', 'expecting', 'contempt'];
+  return runBatchSetByGroups(pid, ids, 'Premium Emo', DEFAULT_IMAGE_MODEL);
+}
+
+async function generateAdultEmotionBatch(){
+  const pid = state.activePid;
+  if (!pid) return;
+  const ids = ['arousal', 'orgasm', 'exstasy', 'drunken'];
+  return runBatchSetByGroups(pid, ids, 'Adult Emo', 'grok-imagine-image-pro');
 }
 
 async function uploadCurrentCard(file){
@@ -1781,6 +1836,8 @@ async function reloadAll(){
 function init(){
   if (els.reloadBtn) els.reloadBtn.onclick = () => reloadAll();
   if (els.testBatchBtn) els.testBatchBtn.onclick = generateFourEmotionTest;
+  if (els.premiumBatchBtn) els.premiumBatchBtn.onclick = generatePremiumEmotionBatches;
+  if (els.adultBatchBtn) els.adultBatchBtn.onclick = generateAdultEmotionBatch;
   if (els.generateAllBtn) els.generateAllBtn.onclick = generateAll;
   if (els.pushAllBtn) els.pushAllBtn.onclick = pushAll;
   if (els.deleteAllBtn) els.deleteAllBtn.onclick = deleteAll;
