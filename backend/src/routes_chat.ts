@@ -39,6 +39,13 @@ const ANTI_HALLUCINATION_GUARD = [
   "- Do not state specific numbers/dates/names as certain without confidence.",
 ].join(" ");
 
+const RILEY_NUMERIC_PRIORITY_GUARD = [
+  "Riley wealth policy:",
+  "- For finance numbers, always prioritize Riley wealth state snapshot over memory text.",
+  "- Use private/public memory only as qualitative context, not numeric source of truth.",
+  "- If memory numbers conflict with state numbers, explicitly follow state numbers.",
+].join(" ");
+
 type ChatBody = {
   messages?: any[];
   model?: string;
@@ -99,12 +106,17 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       ? [
           { role: "system", content: ANTI_HALLUCINATION_GUARD },
           { role: "system", content: RESPONSE_VARIANCE_PROMPT },
+          ...(inRileyChat ? [{ role: "system", content: RILEY_NUMERIC_PRIORITY_GUARD }] : []),
           ...(rileySnapshot ? [{ role: "system", content: buildRileySystemPrompt(rileySnapshot.state) }] : []),
           { role: "system", content: memPrompt },
           ...messages
         ]
       : ((!isImageReq && rileySnapshot)
-          ? [{ role: "system", content: buildRileySystemPrompt(rileySnapshot.state) }, ...messages]
+          ? [
+              ...(inRileyChat ? [{ role: "system", content: RILEY_NUMERIC_PRIORITY_GUARD }] : []),
+              { role: "system", content: buildRileySystemPrompt(rileySnapshot.state) },
+              ...messages,
+            ]
           : messages);
     const preparedMessages = isImageReq
       ? effectiveMessages
