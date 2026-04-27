@@ -3127,7 +3127,18 @@ if (!window.__personaMasonryResizeBound) {
   let masonryResizeTimer = null;
   window.addEventListener('resize', () => {
     clearTimeout(masonryResizeTimer);
-    masonryResizeTimer = setTimeout(() => layoutHorizontalMasonryRows(document.getElementById('chatArea') || document), 80);
+    masonryResizeTimer = setTimeout(() => {
+      const area = document.getElementById('chatArea');
+      layoutHorizontalMasonryRows(area || document);
+      if (!area) return;
+      const chatScreenOpen = document.getElementById('chatScreen')?.classList.contains('active');
+      if (!chatScreenOpen || !activeChatId) return;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          stickChatToBottom(area);
+        });
+      });
+    }, 80);
   });
 }
 
