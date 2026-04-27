@@ -54,13 +54,14 @@ export async function generateGeminiImage(params: {
   model: string;
   prompt: string;
   ratio: string;
+  resolution?: string;
   images: string[];
   apiKey: string;
 }): Promise<string> {
-  const { model, prompt, ratio, images = [], apiKey } = params;
-  const ratioHint = ratio !== "1:1" ? `\n\nAspect ratio: ${ratio}` : "";
+  const { model, prompt, ratio, resolution, images = [], apiKey } = params;
   const imageParts = (await Promise.all(images.map(imageUrlToGeminiPart))).filter(Boolean);
-  const requestParts = [{ text: `${prompt}${ratioHint}` }, ...imageParts];
+  const requestParts = [{ text: prompt }, ...imageParts];
+  const normalizedSize = String(resolution || "").toLowerCase() === "2k" ? "2K" : "1K";
 
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
@@ -72,6 +73,10 @@ export async function generateGeminiImage(params: {
         generationConfig: {
           responseModalities: ["IMAGE"],
           candidateCount: 1,
+          imageConfig: {
+            aspectRatio: ratio || "1:1",
+            imageSize: normalizedSize,
+          },
         },
       }),
     },

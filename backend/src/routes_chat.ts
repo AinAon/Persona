@@ -177,6 +177,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
           model,
           prompt: userPrompt,
           ratio,
+          resolution,
           images,
           apiKey: apiKeys.gemini,
         });
