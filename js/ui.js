@@ -5056,6 +5056,20 @@ async function sendMessage() {
     const suffixes = await resolveMessageSuffixes(reply, pList);
 
     const assistantCreatedAt = Date.now();
+    const lastHist = currentSession.history?.[currentSession.history.length - 1];
+    const duplicateAssistant =
+      lastHist?.role === 'assistant' &&
+      String(lastHist?.content || '').trim() === String(reply || '').trim() &&
+      (assistantCreatedAt - Number(lastHist?.createdAt || 0)) <= 5000;
+    if (duplicateAssistant) {
+      showToast('중복 응답을 자동으로 정리했어요.');
+      await cleanupAttachmentCaches(sentAttachments);
+      isLoading = false;
+      document.getElementById('sendBtn').disabled = false;
+      setTimeout(() => input.focus(), 10);
+      return;
+    }
+
     currentSession.history.push({
       role:'assistant',
       content:reply,
