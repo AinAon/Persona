@@ -2910,13 +2910,7 @@ function findLatestOneOnOneSessionForPid(pid) {
 }
 
 function openLatestOneOnOneChatForPersona(pid) {
-  const target = findLatestOneOnOneSessionForPid(pid);
-  if (target?.id) {
-    clearPersonaSelection();
-    switchTab('chat');
-    openChat(target.id);
-    return;
-  }
+  // Double-tap on persona card should always start a fresh 1:1 chat.
   _selectedPersonaPid = pid;
   startChatFromPersona();
 }
