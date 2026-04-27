@@ -2877,12 +2877,26 @@ async function openRestoreModal() {
   await renderRestoreList();
 }
 
+const _restoreAutoPurgeTriedIds = new Set();
+
 async function renderRestoreList() {
   const wrap = document.getElementById('restoreList');
   if (!wrap) return;
   wrap.innerHTML = `<div style="font-size:12px;color:var(--muted);padding:6px 2px">불러오는 중...</div>`;
   const deleted = await listDeletedSessionsRemote();
-  const sorted = [...deleted].sort((a, b) => (b.deletedAt || b.updatedAt || 0) - (a.deletedAt || a.updatedAt || 0));
+  const isMeaningfulRecoverable = (s) => {
+    const count = Number(s?.messageCount || 0);
+    const preview = String(s?.lastPreview || '').trim();
+    return count > 0 || preview.length > 0;
+  };
+  const emptySessions = (deleted || []).filter(s => s?.id && !isMeaningfulRecoverable(s));
+  for (const s of emptySessions) {
+    if (_restoreAutoPurgeTriedIds.has(s.id)) continue;
+    _restoreAutoPurgeTriedIds.add(s.id);
+    purgeSessionRemote(s.id).catch(() => {});
+  }
+  const sorted = [...(deleted || []).filter(isMeaningfulRecoverable)]
+    .sort((a, b) => (b.deletedAt || b.updatedAt || 0) - (a.deletedAt || a.updatedAt || 0));
   if (!sorted.length) {
     wrap.innerHTML = `<div style="font-size:12px;color:var(--muted);padding:6px 2px">복원 가능한 채팅이 없습니다.</div>`;
     return;
