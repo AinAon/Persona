@@ -4618,7 +4618,9 @@ function buildSystemPrompt(session, pListOverride = null, availableEmotionMap = 
 ${formatEx}
 emotion: ${EMOTIONS.join('/')}
 규칙: emotion 태그는 반드시 pid 태그 바로 뒤에 한 번만. 내용 안에 [감정명] 태그 넣기 금지. 이름: 접두사 금지.
-각 pid는 자신의 "사용 가능한 감정" 목록 안에서만 emotion을 선택.${modeInstr ? '\n' + modeInstr : ''}
+각 pid는 자신의 "사용 가능한 감정" 목록 안에서만 emotion을 선택.
+감정 운용(중요): neutral은 기본값으로 남발하지 말고, 가능한 경우 neutral 이외 감정을 우선 선택할 것.
+감정 변화(중요): 이전 발화와 동일 감정 고정을 피하고, 문맥 변화에 맞춰 감정을 적극적으로 바꿔 사용할 것.${modeInstr ? '\n' + modeInstr : ''}
 인칭은 자연스러운 맥락에서만 가급적 사용. 매 발화 시작에 붙이지 말 것
 필요한 태그 내용은 마크다운(**, 코드블록, 목록 등) 사용 가능
 
