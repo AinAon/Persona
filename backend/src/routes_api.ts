@@ -15,6 +15,7 @@ import {
 import { getAveryWorklogSnapshot, reconcileAveryWorklog } from "./avery_worklog";
 import { getRileyWealthSnapshot, reconcileRileyWealth } from "./riley_wealth";
 import { getPersonaPolicy } from "./persona_policy";
+import { getPromotionCandidates } from "./persona_promotion";
 
 type SessionMeta = {
   id: string;
@@ -995,6 +996,12 @@ export async function handleApiRoute(
     const pid = String(url.searchParams.get("pid") || "").trim().toLowerCase();
     const data = await getPersonaPolicy(env, pid);
     return Response.json(data, { headers: { ...cors, "Cache-Control": "no-store" } });
+  }
+
+  if (url.pathname === "/persona-promotion/candidates" && request.method === "GET") {
+    const pid = String(url.searchParams.get("pid") || "").trim().toLowerCase();
+    const data = await getPromotionCandidates(env, pid);
+    return Response.json({ ok: true, personaPid: pid, ...data }, { headers: { ...cors, "Cache-Control": "no-store" } });
   }
 
   if (url.pathname === "/personas") {

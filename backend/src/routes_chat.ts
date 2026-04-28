@@ -24,6 +24,11 @@ import {
   resolvePolicyTargetPid,
   savePendingPolicyPatchFromReply,
 } from "./persona_policy";
+import {
+  approveLatestPendingCandidate,
+  buildPromotionSystemPrompt,
+  saveCandidateFromReply,
+} from "./persona_promotion";
 
 const IMAGE_MODELS = ["gemini-3.1-flash-image-preview", "grok-imagine-image-pro", "gpt-image-2"];
 const RATIO_TO_SIZE: Record<string, string> = {
@@ -140,6 +145,9 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     const personaPolicyPrompt = (!isImageReq && policyTargetPid)
       ? await buildPersonaPolicySystemPrompt(env, policyTargetPid)
       : "";
+    const promotionPrompt = (!isImageReq && policyTargetPid)
+      ? buildPromotionSystemPrompt(policyTargetPid)
+      : "";
     const effectiveMessages = (!isImageReq && memPrompt)
       ? [
           { role: "system", content: ANTI_HALLUCINATION_GUARD },
@@ -149,8 +157,10 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
           ...(rileySnapshot ? [{ role: "system", content: buildRileySystemPrompt(rileySnapshot.state) }] : []),
           ...(averySnapshot ? [{ role: "system", content: buildAverySystemPrompt(averySnapshot.state) }] : []),
           ...(personaPolicyPrompt ? [{ role: "system", content: personaPolicyPrompt }] : []),
+          ...(promotionPrompt ? [{ role: "system", content: promotionPrompt }] : []),
           { role: "system", content: memPrompt },
           ...(policyApplyMessage ? [{ role: "system", content: `Policy apply status: ${policyApplyMessage}` }] : []),
+          ...(promotionApplyMessage ? [{ role: "system", content: `Promotion apply status: ${promotionApplyMessage}` }] : []),
           ...messages
         ]
       : ((!isImageReq && (rileySnapshot || averySnapshot))
@@ -160,7 +170,9 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
               ...(rileySnapshot ? [{ role: "system", content: buildRileySystemPrompt(rileySnapshot.state) }] : []),
               ...(averySnapshot ? [{ role: "system", content: buildAverySystemPrompt(averySnapshot.state) }] : []),
               ...(personaPolicyPrompt ? [{ role: "system", content: personaPolicyPrompt }] : []),
+              ...(promotionPrompt ? [{ role: "system", content: promotionPrompt }] : []),
               ...(policyApplyMessage ? [{ role: "system", content: `Policy apply status: ${policyApplyMessage}` }] : []),
+              ...(promotionApplyMessage ? [{ role: "system", content: `Promotion apply status: ${promotionApplyMessage}` }] : []),
               ...messages,
             ]
           : messages);
@@ -254,6 +266,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
             }
             if (policyTargetPid) {
               await savePendingPolicyPatchFromReply(env, policyTargetPid, reply);
+              await saveCandidateFromReply(env, policyTargetPid, reply);
             }
             send({ type: "done", reply });
           } catch (err: any) {
@@ -305,6 +318,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     }
     if (policyTargetPid) {
       await savePendingPolicyPatchFromReply(env, policyTargetPid, reply);
+      await saveCandidateFromReply(env, policyTargetPid, reply);
     }
 
     if (imageUrlOut) {
@@ -402,3 +416,8 @@ async function generateClaudeText(params: {
   const data = JSON.parse(text);
   return data.content?.[0]?.text || "";
 }
+    let promotionApplyMessage = "";
+    if (!isImageReq && policyTargetPid) {
+      const promoted = await approveLatestPendingCandidate(env, policyTargetPid, latestUserText);
+      if (promoted.applied && promoted.message) promotionApplyMessage = promoted.message;
+    }
