@@ -3520,6 +3520,9 @@ async function renderChatArea() {
         ? msg.personaSnapshot.map(snap => getPersona(snap.pid) || { pid:snap.pid, name:snap.name, image:null, hue:0, _ghost:true })
         : pList;
       if (!msg._suffixes || typeof msg._suffixes !== 'object') msg._suffixes = {};
+      if (!Object.keys(msg._suffixes).length) {
+        msg._suffixes = await resolveMessageSuffixes(msg.content, renderPersonas, msg._suffixes);
+      }
       el.innerHTML = await renderAIResponseHTML(msg.content, renderPersonas, msg._suffixes);
       if (renderAIResponseHTML._lastSuffixPatched) shouldSavePatchedSuffix = true;
     }

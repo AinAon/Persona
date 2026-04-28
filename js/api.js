@@ -285,6 +285,26 @@ function pickRandomSuffix() {
   return String.fromCharCode(97 + Math.floor(Math.random() * 26)); // a-z
 }
 
+function stableHash32(input = '') {
+  let h = 2166136261 >>> 0;
+  const s = String(input || '');
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function pickStableSuffix(suffixes, seed) {
+  const arr = (Array.isArray(suffixes) ? suffixes : [])
+    .map((x) => String(x || '').toLowerCase())
+    .filter(Boolean)
+    .sort();
+  if (!arr.length) return null;
+  const idx = stableHash32(seed) % arr.length;
+  return arr[idx];
+}
+
 async function getEmotionImageSuffixed(pid, emotion, letter, displayPx = 200) {
   if (letter === null || letter === undefined) return null;
   const cachedTiered = await getEmotionRectImage(pid, emotion, letter, displayPx);
@@ -335,8 +355,9 @@ async function resolveMessageSuffixes(rawText, pList, existingSuffixes = null) {
     const keys = await getImageList(p.pid);
     const { suffixed, hasBase } = getSuffixesForEmotion(keys, p.pid, seg.emotion);
     if (suffixed.length > 0) {
-      // 랜덤 suffix 선택
-      suffixes[key] = suffixed[Math.floor(Math.random() * suffixed.length)];
+      // Deterministic suffix selection so rerenders/reloads don't drift.
+      const stable = pickStableSuffix(suffixed, `${p.pid}:${seg.emotion}:${rawText}`);
+      suffixes[key] = stable || suffixed[0];
     } else if (hasBase) {
       suffixes[key] = ''; // suffix 없는 기본 파일
     } else {
@@ -846,6 +867,38 @@ async function saveIndex() {
   }, REMOTE_SAVE_DEBOUNCE_MS);
 }
 
+function canonicalMessageForDedup(msg) {
+  if (!msg || typeof msg !== 'object') return msg;
+  const {
+    _rendered,
+    _suffixes,
+    _imageWorkflow,
+    ...rest
+  } = msg;
+  return rest;
+}
+
+function dedupeHistoryMessages(history) {
+  const arr = Array.isArray(history) ? history : [];
+  const seen = new Set();
+  const out = [];
+  for (const msg of arr) {
+    let key = '';
+    try {
+      key = JSON.stringify(canonicalMessageForDedup(msg));
+    } catch {
+      const role = String(msg?.role || '');
+      const createdAt = Number(msg?.createdAt || 0);
+      const content = typeof msg?.content === 'string' ? msg.content : JSON.stringify(msg?.content ?? null);
+      key = `${role}|${createdAt}|${content}`;
+    }
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(msg);
+  }
+  return out;
+}
+
 async function saveSession(id) {
   const s = sessions.find(x=>x.id===id); if (!s) return;
   if (s._loaded !== true) {
@@ -886,7 +939,7 @@ async function saveSession(id) {
     return out;
   };
   if (!Array.isArray(s.history)) s.history = [];
-  const history = s.history.map(sanitizeMessageForStorage);
+  const history = dedupeHistoryMessages(s.history.map(sanitizeMessageForStorage));
   s.messageCount = history.length;
   s.lastMessageAt = history.reduce((max, m) => Math.max(max, Number(m?.createdAt || 0)), 0);
   s.lastPreview = getSessionPreviewFromHistory(history);
@@ -1005,8 +1058,7 @@ async function loadSession(id, options = {}) {
   const messageKey = (m) => {
     try {
       if (!m || typeof m !== 'object') return String(m || '');
-      const { _rendered, ...rest } = m;
-      return JSON.stringify(rest);
+      return JSON.stringify(canonicalMessageForDedup(m));
     } catch {
       const role = String(m?.role || '');
       const createdAt = Number(m?.createdAt || 0);
@@ -1083,8 +1135,8 @@ async function loadSession(id, options = {}) {
       return;
     }
 
-    const remoteHistory = Array.isArray(remoteSession.history) ? remoteSession.history : [];
-    const localHistory = Array.isArray(s.history) ? s.history : [];
+    const remoteHistory = dedupeHistoryMessages(Array.isArray(remoteSession.history) ? remoteSession.history : []);
+    const localHistory = dedupeHistoryMessages(Array.isArray(s.history) ? s.history : []);
     const localLastTs = getLastTs(localHistory);
     const remoteLastTs = getLastTs(remoteHistory);
     const localUpdatedAt = Number(s.updatedAt || 0);
