@@ -18,6 +18,12 @@ import {
   isWealthMutationText,
   isRileyParticipant,
 } from "./riley_wealth";
+import {
+  applyPendingPolicyIfApproved,
+  buildPersonaPolicySystemPrompt,
+  resolvePolicyTargetPid,
+  savePendingPolicyPatchFromReply,
+} from "./persona_policy";
 
 const IMAGE_MODELS = ["gemini-3.1-flash-image-preview", "grok-imagine-image-pro", "gpt-image-2"];
 const RATIO_TO_SIZE: Record<string, string> = {
@@ -111,8 +117,14 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
   const latestUserText = extractLatestUserText(messages);
   const shouldWriteRileyEvent = inRileyChat && isWealthMutationText(latestUserText);
   const shouldWriteAveryEvent = inAveryChat && shouldPersistAveryWorklogText(latestUserText);
+  const policyTargetPid = resolvePolicyTargetPid(participant_pids || []);
 
   try {
+    let policyApplyMessage = "";
+    if (!isImageReq && policyTargetPid) {
+      const applied = await applyPendingPolicyIfApproved(env, policyTargetPid, latestUserText);
+      if (applied.applied && applied.message) policyApplyMessage = applied.message;
+    }
     const rileySnapshot = (!isImageReq && inRileyChat)
       ? await getRileyWealthSnapshot(env, 10)
       : null;
@@ -125,6 +137,9 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
           participantPids: participant_pids,
           personaCategoryPrefs: persona_memory_prefs as any,
         });
+    const personaPolicyPrompt = (!isImageReq && policyTargetPid)
+      ? await buildPersonaPolicySystemPrompt(env, policyTargetPid)
+      : "";
     const effectiveMessages = (!isImageReq && memPrompt)
       ? [
           { role: "system", content: ANTI_HALLUCINATION_GUARD },
@@ -133,7 +148,9 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
           ...(inAveryChat ? [{ role: "system", content: AVERY_WORKLOG_GUARD }] : []),
           ...(rileySnapshot ? [{ role: "system", content: buildRileySystemPrompt(rileySnapshot.state) }] : []),
           ...(averySnapshot ? [{ role: "system", content: buildAverySystemPrompt(averySnapshot.state) }] : []),
+          ...(personaPolicyPrompt ? [{ role: "system", content: personaPolicyPrompt }] : []),
           { role: "system", content: memPrompt },
+          ...(policyApplyMessage ? [{ role: "system", content: `Policy apply status: ${policyApplyMessage}` }] : []),
           ...messages
         ]
       : ((!isImageReq && (rileySnapshot || averySnapshot))
@@ -142,6 +159,8 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
               ...(inAveryChat ? [{ role: "system", content: AVERY_WORKLOG_GUARD }] : []),
               ...(rileySnapshot ? [{ role: "system", content: buildRileySystemPrompt(rileySnapshot.state) }] : []),
               ...(averySnapshot ? [{ role: "system", content: buildAverySystemPrompt(averySnapshot.state) }] : []),
+              ...(personaPolicyPrompt ? [{ role: "system", content: personaPolicyPrompt }] : []),
+              ...(policyApplyMessage ? [{ role: "system", content: `Policy apply status: ${policyApplyMessage}` }] : []),
               ...messages,
             ]
           : messages);
@@ -233,6 +252,9 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
             if (shouldWriteAveryEvent) {
               await appendAveryWorklogEvent(env, latestUserText);
             }
+            if (policyTargetPid) {
+              await savePendingPolicyPatchFromReply(env, policyTargetPid, reply);
+            }
             send({ type: "done", reply });
           } catch (err: any) {
             send({ type: "error", error: err?.message || "stream error" });
@@ -280,6 +302,9 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     }
     if (shouldWriteAveryEvent) {
       await appendAveryWorklogEvent(env, latestUserText);
+    }
+    if (policyTargetPid) {
+      await savePendingPolicyPatchFromReply(env, policyTargetPid, reply);
     }
 
     if (imageUrlOut) {
