@@ -3137,7 +3137,7 @@ function handleEscBackNavigation(event) {
 }
 
 function handleGlobalShortcutKeys(event) {
-  if (!event || isEditableElement(event.target)) return;
+  if (!event) return;
   if (activeTab !== 'chat') return;
   if (!event.ctrlKey || event.altKey || event.shiftKey) return;
   if (event.code !== 'Backquote') return;
@@ -3145,6 +3145,7 @@ function handleGlobalShortcutKeys(event) {
     if (window.matchMedia && !window.matchMedia('(pointer:fine)').matches) return;
   } catch {}
   event.preventDefault();
+  event.stopPropagation();
   if (activeChatId) toggleChatProfileOverride();
   else toggleChatListAvatarVisibility();
 }
