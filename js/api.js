@@ -285,26 +285,6 @@ function pickRandomSuffix() {
   return String.fromCharCode(97 + Math.floor(Math.random() * 26)); // a-z
 }
 
-function stableHash32(input = '') {
-  let h = 2166136261 >>> 0;
-  const s = String(input || '');
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
-function pickStableSuffix(suffixes, seed) {
-  const arr = (Array.isArray(suffixes) ? suffixes : [])
-    .map((x) => String(x || '').toLowerCase())
-    .filter(Boolean)
-    .sort();
-  if (!arr.length) return null;
-  const idx = stableHash32(seed) % arr.length;
-  return arr[idx];
-}
-
 async function getEmotionImageSuffixed(pid, emotion, letter, displayPx = 200) {
   if (letter === null || letter === undefined) return null;
   const cachedTiered = await getEmotionRectImage(pid, emotion, letter, displayPx);
@@ -355,9 +335,8 @@ async function resolveMessageSuffixes(rawText, pList, existingSuffixes = null) {
     const keys = await getImageList(p.pid);
     const { suffixed, hasBase } = getSuffixesForEmotion(keys, p.pid, seg.emotion);
     if (suffixed.length > 0) {
-      // Deterministic suffix selection so rerenders/reloads don't drift.
-      const stable = pickStableSuffix(suffixed, `${p.pid}:${seg.emotion}:${rawText}`);
-      suffixes[key] = stable || suffixed[0];
+      // 랜덤 suffix 선택
+      suffixes[key] = suffixed[Math.floor(Math.random() * suffixed.length)];
     } else if (hasBase) {
       suffixes[key] = ''; // suffix 없는 기본 파일
     } else {
@@ -869,12 +848,7 @@ async function saveIndex() {
 
 function canonicalMessageForDedup(msg) {
   if (!msg || typeof msg !== 'object') return msg;
-  const {
-    _rendered,
-    _suffixes,
-    _imageWorkflow,
-    ...rest
-  } = msg;
+  const { _rendered, ...rest } = msg;
   return rest;
 }
 
