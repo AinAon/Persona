@@ -142,6 +142,23 @@ async function getBestCachedTierByPrefix(prefix, requiredPx) {
   return await idbGet(picked.key).catch(() => null);
 }
 
+async function hydrateEmotionVariantFromCache(pid, cacheKey) {
+  const candidates = [
+    `em_full_${pid}_${cacheKey}`,
+    `emotion_${pid}_${cacheKey}_hd`,
+    `emotion_${pid}_${cacheKey}_a_1000`,
+    `emotion_${pid}_${cacheKey}`,
+    `emotion_${pid}_${cacheKey}_ld`,
+  ];
+  for (const key of candidates) {
+    const src = await idbGet(key).catch(() => null);
+    if (!src) continue;
+    await generateThumbnailSet(src, pid, cacheKey).catch(() => null);
+    return true;
+  }
+  return false;
+}
+
 function getScreenDpr() {
   if (typeof window === 'undefined') return 1;
   return Math.max(1, Number(window.devicePixelRatio || 1));
@@ -156,21 +173,29 @@ function getEmotionKeyForCache(emotion, letter = '') {
 async function getEmotionCircleThumb(pid, emotion = 'neutral', letter = '', displayPx = 80) {
   const needed = displayPx * getScreenDpr();
   const cacheKey = getEmotionKeyForCache(emotion, letter);
-  try {
+
+  const readCircle = async (targetKey) => {
     for (const size of getStepCandidates(PROFILE_CIRCLE_STEPS, needed)) {
-      const exact = await idbGet(`emotion_${pid}_${cacheKey}_c_${size}`);
+      const exact = await idbGet(`emotion_${pid}_${targetKey}_c_${size}`);
       if (exact) return exact;
     }
-    const dynamic = await getBestCachedTierByPrefix(`emotion_${pid}_${cacheKey}_c_`, needed);
-    if (dynamic) return dynamic;
+    return await getBestCachedTierByPrefix(`emotion_${pid}_${targetKey}_c_`, needed);
+  };
+
+  try {
+    const direct = await readCircle(cacheKey);
+    if (direct) return direct;
+
+    // Rect/full tiers may exist without circle tiers in older caches. Rebuild once from same emotion key.
+    if (await hydrateEmotionVariantFromCache(pid, cacheKey)) {
+      const rebuilt = await readCircle(cacheKey);
+      if (rebuilt) return rebuilt;
+    }
+
     const legacy = await idbGet(`emotion_${pid}_${cacheKey}_circle_thumb`);
     if (legacy) return legacy;
     if (!letter && cacheKey !== 'neutral_a') {
-      for (const size of getStepCandidates(PROFILE_CIRCLE_STEPS, needed)) {
-        const neutralExact = await idbGet(`emotion_${pid}_neutral_a_c_${size}`);
-        if (neutralExact) return neutralExact;
-      }
-      const neutralDynamic = await getBestCachedTierByPrefix(`emotion_${pid}_neutral_a_c_`, needed);
+      const neutralDynamic = await readCircle('neutral_a');
       if (neutralDynamic) return neutralDynamic;
     }
     const neutralLegacy = await idbGet(`emotion_${pid}_neutral_a_circle_thumb`);
