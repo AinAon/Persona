@@ -52,6 +52,47 @@ const TTS_EMOTION_STRENGTHS = [
   { value: 'high', label: '강하게' },
 ];
 let _editMultiUploadQueue = [];
+const UI_LOCAL_PREFS_KEY = 'pc4_ui_local_prefs';
+let _uiLocalPrefs = null;
+
+function ensureUiLocalPrefsLoaded() {
+  if (_uiLocalPrefs) return _uiLocalPrefs;
+  try {
+    const raw = localStorage.getItem(UI_LOCAL_PREFS_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    _uiLocalPrefs = (parsed && typeof parsed === 'object') ? parsed : {};
+  } catch {
+    _uiLocalPrefs = {};
+  }
+  if (typeof _uiLocalPrefs.showHiddenChats !== 'boolean') _uiLocalPrefs.showHiddenChats = false;
+  if (typeof _uiLocalPrefs.showHiddenPersonas !== 'boolean') _uiLocalPrefs.showHiddenPersonas = false;
+  if (!_uiLocalPrefs.chatProfileOverrides || typeof _uiLocalPrefs.chatProfileOverrides !== 'object') {
+    _uiLocalPrefs.chatProfileOverrides = {};
+  }
+  return _uiLocalPrefs;
+}
+
+function saveUiLocalPrefs() {
+  const prefs = ensureUiLocalPrefsLoaded();
+  try { localStorage.setItem(UI_LOCAL_PREFS_KEY, JSON.stringify(prefs)); } catch {}
+}
+
+function getChatProfileOverrideLocal(sessionId) {
+  const id = String(sessionId || '').trim();
+  if (!id) return null;
+  const prefs = ensureUiLocalPrefsLoaded();
+  const v = prefs.chatProfileOverrides?.[id];
+  return (v === 'on' || v === 'off') ? v : null;
+}
+
+function setChatProfileOverrideLocal(sessionId, value) {
+  const id = String(sessionId || '').trim();
+  if (!id) return;
+  const prefs = ensureUiLocalPrefsLoaded();
+  if (value === 'on' || value === 'off') prefs.chatProfileOverrides[id] = value;
+  else delete prefs.chatProfileOverrides[id];
+  saveUiLocalPrefs();
+}
 
 function buildModelSelect(id, selectedValue, style = '') {
   const opts = CHAT_MODELS.map(m => {
@@ -224,7 +265,7 @@ function buildCurrentTimeSystemMessage() {
 
 function getChatAvatarStyle() {
   const session = getActiveSession();
-  const override = session?.chatProfileOverride || null; // 'on' | 'off' | null
+  const override = getChatProfileOverrideLocal(session?.id) || null; // 'on' | 'off' | null
   const baseStyle = userProfile.chatAvatarStyle || 'square';
   if (override === 'off') return 'hidden';
   if (override === 'on') return baseStyle === 'hidden' ? 'square' : baseStyle;
@@ -263,7 +304,7 @@ function updateChatHeaderActionButtons() {
   const btn = document.getElementById('chatProfileToggleBtn');
   if (!btn) return;
   const session = getActiveSession();
-  const override = session?.chatProfileOverride || null;
+  const override = getChatProfileOverrideLocal(session?.id) || null;
   const effective = getChatAvatarStyle();
   const on = effective !== 'hidden';
   btn.classList.toggle('on', on);
@@ -281,11 +322,11 @@ function updateChatHeaderAvatarVisibility() {
 }
 
 function getChatHiddenFilterEnabled() {
-  return !!window._showHiddenChats;
+  return !!ensureUiLocalPrefsLoaded().showHiddenChats;
 }
 
 function getPersonaHiddenFilterEnabled() {
-  return !!window._showHiddenPersonas;
+  return !!ensureUiLocalPrefsLoaded().showHiddenPersonas;
 }
 
 function updatePersonaListVisibilityButton() {
@@ -298,7 +339,9 @@ function updatePersonaListVisibilityButton() {
 }
 
 function togglePersonaHiddenVisibility() {
-  window._showHiddenPersonas = !getPersonaHiddenFilterEnabled();
+  const prefs = ensureUiLocalPrefsLoaded();
+  prefs.showHiddenPersonas = !getPersonaHiddenFilterEnabled();
+  saveUiLocalPrefs();
   updatePersonaListVisibilityButton();
   renderPersonaGrid();
 }
@@ -328,7 +371,9 @@ function updateChatListVisibilityButton() {
 }
 
 function toggleChatHiddenVisibility() {
-  window._showHiddenChats = !getChatHiddenFilterEnabled();
+  const prefs = ensureUiLocalPrefsLoaded();
+  prefs.showHiddenChats = !getChatHiddenFilterEnabled();
+  saveUiLocalPrefs();
   updateChatListVisibilityButton();
   renderChatList();
 }
@@ -365,12 +410,10 @@ async function refreshCurrentChat() {
 function toggleChatProfileOverride() {
   const session = getActiveSession();
   if (!session || !activeChatId) return;
-  const cur = session.chatProfileOverride || null;
-  session.chatProfileOverride = cur === 'off' ? 'on' : 'off';
+  const cur = getChatProfileOverrideLocal(session.id) || null;
+  setChatProfileOverrideLocal(session.id, cur === 'off' ? 'on' : 'off');
   updateChatHeaderActionButtons();
   renderChatArea();
-  saveSession(activeChatId);
-  saveIndex();
 }
 
 function enhanceRenderedMessage(container) {
