@@ -14,6 +14,7 @@ import {
 } from "./memory";
 import { getAveryWorklogSnapshot, reconcileAveryWorklog } from "./avery_worklog";
 import { getRileyWealthSnapshot, reconcileRileyWealth } from "./riley_wealth";
+import { getPersonaPolicy } from "./persona_policy";
 
 type SessionMeta = {
   id: string;
@@ -988,6 +989,12 @@ export async function handleApiRoute(
   if (url.pathname === "/avery/worklog/reconcile" && request.method === "POST") {
     const result = await reconcileAveryWorklog(env);
     return Response.json(result, { headers: { ...cors, "Cache-Control": "no-store" } });
+  }
+
+  if (url.pathname === "/persona-policy/get" && request.method === "GET") {
+    const pid = String(url.searchParams.get("pid") || "").trim().toLowerCase();
+    const data = await getPersonaPolicy(env, pid);
+    return Response.json(data, { headers: { ...cors, "Cache-Control": "no-store" } });
   }
 
   if (url.pathname === "/personas") {

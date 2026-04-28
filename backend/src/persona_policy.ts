@@ -145,3 +145,23 @@ export async function applyPendingPolicyIfApproved(
   await env.R2.delete(pendingKey(pid));
   return { applied: true, message: `${pid} policy.md 적용 완료` };
 }
+
+export async function getPersonaPolicy(env: Env, personaPid: string): Promise<{
+  ok: boolean;
+  personaPid: string;
+  policyText: string;
+  hasPending: boolean;
+}> {
+  const pid = normalizePid(personaPid);
+  if (!POLICY_PIDS.has(pid)) {
+    return { ok: false, personaPid: pid, policyText: "", hasPending: false };
+  }
+  const policyObj = await env.R2.get(policyKey(pid));
+  const pendingObj = await env.R2.get(pendingKey(pid));
+  return {
+    ok: true,
+    personaPid: pid,
+    policyText: policyObj ? await policyObj.text() : "",
+    hasPending: !!pendingObj,
+  };
+}
