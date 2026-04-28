@@ -125,6 +125,11 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
   const policyTargetPid = resolvePolicyTargetPid(participant_pids || []);
 
   try {
+    let promotionApplyMessage = "";
+    if (!isImageReq && policyTargetPid) {
+      const promoted = await approveLatestPendingCandidate(env, policyTargetPid, latestUserText);
+      if (promoted.applied && promoted.message) promotionApplyMessage = promoted.message;
+    }
     let policyApplyMessage = "";
     if (!isImageReq && policyTargetPid) {
       const applied = await applyPendingPolicyIfApproved(env, policyTargetPid, latestUserText);
@@ -416,8 +421,3 @@ async function generateClaudeText(params: {
   const data = JSON.parse(text);
   return data.content?.[0]?.text || "";
 }
-    let promotionApplyMessage = "";
-    if (!isImageReq && policyTargetPid) {
-      const promoted = await approveLatestPendingCandidate(env, policyTargetPid, latestUserText);
-      if (promoted.applied && promoted.message) promotionApplyMessage = promoted.message;
-    }
