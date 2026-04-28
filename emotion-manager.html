@@ -285,6 +285,9 @@ const WORKER_URL = 'https://persona-worker.persona-worker.workers.dev';
 const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbwc2pNBmXpeDLHqc7tGff4kVByDbcG1ijLRzxNTiKjSklSo4dcm61R5XNOAghaAGozz/exec';
 const R2_UPLOAD_ENDPOINT = `${WORKER_URL}/image`;
 const DEFAULT_SLOT_KEYS = ['a','b','c','d','e'];
+const PROFILE_RECT_WIDTH_STEPS = [200, 300, 400, 600];
+const PROFILE_CIRCLE_STEPS = [160, 200, 240, 300];
+const PROFILE_FULL_WIDTH_STEPS = [1000];
 const EMOTION_PROMPTS = (globalThis.EMOTION_PROMPTS_KO && typeof globalThis.EMOTION_PROMPTS_KO === 'object')
   ? globalThis.EMOTION_PROMPTS_KO
   : {
@@ -734,9 +737,9 @@ async function makeVariants(dataUrl, pid, eid, slot){
   circleSource.height = circleSide;
   circleSource.getContext('2d').drawImage(img, cropX, cropY, circleSide, circleSide, 0, 0, circleSide, circleSide);
 
-  const aWidths = [Math.min(1000, W)];
-  const bWidths = [Math.min(300, rectW)];
-  const cSizes = [Math.min(200, circleSide)];
+  const aWidths = [...new Set(PROFILE_FULL_WIDTH_STEPS.map((w) => Math.min(w, W)))];
+  const bWidths = [...new Set(PROFILE_RECT_WIDTH_STEPS.map((w) => Math.min(w, rectW)))];
+  const cSizes = [...new Set(PROFILE_CIRCLE_STEPS.map((s) => Math.min(s, circleSide)))];
 
   const records = [];
   for (const outW of aWidths) {
@@ -763,7 +766,8 @@ async function makeVariants(dataUrl, pid, eid, slot){
     records.push({ key: `emotion_${pid}_${emotionKey}_c_${side}`, url: ccv.toDataURL('image/png') });
   }
 
-  const rectMd = records.find((x) => x.key === `emotion_${pid}_${emotionKey}_b_300`)?.url
+  const rectMd = records.find((x) => x.key === `emotion_${pid}_${emotionKey}_b_400`)?.url
+    || records.find((x) => x.key === `emotion_${pid}_${emotionKey}_b_300`)?.url
     || records.find((x) => x.key.startsWith(`emotion_${pid}_${emotionKey}_b_`))?.url
     || dataUrl;
   const rectLd = records.find((x) => x.key === `emotion_${pid}_${emotionKey}_b_200`)?.url || rectMd;

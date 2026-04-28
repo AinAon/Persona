@@ -2891,7 +2891,7 @@ async function renderChatList(options = {}) {
 
     const avEls = showListAvatars ? await Promise.all(pList.map(async p => {
       const imgSrc = await getChatListNeutralThumb(p);
-      const imgHTML = imgSrc ? `<img src="${imgSrc}">` : defaultAvatar(p.hue);
+      const imgHTML = imgSrc ? `<img src="${imgSrc}" width="80" height="80" loading="lazy" decoding="async">` : defaultAvatar(p.hue);
       return `<div class="chat-av-item" style="background:hsl(${p.hue},22%,14%);border-color:hsl(${p.hue},30%,26%)">${imgHTML}</div>`;
     })) : [];
     if (myVersion !== _chatListRenderVersion) return;
@@ -3420,7 +3420,7 @@ async function openChat(id) {
   const avatarsEl = document.getElementById('chatHeaderAvatars');
   avatarsEl.innerHTML = pList.map(p => {
     const headSrc = p.neutral_thumb || '';
-    const img = headSrc ? `<img src="${headSrc}" style="width:100%;height:100%;object-fit:cover;object-position:top;">` : defaultAvatar(p.hue);
+    const img = headSrc ? `<img src="${headSrc}" width="42" height="42" decoding="async" style="width:100%;height:100%;object-fit:cover;object-position:top;">` : defaultAvatar(p.hue);
     return `<div class="chat-header-av" style="background:hsl(${p.hue},22%,14%);border-color:hsl(${p.hue},30%,26%);width:42px;height:42px;border-radius:50%;overflow:hidden;flex-shrink:0;">${img}</div>`;
   }).join('');
   document.getElementById('chatHeaderNames').textContent = s.roomName || pList.map(p=>p.name).join(', ');
@@ -3443,7 +3443,7 @@ async function openChat(id) {
       const avEl = avatarsEl.children[i];
       if (avEl) {
         const cur = avEl.querySelector('img')?.getAttribute('src') || '';
-        if (cur !== img) avEl.innerHTML = `<img src="${img}" style="width:100%;height:100%;object-fit:cover;object-position:top;">`;
+        if (cur !== img) avEl.innerHTML = `<img src="${img}" width="42" height="42" decoding="async" style="width:100%;height:100%;object-fit:cover;object-position:top;">`;
       }
     }
   });
@@ -3637,7 +3637,7 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
     const circleThumb = await getPersonaCircleThumb(p.pid, seg.emotion, suffix, circleDisplayPx);
     
     if (dataUrl) { 
-      baseImg = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;object-position:top;">`; 
+      baseImg = `<img src="${dataUrl}" width="400" height="600" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover;object-position:top;">`;
       thumbSrc = dataUrl; 
     }
     if (circleThumb) thumbSrc = circleThumb;
@@ -3652,7 +3652,7 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
     const avDisplay = avStyle === 'hidden' ? 'display:none;' : '';
     const avShape = avStyle === 'circle' ? 'border-radius:50%; width:min(25vw,80px); height:min(25vw,80px); aspect-ratio:1/1; max-height:80px;' : '';
     if (avStyle === 'circle' && circleThumb) {
-      baseImg = `<img src="${circleThumb}" style="width:100%;height:100%;object-fit:cover;object-position:top;">`;
+      baseImg = `<img src="${circleThumb}" width="80" height="80" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover;object-position:top;">`;
     }
     
     const fmtContent = fmt(seg.content);
@@ -5430,7 +5430,7 @@ if (!confirm(`${p?.name || pid}를 이 채팅방에서 추방할까?\n대화 기
   if (avatarsEl) {
     avatarsEl.innerHTML = pList.map(p => {
       const headSrc = p.neutral_thumb || '';
-      const img = headSrc ? `<img src="${headSrc}" style="width:100%;height:100%;object-fit:cover;object-position:top;">` : defaultAvatar(p.hue);
+      const img = headSrc ? `<img src="${headSrc}" width="42" height="42" decoding="async" style="width:100%;height:100%;object-fit:cover;object-position:top;">` : defaultAvatar(p.hue);
       return `<div class="chat-header-av" style="background:hsl(${p.hue},22%,14%);border-color:hsl(${p.hue},30%,26%);width:42px;height:42px;border-radius:50%;overflow:hidden;flex-shrink:0;">${img}</div>`;
     }).join('');
     
@@ -5440,7 +5440,7 @@ if (!confirm(`${p?.name || pid}를 이 채팅방에서 추방할까?\n대화 기
       const avEl = avatarsEl.children[i];
       if (avEl) {
         const cur = avEl.querySelector('img')?.getAttribute('src') || '';
-        if (cur !== img) avEl.innerHTML = `<img src="${img}" style="width:100%;height:100%;object-fit:cover;object-position:top;">`;
+        if (cur !== img) avEl.innerHTML = `<img src="${img}" width="42" height="42" decoding="async" style="width:100%;height:100%;object-fit:cover;object-position:top;">`;
       }
     }
   });

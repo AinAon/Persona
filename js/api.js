@@ -11,8 +11,8 @@ const IMAGE_CACHE_SIZES = {
 };
 
 // Keep rectangular chat/profile thumbs fixed at the cropped chat size.
-const PROFILE_RECT_WIDTH_STEPS = [300];
-const PROFILE_CIRCLE_STEPS = [200];
+const PROFILE_RECT_WIDTH_STEPS = [200, 300, 400, 600];
+const PROFILE_CIRCLE_STEPS = [160, 200, 240, 300];
 const PROFILE_FULL_WIDTH_STEPS = [1000];
 
 // ══════════════════════════════
@@ -126,6 +126,22 @@ function getStepCandidates(steps, requiredPx) {
   return [...hi, ...lo];
 }
 
+async function getBestCachedTierByPrefix(prefix, requiredPx) {
+  const target = Math.max(1, Math.round(requiredPx || 1));
+  const keys = await idbKeys().catch(() => []);
+  const hits = [];
+  for (const key of keys || []) {
+    const k = String(key || '');
+    if (!k.startsWith(prefix)) continue;
+    const size = Number(k.slice(prefix.length));
+    if (Number.isFinite(size) && size > 0) hits.push({ key: k, size });
+  }
+  if (!hits.length) return null;
+  hits.sort((a, b) => a.size - b.size);
+  const picked = hits.find((x) => x.size >= target) || hits[hits.length - 1];
+  return await idbGet(picked.key).catch(() => null);
+}
+
 function getScreenDpr() {
   if (typeof window === 'undefined') return 1;
   return Math.max(1, Number(window.devicePixelRatio || 1));
@@ -145,6 +161,8 @@ async function getEmotionCircleThumb(pid, emotion = 'neutral', letter = '', disp
       const exact = await idbGet(`emotion_${pid}_${cacheKey}_c_${size}`);
       if (exact) return exact;
     }
+    const dynamic = await getBestCachedTierByPrefix(`emotion_${pid}_${cacheKey}_c_`, needed);
+    if (dynamic) return dynamic;
     const legacy = await idbGet(`emotion_${pid}_${cacheKey}_circle_thumb`);
     if (legacy) return legacy;
     if (!letter && cacheKey !== 'neutral_a') {
@@ -152,6 +170,8 @@ async function getEmotionCircleThumb(pid, emotion = 'neutral', letter = '', disp
         const neutralExact = await idbGet(`emotion_${pid}_neutral_a_c_${size}`);
         if (neutralExact) return neutralExact;
       }
+      const neutralDynamic = await getBestCachedTierByPrefix(`emotion_${pid}_neutral_a_c_`, needed);
+      if (neutralDynamic) return neutralDynamic;
     }
     const neutralLegacy = await idbGet(`emotion_${pid}_neutral_a_circle_thumb`);
     if (neutralLegacy) return neutralLegacy;
@@ -188,6 +208,8 @@ async function getEmotionRectImage(pid, emotion = 'neutral', letter = '', displa
       const exact = await idbGet(`emotion_${pid}_${cacheKey}_b_${width}`);
       if (exact) return exact;
     }
+    const dynamic = await getBestCachedTierByPrefix(`emotion_${pid}_${cacheKey}_b_`, needed);
+    if (dynamic) return dynamic;
     const md = await idbGet(`emotion_${pid}_${cacheKey}`);
     if (md) return md;
     const ld = await idbGet(`emotion_${pid}_${cacheKey}_ld`);
@@ -201,6 +223,8 @@ async function getEmotionRectImage(pid, emotion = 'neutral', letter = '', displa
         const neutralExact = await idbGet(`emotion_${pid}_neutral_a_b_${width}`);
         if (neutralExact) return neutralExact;
       }
+      const neutralDynamic = await getBestCachedTierByPrefix(`emotion_${pid}_neutral_a_b_`, needed);
+      if (neutralDynamic) return neutralDynamic;
       const neutralMd = await idbGet(`emotion_${pid}_neutral_a`);
       if (neutralMd) return neutralMd;
     }
@@ -460,7 +484,7 @@ async function generateThumbnailSet(fullDataUrl, pid, emotion = 'neutral_a') {
   }
 
   // Generate fixed rectangular tiers for stable rendering quality across personas.
-  const rectWidths = [...new Set(PROFILE_RECT_WIDTH_STEPS)];
+  const rectWidths = [...new Set(PROFILE_RECT_WIDTH_STEPS.map((w) => Math.min(w, cropW)))];
   for (const outW of rectWidths) {
     const outH = Math.max(1, Math.round(outW * 1.5));
     const cv = drawProgressiveScaledCanvas(rectSource, outW, outH);
@@ -487,7 +511,9 @@ async function generateThumbnailSet(fullDataUrl, pid, emotion = 'neutral_a') {
   const hdW = Math.min(IMAGE_CACHE_SIZES.HD, W);
   const mainCircleSize = pickClosestStep(PROFILE_CIRCLE_STEPS, 160);
 
-  const rectMd = records.find((x) => x.key === `emotion_${pid}_${emotion}_b_${mdW}`)?.url || fullDataUrl;
+  const rectMd = records.find((x) => x.key === `emotion_${pid}_${emotion}_b_${mdW}`)?.url
+    || records.find((x) => x.key.startsWith(`emotion_${pid}_${emotion}_b_`))?.url
+    || fullDataUrl;
   const rectLd = records.find((x) => x.key === `emotion_${pid}_${emotion}_b_${ldW}`)?.url || rectMd;
   const fullHd = records.find((x) => x.key === `emotion_${pid}_${emotion}_a_${hdW}`)?.url || fullDataUrl;
   const circleMain = records.find((x) => x.key === `emotion_${pid}_${emotion}_c_${mainCircleSize}`)?.url
