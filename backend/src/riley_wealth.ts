@@ -392,6 +392,12 @@ export async function loadRileyState(env: Env): Promise<RileyState> {
   return await r2Json<RileyState>(env, RILEY_STATE_KEY, defaultState());
 }
 
+export async function ensureRileyStateSnapshot(env: Env): Promise<RileyState> {
+  const state = await loadRileyState(env);
+  await r2PutJson(env, RILEY_STATE_KEY, state);
+  return state;
+}
+
 export async function appendRileyWealthEvent(env: Env, text: string): Promise<{ ok: true; eventId: string } | { ok: false; error: string }> {
   const raw = String(text || "").trim();
   if (!raw) return { ok: false, error: "empty text" };

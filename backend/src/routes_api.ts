@@ -16,6 +16,7 @@ import { getAveryWorklogSnapshot, reconcileAveryWorklog } from "./avery_worklog"
 import { getRileyWealthSnapshot, reconcileRileyWealth } from "./riley_wealth";
 import { getPersonaPolicy } from "./persona_policy";
 import { getPromotionCandidates } from "./persona_promotion";
+import { dropboxReadText, dropboxWriteTextWithDetail, getPersonaDropboxAccessToken } from "./dropbox_vault";
 
 type SessionMeta = {
   id: string;
@@ -1043,6 +1044,25 @@ export async function handleApiRoute(
       state: snapshot.state,
       events: snapshot.events,
     }, { headers: { ...cors, "Cache-Control": "no-store" } });
+  }
+
+  if (url.pathname === "/debug/dropbox/riley" && request.method === "GET") {
+    const token = await getPersonaDropboxAccessToken(env, "riley");
+    if (!token) {
+      return Response.json({ ok: false, stage: "token", error: "empty_access_token_from_refresh_flow" }, { status: 500, headers: noStoreHeaders });
+    }
+    const testPath = "/riley_memory/__debug_probe__.txt";
+    const stamp = new Date().toISOString();
+    const wr = await dropboxWriteTextWithDetail(token, testPath, `probe:${stamp}`);
+    const rd = await dropboxReadText(token, testPath);
+    return Response.json({
+      ok: wr.ok && rd != null,
+      token_prefix: token.slice(0, 8),
+      write: wr,
+      read_ok: rd != null,
+      read_preview: rd ? rd.slice(0, 80) : "",
+      test_path: testPath,
+    }, { headers: noStoreHeaders });
   }
 
   if (url.pathname === "/riley/wealth/reconcile" && request.method === "POST") {

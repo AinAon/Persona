@@ -104,3 +104,24 @@ export async function dropboxWriteText(token: string, path: string, content: str
   });
   return res.ok;
 }
+
+export async function dropboxWriteTextWithDetail(token: string, path: string, content: string): Promise<{ ok: boolean; status: number; detail: string }> {
+  await ensureFolder(token, dirname(path));
+  const res = await fetch(`${DROPBOX_CONTENT}/files/upload`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/octet-stream",
+      "Dropbox-API-Arg": JSON.stringify({
+        path,
+        mode: "overwrite",
+        autorename: false,
+        mute: true,
+        strict_conflict: false,
+      }),
+    },
+    body: toBytes(content),
+  });
+  const detail = await res.text().catch(() => "");
+  return { ok: res.ok, status: res.status, detail };
+}

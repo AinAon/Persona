@@ -13,8 +13,10 @@ import {
 import {
   appendRileyWealthEvent,
   buildRileySystemPrompt,
+  ensureRileyStateSnapshot,
   extractLatestUserText,
   getRileyWealthSnapshot,
+  isWealthIntentText,
   isWealthMutationText,
   isRileyParticipant,
 } from "./riley_wealth";
@@ -120,7 +122,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
   const inRileyChat = isRileyParticipant(participant_pids || []);
   const inAveryChat = isAveryParticipant(participant_pids || []);
   const latestUserText = extractLatestUserText(messages);
-  const shouldWriteRileyEvent = inRileyChat && isWealthMutationText(latestUserText);
+  const shouldWriteRileyEvent = inRileyChat && (isWealthMutationText(latestUserText) || isWealthIntentText(latestUserText));
   const shouldWriteAveryEvent = inAveryChat && shouldPersistAveryWorklogText(latestUserText);
   const policyTargetPid = resolvePolicyTargetPid(participant_pids || []);
 
@@ -136,7 +138,10 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       if (applied.applied && applied.message) policyApplyMessage = applied.message;
     }
     const rileySnapshot = (!isImageReq && inRileyChat)
-      ? await getRileyWealthSnapshot(env, 10)
+      ? await (async () => {
+          await ensureRileyStateSnapshot(env);
+          return await getRileyWealthSnapshot(env, 10);
+        })()
       : null;
     const averySnapshot = (!isImageReq && inAveryChat)
       ? await getAveryWorklogSnapshot(env, 20)
