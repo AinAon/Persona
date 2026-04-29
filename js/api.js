@@ -1049,14 +1049,17 @@ async function loadIndex() {
     const mergedIndex = [...index];
     const activeIds = new Set(index.map(item => item?.id).filter(Boolean));
 
-    // Keep local-only sessions when local cache exists (e.g., newly created empty rooms before remote sync).
+    // Keep local-only sessions only when they actually contain messages.
+    // Empty local arrays create ghost rows that disappear after opening.
     for (const item of localIndex) {
       const sid = item?.id;
       if (!sid || activeIds.has(sid)) continue;
       const localSession = getLocalSession(sid);
-      if (Array.isArray(localSession)) {
+      if (Array.isArray(localSession) && localSession.length > 0) {
         mergedIndex.push(item);
         activeIds.add(sid);
+      } else {
+        removeLocalSession(sid);
       }
     }
 
