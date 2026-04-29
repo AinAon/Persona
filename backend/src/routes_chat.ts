@@ -127,6 +127,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
   const policyTargetPid = resolvePolicyTargetPid(participant_pids || []);
 
   try {
+    let rileyWriteResult: { ok: boolean; error?: string; eventId?: string } | null = null;
     let promotionApplyMessage = "";
     if (!isImageReq && policyTargetPid) {
       const promoted = await approveLatestPendingCandidate(env, policyTargetPid, latestUserText);
@@ -269,7 +270,8 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
               });
             }
             if (shouldWriteRileyEvent) {
-              await appendRileyWealthEvent(env, latestUserText);
+              const wr = await appendRileyWealthEvent(env, latestUserText);
+              rileyWriteResult = wr.ok ? { ok: true, eventId: wr.eventId } : { ok: false, error: wr.error };
             }
             if (shouldWriteAveryEvent) {
               await appendAveryWorklogEvent(env, latestUserText);
@@ -321,7 +323,8 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     }
 
     if (shouldWriteRileyEvent) {
-      await appendRileyWealthEvent(env, latestUserText);
+      const wr = await appendRileyWealthEvent(env, latestUserText);
+      rileyWriteResult = wr.ok ? { ok: true, eventId: wr.eventId } : { ok: false, error: wr.error };
     }
     if (shouldWriteAveryEvent) {
       await appendAveryWorklogEvent(env, latestUserText);
@@ -332,9 +335,9 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     }
 
     if (imageUrlOut) {
-      return Response.json({ result: "success", reply, image_url: imageUrlOut }, { headers: cors });
+      return Response.json({ result: "success", reply, image_url: imageUrlOut, riley_write: rileyWriteResult }, { headers: cors });
     }
-    return Response.json({ result: "success", reply }, { headers: cors });
+    return Response.json({ result: "success", reply, riley_write: rileyWriteResult }, { headers: cors });
   } catch (e: any) {
     return Response.json({ result: "error", error: e?.message || "unknown error" }, { status: 500, headers: cors });
   }
