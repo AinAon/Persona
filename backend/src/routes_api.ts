@@ -334,6 +334,33 @@ async function deleteR2ByPrefix(env: Env, prefix: string, batchMax = 5000): Prom
   return keys.length;
 }
 
+async function migrateR2PrefixToSharedDropbox(
+  env: Env,
+  prefix: string,
+  sharedToken: string,
+): Promise<{ scanned: number; copied: number; skipped: number }> {
+  const keys = await listR2ByPrefix(env, prefix, 20000);
+  let copied = 0;
+  let skipped = 0;
+  for (const key of keys) {
+    const dbxPath = `${SHARED_PREFIX}/${key}`;
+    const existing = await dropboxReadBytes(sharedToken, dbxPath);
+    if (existing) {
+      skipped++;
+      continue;
+    }
+    const obj = await env.R2.get(key);
+    if (!obj || typeof obj.arrayBuffer !== "function") {
+      skipped++;
+      continue;
+    }
+    const bytes = await obj.arrayBuffer();
+    const ok = await dropboxWriteBytes(sharedToken, dbxPath, bytes);
+    if (ok) copied++;
+  }
+  return { scanned: keys.length, copied, skipped };
+}
+
 function buildMemoryBackupKey(tag: string): string {
   const now = new Date();
   const y = now.getUTCFullYear();
@@ -1166,6 +1193,25 @@ export async function handleApiRoute(
         read: summarize(dbxReadMs),
       },
     }, { headers: noStoreHeaders });
+  }
+
+  if (url.pathname === "/migrate/shared/run" && request.method === "POST") {
+    const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
+    if (!sharedToken) {
+      return Response.json({ ok: false, error: "shared dropbox token missing" }, { status: 500, headers: noStoreHeaders });
+    }
+    const targets = [
+      "image/",
+      "session/data/",
+      "session/deleted/",
+      "session/index.json",
+      "session/deleted_index.json",
+    ];
+    const report: Record<string, { scanned: number; copied: number; skipped: number }> = {};
+    for (const t of targets) {
+      report[t] = await migrateR2PrefixToSharedDropbox(env, t, sharedToken);
+    }
+    return Response.json({ ok: true, sharedPrefix: SHARED_PREFIX, report }, { headers: noStoreHeaders });
   }
 
   if (url.pathname === "/riley/wealth/reconcile" && request.method === "POST") {
