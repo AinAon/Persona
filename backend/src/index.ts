@@ -30,6 +30,8 @@ export interface Env {
   RILEY_DBX_APP_SECRET?: string;
   AVERY_DBX_APP_KEY?: string;
   AVERY_DBX_APP_SECRET?: string;
+  RILEY_DBX_REFRESH_TOKEN?: string;
+  AVERY_DBX_REFRESH_TOKEN?: string;
   GEMINI_KEY?: string;
   GROK_KEY?: string;
   OPENAI_KEY?: string;

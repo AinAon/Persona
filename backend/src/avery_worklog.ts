@@ -1,5 +1,5 @@
 import type { Env } from "./index";
-import { dropboxReadText, dropboxWriteText, getPersonaDropboxToken } from "./dropbox_vault";
+import { dropboxReadText, dropboxWriteText, getPersonaDropboxAccessToken } from "./dropbox_vault";
 
 const AVERY_LOG_KEY = "avery_memory/avery_worklog.log.jsonl";
 const AVERY_STATE_KEY = "avery_memory/avery_worklog_state.json";
@@ -119,7 +119,7 @@ function toItemId(kind: WorkKind, title: string): string {
 }
 
 async function r2Text(env: Env, key: string): Promise<string | null> {
-  const token = getPersonaDropboxToken(env, "avery");
+  const token = await getPersonaDropboxAccessToken(env, "avery");
   if (token) {
     const txt = await dropboxReadText(token, key === AVERY_LOG_KEY ? AVERY_VAULT_LOG_PATH : AVERY_VAULT_STATE_PATH);
     if (txt != null) return txt;
@@ -145,7 +145,7 @@ async function r2Json<T>(env: Env, key: string, fallback: T): Promise<T> {
 }
 
 async function r2PutJson(env: Env, key: string, value: unknown): Promise<void> {
-  const token = getPersonaDropboxToken(env, "avery");
+  const token = await getPersonaDropboxAccessToken(env, "avery");
   if (token) {
     const path = key === AVERY_LOG_KEY ? AVERY_VAULT_LOG_PATH : AVERY_VAULT_STATE_PATH;
     const ok = await dropboxWriteText(token, path, JSON.stringify(value));
@@ -477,7 +477,7 @@ async function appendLogLine(env: Env, event: AveryEvent): Promise<void> {
   const existing = await r2Text(env, AVERY_LOG_KEY);
   const line = JSON.stringify(event);
   const next = existing && existing.trim() ? `${existing.trim()}\n${line}` : line;
-  const token = getPersonaDropboxToken(env, "avery");
+  const token = await getPersonaDropboxAccessToken(env, "avery");
   if (token) {
     const ok = await dropboxWriteText(token, AVERY_VAULT_LOG_PATH, next);
     if (ok) return;

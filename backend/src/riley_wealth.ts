@@ -1,5 +1,5 @@
 import type { Env } from "./index";
-import { dropboxReadText, dropboxWriteText, getPersonaDropboxToken } from "./dropbox_vault";
+import { dropboxReadText, dropboxWriteText, getPersonaDropboxAccessToken } from "./dropbox_vault";
 
 const RILEY_LOG_KEY = "riley_memory/riley_memory.log.jsonl";
 const RILEY_STATE_KEY = "riley_memory/riley_state.json";
@@ -91,7 +91,7 @@ function safeNumber(v: unknown): number {
 }
 
 async function r2Text(env: Env, key: string): Promise<string | null> {
-  const token = getPersonaDropboxToken(env, "riley");
+  const token = await getPersonaDropboxAccessToken(env, "riley");
   if (token) {
     const txt = await dropboxReadText(token, key === RILEY_LOG_KEY ? RILEY_VAULT_LOG_PATH : RILEY_VAULT_STATE_PATH);
     if (txt != null) return txt;
@@ -117,7 +117,7 @@ async function r2Json<T>(env: Env, key: string, fallback: T): Promise<T> {
 }
 
 async function r2PutJson(env: Env, key: string, value: unknown): Promise<void> {
-  const token = getPersonaDropboxToken(env, "riley");
+  const token = await getPersonaDropboxAccessToken(env, "riley");
   if (token) {
     const path = key === RILEY_LOG_KEY ? RILEY_VAULT_LOG_PATH : RILEY_VAULT_STATE_PATH;
     const ok = await dropboxWriteText(token, path, JSON.stringify(value));
@@ -376,7 +376,7 @@ async function appendLogLine(env: Env, event: WealthEvent): Promise<void> {
   const existing = await r2Text(env, RILEY_LOG_KEY);
   const line = JSON.stringify(event);
   const next = existing && existing.trim() ? `${existing.trim()}\n${line}` : line;
-  const token = getPersonaDropboxToken(env, "riley");
+  const token = await getPersonaDropboxAccessToken(env, "riley");
   if (token) {
     const ok = await dropboxWriteText(token, RILEY_VAULT_LOG_PATH, next);
     if (ok) return;

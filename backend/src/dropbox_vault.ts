@@ -10,6 +10,15 @@ function dbxHeaders(token: string): HeadersInit {
   };
 }
 
+type Persona = "riley" | "avery";
+
+function getDropboxAppConfig(env: Env, persona: Persona): { key: string; secret: string; refreshToken: string } {
+  const key = String(persona === "riley" ? (env.RILEY_DBX_APP_KEY || "") : (env.AVERY_DBX_APP_KEY || "")).trim();
+  const secret = String(persona === "riley" ? (env.RILEY_DBX_APP_SECRET || "") : (env.AVERY_DBX_APP_SECRET || "")).trim();
+  const refreshToken = String(persona === "riley" ? (env.RILEY_DBX_REFRESH_TOKEN || "") : (env.AVERY_DBX_REFRESH_TOKEN || "")).trim();
+  return { key, secret, refreshToken };
+}
+
 function toBytes(text: string): Uint8Array {
   return new TextEncoder().encode(text);
 }
@@ -39,8 +48,29 @@ function dirname(path: string): string {
   return path.slice(0, idx);
 }
 
-export function getPersonaDropboxToken(env: Env, persona: "riley" | "avery"): string {
+export function getPersonaDropboxToken(env: Env, persona: Persona): string {
   return String(persona === "riley" ? (env.RILEY_DBX_ACCESS_TOKEN || "") : (env.AVERY_DBX_ACCESS_TOKEN || "")).trim();
+}
+
+export async function getPersonaDropboxAccessToken(env: Env, persona: Persona): Promise<string> {
+  const direct = getPersonaDropboxToken(env, persona);
+  if (direct) return direct;
+  const cfg = getDropboxAppConfig(env, persona);
+  if (!cfg.key || !cfg.secret || !cfg.refreshToken) return "";
+  const res = await fetch("https://api.dropboxapi.com/oauth2/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: cfg.refreshToken,
+      client_id: cfg.key,
+      client_secret: cfg.secret,
+    }),
+  });
+  if (!res.ok) return "";
+  const raw = await res.json().catch(() => null) as any;
+  const token = String(raw?.access_token || "").trim();
+  return token;
 }
 
 export async function dropboxReadText(token: string, path: string): Promise<string | null> {
