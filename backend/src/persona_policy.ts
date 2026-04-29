@@ -1,4 +1,5 @@
 import type { Env } from "./index";
+import { dropboxDeletePath, dropboxReadText, dropboxWriteText, getPersonaDropboxAccessToken } from "./dropbox_vault";
 
 type PersonaPolicyPatch = {
   personaPid: string;
@@ -48,6 +49,55 @@ function normalizePid(pid: string): string {
   return String(pid || "").trim().toLowerCase();
 }
 
+function pidToPersona(pid: string): "riley" | "avery" | null {
+  const p = normalizePid(pid);
+  if (p === "p_riley" || p === "riley") return "riley";
+  if (p === "p_avery" || p === "avery") return "avery";
+  return null;
+}
+
+function vaultPathFromR2Key(key: string): string {
+  return `/${String(key || "").replace(/^\/+/, "")}`;
+}
+
+async function readPolicyText(env: Env, pid: string, key: string): Promise<string | null> {
+  const persona = pidToPersona(pid);
+  if (persona) {
+    const token = await getPersonaDropboxAccessToken(env, persona);
+    if (token) {
+      const txt = await dropboxReadText(token, vaultPathFromR2Key(key));
+      if (txt != null) return txt;
+    }
+  }
+  const obj = await env.R2.get(key);
+  if (!obj) return null;
+  return await obj.text();
+}
+
+async function writePolicyText(env: Env, pid: string, key: string, text: string, contentType: string): Promise<void> {
+  const persona = pidToPersona(pid);
+  if (persona) {
+    const token = await getPersonaDropboxAccessToken(env, persona);
+    if (token) {
+      const ok = await dropboxWriteText(token, vaultPathFromR2Key(key), text);
+      if (ok) return;
+    }
+  }
+  await env.R2.put(key, text, { httpMetadata: { contentType } });
+}
+
+async function deletePolicyText(env: Env, pid: string, key: string): Promise<void> {
+  const persona = pidToPersona(pid);
+  if (persona) {
+    const token = await getPersonaDropboxAccessToken(env, persona);
+    if (token) {
+      const ok = await dropboxDeletePath(token, vaultPathFromR2Key(key));
+      if (ok) return;
+    }
+  }
+  await env.R2.delete(key);
+}
+
 export function resolvePolicyTargetPid(participantPids: string[] = []): string | null {
   for (const raw of participantPids || []) {
     const pid = normalizePid(raw);
@@ -88,8 +138,7 @@ function parsePolicyPatchFromReply(reply: string, expectedPid: string): PersonaP
 export async function buildPersonaPolicySystemPrompt(env: Env, personaPid: string): Promise<string> {
   const pid = normalizePid(personaPid);
   if (!POLICY_PIDS.has(pid)) return "";
-  const policyRaw = await env.R2.get(policyKey(pid));
-  const policyText = policyRaw ? await policyRaw.text() : "";
+  const policyText = (await readPolicyText(env, pid, policyKey(pid))) || "";
   return [
     `Persona policy control enabled for ${pid}.`,
     "If user asks to change this persona policy, DO NOT claim direct modification.",
@@ -107,18 +156,13 @@ export async function savePendingPolicyPatchFromReply(env: Env, personaPid: stri
   if (!POLICY_PIDS.has(pid)) return;
   const patch = parsePolicyPatchFromReply(reply, pid);
   if (!patch) return;
-  await env.R2.put(pendingKey(pid), JSON.stringify(patch, null, 2), {
-    httpMetadata: { contentType: "application/json; charset=utf-8" },
-  });
+  await writePolicyText(env, pid, pendingKey(pid), JSON.stringify(patch, null, 2), "application/json; charset=utf-8");
 }
 
 async function appendApprovalLog(env: Env, pid: string, line: PersonaPolicyApprovalLog): Promise<void> {
-  const obj = await env.R2.get(approvalLogKey(pid));
-  const prev = obj ? await obj.text() : "";
+  const prev = (await readPolicyText(env, pid, approvalLogKey(pid))) || "";
   const next = `${prev ? `${prev}\n` : ""}${JSON.stringify(line)}`;
-  await env.R2.put(approvalLogKey(pid), next, {
-    httpMetadata: { contentType: "application/x-ndjson; charset=utf-8" },
-  });
+  await writePolicyText(env, pid, approvalLogKey(pid), next, "application/x-ndjson; charset=utf-8");
 }
 
 export async function applyPendingPolicyIfApproved(
@@ -129,20 +173,18 @@ export async function applyPendingPolicyIfApproved(
   const pid = normalizePid(personaPid);
   if (!POLICY_PIDS.has(pid)) return { applied: false };
   if (!isPolicyApprovalText(userText)) return { applied: false };
-  const pendingObj = await env.R2.get(pendingKey(pid));
-  if (!pendingObj) return { applied: false, message: "승인할 policy 제안이 아직 없습니다." };
-  const pending = JSON.parse(await pendingObj.text()) as PersonaPolicyPatch;
+  const pendingRaw = await readPolicyText(env, pid, pendingKey(pid));
+  if (!pendingRaw) return { applied: false, message: "승인할 policy 제안이 아직 없습니다." };
+  const pending = JSON.parse(pendingRaw) as PersonaPolicyPatch;
   if (!pending?.policyText) return { applied: false, message: "제안 형식이 유효하지 않아 적용을 건너뛰었습니다." };
-  await env.R2.put(policyKey(pid), pending.policyText, {
-    httpMetadata: { contentType: "text/markdown; charset=utf-8" },
-  });
+  await writePolicyText(env, pid, policyKey(pid), pending.policyText, "text/markdown; charset=utf-8");
   await appendApprovalLog(env, pid, {
     ts: nowKstIso(),
     personaPid: pid,
     approvedByText: String(userText || "").trim().slice(0, 200),
     summary: pending.summary || "",
   });
-  await env.R2.delete(pendingKey(pid));
+  await deletePolicyText(env, pid, pendingKey(pid));
   return { applied: true, message: `${pid} policy.md 적용 완료` };
 }
 
@@ -156,12 +198,12 @@ export async function getPersonaPolicy(env: Env, personaPid: string): Promise<{
   if (!POLICY_PIDS.has(pid)) {
     return { ok: false, personaPid: pid, policyText: "", hasPending: false };
   }
-  const policyObj = await env.R2.get(policyKey(pid));
-  const pendingObj = await env.R2.get(pendingKey(pid));
+  const policyText = (await readPolicyText(env, pid, policyKey(pid))) || "";
+  const pendingText = await readPolicyText(env, pid, pendingKey(pid));
   return {
     ok: true,
     personaPid: pid,
-    policyText: policyObj ? await policyObj.text() : "",
-    hasPending: !!pendingObj,
+    policyText,
+    hasPending: !!pendingText,
   };
 }

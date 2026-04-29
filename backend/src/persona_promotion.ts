@@ -1,4 +1,5 @@
 import type { Env } from "./index";
+import { dropboxReadText, dropboxWriteText, getPersonaDropboxAccessToken } from "./dropbox_vault";
 
 type PromotionCandidate = {
   id: string;
@@ -29,8 +30,37 @@ function nowKstIso(): string {
 
 function key(pid: string): string { return `persona_promotion/${String(pid || "").trim().toLowerCase()}/candidates.json`; }
 
+function normalizePid(pid: string): string { return String(pid || "").trim().toLowerCase(); }
+
+function pidToPersona(pid: string): "riley" | "avery" | null {
+  const p = normalizePid(pid);
+  if (p === "p_riley" || p === "riley") return "riley";
+  if (p === "p_avery" || p === "avery") return "avery";
+  return null;
+}
+
+function vaultPathFromR2Key(path: string): string {
+  return `/${String(path || "").replace(/^\/+/, "")}`;
+}
+
 async function load(env: Env, pid: string): Promise<CandidateDoc> {
-  const obj = await env.R2.get(key(pid));
+  const k = key(pid);
+  const persona = pidToPersona(pid);
+  if (persona) {
+    const token = await getPersonaDropboxAccessToken(env, persona);
+    if (token) {
+      const txt = await dropboxReadText(token, vaultPathFromR2Key(k));
+      if (txt) {
+        try {
+          const parsed = JSON.parse(txt) as CandidateDoc;
+          return parsed?.version === 1 && Array.isArray(parsed.items) ? parsed : { version: 1, items: [] };
+        } catch {
+          return { version: 1, items: [] };
+        }
+      }
+    }
+  }
+  const obj = await env.R2.get(k);
   if (!obj) return { version: 1, items: [] };
   try {
     const parsed = JSON.parse(await obj.text()) as CandidateDoc;
@@ -41,9 +71,17 @@ async function load(env: Env, pid: string): Promise<CandidateDoc> {
 }
 
 async function save(env: Env, pid: string, doc: CandidateDoc): Promise<void> {
-  await env.R2.put(key(pid), JSON.stringify(doc, null, 2), {
-    httpMetadata: { contentType: "application/json; charset=utf-8" },
-  });
+  const payload = JSON.stringify(doc, null, 2);
+  const k = key(pid);
+  const persona = pidToPersona(pid);
+  if (persona) {
+    const token = await getPersonaDropboxAccessToken(env, persona);
+    if (token) {
+      const ok = await dropboxWriteText(token, vaultPathFromR2Key(k), payload);
+      if (ok) return;
+    }
+  }
+  await env.R2.put(k, payload, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
 }
 
 export function isPromotionApprovalText(text: string): boolean {

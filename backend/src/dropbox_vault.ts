@@ -125,3 +125,12 @@ export async function dropboxWriteTextWithDetail(token: string, path: string, co
   const detail = await res.text().catch(() => "");
   return { ok: res.ok, status: res.status, detail };
 }
+
+export async function dropboxDeletePath(token: string, path: string): Promise<boolean> {
+  const res = await fetch(`${DROPBOX_API}/files/delete_v2`, {
+    method: "POST",
+    headers: dbxHeaders(token),
+    body: JSON.stringify({ path }),
+  });
+  return res.ok;
+}
