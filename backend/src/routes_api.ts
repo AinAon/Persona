@@ -273,6 +273,8 @@ async function getSessionPayloadText(env: Env, id: string): Promise<string | nul
     const fromDbx = await dropboxReadText(sharedToken, `${SHARED_PREFIX}/${sessionR2Key(id)}`);
     if (fromDbx) return fromDbx;
   }
+  const fromR2 = await r2Text(env, sessionR2Key(id));
+  if (fromR2) return fromR2;
   return await env.KV.get(`session:${id}`);
 }
 
@@ -282,6 +284,8 @@ async function getDeletedSessionPayloadText(env: Env, id: string): Promise<strin
     const fromDbx = await dropboxReadText(sharedToken, `${SHARED_PREFIX}/${deletedSessionR2Key(id)}`);
     if (fromDbx) return fromDbx;
   }
+  const fromR2 = await r2Text(env, deletedSessionR2Key(id));
+  if (fromR2) return fromR2;
   return await env.KV.get(`deleted:session:${id}`);
 }
 
@@ -359,6 +363,54 @@ async function migrateR2PrefixToSharedDropbox(
     if (ok) copied++;
   }
   return { scanned: keys.length, copied, skipped };
+}
+
+async function migrateR2PrefixToSharedDropboxPaged(
+  env: Env,
+  prefix: string,
+  sharedToken: string,
+  limit: number,
+  cursor?: string,
+): Promise<{
+  scanned: number;
+  copied: number;
+  skipped: number;
+  failed: number;
+  sampleErrors: string[];
+  nextCursor: string;
+  done: boolean;
+}> {
+  const page = await env.R2.list({ prefix, limit: Math.max(1, Math.min(500, limit || 200)), cursor });
+  const objects = page.objects || [];
+  let copied = 0;
+  let skipped = 0;
+  let failed = 0;
+  const sampleErrors: string[] = [];
+  for (const o of objects) {
+    const key = String(o?.key || "");
+    if (!key) continue;
+    const dbxPath = `${SHARED_PREFIX}/${key}`;
+    const existing = await dropboxReadBytes(sharedToken, dbxPath);
+    if (existing) {
+      skipped++;
+      continue;
+    }
+    const obj = await env.R2.get(key);
+    if (!obj || typeof obj.arrayBuffer !== "function") {
+      skipped++;
+      continue;
+    }
+    const bytes = await obj.arrayBuffer();
+    const ok = await dropboxWriteBytes(sharedToken, dbxPath, bytes);
+    if (ok) copied++;
+    else {
+      failed++;
+      if (sampleErrors.length < 5) sampleErrors.push(`write_failed:${key}`);
+    }
+  }
+  const nextCursor = String((page as any).cursor || "");
+  const done = !!((page as any).list_complete) || !nextCursor;
+  return { scanned: objects.length, copied, skipped, failed, sampleErrors, nextCursor, done };
 }
 
 function buildMemoryBackupKey(tag: string): string {
@@ -1212,6 +1264,26 @@ export async function handleApiRoute(
       report[t] = await migrateR2PrefixToSharedDropbox(env, t, sharedToken);
     }
     return Response.json({ ok: true, sharedPrefix: SHARED_PREFIX, report }, { headers: noStoreHeaders });
+  }
+
+  if (url.pathname === "/migrate/shared/page" && request.method === "POST") {
+    const body = await request.json().catch(() => ({} as any)) as { prefix?: string; limit?: number; cursor?: string };
+    const prefix = String(body.prefix || "").trim();
+    if (!prefix) {
+      return Response.json({ ok: false, error: "prefix required" }, { status: 400, headers: noStoreHeaders });
+    }
+    const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
+    if (!sharedToken) {
+      return Response.json({ ok: false, error: "shared dropbox token missing" }, { status: 500, headers: noStoreHeaders });
+    }
+    const result = await migrateR2PrefixToSharedDropboxPaged(
+      env,
+      prefix,
+      sharedToken,
+      Number(body.limit || 200),
+      String(body.cursor || "") || undefined,
+    );
+    return Response.json({ ok: true, prefix, ...result }, { headers: noStoreHeaders });
   }
 
   if (url.pathname === "/riley/wealth/reconcile" && request.method === "POST") {
