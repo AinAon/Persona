@@ -24,6 +24,12 @@ interface R2Store {
 export interface Env {
   KV: KVStore;
   R2: R2Store;
+  RILEY_DBX_ACCESS_TOKEN?: string;
+  AVERY_DBX_ACCESS_TOKEN?: string;
+  RILEY_DBX_APP_KEY?: string;
+  RILEY_DBX_APP_SECRET?: string;
+  AVERY_DBX_APP_KEY?: string;
+  AVERY_DBX_APP_SECRET?: string;
   GEMINI_KEY?: string;
   GROK_KEY?: string;
   OPENAI_KEY?: string;

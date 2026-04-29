@@ -48,6 +48,12 @@ const SESSION_R2_PREFIX = "session/data/";
 const DELETED_SESSION_R2_PREFIX = "session/deleted/";
 const SESSION_AUDIO_R2_PREFIXES = ["tts/session/", "audio/session/"];
 
+function getDropboxAppConfig(env: Env, persona: "riley" | "avery"): { key: string; secret: string } {
+  const key = String(persona === "riley" ? (env.RILEY_DBX_APP_KEY || "") : (env.AVERY_DBX_APP_KEY || "")).trim();
+  const secret = String(persona === "riley" ? (env.RILEY_DBX_APP_SECRET || "") : (env.AVERY_DBX_APP_SECRET || "")).trim();
+  return { key, secret };
+}
+
 function toIntInRange(raw: string | null, min: number, max: number): number | null {
   if (!raw) return null;
   const n = Number(raw);
@@ -474,6 +480,64 @@ export async function handleApiRoute(
   cors: CorsHeaders,
 ): Promise<Response | null> {
   const noStoreHeaders = { ...cors, "Cache-Control": "no-store" };
+  if (url.pathname === "/oauth/dropbox/start" && request.method === "GET") {
+    const personaRaw = String(url.searchParams.get("persona") || "").trim().toLowerCase();
+    const persona = personaRaw === "avery" ? "avery" : (personaRaw === "riley" ? "riley" : "");
+    if (!persona) return Response.json({ ok: false, error: "persona must be riley or avery" }, { status: 400, headers: cors });
+    const cfg = getDropboxAppConfig(env, persona);
+    if (!cfg.key) return Response.json({ ok: false, error: `${persona} app key missing` }, { status: 500, headers: cors });
+    const redirectUri = `${url.origin}/oauth/dropbox/callback`;
+    const state = `${persona}:${Date.now()}`;
+    const authUrl = new URL("https://www.dropbox.com/oauth2/authorize");
+    authUrl.searchParams.set("client_id", cfg.key);
+    authUrl.searchParams.set("response_type", "code");
+    authUrl.searchParams.set("token_access_type", "offline");
+    authUrl.searchParams.set("redirect_uri", redirectUri);
+    authUrl.searchParams.set("state", state);
+    return Response.redirect(authUrl.toString(), 302);
+  }
+
+  if (url.pathname === "/oauth/dropbox/callback" && request.method === "GET") {
+    const code = String(url.searchParams.get("code") || "").trim();
+    const state = String(url.searchParams.get("state") || "").trim().toLowerCase();
+    const persona = state.startsWith("avery:") ? "avery" : (state.startsWith("riley:") ? "riley" : "");
+    if (!code || !persona) {
+      return Response.json({ ok: false, error: "missing code/state" }, { status: 400, headers: cors });
+    }
+    const cfg = getDropboxAppConfig(env, persona as "riley" | "avery");
+    if (!cfg.key || !cfg.secret) {
+      return Response.json({ ok: false, error: `${persona} app key/secret missing` }, { status: 500, headers: cors });
+    }
+    const redirectUri = `${url.origin}/oauth/dropbox/callback`;
+    const tokenRes = await fetch("https://api.dropboxapi.com/oauth2/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code,
+        grant_type: "authorization_code",
+        client_id: cfg.key,
+        client_secret: cfg.secret,
+        redirect_uri: redirectUri,
+      }),
+    });
+    const raw = await tokenRes.text();
+    if (!tokenRes.ok) {
+      return Response.json({ ok: false, persona, error: "token exchange failed", detail: raw }, { status: 502, headers: cors });
+    }
+    let parsed: any = {};
+    try { parsed = JSON.parse(raw); } catch { parsed = {}; }
+    return Response.json({
+      ok: true,
+      persona,
+      redirect_uri: redirectUri,
+      has_refresh_token: !!parsed?.refresh_token,
+      refresh_token: String(parsed?.refresh_token || ""),
+      access_token: String(parsed?.access_token || ""),
+      expires_in: Number(parsed?.expires_in || 0),
+      note: "Store refresh_token as Wrangler secret. Do not share this response.",
+    }, { headers: noStoreHeaders });
+  }
+
   if (url.pathname === "/tts" && request.method === "POST") {
     const body = await request.json() as {
       text?: string;
