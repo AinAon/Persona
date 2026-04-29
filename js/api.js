@@ -1163,6 +1163,8 @@ async function loadSession(id, options = {}) {
       sessions = sessions.filter(x => x.id !== id);
       removeLocalSession(id);
       setLocalSessionIndex(buildIndex());
+      // Also sync index deletion to remote so the ghost row doesn't come back.
+      saveIndex();
       if (activeChatId === id) activeChatId = null;
       renderChatList();
       return;
