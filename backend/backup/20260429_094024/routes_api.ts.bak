@@ -48,15 +48,6 @@ const SESSION_R2_PREFIX = "session/data/";
 const DELETED_SESSION_R2_PREFIX = "session/deleted/";
 const SESSION_AUDIO_R2_PREFIXES = ["tts/session/", "audio/session/"];
 
-function toIntInRange(raw: string | null, min: number, max: number): number | null {
-  if (!raw) return null;
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return null;
-  const v = Math.round(n);
-  if (v < min || v > max) return null;
-  return v;
-}
-
 function buildSessionMeta(session: Record<string, unknown>): SessionMeta {
   return {
     id: String(session.id),
@@ -1154,37 +1145,6 @@ export async function handleApiRoute(
         "Cache-Control": "no-store",
       },
     });
-  }
-
-  if (url.pathname.startsWith("/image-variant/") && request.method === "GET") {
-    const key = decodeURIComponent(url.pathname.slice(15)).replace(/^\/+/, "");
-    if (!key) return Response.json({ error: "key required" }, { status: 400, headers: cors });
-
-    const width = toIntInRange(url.searchParams.get("w"), 1, 4096);
-    const height = toIntInRange(url.searchParams.get("h"), 1, 4096);
-    const quality = toIntInRange(url.searchParams.get("q"), 1, 100);
-    const dpr = toIntInRange(url.searchParams.get("dpr"), 1, 4) || 1;
-    const fit = String(url.searchParams.get("fit") || "").trim().toLowerCase();
-    const format = String(url.searchParams.get("f") || "").trim().toLowerCase();
-
-    const options: string[] = [];
-    if (width) options.push(`width=${Math.min(4096, width * dpr)}`);
-    if (height) options.push(`height=${Math.min(4096, height * dpr)}`);
-    if (["cover", "contain", "crop", "pad", "scale-down"].includes(fit)) options.push(`fit=${fit}`);
-    if (quality) options.push(`quality=${quality}`);
-    if (["auto", "avif", "webp", "jpeg", "jpg", "png"].includes(format)) {
-      options.push(`format=${format}`);
-    } else {
-      options.push("format=auto");
-    }
-
-    if (!options.length) {
-      return Response.redirect(`${url.origin}/image/${encodeURIComponent(key).replace(/%2F/gi, "/")}`, 302);
-    }
-
-    const sourcePath = `image/${key}`;
-    const location = `${url.origin}/cdn-cgi/image/${options.join(",")}/${sourcePath}`;
-    return Response.redirect(location, 302);
   }
 
   if (url.pathname === "/image" && request.method === "POST") {

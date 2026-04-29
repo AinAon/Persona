@@ -63,6 +63,43 @@ function cacheBustUrl(url) {
   return url + (url.includes('?') ? '&' : '?') + 't=' + t;
 }
 
+function buildImageVariantUrl(key, {
+  w = 0,
+  h = 0,
+  fit = 'cover',
+  q = 88,
+  f = 'auto'
+} = {}) {
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl || !key) return '';
+  const safeKey = String(key).replace(/^\/+/, '');
+  const sp = new URLSearchParams();
+  if (w) sp.set('w', String(Math.max(1, Math.round(w))));
+  if (h) sp.set('h', String(Math.max(1, Math.round(h))));
+  if (fit) sp.set('fit', String(fit));
+  if (q) sp.set('q', String(Math.max(1, Math.min(100, Math.round(q)))));
+  if (f) sp.set('f', String(f));
+  return `${wUrl}/image-variant/${encodeURIComponent(safeKey).replace(/%2F/gi, '/')}${sp.toString() ? `?${sp.toString()}` : ''}`;
+}
+
+async function fetchImageFromWorker(key, variantOptions = {}, timeoutMs = 4500) {
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl || !key) return null;
+  const safeKey = String(key).replace(/^\/+/, '');
+  const variantUrl = buildImageVariantUrl(safeKey, variantOptions);
+  if (variantUrl) {
+    try {
+      const resized = await fetchWithTimeout(cacheBustUrl(variantUrl), {}, timeoutMs);
+      if (resized?.ok) return resized;
+    } catch {}
+  }
+  try {
+    const raw = await fetchWithTimeout(cacheBustUrl(`${wUrl}/image/${safeKey}`), {}, timeoutMs);
+    if (raw?.ok) return raw;
+  } catch {}
+  return null;
+}
+
 async function fetchWithTimeout(url, options = {}, timeoutMs = 5000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -297,12 +334,14 @@ async function getEmotionImageSuffixed(pid, emotion, letter, displayPx = 200) {
     if (cached) return cached;
     const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
     if (!wUrl) return null;
-    const url = letter
-      ? `${wUrl}/image/profile/${pid}/${pid}_${emotion}_${letter}.jpg`
-      : `${wUrl}/image/profile/${pid}/${pid}_${emotion}.jpg`;
-    const resp = await fetchWithTimeout(cacheBustUrl(url), {}, 4500);
-    if (!resp.ok) {
-      console.warn(`[emotion] 404: ${url}`);
+    const key = letter
+      ? `profile/${pid}/${pid}_${emotion}_${letter}.jpg`
+      : `profile/${pid}/${pid}_${emotion}.jpg`;
+    const targetW = Math.max(220, Math.round(displayPx * getScreenDpr()));
+    const targetH = Math.max(330, Math.round(targetW * 1.5));
+    const resp = await fetchImageFromWorker(key, { w: targetW, h: targetH, fit: 'cover', q: 90, f: 'auto' }, 4500);
+    if (!resp || !resp.ok) {
+      console.warn(`[emotion] 404: ${key}`);
       return null;
     }
     const blob = await resp.blob();
@@ -370,21 +409,27 @@ async function getEmotionImageHD(pid, emotion, letter = '') {
     if (!wUrl) return null;
     const keys = await getImageList(pid);
     const { suffixed, hasBase } = getSuffixesForEmotion(keys, pid, eid);
-    let url = null;
+    let key = '';
     
     // 명시된 letter가 있으면 우선 사용
     if (letter && suffixed.includes(letter)) {
-      url = `${wUrl}/image/profile/${pid}/${pid}_${eid}_${letter}.jpg`;
+      key = `profile/${pid}/${pid}_${eid}_${letter}.jpg`;
     } else if (hasBase && !letter) {
-      url = `${wUrl}/image/profile/${pid}/${pid}_${eid}.jpg`;
+      key = `profile/${pid}/${pid}_${eid}.jpg`;
     } else if (!strictBaseOnly && suffixed.length > 0) {
       const randomLetter = suffixed[Math.floor(Math.random() * suffixed.length)];
-      url = `${wUrl}/image/profile/${pid}/${pid}_${eid}_${randomLetter}.jpg`;
+      key = `profile/${pid}/${pid}_${eid}_${randomLetter}.jpg`;
     }
     
-    if (!url) return null;
-    const resp = await fetchWithTimeout(cacheBustUrl(url), {}, 4500);
-    if (!resp.ok) return null;
+    if (!key) return null;
+    const resp = await fetchImageFromWorker(key, {
+      w: IMAGE_CACHE_SIZES.HD,
+      h: Math.round(IMAGE_CACHE_SIZES.HD * 1.5),
+      fit: 'cover',
+      q: 92,
+      f: 'auto'
+    }, 4500);
+    if (!resp || !resp.ok) return null;
     const blob = await resp.blob();
     const dataUrl = await new Promise(r => {
       const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob);
@@ -415,9 +460,14 @@ async function getNeutralABaseImageHD(pid) {
   try {
     const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
     if (!wUrl) return null;
-    const url = `${wUrl}/image/profile/${pid}/${pid}_neutral_a.jpg`;
-    const resp = await fetchWithTimeout(cacheBustUrl(url), {}, 4500);
-    if (!resp.ok) return null;
+    const resp = await fetchImageFromWorker(`profile/${pid}/${pid}_neutral_a.jpg`, {
+      w: IMAGE_CACHE_SIZES.HD,
+      h: Math.round(IMAGE_CACHE_SIZES.HD * 1.5),
+      fit: 'cover',
+      q: 92,
+      f: 'auto'
+    }, 4500);
+    if (!resp || !resp.ok) return null;
     const blob = await resp.blob();
     const dataUrl = await new Promise((r) => {
       const rd = new FileReader();
@@ -636,16 +686,22 @@ async function loadNeutralDirect(pid) {
     }
 
     const candidates = hasNeutralA
-      ? [{ url: `${wUrl}/image/profile/${pid}/${pid}_neutral_a.jpg`, cacheEmotion: 'neutral_a' }]
-      : [{ url: `${wUrl}/image/profile/${pid}/${pid}_neutral.jpg`, cacheEmotion: 'neutral' }];
+      ? [{ key: `profile/${pid}/${pid}_neutral_a.jpg`, cacheEmotion: 'neutral_a' }]
+      : [{ key: `profile/${pid}/${pid}_neutral.jpg`, cacheEmotion: 'neutral' }];
 
-    if (NEUTRAL_DEBUG_LOG) console.log('[neutral] trying candidates for', pid, candidates.map(c => c.url).slice(0, 2));
+    if (NEUTRAL_DEBUG_LOG) console.log('[neutral] trying candidates for', pid, candidates.map(c => c.key).slice(0, 2));
 
     for (const c of candidates) {
       try {
-        const resp = await fetchWithTimeout(cacheBustUrl(c.url), {}, 4500);
-        if (NEUTRAL_DEBUG_LOG) console.log('[neutral]', c.url, resp.status);
-        if (!resp.ok) continue;
+        const resp = await fetchImageFromWorker(c.key, {
+          w: IMAGE_CACHE_SIZES.HD,
+          h: Math.round(IMAGE_CACHE_SIZES.HD * 1.5),
+          fit: 'cover',
+          q: 92,
+          f: 'auto'
+        }, 4500);
+        if (NEUTRAL_DEBUG_LOG) console.log('[neutral]', c.key, resp?.status || 0);
+        if (!resp || !resp.ok) continue;
 
         const blob = await resp.blob();
         const dataUrl = await new Promise(r => {
