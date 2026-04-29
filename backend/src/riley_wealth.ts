@@ -1,5 +1,5 @@
 import type { Env } from "./index";
-import { dropboxReadText, dropboxWriteText, getPersonaDropboxAccessToken } from "./dropbox_vault";
+import { dropboxPathExists, dropboxReadText, dropboxWriteText, getPersonaDropboxAccessToken } from "./dropbox_vault";
 
 const RILEY_LOG_KEY = "riley_memory/riley_memory.log.jsonl";
 const RILEY_STATE_KEY = "riley_memory/riley_state.json";
@@ -92,18 +92,8 @@ function safeNumber(v: unknown): number {
 
 async function r2Text(env: Env, key: string): Promise<string | null> {
   const token = await getPersonaDropboxAccessToken(env, "riley");
-  if (token) {
-    const txt = await dropboxReadText(token, key === RILEY_LOG_KEY ? RILEY_VAULT_LOG_PATH : RILEY_VAULT_STATE_PATH);
-    if (txt != null) return txt;
-  }
-  try {
-    const obj = await env.R2.get(key);
-    if (!obj) return null;
-    if (typeof obj.text === "function") return await obj.text();
-    return null;
-  } catch {
-    return null;
-  }
+  if (!token) return null;
+  return await dropboxReadText(token, key === RILEY_LOG_KEY ? RILEY_VAULT_LOG_PATH : RILEY_VAULT_STATE_PATH);
 }
 
 async function r2Json<T>(env: Env, key: string, fallback: T): Promise<T> {
@@ -118,16 +108,33 @@ async function r2Json<T>(env: Env, key: string, fallback: T): Promise<T> {
 
 async function r2PutJson(env: Env, key: string, value: unknown): Promise<void> {
   const token = await getPersonaDropboxAccessToken(env, "riley");
-  if (token) {
-    const path = key === RILEY_LOG_KEY ? RILEY_VAULT_LOG_PATH : RILEY_VAULT_STATE_PATH;
-    const ok = await dropboxWriteText(token, path, JSON.stringify(value));
-    if (ok) return;
+  if (!token) return;
+  const path = key === RILEY_LOG_KEY ? RILEY_VAULT_LOG_PATH : RILEY_VAULT_STATE_PATH;
+  await dropboxWriteText(token, path, JSON.stringify(value));
+}
+
+let migratedOnce = false;
+
+async function migrateRileyFromR2ToDropboxNoOverwrite(env: Env): Promise<void> {
+  if (migratedOnce) return;
+  migratedOnce = true;
+  const token = await getPersonaDropboxAccessToken(env, "riley");
+  if (!token) return;
+
+  const pairs: Array<{ r2Key: string; dbxPath: string }> = [
+    { r2Key: RILEY_LOG_KEY, dbxPath: RILEY_VAULT_LOG_PATH },
+    { r2Key: RILEY_STATE_KEY, dbxPath: RILEY_VAULT_STATE_PATH },
+  ];
+
+  for (const pair of pairs) {
+    const exists = await dropboxPathExists(token, pair.dbxPath);
+    if (exists) continue; // never overwrite existing Dropbox file
+    const obj = await env.R2.get(pair.r2Key);
+    if (!obj || typeof obj.text !== "function") continue;
+    const text = await obj.text();
+    if (!text) continue;
+    await dropboxWriteText(token, pair.dbxPath, text);
   }
-  await env.R2.put(
-    key,
-    JSON.stringify(value),
-    { httpMetadata: { contentType: "application/json; charset=utf-8" } },
-  );
 }
 
 function defaultState(): RileyState {
@@ -373,22 +380,17 @@ function parseStructuredFromText(text: string): WealthEvent | null {
 }
 
 async function appendLogLine(env: Env, event: WealthEvent): Promise<void> {
+  await migrateRileyFromR2ToDropboxNoOverwrite(env);
   const existing = await r2Text(env, RILEY_LOG_KEY);
   const line = JSON.stringify(event);
   const next = existing && existing.trim() ? `${existing.trim()}\n${line}` : line;
   const token = await getPersonaDropboxAccessToken(env, "riley");
-  if (token) {
-    const ok = await dropboxWriteText(token, RILEY_VAULT_LOG_PATH, next);
-    if (ok) return;
-  }
-  await env.R2.put(
-    RILEY_LOG_KEY,
-    next,
-    { httpMetadata: { contentType: "application/json; charset=utf-8" } },
-  );
+  if (!token) return;
+  await dropboxWriteText(token, RILEY_VAULT_LOG_PATH, next);
 }
 
 export async function loadRileyState(env: Env): Promise<RileyState> {
+  await migrateRileyFromR2ToDropboxNoOverwrite(env);
   return await r2Json<RileyState>(env, RILEY_STATE_KEY, defaultState());
 }
 

@@ -32,6 +32,10 @@ export interface Env {
   AVERY_DBX_APP_SECRET?: string;
   RILEY_DBX_REFRESH_TOKEN?: string;
   AVERY_DBX_REFRESH_TOKEN?: string;
+  PERSONA_SHARED_DBX_ACCESS_TOKEN?: string;
+  PERSONA_SHARED_DBX_APP_KEY?: string;
+  PERSONA_SHARED_DBX_APP_SECRET?: string;
+  PERSONA_SHARED_DBX_REFRESH_TOKEN?: string;
   GEMINI_KEY?: string;
   GROK_KEY?: string;
   OPENAI_KEY?: string;

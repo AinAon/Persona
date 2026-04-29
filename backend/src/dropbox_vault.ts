@@ -10,17 +10,49 @@ function dbxHeaders(token: string): HeadersInit {
   };
 }
 
-type Persona = "riley" | "avery";
+type Persona = "riley" | "avery" | "shared";
 
 function getDropboxAppConfig(env: Env, persona: Persona): { key: string; secret: string; refreshToken: string } {
-  const key = String(persona === "riley" ? (env.RILEY_DBX_APP_KEY || "") : (env.AVERY_DBX_APP_KEY || "")).trim();
-  const secret = String(persona === "riley" ? (env.RILEY_DBX_APP_SECRET || "") : (env.AVERY_DBX_APP_SECRET || "")).trim();
-  const refreshToken = String(persona === "riley" ? (env.RILEY_DBX_REFRESH_TOKEN || "") : (env.AVERY_DBX_REFRESH_TOKEN || "")).trim();
+  const key = String(
+    persona === "riley"
+      ? (env.RILEY_DBX_APP_KEY || "")
+      : (persona === "avery" ? (env.AVERY_DBX_APP_KEY || "") : (env.PERSONA_SHARED_DBX_APP_KEY || "")),
+  ).trim();
+  const secret = String(
+    persona === "riley"
+      ? (env.RILEY_DBX_APP_SECRET || "")
+      : (persona === "avery" ? (env.AVERY_DBX_APP_SECRET || "") : (env.PERSONA_SHARED_DBX_APP_SECRET || "")),
+  ).trim();
+  const refreshToken = String(
+    persona === "riley"
+      ? (env.RILEY_DBX_REFRESH_TOKEN || "")
+      : (persona === "avery" ? (env.AVERY_DBX_REFRESH_TOKEN || "") : (env.PERSONA_SHARED_DBX_REFRESH_TOKEN || "")),
+  ).trim();
   return { key, secret, refreshToken };
 }
 
 function toBytes(text: string): Uint8Array {
   return new TextEncoder().encode(text);
+}
+
+async function dropboxUploadBytes(token: string, path: string, bytes: ArrayBuffer | Uint8Array): Promise<boolean> {
+  await ensureFolder(token, dirname(path));
+  const res = await fetch(`${DROPBOX_CONTENT}/files/upload`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/octet-stream",
+      "Dropbox-API-Arg": JSON.stringify({
+        path,
+        mode: "overwrite",
+        autorename: false,
+        mute: true,
+        strict_conflict: false,
+      }),
+    },
+    body: bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes),
+  });
+  return res.ok;
 }
 
 async function listFolderOnce(token: string, path: string): Promise<boolean> {
@@ -49,7 +81,11 @@ function dirname(path: string): string {
 }
 
 export function getPersonaDropboxToken(env: Env, persona: Persona): string {
-  return String(persona === "riley" ? (env.RILEY_DBX_ACCESS_TOKEN || "") : (env.AVERY_DBX_ACCESS_TOKEN || "")).trim();
+  return String(
+    persona === "riley"
+      ? (env.RILEY_DBX_ACCESS_TOKEN || "")
+      : (persona === "avery" ? (env.AVERY_DBX_ACCESS_TOKEN || "") : (env.PERSONA_SHARED_DBX_ACCESS_TOKEN || "")),
+  ).trim();
 }
 
 export async function getPersonaDropboxAccessToken(env: Env, persona: Persona): Promise<string> {
@@ -85,24 +121,22 @@ export async function dropboxReadText(token: string, path: string): Promise<stri
   return await res.text();
 }
 
-export async function dropboxWriteText(token: string, path: string, content: string): Promise<boolean> {
-  await ensureFolder(token, dirname(path));
-  const res = await fetch(`${DROPBOX_CONTENT}/files/upload`, {
+export async function dropboxReadBytes(token: string, path: string): Promise<{ bytes: ArrayBuffer; contentType: string } | null> {
+  const res = await fetch(`${DROPBOX_CONTENT}/files/download`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
-      "Content-Type": "application/octet-stream",
-      "Dropbox-API-Arg": JSON.stringify({
-        path,
-        mode: "overwrite",
-        autorename: false,
-        mute: true,
-        strict_conflict: false,
-      }),
+      "Dropbox-API-Arg": JSON.stringify({ path }),
     },
-    body: toBytes(content),
   });
-  return res.ok;
+  if (!res.ok) return null;
+  const bytes = await res.arrayBuffer();
+  const contentType = res.headers.get("content-type") || "application/octet-stream";
+  return { bytes, contentType };
+}
+
+export async function dropboxWriteText(token: string, path: string, content: string): Promise<boolean> {
+  return await dropboxUploadBytes(token, path, toBytes(content));
 }
 
 export async function dropboxWriteTextWithDetail(token: string, path: string, content: string): Promise<{ ok: boolean; status: number; detail: string }> {
@@ -128,6 +162,19 @@ export async function dropboxWriteTextWithDetail(token: string, path: string, co
 
 export async function dropboxDeletePath(token: string, path: string): Promise<boolean> {
   const res = await fetch(`${DROPBOX_API}/files/delete_v2`, {
+    method: "POST",
+    headers: dbxHeaders(token),
+    body: JSON.stringify({ path }),
+  });
+  return res.ok;
+}
+
+export async function dropboxWriteBytes(token: string, path: string, bytes: ArrayBuffer | Uint8Array): Promise<boolean> {
+  return await dropboxUploadBytes(token, path, bytes);
+}
+
+export async function dropboxPathExists(token: string, path: string): Promise<boolean> {
+  const res = await fetch(`${DROPBOX_API}/files/get_metadata`, {
     method: "POST",
     headers: dbxHeaders(token),
     body: JSON.stringify({ path }),

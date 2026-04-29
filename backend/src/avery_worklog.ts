@@ -146,16 +146,9 @@ async function r2Json<T>(env: Env, key: string, fallback: T): Promise<T> {
 
 async function r2PutJson(env: Env, key: string, value: unknown): Promise<void> {
   const token = await getPersonaDropboxAccessToken(env, "avery");
-  if (token) {
-    const path = key === AVERY_LOG_KEY ? AVERY_VAULT_LOG_PATH : AVERY_VAULT_STATE_PATH;
-    const ok = await dropboxWriteText(token, path, JSON.stringify(value));
-    if (ok) return;
-  }
-  await env.R2.put(
-    key,
-    JSON.stringify(value),
-    { httpMetadata: { contentType: "application/json; charset=utf-8" } },
-  );
+  if (!token) return;
+  const path = key === AVERY_LOG_KEY ? AVERY_VAULT_LOG_PATH : AVERY_VAULT_STATE_PATH;
+  await dropboxWriteText(token, path, JSON.stringify(value));
 }
 
 function computeStats(items: AveryItem[]): AveryState["stats"] {
