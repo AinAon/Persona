@@ -1052,31 +1052,17 @@ async function loadIndex() {
     const data = await res.json();
     const index = Array.isArray(data.sessions) ? data.sessions : [];
     const localIndex = Array.isArray(getLocalSessionIndex()) ? getLocalSessionIndex() : [];
-    const mergedIndex = [...index];
     const activeIds = new Set(index.map(item => item?.id).filter(Boolean));
 
-    // Keep local-only sessions only when they actually contain messages.
-    // Empty local arrays create ghost rows that disappear after opening.
-    for (const item of localIndex) {
-      const sid = item?.id;
-      if (!sid || activeIds.has(sid)) continue;
-      const localSession = getLocalSession(sid);
-      if (Array.isArray(localSession) && localSession.length > 0) {
-        mergedIndex.push(item);
-        activeIds.add(sid);
-      } else {
-        removeLocalSession(sid);
-      }
-    }
-
-    sessions = mergedIndex.map(item => {
+    // Server is source of truth: local-only rows must be dropped to prevent ghost rooms.
+    sessions = index.map(item => {
       const prev = prevById.get(item?.id);
       if (prev && prev._loaded === true && Array.isArray(prev.history)) {
         return { ...item, history: prev.history, _loaded: true };
       }
       return { ...item, history: [], _loaded: false };
     });
-    setLocalSessionIndex(mergedIndex);
+    setLocalSessionIndex(index);
 
     // Remove stale local session caches that are no longer present in remote index.
     try {
@@ -1087,6 +1073,9 @@ async function loadIndex() {
         }
       }
     } catch(e) {}
+    if (activeChatId && !activeIds.has(activeChatId)) {
+      activeChatId = null;
+    }
 
     renderChatList();
   } catch(e) {}
