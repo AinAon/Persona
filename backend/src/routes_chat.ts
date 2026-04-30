@@ -177,21 +177,55 @@ function stripVaultProposalBlock(reply: string): string {
   return String(reply || "").replace(/\n?\[VAULT_PROPOSAL\][\s\S]*?\[\/VAULT_PROPOSAL\]\n?/i, "\n").trim();
 }
 
-function expandVaultResultMessage(raw: string): string {
+type TextApiKeys = { gemini: string; grok: string; openai: string; anthropic: string };
+
+async function renderVaultResultMessage(raw: string, model: string, apiKeys: TextApiKeys): Promise<string> {
   const msg = String(raw || "").trim();
   if (!msg) return "";
-  const created = msg.match(/^created file:\s*(\/\S+)/i);
-  if (created) {
-    const path = created[1];
-    return `${msg}\n요청하신 파일을 실제로 생성했습니다. 저장 경로는 \`${path}\`입니다. 원하시면 이어서 내용까지 채워드리겠습니다.`;
-  }
-  const applied = msg.match(/^applied proposal:\s*(\d+)\s*action/i);
-  if (applied) {
-    const n = applied[1];
-    return `${msg}\n승인하신 개선안을 적용했습니다. 총 ${n}개 항목을 반영했습니다. 원하시면 적용된 파일/폴더 목록을 바로 보여드리겠습니다.`;
-  }
-  if (/^created folder:/i.test(msg)) {
-    return `${msg}\n요청하신 폴더를 실제로 생성했습니다. 필요하시면 하위 파일 구조도 바로 정리해드리겠습니다.`;
+  const system = [
+    "Rewrite operation result into natural Korean response.",
+    "Rules:",
+    "- Keep facts exact (path/count/error text).",
+    "- Do not invent actions.",
+    "- Be concise and polite.",
+    "- 1 to 3 short sentences.",
+    "- No markdown list/code block.",
+  ].join("\n");
+  const messages = [
+    { role: "system", content: system },
+    { role: "user", content: `operation_result:\n${msg}` },
+  ];
+
+  const tryModel = async (kind: "gemini" | "grok" | "openai" | "claude"): Promise<string> => {
+    if (kind === "gemini") {
+      if (!apiKeys.gemini) return "";
+      return await generateGeminiText({ model: model.startsWith("gemini") ? model : "gemini-2.5-flash", messages, apiKey: apiKeys.gemini });
+    }
+    if (kind === "grok") {
+      if (!apiKeys.grok) return "";
+      return await generateGrokText({ model: model.startsWith("grok") ? model : "grok-4.20-non-reasoning", messages, apiKey: apiKeys.grok });
+    }
+    if (kind === "claude") {
+      if (!apiKeys.anthropic) return "";
+      return await generateClaudeText({ model: model.startsWith("claude") ? model : "claude-sonnet-4-20250514", messages, apiKey: apiKeys.anthropic });
+    }
+    if (!apiKeys.openai) return "";
+    return await generateOpenAIText({ model: (model.startsWith("gpt-") || model.startsWith("o1") || model.startsWith("o3") || model.startsWith("o4")) ? model : "gpt-4.1-mini", messages, apiKey: apiKeys.openai });
+  };
+
+  const order: Array<"gemini" | "grok" | "openai" | "claude"> =
+    model.startsWith("gemini") ? ["gemini", "grok", "openai", "claude"]
+    : model.startsWith("grok") ? ["grok", "gemini", "openai", "claude"]
+    : model.startsWith("claude") ? ["claude", "openai", "gemini", "grok"]
+    : ["openai", "gemini", "grok", "claude"];
+
+  for (const kind of order) {
+    try {
+      const out = String(await tryModel(kind) || "").trim();
+      if (out) return out;
+    } catch {
+      // Try next provider
+    }
   }
   return msg;
 }
@@ -252,7 +286,8 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       if (pending) {
         const exec = await executeVaultProposal(env, pending);
         if (exec.ok) await clearPendingVaultProposal(env, proposalPersona);
-        return Response.json({ result: exec.ok ? "success" : "error", reply: expandVaultResultMessage(exec.message) }, { status: exec.ok ? 200 : 400, headers: cors });
+        const natural = await renderVaultResultMessage(exec.message, model, apiKeys);
+        return Response.json({ result: exec.ok ? "success" : "error", reply: natural }, { status: exec.ok ? 200 : 400, headers: cors });
       }
     }
 
@@ -260,14 +295,16 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       const vaultAction = await runRileyVaultActionFromText(env, latestUserText);
       if (vaultAction) {
         if (!vaultAction.ok) return Response.json({ result: "error", error: vaultAction.error }, { status: 400, headers: cors });
-        return Response.json({ result: "success", reply: expandVaultResultMessage(vaultAction.message) }, { headers: cors });
+        const natural = await renderVaultResultMessage(vaultAction.message, model, apiKeys);
+        return Response.json({ result: "success", reply: natural }, { headers: cors });
       }
     }
     if (!isImageReq && inAveryChat) {
       const vaultAction = await runAveryVaultActionFromText(env, latestUserText);
       if (vaultAction) {
         if (!vaultAction.ok) return Response.json({ result: "error", error: vaultAction.error }, { status: 400, headers: cors });
-        return Response.json({ result: "success", reply: expandVaultResultMessage(vaultAction.message) }, { headers: cors });
+        const natural = await renderVaultResultMessage(vaultAction.message, model, apiKeys);
+        return Response.json({ result: "success", reply: natural }, { headers: cors });
       }
     }
 
