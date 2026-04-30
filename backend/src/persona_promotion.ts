@@ -28,7 +28,7 @@ function nowKstIso(): string {
   return `${pick("year")}-${pick("month")}-${pick("day")}T${pick("hour")}:${pick("minute")}:${pick("second")}+09:00`;
 }
 
-function key(pid: string): string { return `persona_promotion/${String(pid || "").trim().toLowerCase()}/candidates.json`; }
+function key(pid: string): string { return `_promotion/candidates.json`; }
 
 function normalizePid(pid: string): string { return String(pid || "").trim().toLowerCase(); }
 

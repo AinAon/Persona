@@ -1,10 +1,10 @@
 import type { Env } from "./index";
 import { dropboxReadText, dropboxWriteText, getPersonaDropboxAccessToken } from "./dropbox_vault";
 
-const AVERY_LOG_KEY = "avery_memory/avery_worklog.log.jsonl";
-const AVERY_STATE_KEY = "avery_memory/avery_worklog_state.json";
-const AVERY_VAULT_LOG_PATH = "/avery_memory/avery_worklog.log.jsonl";
-const AVERY_VAULT_STATE_PATH = "/avery_memory/avery_worklog_state.json";
+const AVERY_LOG_KEY = "_memory/avery_worklog.log.jsonl";
+const AVERY_STATE_KEY = "_memory/avery_worklog_state.json";
+const AVERY_VAULT_LOG_PATH = "/_memory/avery_worklog.log.jsonl";
+const AVERY_VAULT_STATE_PATH = "/_memory/avery_worklog_state.json";
 const AVERY_VAULT_DIRECTIVE_PATH = "/avery_directive.md";
 const AVERY_IDS = new Set(["p_avery", "avery"]);
 

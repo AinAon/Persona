@@ -16,7 +16,7 @@ import { getAveryWorklogSnapshot, reconcileAveryWorklog } from "./avery_worklog"
 import { getRileyWealthSnapshot, reconcileRileyWealth } from "./riley_wealth";
 import { getPersonaPolicy } from "./persona_policy";
 import { getPromotionCandidates } from "./persona_promotion";
-import { dropboxDeletePath, dropboxListFolder, dropboxReadBytes, dropboxReadText, dropboxWriteBytes, dropboxWriteBytesWithDetail, dropboxWriteText, dropboxWriteTextWithDetail, getPersonaDropboxAccessToken } from "./dropbox_vault";
+import { dropboxDeletePath, dropboxListFolder, dropboxMovePath, dropboxPathExists, dropboxReadBytes, dropboxReadText, dropboxWriteBytes, dropboxWriteBytesWithDetail, dropboxWriteText, dropboxWriteTextWithDetail, getPersonaDropboxAccessToken } from "./dropbox_vault";
 
 type SessionMeta = {
   id: string;
@@ -53,6 +53,19 @@ const SESSION_CHANGE_SEQ_KEY = "session_change_seq";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function migrateDropboxPathNoOverwrite(
+  token: string,
+  fromPath: string,
+  toPath: string,
+): Promise<"moved" | "skipped_missing" | "skipped_exists" | "failed"> {
+  const fromExists = await dropboxPathExists(token, fromPath);
+  if (!fromExists) return "skipped_missing";
+  const toExists = await dropboxPathExists(token, toPath);
+  if (toExists) return "skipped_exists";
+  const moved = await dropboxMovePath(token, fromPath, toPath);
+  return moved ? "moved" : "failed";
 }
 
 function getDropboxAppConfig(env: Env, persona: "riley" | "avery" | "shared"): { key: string; secret: string } {
@@ -1284,6 +1297,67 @@ export async function handleApiRoute(
     const rileyOk = await dropboxWriteText(rileyToken, "/riley_directive.md", rileyContent);
     const averyOk = await dropboxWriteText(averyToken, "/avery_directive.md", averyContent);
     return Response.json({ ok: rileyOk && averyOk, rileyOk, averyOk }, { headers: noStoreHeaders });
+  }
+
+  if (url.pathname === "/vault/layout/migrate" && request.method === "POST") {
+    const rileyToken = await getPersonaDropboxAccessToken(env, "riley");
+    const averyToken = await getPersonaDropboxAccessToken(env, "avery");
+    if (!rileyToken || !averyToken) {
+      return Response.json({ ok: false, error: "riley/avery dropbox token missing" }, { status: 500, headers: noStoreHeaders });
+    }
+
+    const plan: Record<"riley" | "avery", Array<{ from: string; to: string }>> = {
+      riley: [
+        { from: "/persona_policy/p_riley/policy.md", to: "/_policy/policy.md" },
+        { from: "/persona_policy/riley/policy.md", to: "/_policy/policy.md" },
+        { from: "/persona_policy/p_riley/pending.json", to: "/_policy/pending.json" },
+        { from: "/persona_policy/riley/pending.json", to: "/_policy/pending.json" },
+        { from: "/persona_policy/p_riley/approval.log.jsonl", to: "/_policy/approval.log.jsonl" },
+        { from: "/persona_policy/riley/approval.log.jsonl", to: "/_policy/approval.log.jsonl" },
+        { from: "/persona_promotion/p_riley/candidates.json", to: "/_promotion/candidates.json" },
+        { from: "/persona_promotion/riley/candidates.json", to: "/_promotion/candidates.json" },
+        { from: "/riley_memory/riley_memory.log.jsonl", to: "/_memory/riley_memory.log.jsonl" },
+        { from: "/riley_memory/riley_state.json", to: "/_memory/riley_state.json" },
+      ],
+      avery: [
+        { from: "/persona_policy/p_avery/policy.md", to: "/_policy/policy.md" },
+        { from: "/persona_policy/avery/policy.md", to: "/_policy/policy.md" },
+        { from: "/persona_policy/p_avery/pending.json", to: "/_policy/pending.json" },
+        { from: "/persona_policy/avery/pending.json", to: "/_policy/pending.json" },
+        { from: "/persona_policy/p_avery/approval.log.jsonl", to: "/_policy/approval.log.jsonl" },
+        { from: "/persona_policy/avery/approval.log.jsonl", to: "/_policy/approval.log.jsonl" },
+        { from: "/persona_promotion/p_avery/candidates.json", to: "/_promotion/candidates.json" },
+        { from: "/persona_promotion/avery/candidates.json", to: "/_promotion/candidates.json" },
+        { from: "/avery_memory/avery_worklog.log.jsonl", to: "/_memory/avery_worklog.log.jsonl" },
+        { from: "/avery_memory/avery_worklog_state.json", to: "/_memory/avery_worklog_state.json" },
+      ],
+    };
+
+    const run = async (token: string, persona: "riley" | "avery") => {
+      const moved: string[] = [];
+      const skippedMissing: string[] = [];
+      const skippedExists: string[] = [];
+      const failed: string[] = [];
+      for (const item of plan[persona]) {
+        const status = await migrateDropboxPathNoOverwrite(token, item.from, item.to);
+        if (status === "moved") moved.push(`${item.from} -> ${item.to}`);
+        else if (status === "skipped_missing") skippedMissing.push(item.from);
+        else if (status === "skipped_exists") skippedExists.push(`${item.from} (to exists: ${item.to})`);
+        else failed.push(`${item.from} -> ${item.to}`);
+      }
+      const oldRoots = ["/persona_policy", "/persona_promotion", persona === "riley" ? "/riley_memory" : "/avery_memory"];
+      const removedRoots: string[] = [];
+      for (const root of oldRoots) {
+        const ok = await dropboxDeletePath(token, root);
+        if (ok) removedRoots.push(root);
+      }
+      return { moved, skippedMissing, skippedExists, failed, removedRoots };
+    };
+
+    const riley = await run(rileyToken, "riley");
+    const avery = await run(averyToken, "avery");
+    const ok = riley.failed.length === 0 && avery.failed.length === 0;
+    return Response.json({ ok, riley, avery }, { headers: noStoreHeaders });
   }
 
   if (url.pathname === "/migrate/shared/run" && request.method === "POST") {

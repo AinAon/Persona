@@ -36,13 +36,13 @@ function nowKstIso(): string {
 }
 
 function policyKey(pid: string): string {
-  return `persona_policy/${pid}/policy.md`;
+  return `_policy/policy.md`;
 }
 function pendingKey(pid: string): string {
-  return `persona_policy/${pid}/pending.json`;
+  return `_policy/pending.json`;
 }
 function approvalLogKey(pid: string): string {
-  return `persona_policy/${pid}/approval.log.jsonl`;
+  return `_policy/approval.log.jsonl`;
 }
 
 function normalizePid(pid: string): string {

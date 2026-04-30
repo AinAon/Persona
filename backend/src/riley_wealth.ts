@@ -1,10 +1,10 @@
 import type { Env } from "./index";
 import { dropboxPathExists, dropboxReadText, dropboxWriteText, getPersonaDropboxAccessToken } from "./dropbox_vault";
 
-const RILEY_LOG_KEY = "riley_memory/riley_memory.log.jsonl";
-const RILEY_STATE_KEY = "riley_memory/riley_state.json";
-const RILEY_VAULT_LOG_PATH = "/riley_memory/riley_memory.log.jsonl";
-const RILEY_VAULT_STATE_PATH = "/riley_memory/riley_state.json";
+const RILEY_LOG_KEY = "_memory/riley_memory.log.jsonl";
+const RILEY_STATE_KEY = "_memory/riley_state.json";
+const RILEY_VAULT_LOG_PATH = "/_memory/riley_memory.log.jsonl";
+const RILEY_VAULT_STATE_PATH = "/_memory/riley_state.json";
 const RILEY_VAULT_DIRECTIVE_PATH = "/riley_directive.md";
 const RILEY_IDS = new Set(["p_riley", "riley"]);
 
