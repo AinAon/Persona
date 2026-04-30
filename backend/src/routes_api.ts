@@ -1137,7 +1137,7 @@ export async function handleApiRoute(
     if (!token) {
       return Response.json({ ok: false, stage: "token", error: "empty_access_token_from_refresh_flow" }, { status: 500, headers: noStoreHeaders });
     }
-    const testPath = "/riley_memory/__debug_probe__.txt";
+    const testPath = "/__debug_probe__.txt";
     const stamp = new Date().toISOString();
     const wr = await dropboxWriteTextWithDetail(token, testPath, `probe:${stamp}`);
     const rd = await dropboxReadText(token, testPath);
@@ -1260,8 +1260,8 @@ export async function handleApiRoute(
       "Suggested fields:",
       "date,kind,title,topic_key,context,tool,status,due_at,note",
     ].join("\n");
-    const rileyOk = await dropboxWriteText(rileyToken, "/riley_memory/riley_directive.md", rileyContent);
-    const averyOk = await dropboxWriteText(averyToken, "/avery_memory/avery_directive.md", averyContent);
+    const rileyOk = await dropboxWriteText(rileyToken, "/riley_directive.md", rileyContent);
+    const averyOk = await dropboxWriteText(averyToken, "/avery_directive.md", averyContent);
     return Response.json({ ok: rileyOk && averyOk, rileyOk, averyOk }, { headers: noStoreHeaders });
   }
 

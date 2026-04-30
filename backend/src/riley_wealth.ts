@@ -5,7 +5,7 @@ const RILEY_LOG_KEY = "riley_memory/riley_memory.log.jsonl";
 const RILEY_STATE_KEY = "riley_memory/riley_state.json";
 const RILEY_VAULT_LOG_PATH = "/riley_memory/riley_memory.log.jsonl";
 const RILEY_VAULT_STATE_PATH = "/riley_memory/riley_state.json";
-const RILEY_VAULT_DIRECTIVE_PATH = "/riley_memory/riley_directive.md";
+const RILEY_VAULT_DIRECTIVE_PATH = "/riley_directive.md";
 const RILEY_IDS = new Set(["p_riley", "riley"]);
 
 type WealthBucket = "assets" | "liabilities" | "retirement" | "fixed_cashflow";
@@ -473,7 +473,7 @@ export async function runRileyVaultActionFromText(env: Env, text: string): Promi
     const rel = String(fileMatch[1] || "").trim().replace(/^\/+/, "");
     const content = String(fileMatch[2] || "").replace(/^\s+|\s+$/g, "");
     if (!rel) return { ok: false, error: "file path required" };
-    const safeRel = rel.startsWith("riley_memory/") ? rel : `riley_memory/${rel}`;
+    const safeRel = rel.replace(/^\/+/, "");
     const path = `/${safeRel}`;
     const ok = await dropboxWriteText(token, path, content);
     return ok ? { ok: true, message: `created file: ${path}` } : { ok: false, error: `failed to create file: ${path}` };
@@ -483,7 +483,7 @@ export async function runRileyVaultActionFromText(env: Env, text: string): Promi
   if (dirMatch) {
     const rel = String(dirMatch[1] || "").trim().replace(/^\/+/, "").replace(/\/+$/, "");
     if (!rel) return { ok: false, error: "folder path required" };
-    const safeRel = rel.startsWith("riley_memory/") ? rel : `riley_memory/${rel}`;
+    const safeRel = rel.replace(/^\/+/, "").replace(/\/+$/, "");
     const path = `/${safeRel}/.keep`;
     const ok = await dropboxWriteText(token, path, "");
     return ok ? { ok: true, message: `created folder: /${safeRel}` } : { ok: false, error: `failed to create folder: /${safeRel}` };

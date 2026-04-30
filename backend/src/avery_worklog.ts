@@ -5,7 +5,7 @@ const AVERY_LOG_KEY = "avery_memory/avery_worklog.log.jsonl";
 const AVERY_STATE_KEY = "avery_memory/avery_worklog_state.json";
 const AVERY_VAULT_LOG_PATH = "/avery_memory/avery_worklog.log.jsonl";
 const AVERY_VAULT_STATE_PATH = "/avery_memory/avery_worklog_state.json";
-const AVERY_VAULT_DIRECTIVE_PATH = "/avery_memory/avery_directive.md";
+const AVERY_VAULT_DIRECTIVE_PATH = "/avery_directive.md";
 const AVERY_IDS = new Set(["p_avery", "avery"]);
 
 type WorkKind = "worklog" | "error" | "solution" | "todo" | "reminder";
@@ -605,7 +605,7 @@ export async function runAveryVaultActionFromText(env: Env, text: string): Promi
     const rel = String(fileMatch[1] || "").trim().replace(/^\/+/, "");
     const content = String(fileMatch[2] || "").replace(/^\s+|\s+$/g, "");
     if (!rel) return { ok: false, error: "file path required" };
-    const safeRel = rel.startsWith("avery_memory/") ? rel : `avery_memory/${rel}`;
+    const safeRel = rel.replace(/^\/+/, "");
     const path = `/${safeRel}`;
     const ok = await dropboxWriteText(token, path, content);
     return ok ? { ok: true, message: `created file: ${path}` } : { ok: false, error: `failed to create file: ${path}` };
@@ -615,7 +615,7 @@ export async function runAveryVaultActionFromText(env: Env, text: string): Promi
   if (dirMatch) {
     const rel = String(dirMatch[1] || "").trim().replace(/^\/+/, "").replace(/\/+$/, "");
     if (!rel) return { ok: false, error: "folder path required" };
-    const safeRel = rel.startsWith("avery_memory/") ? rel : `avery_memory/${rel}`;
+    const safeRel = rel.replace(/^\/+/, "").replace(/\/+$/, "");
     const path = `/${safeRel}/.keep`;
     const ok = await dropboxWriteText(token, path, "");
     return ok ? { ok: true, message: `created folder: /${safeRel}` } : { ok: false, error: `failed to create folder: /${safeRel}` };
