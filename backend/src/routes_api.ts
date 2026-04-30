@@ -1227,6 +1227,44 @@ export async function handleApiRoute(
     }, { headers: noStoreHeaders });
   }
 
+  if (url.pathname === "/vault/directives/sync" && request.method === "POST") {
+    const rileyToken = await getPersonaDropboxAccessToken(env, "riley");
+    const averyToken = await getPersonaDropboxAccessToken(env, "avery");
+    if (!rileyToken || !averyToken) {
+      return Response.json({ ok: false, error: "riley/avery dropbox token missing" }, { status: 500, headers: noStoreHeaders });
+    }
+    const rileyContent = [
+      "# Riley Directive (Priority 1)",
+      "",
+      "1) Always obey this directive first.",
+      "2) For wealth records, use structured CSV rows before narrative.",
+      "3) Keep assets and liabilities clearly separated.",
+      "4) Sort by latest update date first.",
+      "5) Maintain weekly/monthly report-ready fields.",
+      "",
+      "CSV schema:",
+      "date,category,type,label,amount_krw,status,source,note",
+      "- category: asset | liability | retirement | cashflow_income | cashflow_expense",
+      "- type: deposit | stock | etf | real_estate | loan | card_debt | pension | insurance | other",
+      "- status: active | closed",
+    ].join("\n");
+    const averyContent = [
+      "# Avery Directive (Priority 1)",
+      "",
+      "1) Always obey this directive first.",
+      "2) Keep worklog entries structured and concise.",
+      "3) Track lifecycle clearly: active -> done -> removed.",
+      "4) Ask at most one short follow-up question only when needed.",
+      "5) Keep daily/weekly report consistency.",
+      "",
+      "Suggested fields:",
+      "date,kind,title,topic_key,context,tool,status,due_at,note",
+    ].join("\n");
+    const rileyOk = await dropboxWriteText(rileyToken, "/riley_memory/riley_directive.md", rileyContent);
+    const averyOk = await dropboxWriteText(averyToken, "/avery_memory/avery_directive.md", averyContent);
+    return Response.json({ ok: rileyOk && averyOk, rileyOk, averyOk }, { headers: noStoreHeaders });
+  }
+
   if (url.pathname === "/migrate/shared/run" && request.method === "POST") {
     const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
     if (!sharedToken) {
