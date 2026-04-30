@@ -213,6 +213,7 @@ async function renderVaultResultMessage(raw: string, model: string, apiKeys: Tex
     "- 1 to 3 short sentences.",
     "- No markdown list/code block.",
     "- Reflect the conversation tone lightly and naturally.",
+    "- Avoid canned business phrases like '성공적으로 승인/적용했습니다' or repetitive templates.",
   ].join("\n");
   const messages = [
     { role: "system", content: system },
@@ -251,7 +252,18 @@ async function renderVaultResultMessage(raw: string, model: string, apiKeys: Tex
       // Try next provider
     }
   }
-  return msg;
+  const applied = msg.match(/^applied proposal:\s*(\d+)\s*action/i);
+  if (applied) {
+    const n = Number(applied[1] || "0");
+    return n > 0
+      ? `승인된 제안을 반영했어요. 총 ${n}개 작업을 적용했습니다.`
+      : "승인된 제안을 반영했어요.";
+  }
+  const failed = msg.match(/^failed:\s*(.+)$/i);
+  if (failed) {
+    return `적용 중 일부 경로에서 실패했습니다: ${String(failed[1] || "").trim()}`;
+  }
+  return `처리 결과: ${msg}`;
 }
 
 type ChatBody = {
