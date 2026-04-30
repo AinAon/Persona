@@ -91,6 +91,7 @@ const VAULT_AUTONOMY_GUARD = [
   "[/VAULT_PROPOSAL]",
   "- Never claim execution before explicit user approval.",
   "- Execute only after user approval words like: 승인, 진행해, 적용해, 해줘, approve, go ahead.",
+  "- When you propose, ask for approval in natural persona voice (do not use fixed template wording).",
 ].join("\n");
 
 type VaultProposalAction = { type: "create_file" | "create_folder"; path: string; content?: string };
@@ -473,7 +474,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
               const proposal = parseVaultProposalFromReply(reply);
               if (proposal && proposal.persona === proposalPersona) {
                 await savePendingVaultProposal(env, proposal);
-                reply = `${stripVaultProposalBlock(reply)}\n\n승인하면 적용할게요. \"승인\" 또는 \"진행해\"라고 말해줘.`.trim();
+                reply = stripVaultProposalBlock(reply).trim();
               }
             }
             send({ type: "done", reply });
@@ -533,7 +534,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       const proposal = parseVaultProposalFromReply(reply);
       if (proposal && proposal.persona === proposalPersona) {
         await savePendingVaultProposal(env, proposal);
-        reply = `${stripVaultProposalBlock(reply)}\n\n승인하면 적용할게요. \"승인\" 또는 \"진행해\"라고 말해줘.`.trim();
+        reply = stripVaultProposalBlock(reply).trim();
       }
     }
 
