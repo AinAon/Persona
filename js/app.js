@@ -267,6 +267,47 @@ async function refreshAllCaches(options = {}) {
   }
 }
 
+let _liveSyncTimer = null;
+let _liveSyncBusy = false;
+
+function getLiveSyncIntervalMs() {
+  return activeChatId ? 2500 : 5000;
+}
+
+async function runLiveSyncOnce() {
+  if (_liveSyncBusy) return;
+  if (document.visibilityState !== 'visible') return;
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) return;
+  _liveSyncBusy = true;
+  try {
+    const localIndexSig = sessionIndexSignature(getLocalSessionIndex() || []);
+    const remoteIndex = await fetchRemoteSessionIndex();
+    const remoteIndexSig = sessionIndexSignature(remoteIndex);
+    if (remoteIndexSig && remoteIndexSig !== localIndexSig) {
+      await loadIndex();
+    }
+    if (activeChatId) {
+      const changed = await refreshCurrentChatIfStale(activeChatId);
+      if (changed && typeof renderChatList === 'function') {
+        await renderChatList();
+      }
+    }
+  } catch (e) {
+  } finally {
+    _liveSyncBusy = false;
+  }
+}
+
+function startLiveSyncLoop() {
+  if (_liveSyncTimer) clearTimeout(_liveSyncTimer);
+  const tick = async () => {
+    await runLiveSyncOnce().catch(() => {});
+    _liveSyncTimer = setTimeout(tick, getLiveSyncIntervalMs());
+  };
+  _liveSyncTimer = setTimeout(tick, getLiveSyncIntervalMs());
+}
+
 function preloadMemoryMetaLight() {
   if (typeof getMemoryMetaApi !== 'function') return;
   const sessionId = String(activeChatId || '');
@@ -445,6 +486,13 @@ async function init() {
     if (activeTab === 'settings') renderSettingsPane();
   }).catch(()=>{});
   await refreshAllCaches({ force: false, showLoading: true, loadingLabel: '로컬 캐시 로드 중...' });
+  startLiveSyncLoop();
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') runLiveSyncOnce().catch(() => {});
+  });
+  window.addEventListener('focus', () => { runLiveSyncOnce().catch(() => {}); });
+  window.addEventListener('online', () => { runLiveSyncOnce().catch(() => {}); });
+  setTimeout(() => { runLiveSyncOnce().catch(() => {}); }, 700);
   preloadMemoryMetaLight();
   try { if (window.reminders && typeof window.reminders.init === 'function') window.reminders.init(); } catch(e) {}
   if (loadingEscapeTimer) clearTimeout(loadingEscapeTimer);
