@@ -161,7 +161,11 @@ async function executeVaultProposal(env: Env, proposal: VaultProposal): Promise<
       const ok = await dropboxWriteText(token, `${path.replace(/\/+$/, "")}/.keep`, "");
       if (ok) okCount++; else failed.push(path);
     } else {
-      const ok = await dropboxWriteText(token, path, String(a.content || ""));
+      const rawContent = String(a.content || "");
+      const payload = /\.csv$/i.test(path)
+        ? (rawContent.startsWith("\uFEFF") ? rawContent : `\uFEFF${rawContent}`)
+        : rawContent;
+      const ok = await dropboxWriteText(token, path, payload);
       if (ok) okCount++; else failed.push(path);
     }
   }

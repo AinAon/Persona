@@ -518,6 +518,12 @@ function extractInlineContent(raw: string): string {
   return "";
 }
 
+function encodeForFilePath(path: string, content: string): string {
+  const out = String(content || "");
+  if (!/\.csv$/i.test(path)) return out;
+  return out.startsWith("\uFEFF") ? out : `\uFEFF${out}`;
+}
+
 export async function runRileyVaultActionFromText(env: Env, text: string): Promise<RileyVaultActionResult | null> {
   const raw = String(text || "").trim();
   if (!raw) return null;
@@ -530,7 +536,8 @@ export async function runRileyVaultActionFromText(env: Env, text: string): Promi
     const content = extractInlineContent(raw);
     const path = `/${safeRel}`;
     const defaultContent = safeRel.toLowerCase().endsWith(".csv") ? "date,category,type,label,amount_krw,status,source,note\n" : "";
-    const ok = await dropboxWriteText(token, path, content || defaultContent);
+    const payload = encodeForFilePath(path, content || defaultContent);
+    const ok = await dropboxWriteText(token, path, payload);
     return ok ? { ok: true, message: `created file: ${path}` } : { ok: false, error: `failed to create file: ${path}` };
   }
 
@@ -554,7 +561,8 @@ export async function runRileyVaultActionFromText(env: Env, text: string): Promi
       : (/(자산|wealth|ledger)/i.test(raw) ? "master_wealth_ledger" : `note_${stamp}`);
     const path = `/${base}.${ext}`;
     const defaultContent = ext === "csv" ? "date,category,type,label,amount_krw,status,source,note\n" : "";
-    const ok = await dropboxWriteText(token, path, defaultContent);
+    const payload = encodeForFilePath(path, defaultContent);
+    const ok = await dropboxWriteText(token, path, payload);
     return ok ? { ok: true, message: `created file: ${path}` } : { ok: false, error: `failed to create file: ${path}` };
   }
   if (wantsFile || wantsFolder) return { ok: false, error: "path_missing: 파일명/폴더명을 한 번만 알려줘." };

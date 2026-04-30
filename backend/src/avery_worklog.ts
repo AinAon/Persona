@@ -649,6 +649,12 @@ function extractInlineContent(raw: string): string {
   return "";
 }
 
+function encodeForFilePath(path: string, content: string): string {
+  const out = String(content || "");
+  if (!/\.csv$/i.test(path)) return out;
+  return out.startsWith("\uFEFF") ? out : `\uFEFF${out}`;
+}
+
 export async function runAveryVaultActionFromText(env: Env, text: string): Promise<AveryVaultActionResult | null> {
   const raw = String(text || "").trim();
   if (!raw) return null;
@@ -661,7 +667,8 @@ export async function runAveryVaultActionFromText(env: Env, text: string): Promi
     const content = extractInlineContent(raw);
     const path = `/${safeRel}`;
     const defaultContent = safeRel.toLowerCase().endsWith(".csv") ? "date,kind,title,topic_key,context,tool,status,due_at,note\n" : "";
-    const ok = await dropboxWriteText(token, path, content || defaultContent);
+    const payload = encodeForFilePath(path, content || defaultContent);
+    const ok = await dropboxWriteText(token, path, payload);
     return ok ? { ok: true, message: `created file: ${path}` } : { ok: false, error: `failed to create file: ${path}` };
   }
 
@@ -684,7 +691,8 @@ export async function runAveryVaultActionFromText(env: Env, text: string): Promi
     const base = /(작업\s*로그|work\s*log)/i.test(raw) ? `work_log_${stamp}` : `note_${stamp}`;
     const path = `/${base}.${ext}`;
     const defaultContent = ext === "csv" ? "date,kind,title,topic_key,context,tool,status,due_at,note\n" : "";
-    const ok = await dropboxWriteText(token, path, defaultContent);
+    const payload = encodeForFilePath(path, defaultContent);
+    const ok = await dropboxWriteText(token, path, payload);
     return ok ? { ok: true, message: `created file: ${path}` } : { ok: false, error: `failed to create file: ${path}` };
   }
   if (wantsFile || wantsFolder) return { ok: false, error: "path_missing: 파일명/폴더명을 한 번만 알려줘." };
