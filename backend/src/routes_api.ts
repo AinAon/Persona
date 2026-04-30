@@ -49,6 +49,11 @@ const SESSION_R2_PREFIX = "session/data/";
 const DELETED_SESSION_R2_PREFIX = "session/deleted/";
 const SESSION_AUDIO_R2_PREFIXES = ["tts/session/", "audio/session/"];
 const SHARED_PREFIX = "/persona_shared";
+const SESSION_CHANGE_SEQ_KEY = "session_change_seq";
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function getDropboxAppConfig(env: Env, persona: "riley" | "avery" | "shared"): { key: string; secret: string } {
   const key = String(
@@ -254,6 +259,22 @@ async function getSessionIndex(env: Env): Promise<SessionMeta[]> {
 
 async function putSessionIndex(env: Env, sessions: SessionMeta[]): Promise<void> {
   await r2PutJson(env, SESSION_INDEX_R2_KEY, sessions);
+}
+
+async function getSessionChangeSeq(env: Env): Promise<number> {
+  const raw = await env.KV.get(SESSION_CHANGE_SEQ_KEY);
+  const n = Number(raw || 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+async function bumpSessionChangeSeq(env: Env): Promise<number> {
+  const seq = Date.now();
+  try {
+    await env.KV.put(SESSION_CHANGE_SEQ_KEY, String(seq));
+  } catch {
+    // ignore; realtime signal is best-effort
+  }
+  return seq;
 }
 
 async function getDeletedSessionIndex(env: Env): Promise<DeletedSessionMeta[]> {
@@ -1420,6 +1441,52 @@ export async function handleApiRoute(
     return null;
   }
 
+  if (url.pathname === "/events/sessions" && request.method === "GET") {
+    const since = Number(url.searchParams.get("since") || 0);
+    const encoder = new TextEncoder();
+    let canceled = false;
+    const body = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const send = (event: string, payload: Record<string, unknown>) => {
+          controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`));
+        };
+        send("ready", { ok: true, ts: Date.now() });
+        let last = await getSessionChangeSeq(env);
+        if (Number.isFinite(since) && since > 0 && last > since) {
+          send("session_update", { seq: last, ts: Date.now() });
+        }
+        const startedAt = Date.now();
+        let heartbeatAt = 0;
+        while (!canceled && (Date.now() - startedAt) < 55000) {
+          await sleep(1200);
+          const current = await getSessionChangeSeq(env);
+          if (current > last) {
+            last = current;
+            send("session_update", { seq: current, ts: Date.now() });
+            heartbeatAt = Date.now();
+            continue;
+          }
+          if ((Date.now() - heartbeatAt) > 15000) {
+            send("ping", { ts: Date.now() });
+            heartbeatAt = Date.now();
+          }
+        }
+        try { controller.close(); } catch {}
+      },
+      cancel() {
+        canceled = true;
+      },
+    });
+    return new Response(body, {
+      headers: {
+        ...noStoreHeaders,
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+      },
+    });
+  }
+
   if (url.pathname === "/sessions") {
     if (request.method === "GET") {
       const sessions = await getSessionIndex(env);
@@ -1428,6 +1495,7 @@ export async function handleApiRoute(
     if (request.method === "PUT") {
       const { sessions } = (await request.json()) as { sessions: unknown[] };
       await putSessionIndex(env, (Array.isArray(sessions) ? sessions : []) as SessionMeta[]);
+      await bumpSessionChangeSeq(env);
       return Response.json({ ok: true }, { headers: cors });
     }
     return null;
@@ -1450,6 +1518,7 @@ export async function handleApiRoute(
       const status = restored.error === "id required" ? 400 : 404;
       return Response.json({ ok: false, error: restored.error }, { status, headers: cors });
     }
+    await bumpSessionChangeSeq(env);
     return Response.json({ ok: true, session: restored.session }, { headers: cors });
   }
 
@@ -1460,6 +1529,7 @@ export async function handleApiRoute(
       const status = recovered.error === "id required" ? 400 : 404;
       return Response.json({ ok: false, error: recovered.error }, { status, headers: cors });
     }
+    await bumpSessionChangeSeq(env);
     return Response.json({ ok: true, session: recovered.session }, { headers: cors });
   }
 
@@ -1482,6 +1552,7 @@ export async function handleApiRoute(
     const deletedIndex = await getDeletedSessionIndex(env);
     await putDeletedSessionIndex(env, deletedIndex.filter((s) => s.id !== sessionId));
 
+    await bumpSessionChangeSeq(env);
     return Response.json({ ok: true }, { headers: cors });
   }
 
@@ -1654,6 +1725,7 @@ async function handleSessionRoute(
     else index.unshift(meta);
 
     await putSessionIndex(env, index);
+    await bumpSessionChangeSeq(env);
     return Response.json({ ok: true }, { headers: cors });
   }
 
@@ -1682,6 +1754,7 @@ async function handleSessionRoute(
     let index = await getSessionIndex(env);
     index = index.filter((s) => s.id !== id);
     await putSessionIndex(env, index);
+    await bumpSessionChangeSeq(env);
     return Response.json({ ok: true }, { headers: cors });
   }
 

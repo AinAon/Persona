@@ -269,9 +269,12 @@ async function refreshAllCaches(options = {}) {
 
 let _liveSyncTimer = null;
 let _liveSyncBusy = false;
+let _sessionEvents = null;
+let _sessionEventsReconnectTimer = null;
+let _lastSessionEventSeq = 0;
 
 function getLiveSyncIntervalMs() {
-  return activeChatId ? 2500 : 5000;
+  return activeChatId ? 30000 : 60000;
 }
 
 async function runLiveSyncOnce() {
@@ -306,6 +309,38 @@ function startLiveSyncLoop() {
     _liveSyncTimer = setTimeout(tick, getLiveSyncIntervalMs());
   };
   _liveSyncTimer = setTimeout(tick, getLiveSyncIntervalMs());
+}
+
+function closeSessionEvents() {
+  try { if (_sessionEvents) _sessionEvents.close(); } catch(e) {}
+  _sessionEvents = null;
+}
+
+function connectSessionEvents() {
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl || typeof EventSource === 'undefined') return;
+  if (_sessionEventsReconnectTimer) {
+    clearTimeout(_sessionEventsReconnectTimer);
+    _sessionEventsReconnectTimer = null;
+  }
+  closeSessionEvents();
+  const es = new EventSource(`${wUrl}/events/sessions?since=${Number(_lastSessionEventSeq || 0)}`);
+  _sessionEvents = es;
+
+  es.addEventListener('session_update', (evt) => {
+    try {
+      const data = JSON.parse(String(evt?.data || '{}'));
+      const seq = Number(data?.seq || 0);
+      if (seq > 0) _lastSessionEventSeq = Math.max(_lastSessionEventSeq, seq);
+    } catch(e) {}
+    runLiveSyncOnce().catch(() => {});
+  });
+
+  es.onerror = () => {
+    closeSessionEvents();
+    if (_sessionEventsReconnectTimer) clearTimeout(_sessionEventsReconnectTimer);
+    _sessionEventsReconnectTimer = setTimeout(() => { connectSessionEvents(); }, 3000);
+  };
 }
 
 function preloadMemoryMetaLight() {
@@ -486,11 +521,17 @@ async function init() {
     if (activeTab === 'settings') renderSettingsPane();
   }).catch(()=>{});
   await refreshAllCaches({ force: false, showLoading: true, loadingLabel: '로컬 캐시 로드 중...' });
+  connectSessionEvents();
   startLiveSyncLoop();
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') runLiveSyncOnce().catch(() => {});
+    if (document.visibilityState === 'visible') {
+      connectSessionEvents();
+      runLiveSyncOnce().catch(() => {});
+    } else {
+      closeSessionEvents();
+    }
   });
-  window.addEventListener('focus', () => { runLiveSyncOnce().catch(() => {}); });
+  window.addEventListener('focus', () => { connectSessionEvents(); runLiveSyncOnce().catch(() => {}); });
   window.addEventListener('online', () => { runLiveSyncOnce().catch(() => {}); });
   setTimeout(() => { runLiveSyncOnce().catch(() => {}); }, 700);
   preloadMemoryMetaLight();
