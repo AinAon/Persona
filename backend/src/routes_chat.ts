@@ -100,14 +100,28 @@ const VAULT_AUTONOMY_GUARD = [
 
 type VaultProposalAction = { type: "create_file" | "create_folder"; path: string; content?: string };
 type VaultProposal = { persona: "riley" | "avery"; actions: VaultProposalAction[]; createdAt: number };
+type VaultActionMode = "direct" | "proposal_apply";
+type VaultActionEvidence = {
+  id: string;
+  at: string;
+  persona: "riley" | "avery";
+  mode: VaultActionMode;
+  ok: boolean;
+  message: string;
+  userText: string;
+  outputs: Array<{ type: "file" | "folder" | "count"; value: string }>;
+};
 
 function pendingVaultProposalKey(persona: "riley" | "avery"): string {
   return `vault:proposal:${persona}`;
 }
 
 function isApprovalText(text: string): boolean {
-  const t = String(text || "").toLowerCase();
-  return /(승인|진행해|진행시켜|적용해|해줘|오케이|approve|go ahead|do it|proceed)/i.test(t);
+  const t = String(text || "").trim().toLowerCase();
+  if (!t || t.length > 40) return false;
+  // Strict approval gate: plain approval utterance only (no mixed command body).
+  if (/(파일|폴더|path|경로|create|write|생성|만들|삭제|remove|move|rename)/i.test(t)) return false;
+  return /^(?:네|응|예|오케이|ok|okay)?\s*(?:승인|진행해|진행시켜|적용해|approve|go ahead|do it|proceed)(?:\s*(?:해|줘|주세요|해줘|부탁해)?)?[.! ]*$/.test(t);
 }
 
 function detectVaultCreateIntent(text: string): boolean {
@@ -172,6 +186,63 @@ async function loadPendingVaultProposal(env: Env, persona: "riley" | "avery"): P
 
 async function clearPendingVaultProposal(env: Env, persona: "riley" | "avery"): Promise<void> {
   await env.KV.delete(pendingVaultProposalKey(persona));
+}
+
+function parseVaultOutputs(message: string): Array<{ type: "file" | "folder" | "count"; value: string }> {
+  const msg = String(message || "");
+  const out: Array<{ type: "file" | "folder" | "count"; value: string }> = [];
+  const file = msg.match(/created file:\s*(\/\S+)/i);
+  if (file) out.push({ type: "file", value: file[1] });
+  const folder = msg.match(/created folder:\s*(\/\S+)/i);
+  if (folder) out.push({ type: "folder", value: folder[1] });
+  const count = msg.match(/applied proposal:\s*(\d+)\s*action/i);
+  if (count) out.push({ type: "count", value: String(count[1] || "0") });
+  return out;
+}
+
+function evidenceKey(persona: "riley" | "avery"): string {
+  return `vault:evidence:${persona}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+}
+
+async function writeVaultEvidence(
+  env: Env,
+  persona: "riley" | "avery",
+  mode: VaultActionMode,
+  ok: boolean,
+  message: string,
+  userText: string,
+): Promise<VaultActionEvidence> {
+  const id = evidenceKey(persona);
+  const ev: VaultActionEvidence = {
+    id,
+    at: new Date().toISOString(),
+    persona,
+    mode,
+    ok,
+    message: String(message || ""),
+    userText: String(userText || ""),
+    outputs: parseVaultOutputs(message),
+  };
+  await env.KV.put(id, JSON.stringify(ev));
+  await env.KV.put(`vault:evidence:last:${persona}`, id);
+  return ev;
+}
+
+function guardPersonaReply(reply: string, hasExecutionEvidence: boolean, inPersonaChat: boolean): string {
+  let out = String(reply || "").trim();
+  if (!out) return out;
+  if (!inPersonaChat) return out;
+
+  // Block false capability disclaimers when vault execution path exists.
+  if (/(직접\s*외부\s*파일\s*시스템.*제한|파일\s*시스템.*접근.*불가능|제안.*승인.*VAULT_PROPOSAL.*유효)/i.test(out)) {
+    return "바로 실행 가능한 요청이면 지금 처리하겠습니다. 경로나 파일명만 명확히 알려주세요.";
+  }
+
+  // If no evidence exists, block fake completion claims.
+  if (!hasExecutionEvidence && /(생성했|생성했습니다|만들었|적용했|저장했|완료했)/i.test(out)) {
+    return "실행 전에 먼저 확인이 필요합니다. 파일명/경로를 지정해주시면 바로 처리하고 결과를 정확히 보고드릴게요.";
+  }
+  return out;
 }
 
 async function executeVaultProposal(env: Env, proposal: VaultProposal): Promise<{ ok: boolean; message: string }> {
@@ -325,8 +396,9 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       if (pending) {
         const exec = await executeVaultProposal(env, pending);
         if (exec.ok) await clearPendingVaultProposal(env, proposalPersona);
+        const evidence = await writeVaultEvidence(env, proposalPersona, "proposal_apply", exec.ok, exec.message, latestUserText);
         const natural = await renderVaultResultMessage(exec.message, model, apiKeys, latestUserText);
-        return Response.json({ result: exec.ok ? "success" : "error", reply: natural }, { status: exec.ok ? 200 : 400, headers: cors });
+        return Response.json({ result: exec.ok ? "success" : "error", reply: natural, evidence_id: evidence.id }, { status: exec.ok ? 200 : 400, headers: cors });
       }
     }
 
@@ -337,11 +409,13 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
           if (/^path_missing:/i.test(String(vaultAction.error || ""))) {
             // Ambiguous create request should stay conversational instead of hard failing.
           } else {
-            return Response.json({ result: "error", error: vaultAction.error }, { status: 400, headers: cors });
+            const evidence = await writeVaultEvidence(env, "riley", "direct", false, String(vaultAction.error || "unknown"), latestUserText);
+            return Response.json({ result: "error", error: vaultAction.error, evidence_id: evidence.id }, { status: 400, headers: cors });
           }
         } else {
+          const evidence = await writeVaultEvidence(env, "riley", "direct", true, vaultAction.message, latestUserText);
           const natural = await renderVaultResultMessage(vaultAction.message, model, apiKeys, latestUserText);
-          return Response.json({ result: "success", reply: natural }, { headers: cors });
+          return Response.json({ result: "success", reply: natural, evidence_id: evidence.id }, { headers: cors });
         }
       }
     }
@@ -352,11 +426,13 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
           if (/^path_missing:/i.test(String(vaultAction.error || ""))) {
             // Ambiguous create request should stay conversational instead of hard failing.
           } else {
-            return Response.json({ result: "error", error: vaultAction.error }, { status: 400, headers: cors });
+            const evidence = await writeVaultEvidence(env, "avery", "direct", false, String(vaultAction.error || "unknown"), latestUserText);
+            return Response.json({ result: "error", error: vaultAction.error, evidence_id: evidence.id }, { status: 400, headers: cors });
           }
         } else {
+          const evidence = await writeVaultEvidence(env, "avery", "direct", true, vaultAction.message, latestUserText);
           const natural = await renderVaultResultMessage(vaultAction.message, model, apiKeys, latestUserText);
-          return Response.json({ result: "success", reply: natural }, { headers: cors });
+          return Response.json({ result: "success", reply: natural, evidence_id: evidence.id }, { headers: cors });
         }
       }
     }
@@ -544,6 +620,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
                 reply = stripVaultProposalBlock(reply).trim();
               }
             }
+            reply = guardPersonaReply(reply, false, !!proposalPersona);
             send({ type: "done", reply });
           } catch (err: any) {
             send({ type: "error", error: err?.message || "stream error" });
@@ -604,6 +681,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
         reply = stripVaultProposalBlock(reply).trim();
       }
     }
+    reply = guardPersonaReply(reply, false, !!proposalPersona);
 
     if (imageUrlOut) {
       return Response.json({ result: "success", reply, image_url: imageUrlOut, riley_write: rileyWriteResult }, { headers: cors });
