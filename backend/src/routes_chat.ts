@@ -9,6 +9,7 @@ import {
   getAveryWorklogSnapshot,
   isAveryParticipant,
   loadAveryDirective,
+  runAveryVaultActionFromText,
   shouldPersistAveryWorklogText,
 } from "./avery_worklog";
 import {
@@ -21,6 +22,7 @@ import {
   isWealthMutationText,
   isRileyParticipant,
   loadRileyDirective,
+  runRileyVaultActionFromText,
 } from "./riley_wealth";
 import {
   applyPendingPolicyIfApproved,
@@ -129,6 +131,21 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
   const policyTargetPid = resolvePolicyTargetPid(participant_pids || []);
 
   try {
+    if (!isImageReq && inRileyChat) {
+      const vaultAction = await runRileyVaultActionFromText(env, latestUserText);
+      if (vaultAction) {
+        if (!vaultAction.ok) return Response.json({ result: "error", error: vaultAction.error }, { status: 400, headers: cors });
+        return Response.json({ result: "success", reply: vaultAction.message }, { headers: cors });
+      }
+    }
+    if (!isImageReq && inAveryChat) {
+      const vaultAction = await runAveryVaultActionFromText(env, latestUserText);
+      if (vaultAction) {
+        if (!vaultAction.ok) return Response.json({ result: "error", error: vaultAction.error }, { status: 400, headers: cors });
+        return Response.json({ result: "success", reply: vaultAction.message }, { headers: cors });
+      }
+    }
+
     let rileyWriteResult: { ok: boolean; error?: string; eventId?: string } | null = null;
     let promotionApplyMessage = "";
     if (!isImageReq && policyTargetPid) {

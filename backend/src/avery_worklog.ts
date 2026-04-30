@@ -592,6 +592,38 @@ export async function loadAveryDirective(env: Env): Promise<string> {
   ].join("\n");
 }
 
+type AveryVaultActionResult = { ok: true; message: string } | { ok: false; error: string };
+
+export async function runAveryVaultActionFromText(env: Env, text: string): Promise<AveryVaultActionResult | null> {
+  const raw = String(text || "").trim();
+  if (!raw) return null;
+  const token = await getPersonaDropboxAccessToken(env, "avery");
+  if (!token) return { ok: false, error: "avery dropbox token missing" };
+
+  const fileMatch = raw.match(/(?:파일생성|파일 만들어|create file)\s+([^\n:]+)(?:::{1,3}([\s\S]*))?/i);
+  if (fileMatch) {
+    const rel = String(fileMatch[1] || "").trim().replace(/^\/+/, "");
+    const content = String(fileMatch[2] || "").replace(/^\s+|\s+$/g, "");
+    if (!rel) return { ok: false, error: "file path required" };
+    const safeRel = rel.startsWith("avery_memory/") ? rel : `avery_memory/${rel}`;
+    const path = `/${safeRel}`;
+    const ok = await dropboxWriteText(token, path, content);
+    return ok ? { ok: true, message: `created file: ${path}` } : { ok: false, error: `failed to create file: ${path}` };
+  }
+
+  const dirMatch = raw.match(/(?:폴더생성|폴더 만들어|create folder)\s+([^\n]+)$/i);
+  if (dirMatch) {
+    const rel = String(dirMatch[1] || "").trim().replace(/^\/+/, "").replace(/\/+$/, "");
+    if (!rel) return { ok: false, error: "folder path required" };
+    const safeRel = rel.startsWith("avery_memory/") ? rel : `avery_memory/${rel}`;
+    const path = `/${safeRel}/.keep`;
+    const ok = await dropboxWriteText(token, path, "");
+    return ok ? { ok: true, message: `created folder: /${safeRel}` } : { ok: false, error: `failed to create folder: /${safeRel}` };
+  }
+
+  return null;
+}
+
 export async function reconcileAveryWorklog(env: Env): Promise<{
   ok: true;
   changed: boolean;
