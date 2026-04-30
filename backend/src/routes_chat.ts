@@ -173,6 +173,25 @@ function stripVaultProposalBlock(reply: string): string {
   return String(reply || "").replace(/\n?\[VAULT_PROPOSAL\][\s\S]*?\[\/VAULT_PROPOSAL\]\n?/i, "\n").trim();
 }
 
+function expandVaultResultMessage(raw: string): string {
+  const msg = String(raw || "").trim();
+  if (!msg) return "";
+  const created = msg.match(/^created file:\s*(\/\S+)/i);
+  if (created) {
+    const path = created[1];
+    return `${msg}\n요청한 파일을 실제로 생성했어. 저장 경로는 \`${path}\`야. 필요하면 바로 내용까지 채워 넣을게.`;
+  }
+  const applied = msg.match(/^applied proposal:\s*(\d+)\s*action/i);
+  if (applied) {
+    const n = applied[1];
+    return `${msg}\n승인한 개선안을 적용했어. 총 ${n}개 항목을 반영했어. 원하면 적용된 파일/폴더 목록도 바로 보여줄게.`;
+  }
+  if (/^created folder:/i.test(msg)) {
+    return `${msg}\n요청한 폴더를 실제로 만들었어. 이어서 하위 파일 구조까지 바로 정리해줄 수 있어.`;
+  }
+  return msg;
+}
+
 type ChatBody = {
   messages?: any[];
   model?: string;
@@ -229,7 +248,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       if (pending) {
         const exec = await executeVaultProposal(env, pending);
         if (exec.ok) await clearPendingVaultProposal(env, proposalPersona);
-        return Response.json({ result: exec.ok ? "success" : "error", reply: exec.message }, { status: exec.ok ? 200 : 400, headers: cors });
+        return Response.json({ result: exec.ok ? "success" : "error", reply: expandVaultResultMessage(exec.message) }, { status: exec.ok ? 200 : 400, headers: cors });
       }
     }
 
@@ -237,14 +256,14 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       const vaultAction = await runRileyVaultActionFromText(env, latestUserText);
       if (vaultAction) {
         if (!vaultAction.ok) return Response.json({ result: "error", error: vaultAction.error }, { status: 400, headers: cors });
-        return Response.json({ result: "success", reply: vaultAction.message }, { headers: cors });
+        return Response.json({ result: "success", reply: expandVaultResultMessage(vaultAction.message) }, { headers: cors });
       }
     }
     if (!isImageReq && inAveryChat) {
       const vaultAction = await runAveryVaultActionFromText(env, latestUserText);
       if (vaultAction) {
         if (!vaultAction.ok) return Response.json({ result: "error", error: vaultAction.error }, { status: 400, headers: cors });
-        return Response.json({ result: "success", reply: vaultAction.message }, { headers: cors });
+        return Response.json({ result: "success", reply: expandVaultResultMessage(vaultAction.message) }, { headers: cors });
       }
     }
 
