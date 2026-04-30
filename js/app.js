@@ -280,6 +280,9 @@ function getLiveSyncIntervalMs() {
 async function runLiveSyncOnce() {
   if (_liveSyncBusy) return;
   if (document.visibilityState !== 'visible') return;
+  try {
+    if (typeof isLoading !== 'undefined' && isLoading) return;
+  } catch(e) {}
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl) return;
   _liveSyncBusy = true;

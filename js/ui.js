@@ -4722,6 +4722,9 @@ function renderUserBubbleHTMLV3(text, atts) {
 async function sendMessage() {
   if (isLoading) return;
   const session = getActiveSession(); if (!session) return;
+  if (session._loaded !== true && typeof loadSession === 'function') {
+    try { await loadSession(session.id); } catch(e) {}
+  }
   const renderSessionId = session.id;
   if (_speechListening) stopMicInput();
   const input = document.getElementById('userInput');

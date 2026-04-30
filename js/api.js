@@ -932,8 +932,13 @@ function dedupeHistoryMessages(history) {
 async function saveSession(id) {
   const s = sessions.find(x=>x.id===id); if (!s) return;
   if (s._loaded !== true) {
-    console.warn('[session] skip save before load', { id });
-    return;
+    if (Array.isArray(s.history) && s.history.length > 0) {
+      // Do not drop freshly typed messages when background sync resets _loaded.
+      s._loaded = true;
+    } else {
+      console.warn('[session] skip save before load', { id });
+      return;
+    }
   }
   const sanitizeMessageForStorage = (msg) => {
     const { _rendered, ...rest } = (msg || {});
@@ -1042,6 +1047,7 @@ async function loadIndex() {
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl) return;
   try {
+    const prevById = new Map((sessions || []).map((s) => [s?.id, s]));
     const res = await fetch(wUrl + '/sessions');
     const data = await res.json();
     const index = Array.isArray(data.sessions) ? data.sessions : [];
@@ -1063,7 +1069,13 @@ async function loadIndex() {
       }
     }
 
-    sessions = mergedIndex.map(item => ({ ...item, history: [], _loaded: false }));
+    sessions = mergedIndex.map(item => {
+      const prev = prevById.get(item?.id);
+      if (prev && prev._loaded === true && Array.isArray(prev.history)) {
+        return { ...item, history: prev.history, _loaded: true };
+      }
+      return { ...item, history: [], _loaded: false };
+    });
     setLocalSessionIndex(mergedIndex);
 
     // Remove stale local session caches that are no longer present in remote index.
