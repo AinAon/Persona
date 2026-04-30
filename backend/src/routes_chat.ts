@@ -3,6 +3,7 @@ import { generateGeminiImage, generateGeminiText, generateImagenImage, streamGem
 import { generateOpenAIImage, generateOpenAIText, streamOpenAIText } from "./model_openai";
 import { generateGrokImage, generateGrokText, streamGrokText } from "./model_grok";
 import { buildMemorySystemPrompt } from "./memory";
+import { dropboxWriteText, getPersonaDropboxAccessToken } from "./dropbox_vault";
 import {
   appendAveryWorklogEvent,
   buildAverySystemPrompt,
@@ -81,6 +82,97 @@ const AVERY_WORKLOG_GUARD = [
   "- If uncertain, ask one short clarification before destructive removal.",
 ].join(" ");
 
+const VAULT_AUTONOMY_GUARD = [
+  "Vault autonomy policy (proposal-first):",
+  "- If you think new folder/file structure will improve workflow, propose first; do not execute immediately.",
+  "- Use this exact block when proposing:",
+  "[VAULT_PROPOSAL]",
+  "{\"persona\":\"riley|avery\",\"actions\":[{\"type\":\"create_folder\",\"path\":\"...\"},{\"type\":\"create_file\",\"path\":\"...\",\"content\":\"...\"}]}",
+  "[/VAULT_PROPOSAL]",
+  "- Never claim execution before explicit user approval.",
+  "- Execute only after user approval words like: 승인, 진행해, 적용해, 해줘, approve, go ahead.",
+].join("\n");
+
+type VaultProposalAction = { type: "create_file" | "create_folder"; path: string; content?: string };
+type VaultProposal = { persona: "riley" | "avery"; actions: VaultProposalAction[]; createdAt: number };
+
+function pendingVaultProposalKey(persona: "riley" | "avery"): string {
+  return `vault:proposal:${persona}`;
+}
+
+function isApprovalText(text: string): boolean {
+  const t = String(text || "").toLowerCase();
+  return /(승인|진행해|진행시켜|적용해|해줘|오케이|approve|go ahead|do it|proceed)/i.test(t);
+}
+
+function parseVaultProposalFromReply(reply: string): VaultProposal | null {
+  const m = String(reply || "").match(/\[VAULT_PROPOSAL\]([\s\S]*?)\[\/VAULT_PROPOSAL\]/i);
+  if (!m) return null;
+  let parsed: any = null;
+  try {
+    parsed = JSON.parse(String(m[1] || "").trim());
+  } catch {
+    return null;
+  }
+  const persona = String(parsed?.persona || "").toLowerCase();
+  if (persona !== "riley" && persona !== "avery") return null;
+  const actionsRaw = Array.isArray(parsed?.actions) ? parsed.actions : [];
+  const actions: VaultProposalAction[] = [];
+  for (const a of actionsRaw) {
+    const type = String(a?.type || "");
+    const path = String(a?.path || "").trim().replace(/^\/+/, "");
+    if (!path) continue;
+    if (type === "create_folder") actions.push({ type: "create_folder", path });
+    if (type === "create_file") actions.push({ type: "create_file", path, content: String(a?.content || "") });
+  }
+  if (!actions.length) return null;
+  return { persona: persona as "riley" | "avery", actions: actions.slice(0, 20), createdAt: Date.now() };
+}
+
+async function savePendingVaultProposal(env: Env, proposal: VaultProposal): Promise<void> {
+  await env.KV.put(pendingVaultProposalKey(proposal.persona), JSON.stringify(proposal));
+}
+
+async function loadPendingVaultProposal(env: Env, persona: "riley" | "avery"): Promise<VaultProposal | null> {
+  const raw = await env.KV.get(pendingVaultProposalKey(persona));
+  if (!raw) return null;
+  try {
+    const p = JSON.parse(raw) as VaultProposal;
+    if (!p || !Array.isArray(p.actions) || !p.actions.length) return null;
+    return p;
+  } catch {
+    return null;
+  }
+}
+
+async function clearPendingVaultProposal(env: Env, persona: "riley" | "avery"): Promise<void> {
+  await env.KV.delete(pendingVaultProposalKey(persona));
+}
+
+async function executeVaultProposal(env: Env, proposal: VaultProposal): Promise<{ ok: boolean; message: string }> {
+  const token = await getPersonaDropboxAccessToken(env, proposal.persona);
+  if (!token) return { ok: false, message: `${proposal.persona} dropbox token missing` };
+  let okCount = 0;
+  const failed: string[] = [];
+  for (const a of proposal.actions) {
+    const path = `/${String(a.path || "").trim().replace(/^\/+/, "")}`;
+    if (!path || path === "/") continue;
+    if (a.type === "create_folder") {
+      const ok = await dropboxWriteText(token, `${path.replace(/\/+$/, "")}/.keep`, "");
+      if (ok) okCount++; else failed.push(path);
+    } else {
+      const ok = await dropboxWriteText(token, path, String(a.content || ""));
+      if (ok) okCount++; else failed.push(path);
+    }
+  }
+  if (failed.length) return { ok: false, message: `failed: ${failed.slice(0, 3).join(", ")}` };
+  return { ok: true, message: `applied proposal: ${okCount} action(s)` };
+}
+
+function stripVaultProposalBlock(reply: string): string {
+  return String(reply || "").replace(/\n?\[VAULT_PROPOSAL\][\s\S]*?\[\/VAULT_PROPOSAL\]\n?/i, "\n").trim();
+}
+
 type ChatBody = {
   messages?: any[];
   model?: string;
@@ -131,6 +223,16 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
   const policyTargetPid = resolvePolicyTargetPid(participant_pids || []);
 
   try {
+    const proposalPersona: "riley" | "avery" | null = inRileyChat ? "riley" : (inAveryChat ? "avery" : null);
+    if (!isImageReq && proposalPersona && isApprovalText(latestUserText)) {
+      const pending = await loadPendingVaultProposal(env, proposalPersona);
+      if (pending) {
+        const exec = await executeVaultProposal(env, pending);
+        if (exec.ok) await clearPendingVaultProposal(env, proposalPersona);
+        return Response.json({ result: exec.ok ? "success" : "error", reply: exec.message }, { status: exec.ok ? 200 : 400, headers: cors });
+      }
+    }
+
     if (!isImageReq && inRileyChat) {
       const vaultAction = await runRileyVaultActionFromText(env, latestUserText);
       if (vaultAction) {
@@ -188,6 +290,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
           { role: "system", content: RESPONSE_VARIANCE_PROMPT },
           ...(inRileyChat ? [{ role: "system", content: RILEY_NUMERIC_PRIORITY_GUARD }] : []),
           ...(inAveryChat ? [{ role: "system", content: AVERY_WORKLOG_GUARD }] : []),
+          ...((inRileyChat || inAveryChat) ? [{ role: "system", content: VAULT_AUTONOMY_GUARD }] : []),
           ...(rileySnapshot ? [{ role: "system", content: buildRileySystemPrompt(rileySnapshot.state) }] : []),
           ...(averySnapshot ? [{ role: "system", content: buildAverySystemPrompt(averySnapshot.state) }] : []),
           ...(personaPolicyPrompt ? [{ role: "system", content: personaPolicyPrompt }] : []),
@@ -201,6 +304,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
           ? [
               ...(inRileyChat ? [{ role: "system", content: RILEY_NUMERIC_PRIORITY_GUARD }] : []),
               ...(inAveryChat ? [{ role: "system", content: AVERY_WORKLOG_GUARD }] : []),
+              ...((inRileyChat || inAveryChat) ? [{ role: "system", content: VAULT_AUTONOMY_GUARD }] : []),
               ...(rileyDirective ? [{ role: "system", content: `Priority 1 Directive (Riley):\n${rileyDirective}` }] : []),
               ...(averyDirective ? [{ role: "system", content: `Priority 1 Directive (Avery):\n${averyDirective}` }] : []),
               ...(rileySnapshot ? [{ role: "system", content: buildRileySystemPrompt(rileySnapshot.state) }] : []),
@@ -305,6 +409,13 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
               await savePendingPolicyPatchFromReply(env, policyTargetPid, reply);
               await saveCandidateFromReply(env, policyTargetPid, reply);
             }
+            if (proposalPersona) {
+              const proposal = parseVaultProposalFromReply(reply);
+              if (proposal && proposal.persona === proposalPersona) {
+                await savePendingVaultProposal(env, proposal);
+                reply = `${stripVaultProposalBlock(reply)}\n\n승인하면 적용할게요. \"승인\" 또는 \"진행해\"라고 말해줘.`.trim();
+              }
+            }
             send({ type: "done", reply });
           } catch (err: any) {
             send({ type: "error", error: err?.message || "stream error" });
@@ -357,6 +468,13 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     if (policyTargetPid) {
       await savePendingPolicyPatchFromReply(env, policyTargetPid, reply);
       await saveCandidateFromReply(env, policyTargetPid, reply);
+    }
+    if (proposalPersona) {
+      const proposal = parseVaultProposalFromReply(reply);
+      if (proposal && proposal.persona === proposalPersona) {
+        await savePendingVaultProposal(env, proposal);
+        reply = `${stripVaultProposalBlock(reply)}\n\n승인하면 적용할게요. \"승인\" 또는 \"진행해\"라고 말해줘.`.trim();
+      }
     }
 
     if (imageUrlOut) {

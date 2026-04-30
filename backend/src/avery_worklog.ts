@@ -594,40 +594,100 @@ export async function loadAveryDirective(env: Env): Promise<string> {
 
 type AveryVaultActionResult = { ok: true; message: string } | { ok: false; error: string };
 
+function ymdStampUnderscore(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}_${m}_${day}`;
+}
+
+function normalizeVaultRelPath(input: string): string {
+  return String(input || "")
+    .trim()
+    .replace(/^\/+/, "")
+    .replace(/\\/g, "/")
+    .replace(/\/{2,}/g, "/");
+}
+
+function inferAveryFilePath(raw: string): string | null {
+  const explicit =
+    raw.match(/(?:파일생성|파일 만들어|create file)\s+([^\n:]+)(?:::{1,3}([\s\S]*))?/i)?.[1]
+    || raw.match(/["'`]([a-zA-Z0-9_./-]+\.(?:csv|md|txt|json))["'`]/i)?.[1]
+    || raw.match(/([a-zA-Z0-9_./-]+\.(?:csv|md|txt|json))/i)?.[1];
+  if (explicit) return normalizeVaultRelPath(explicit);
+
+  const wantsFile = /(?:파일|file|csv|md|txt|json).*(?:생성|만들|작성|저장|create|write)|(?:create|write).*(?:file)|\.(?:csv|md|txt|json)\b/i.test(raw);
+  if (!wantsFile) return null;
+
+  const ext = /\bcsv\b|csv/i.test(raw) ? "csv"
+    : (/\bmd\b|markdown/i.test(raw) ? "md"
+      : (/\bjson\b/i.test(raw) ? "json" : "txt"));
+  const stamp = ymdStampUnderscore();
+  const base = /(작업\s*로그|work\s*log)/i.test(raw) ? `work_log_${stamp}`
+    : (/(리포트|report)/i.test(raw) ? `report_${stamp}` : `note_${stamp}`);
+  return `${base}.${ext}`;
+}
+
+function inferAveryFolderPath(raw: string): string | null {
+  const explicit =
+    raw.match(/(?:폴더생성|폴더 만들어|create folder)\s+([^\n]+)$/i)?.[1]
+    || raw.match(/["'`]([a-zA-Z0-9_./-]+)["'`]\s*(?:폴더|folder)/i)?.[1]
+    || raw.match(/([a-zA-Z0-9_./-]+)\s*(?:폴더|folder)\s*(?:생성|만들어|만들어줘|create)/i)?.[1];
+  if (explicit) return normalizeVaultRelPath(explicit).replace(/\/+$/, "");
+
+  const wantsFolder = /(?:폴더|folder|디렉터리|directory).*(?:생성|만들|create)|(?:create).*(?:folder|directory)/i.test(raw);
+  if (!wantsFolder) return null;
+  return `folder_${ymdStampUnderscore()}`;
+}
+
+function extractInlineContent(raw: string): string {
+  const marked = raw.match(/:{3}([\s\S]*)$/);
+  if (marked) return String(marked[1] || "").trim();
+  const lines = raw.split(/\r?\n/);
+  if (lines.length >= 2) return lines.slice(1).join("\n").trim();
+  return "";
+}
+
 export async function runAveryVaultActionFromText(env: Env, text: string): Promise<AveryVaultActionResult | null> {
   const raw = String(text || "").trim();
   if (!raw) return null;
   const token = await getPersonaDropboxAccessToken(env, "avery");
   if (!token) return { ok: false, error: "avery dropbox token missing" };
 
-  const wantsFile = /(?:파일|file|csv|md|txt).*(?:생성|만들|create)|(?:create).*(?:file)|\.(?:csv|md|txt|json)\b/i.test(raw);
-  const wantsFolder = /(?:폴더|folder|디렉터리|directory).*(?:생성|만들|create)|(?:create).*(?:folder|directory)/i.test(raw);
-
-  const fileMatch = raw.match(/(?:파일생성|파일 만들어|create file)\s+([^\n:]+)(?:::{1,3}([\s\S]*))?/i)
-    || raw.match(/([a-zA-Z0-9_./-]+\.(?:csv|md|txt|json))\s*(?:파일)?\s*(?:생성|만들어|만들어줘|create)/i);
-  if (fileMatch) {
-    const rel = String(fileMatch[1] || "").trim().replace(/^\/+/, "");
-    const content = String(fileMatch[2] || "").replace(/^\s+|\s+$/g, "");
-    if (!rel) return { ok: false, error: "file path required" };
-    const safeRel = rel.replace(/^\/+/, "");
+  const fileRel = inferAveryFilePath(raw);
+  if (fileRel) {
+    const safeRel = normalizeVaultRelPath(fileRel);
+    const content = extractInlineContent(raw);
     const path = `/${safeRel}`;
-    const defaultContent = rel.toLowerCase().endsWith(".csv") ? "date,kind,title,topic_key,context,tool,status,due_at,note\n" : "";
+    const defaultContent = safeRel.toLowerCase().endsWith(".csv") ? "date,kind,title,topic_key,context,tool,status,due_at,note\n" : "";
     const ok = await dropboxWriteText(token, path, content || defaultContent);
     return ok ? { ok: true, message: `created file: ${path}` } : { ok: false, error: `failed to create file: ${path}` };
   }
 
-  const dirMatch = raw.match(/(?:폴더생성|폴더 만들어|create folder)\s+([^\n]+)$/i)
-    || raw.match(/([a-zA-Z0-9_./-]+)\s*(?:폴더|folder)\s*(?:생성|만들어|만들어줘|create)/i);
-  if (dirMatch) {
-    const rel = String(dirMatch[1] || "").trim().replace(/^\/+/, "").replace(/\/+$/, "");
-    if (!rel) return { ok: false, error: "folder path required" };
-    const safeRel = rel.replace(/^\/+/, "").replace(/\/+$/, "");
+  const folderRel = inferAveryFolderPath(raw);
+  if (folderRel) {
+    const safeRel = normalizeVaultRelPath(folderRel).replace(/\/+$/, "");
+    if (!safeRel) return { ok: false, error: "folder path required" };
     const path = `/${safeRel}/.keep`;
     const ok = await dropboxWriteText(token, path, "");
     return ok ? { ok: true, message: `created folder: /${safeRel}` } : { ok: false, error: `failed to create folder: /${safeRel}` };
   }
 
-  if (wantsFile || wantsFolder) return { ok: false, error: "pattern_miss: provide path (e.g. 파일생성 a.csv ::: ...)" };
+  const wantsFile = /(?:파일|file|csv|md|txt|json|문서).*(?:생성|만들|작성|저장|create|write)|(?:create|write).*(?:file)/i.test(raw);
+  const wantsFolder = /(?:폴더|folder|디렉터리|directory).*(?:생성|만들|create)|(?:create).*(?:folder|directory)/i.test(raw);
+  if (/(csv|파일|file|문서)/i.test(raw) && /(생성|만들|작성|저장|create|write)/i.test(raw)) {
+    const ext = /\bcsv\b|csv/i.test(raw) ? "csv"
+      : (/\bmd\b|markdown/i.test(raw) ? "md"
+        : (/\bjson\b/i.test(raw) ? "json" : "txt"));
+    const stamp = ymdStampUnderscore();
+    const base = /(작업\s*로그|work\s*log)/i.test(raw) ? `work_log_${stamp}` : `note_${stamp}`;
+    const path = `/${base}.${ext}`;
+    const defaultContent = ext === "csv" ? "date,kind,title,topic_key,context,tool,status,due_at,note\n" : "";
+    const ok = await dropboxWriteText(token, path, defaultContent);
+    return ok ? { ok: true, message: `created file: ${path}` } : { ok: false, error: `failed to create file: ${path}` };
+  }
+  if (wantsFile || wantsFolder) return { ok: false, error: "path_missing: 파일명/폴더명을 한 번만 알려줘." };
   return null;
 }
 
