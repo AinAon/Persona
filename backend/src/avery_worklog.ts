@@ -6,6 +6,7 @@ const AVERY_STATE_KEY = "_memory/avery_worklog_state.json";
 const AVERY_VAULT_LOG_PATH = "/_memory/avery_worklog.log.jsonl";
 const AVERY_VAULT_STATE_PATH = "/_memory/avery_worklog_state.json";
 const AVERY_VAULT_DIRECTIVE_PATH = "/avery_directive.md";
+const AVERY_VAULT_MEMORY_MD_PATH = "/_memory/avery_memory.md";
 const AVERY_IDS = new Set(["p_avery", "avery"]);
 
 type WorkKind = "worklog" | "error" | "solution" | "todo" | "reminder";
@@ -590,6 +591,13 @@ export async function loadAveryDirective(env: Env): Promise<string> {
     "4) Prefer one short follow-up question only when needed.",
     "5) Preserve timeline consistency for daily/weekly reporting.",
   ].join("\n");
+}
+
+export async function loadAveryVaultMemoryMarkdown(env: Env): Promise<string> {
+  const token = await getPersonaDropboxAccessToken(env, "avery");
+  if (!token) return "";
+  const txt = await dropboxReadText(token, AVERY_VAULT_MEMORY_MD_PATH);
+  return String(txt || "").trim();
 }
 
 type AveryVaultActionResult = { ok: true; message: string } | { ok: false; error: string };

@@ -346,20 +346,7 @@ function connectSessionEvents() {
   };
 }
 
-function preloadMemoryMetaLight() {
-  if (typeof getMemoryMetaApi !== 'function') return;
-  const sessionId = String(activeChatId || '');
-  getMemoryMetaApi(sessionId)
-    .then((meta) => {
-      if (!meta || typeof meta !== 'object') return;
-      window.__memoryMetaCache = {
-        sessionId,
-        meta,
-        fetchedAt: Date.now()
-      };
-    })
-    .catch(() => {});
-}
+function preloadMemoryMetaLight() {}
 
 window.refreshAllCachesManual = async function() {
   await refreshAllCaches({ force: true, showLoading: true, loadingLabel: '수동 새로고침 준비 중...' });

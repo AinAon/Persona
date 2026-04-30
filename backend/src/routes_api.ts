@@ -50,6 +50,7 @@ const DELETED_SESSION_R2_PREFIX = "session/deleted/";
 const SESSION_AUDIO_R2_PREFIXES = ["tts/session/", "audio/session/"];
 const SHARED_PREFIX = "/persona_shared";
 const SESSION_CHANGE_SEQ_KEY = "session_change_seq";
+const MEMORY_API_ENABLED = false;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -884,6 +885,10 @@ export async function handleApiRoute(
       endpoint: lastEndpoint,
       detail: lastErr.slice(0, 600),
     }, { status: 502, headers: cors });
+  }
+
+  if (!MEMORY_API_ENABLED && url.pathname.startsWith("/memory/")) {
+    return Response.json({ ok: false, error: "memory_disabled" }, { status: 410, headers: cors });
   }
 
   if (url.pathname === "/memory/list" && request.method === "GET") {

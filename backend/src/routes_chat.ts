@@ -2,7 +2,6 @@ import type { CorsHeaders, Env } from "./index";
 import { generateGeminiImage, generateGeminiText, generateImagenImage, streamGeminiText } from "./model_gemini";
 import { generateOpenAIImage, generateOpenAIText, streamOpenAIText } from "./model_openai";
 import { generateGrokImage, generateGrokText, streamGrokText } from "./model_grok";
-import { buildMemorySystemPrompt } from "./memory";
 import { dropboxWriteText, getPersonaDropboxAccessToken } from "./dropbox_vault";
 import {
   appendAveryWorklogEvent,
@@ -10,6 +9,7 @@ import {
   getAveryWorklogSnapshot,
   isAveryParticipant,
   loadAveryDirective,
+  loadAveryVaultMemoryMarkdown,
   runAveryVaultActionFromText,
   shouldPersistAveryWorklogText,
 } from "./avery_worklog";
@@ -23,6 +23,7 @@ import {
   isWealthMutationText,
   isRileyParticipant,
   loadRileyDirective,
+  loadRileyVaultMemoryMarkdown,
   runRileyVaultActionFromText,
 } from "./riley_wealth";
 import {
@@ -283,7 +284,6 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     resolution,
     images = [],
     participant_pids = [],
-    persona_memory_prefs = {},
     stream = false,
   } = reqBody;
 
@@ -372,12 +372,21 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       : null;
     const rileyDirective = (!isImageReq && inRileyChat) ? await loadRileyDirective(env) : "";
     const averyDirective = (!isImageReq && inAveryChat) ? await loadAveryDirective(env) : "";
+    const rileyMemoryMd = (!isImageReq && inRileyChat) ? await loadRileyVaultMemoryMarkdown(env) : "";
+    const averyMemoryMd = (!isImageReq && inAveryChat) ? await loadAveryVaultMemoryMarkdown(env) : "";
     const memPrompt = isImageReq
       ? ""
-      : await buildMemorySystemPrompt(env, {
-          participantPids: participant_pids,
-          personaCategoryPrefs: persona_memory_prefs as any,
-        });
+      : [
+          "Memory policy:",
+          "- Public/private memory feature is disabled.",
+          "- Do not create, update, or reference generic memory store entries.",
+          ...(rileyMemoryMd
+            ? ["Riley vault memory markdown (/_memory/riley_memory.md):", rileyMemoryMd]
+            : []),
+          ...(averyMemoryMd
+            ? ["Avery vault memory markdown (/_memory/avery_memory.md):", averyMemoryMd]
+            : []),
+        ].join("\n");
     const personaPolicyPrompt = (!isImageReq && policyTargetPid)
       ? await buildPersonaPolicySystemPrompt(env, policyTargetPid)
       : "";

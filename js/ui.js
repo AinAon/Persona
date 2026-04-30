@@ -1630,9 +1630,7 @@ function renderSettingsPane() {
   const typingEl = document.getElementById('settingsTypingSpeed');
   if (typingEl) typingEl.value = getBubbleTypingSpeedPreset();
   setSettingsSegmentValue('settingsTypingSpeed', getBubbleTypingSpeedPreset(), 'settingsTypingSpeedSeg');
-  ensureSettingsMemoryPanel();
-  renderPublicMemoryList();
-  renderMemoryMeta();
+  // Public/private memory UI disabled by policy.
 }
 
 function previewFontSize(val) {
@@ -2289,8 +2287,7 @@ function renderEditBody(p, hdImage = null) {
       if (!isCustom) custom.value = '';
     };
   }
-  ensureEditPrivateMemoryPanel(p.pid);
-  renderPrivateMemoryList(p.pid);
+  // Persona memory panel is hidden; memory is managed by vault markdown files.
 }
 
 function selectEditHue(h, el) {
@@ -4730,7 +4727,6 @@ async function sendMessage() {
   const input = document.getElementById('userInput');
   const text = sanitizeUserInputValue(input.value).trim();
   if (!text && !attachments.length) return;
-  const shouldAutoMemorySave = /(기억해|기억해줘|remember this|note this|메모해|기록해)/i.test(text);
 
   const isImageReq = (_inputTab === 'image');
   const targetModel = getTargetModelForRequest(session, isImageReq);
@@ -5195,9 +5191,7 @@ async function sendMessage() {
       }];
       renderAttachmentPreviews();
     }
-    if (!currentSession._demo && (shouldAutoMemorySave || ((currentSession.history?.length || 0) % 12 === 0))) {
-      extractSessionMemories(currentSession).catch(() => {});
-    }
+    // Public/private memory extraction disabled.
     await cleanupAttachmentCaches(sentAttachments);
     
     // 완료 후 항상 락 해제 (이미지/채팅 공통)

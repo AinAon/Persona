@@ -6,6 +6,7 @@ const RILEY_STATE_KEY = "_memory/riley_state.json";
 const RILEY_VAULT_LOG_PATH = "/_memory/riley_memory.log.jsonl";
 const RILEY_VAULT_STATE_PATH = "/_memory/riley_state.json";
 const RILEY_VAULT_DIRECTIVE_PATH = "/riley_directive.md";
+const RILEY_VAULT_MEMORY_MD_PATH = "/_memory/riley_memory.md";
 const RILEY_IDS = new Set(["p_riley", "riley"]);
 
 type WealthBucket = "assets" | "liabilities" | "retirement" | "fixed_cashflow";
@@ -458,6 +459,13 @@ export async function loadRileyDirective(env: Env): Promise<string> {
     "- type: deposit | stock | etf | real_estate | loan | card_debt | pension | insurance | other",
     "- status: active | closed",
   ].join("\n");
+}
+
+export async function loadRileyVaultMemoryMarkdown(env: Env): Promise<string> {
+  const token = await getPersonaDropboxAccessToken(env, "riley");
+  if (!token) return "";
+  const txt = await dropboxReadText(token, RILEY_VAULT_MEMORY_MD_PATH);
+  return String(txt || "").trim();
 }
 
 type RileyVaultActionResult = { ok: true; message: string } | { ok: false; error: string };
