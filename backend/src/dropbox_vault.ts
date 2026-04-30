@@ -169,6 +169,26 @@ export async function dropboxDeletePath(token: string, path: string): Promise<bo
   return res.ok;
 }
 
+export async function dropboxListFolder(token: string, path: string): Promise<Array<{ path_display?: string; path_lower?: string; name?: string; ".tag"?: string }>> {
+  const res = await fetch(`${DROPBOX_API}/files/list_folder`, {
+    method: "POST",
+    headers: dbxHeaders(token),
+    body: JSON.stringify({ path, recursive: true, include_deleted: false, limit: 2000 }),
+  });
+  if (!res.ok) return [];
+  const raw = await res.json().catch(() => null) as any;
+  return Array.isArray(raw?.entries) ? raw.entries : [];
+}
+
+export async function dropboxMovePath(token: string, from_path: string, to_path: string): Promise<boolean> {
+  const res = await fetch(`${DROPBOX_API}/files/move_v2`, {
+    method: "POST",
+    headers: dbxHeaders(token),
+    body: JSON.stringify({ from_path, to_path, autorename: false, allow_shared_folder: true, allow_ownership_transfer: false }),
+  });
+  return res.ok;
+}
+
 export async function dropboxWriteBytes(token: string, path: string, bytes: ArrayBuffer | Uint8Array): Promise<boolean> {
   return await dropboxUploadBytes(token, path, bytes);
 }
