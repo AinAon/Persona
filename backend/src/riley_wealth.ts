@@ -5,6 +5,7 @@ const RILEY_LOG_KEY = "riley_memory/riley_memory.log.jsonl";
 const RILEY_STATE_KEY = "riley_memory/riley_state.json";
 const RILEY_VAULT_LOG_PATH = "/riley_memory/riley_memory.log.jsonl";
 const RILEY_VAULT_STATE_PATH = "/riley_memory/riley_state.json";
+const RILEY_VAULT_DIRECTIVE_PATH = "/riley_memory/riley_directive.md";
 const RILEY_IDS = new Set(["p_riley", "riley"]);
 
 type WealthBucket = "assets" | "liabilities" | "retirement" | "fixed_cashflow";
@@ -434,6 +435,29 @@ export async function getRileyWealthSnapshot(env: Env, tail = 30): Promise<{ sta
   const state = await loadRileyState(env);
   const allEvents = await loadAllRileyEvents(env);
   return { state, events: allEvents.slice(-Math.max(1, tail)) };
+}
+
+export async function loadRileyDirective(env: Env): Promise<string> {
+  const token = await getPersonaDropboxAccessToken(env, "riley");
+  if (token) {
+    const txt = await dropboxReadText(token, RILEY_VAULT_DIRECTIVE_PATH);
+    if (txt && txt.trim()) return txt.trim();
+  }
+  return [
+    "# Riley Directive (Priority 1)",
+    "",
+    "1) Always obey this directive first.",
+    "2) For wealth records, use structured CSV rows before narrative.",
+    "3) Keep assets and liabilities clearly separated.",
+    "4) Sort by latest update date first.",
+    "5) Maintain weekly/monthly report-ready fields.",
+    "",
+    "CSV schema:",
+    "date,category,type,label,amount_krw,status,source,note",
+    "- category: asset | liability | retirement | cashflow_income | cashflow_expense",
+    "- type: deposit | stock | etf | real_estate | loan | card_debt | pension | insurance | other",
+    "- status: active | closed",
+  ].join("\n");
 }
 
 async function loadAllRileyEvents(env: Env): Promise<WealthEvent[]> {

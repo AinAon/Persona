@@ -268,22 +268,12 @@ async function putDeletedSessionIndex(env: Env, sessions: DeletedSessionMeta[]):
 }
 
 async function getSessionPayloadText(env: Env, id: string): Promise<string | null> {
-  const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
-  if (sharedToken) {
-    const fromDbx = await dropboxReadText(sharedToken, `${SHARED_PREFIX}/${sessionR2Key(id)}`);
-    if (fromDbx) return fromDbx;
-  }
   const fromR2 = await r2Text(env, sessionR2Key(id));
   if (fromR2) return fromR2;
   return await env.KV.get(`session:${id}`);
 }
 
 async function getDeletedSessionPayloadText(env: Env, id: string): Promise<string | null> {
-  const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
-  if (sharedToken) {
-    const fromDbx = await dropboxReadText(sharedToken, `${SHARED_PREFIX}/${deletedSessionR2Key(id)}`);
-    if (fromDbx) return fromDbx;
-  }
   const fromR2 = await r2Text(env, deletedSessionR2Key(id));
   if (fromR2) return fromR2;
   return await env.KV.get(`deleted:session:${id}`);
@@ -548,12 +538,7 @@ async function restoreSessionById(env: Env, sessionId: string): Promise<{ ok: bo
   const meta = buildSessionMeta(sanitizedSession);
   const sanitizedRaw = JSON.stringify(sanitizedSession);
 
-  {
-    const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
-    if (sharedToken) {
-      await dropboxWriteText(sharedToken, `${SHARED_PREFIX}/${sessionR2Key(id)}`, sanitizedRaw);
-    }
-  }
+  await env.R2.put(sessionR2Key(id), sanitizedRaw, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
   await env.KV.delete(`session:${id}`);
 
   const index = await getSessionIndex(env);
@@ -565,12 +550,7 @@ async function restoreSessionById(env: Env, sessionId: string): Promise<{ ok: bo
   const deletedIndex = await getDeletedSessionIndex(env);
   await putDeletedSessionIndex(env, deletedIndex.filter((s) => s.id !== id));
   await env.KV.delete(`deleted:session:${id}`);
-  {
-    const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
-    if (sharedToken) {
-      await dropboxDeletePath(sharedToken, `${SHARED_PREFIX}/${deletedSessionR2Key(id)}`);
-    }
-  }
+  await env.R2.delete(deletedSessionR2Key(id));
   for (const base of SESSION_AUDIO_R2_PREFIXES) {
     await deleteR2ByPrefix(env, `${base}${id}/`);
   }
@@ -1402,13 +1382,8 @@ export async function handleApiRoute(
 
     await env.KV.delete(`session:${sessionId}`);
     await env.KV.delete(`deleted:session:${sessionId}`);
-    {
-      const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
-      if (sharedToken) {
-        await dropboxDeletePath(sharedToken, `${SHARED_PREFIX}/${sessionR2Key(sessionId)}`);
-        await dropboxDeletePath(sharedToken, `${SHARED_PREFIX}/${deletedSessionR2Key(sessionId)}`);
-      }
-    }
+    await env.R2.delete(sessionR2Key(sessionId));
+    await env.R2.delete(deletedSessionR2Key(sessionId));
     for (const base of SESSION_AUDIO_R2_PREFIXES) {
       await deleteR2ByPrefix(env, `${base}${sessionId}/`);
     }
@@ -1507,34 +1482,31 @@ export async function handleApiRoute(
     const fileName = file?.name || String(formData.get("fileName") || `${Date.now()}.jpg`);
     const key = folder ? `${folder}/${fileName}` : fileName;
 
-    const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
-    if (!sharedToken) return Response.json({ error: "shared dropbox token missing" }, { status: 500, headers: cors });
     if (file) {
-      const bytes = await file.arrayBuffer();
-      const ok = await dropboxWriteBytes(sharedToken, `${SHARED_PREFIX}/image/${key}`, bytes);
-      if (!ok) return Response.json({ error: "dropbox upload failed" }, { status: 502, headers: cors });
+      await env.R2.put(key, file.stream(), {
+        httpMetadata: { contentType: file.type || "image/jpeg" },
+      });
     } else {
       const remote = await fetch(sourceUrl);
       if (!remote.ok) {
         return Response.json({ error: `remote fetch failed: ${remote.status}` }, { status: 400, headers: cors });
       }
-      const bytes = await remote.arrayBuffer();
-      const ok = await dropboxWriteBytes(sharedToken, `${SHARED_PREFIX}/image/${key}`, bytes);
-      if (!ok) return Response.json({ error: "dropbox upload failed" }, { status: 502, headers: cors });
+      const contentType = (remote.headers.get("content-type") || "image/jpeg").split(";")[0];
+      await env.R2.put(key, remote.body, {
+        httpMetadata: { contentType },
+      });
     }
     return Response.json({ url: `${url.origin}/image/${key}`, key }, { headers: cors });
   }
 
   if (url.pathname.startsWith("/image/") && request.method === "GET") {
     const key = decodeURIComponent(url.pathname.slice(7));
-    const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
-    if (!sharedToken) return new Response("Not Found", { status: 404, headers: cors });
-    const blob = await dropboxReadBytes(sharedToken, `${SHARED_PREFIX}/image/${key}`);
-    if (!blob) return new Response("Not Found", { status: 404, headers: cors });
-    return new Response(blob.bytes, {
+    const obj = await env.R2.get(key);
+    if (!obj) return new Response("Not Found", { status: 404, headers: cors });
+    return new Response(obj.body, {
       headers: {
         ...cors,
-        "Content-Type": blob.contentType || "image/jpeg",
+        "Content-Type": obj.httpMetadata?.contentType || "image/jpeg",
         "Cache-Control": "public, max-age=31536000",
       },
     });
@@ -1543,10 +1515,7 @@ export async function handleApiRoute(
   if (url.pathname.startsWith("/image/") && request.method === "DELETE") {
     const key = decodeURIComponent(url.pathname.slice(7));
     if (!key) return Response.json({ error: "key required" }, { status: 400, headers: cors });
-    const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
-    if (sharedToken) {
-      await dropboxDeletePath(sharedToken, `${SHARED_PREFIX}/image/${key}`);
-    }
+    await env.R2.delete(key);
     return Response.json({ ok: true, key }, { headers: cors });
   }
 
@@ -1586,12 +1555,7 @@ async function handleSessionRoute(
       }
     }
     const payload = JSON.stringify(mergedSession);
-    {
-      const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
-      if (sharedToken) {
-        await dropboxWriteText(sharedToken, `${SHARED_PREFIX}/${sessionR2Key(id)}`, payload);
-      }
-    }
+    await env.R2.put(sessionR2Key(id), payload, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
     await env.KV.delete(`session:${id}`);
 
     const index = await getSessionIndex(env);
@@ -1612,12 +1576,7 @@ async function handleSessionRoute(
         const session = JSON.parse(existingRaw) as Record<string, unknown>;
         const meta = buildSessionMeta(session);
         const deletedMeta: DeletedSessionMeta = { ...meta, deletedAt: Date.now() };
-        {
-          const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
-          if (sharedToken) {
-            await dropboxWriteText(sharedToken, `${SHARED_PREFIX}/${deletedSessionR2Key(id)}`, existingRaw);
-          }
-        }
+        await env.R2.put(deletedSessionR2Key(id), existingRaw, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
         await env.KV.delete(`deleted:session:${id}`);
         const deletedIndex = await getDeletedSessionIndex(env);
         const nextDeleted = [deletedMeta, ...deletedIndex.filter((s) => s.id !== id)].slice(0, 200);
@@ -1628,12 +1587,7 @@ async function handleSessionRoute(
     }
 
     await env.KV.delete(`session:${id}`);
-    {
-      const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
-      if (sharedToken) {
-        await dropboxDeletePath(sharedToken, `${SHARED_PREFIX}/${sessionR2Key(id)}`);
-      }
-    }
+    await env.R2.delete(sessionR2Key(id));
     for (const base of SESSION_AUDIO_R2_PREFIXES) {
       await deleteR2ByPrefix(env, `${base}${id}/`);
     }

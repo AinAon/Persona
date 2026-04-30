@@ -5,6 +5,7 @@ const AVERY_LOG_KEY = "avery_memory/avery_worklog.log.jsonl";
 const AVERY_STATE_KEY = "avery_memory/avery_worklog_state.json";
 const AVERY_VAULT_LOG_PATH = "/avery_memory/avery_worklog.log.jsonl";
 const AVERY_VAULT_STATE_PATH = "/avery_memory/avery_worklog_state.json";
+const AVERY_VAULT_DIRECTIVE_PATH = "/avery_memory/avery_directive.md";
 const AVERY_IDS = new Set(["p_avery", "avery"]);
 
 type WorkKind = "worklog" | "error" | "solution" | "todo" | "reminder";
@@ -572,6 +573,23 @@ export async function getAveryWorklogSnapshot(env: Env, tail = 30): Promise<{ st
   const state = await loadAveryState(env);
   const allEvents = await loadAllAveryEvents(env);
   return { state, events: allEvents.slice(-Math.max(1, tail)) };
+}
+
+export async function loadAveryDirective(env: Env): Promise<string> {
+  const token = await getPersonaDropboxAccessToken(env, "avery");
+  if (token) {
+    const txt = await dropboxReadText(token, AVERY_VAULT_DIRECTIVE_PATH);
+    if (txt && txt.trim()) return txt.trim();
+  }
+  return [
+    "# Avery Directive (Priority 1)",
+    "",
+    "1) Always obey this directive first.",
+    "2) Keep worklog entries structured and concise.",
+    "3) Track status lifecycle: active -> done -> removed.",
+    "4) Prefer one short follow-up question only when needed.",
+    "5) Preserve timeline consistency for daily/weekly reporting.",
+  ].join("\n");
 }
 
 export async function reconcileAveryWorklog(env: Env): Promise<{

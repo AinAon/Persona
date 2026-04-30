@@ -8,6 +8,7 @@ import {
   buildAverySystemPrompt,
   getAveryWorklogSnapshot,
   isAveryParticipant,
+  loadAveryDirective,
   shouldPersistAveryWorklogText,
 } from "./avery_worklog";
 import {
@@ -19,6 +20,7 @@ import {
   isWealthIntentText,
   isWealthMutationText,
   isRileyParticipant,
+  loadRileyDirective,
 } from "./riley_wealth";
 import {
   applyPendingPolicyIfApproved,
@@ -147,6 +149,8 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     const averySnapshot = (!isImageReq && inAveryChat)
       ? await getAveryWorklogSnapshot(env, 20)
       : null;
+    const rileyDirective = (!isImageReq && inRileyChat) ? await loadRileyDirective(env) : "";
+    const averyDirective = (!isImageReq && inAveryChat) ? await loadAveryDirective(env) : "";
     const memPrompt = isImageReq
       ? ""
       : await buildMemorySystemPrompt(env, {
@@ -162,6 +166,8 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     const effectiveMessages = (!isImageReq && memPrompt)
       ? [
           { role: "system", content: ANTI_HALLUCINATION_GUARD },
+          ...(rileyDirective ? [{ role: "system", content: `Priority 1 Directive (Riley):\n${rileyDirective}` }] : []),
+          ...(averyDirective ? [{ role: "system", content: `Priority 1 Directive (Avery):\n${averyDirective}` }] : []),
           { role: "system", content: RESPONSE_VARIANCE_PROMPT },
           ...(inRileyChat ? [{ role: "system", content: RILEY_NUMERIC_PRIORITY_GUARD }] : []),
           ...(inAveryChat ? [{ role: "system", content: AVERY_WORKLOG_GUARD }] : []),
@@ -178,6 +184,8 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
           ? [
               ...(inRileyChat ? [{ role: "system", content: RILEY_NUMERIC_PRIORITY_GUARD }] : []),
               ...(inAveryChat ? [{ role: "system", content: AVERY_WORKLOG_GUARD }] : []),
+              ...(rileyDirective ? [{ role: "system", content: `Priority 1 Directive (Riley):\n${rileyDirective}` }] : []),
+              ...(averyDirective ? [{ role: "system", content: `Priority 1 Directive (Avery):\n${averyDirective}` }] : []),
               ...(rileySnapshot ? [{ role: "system", content: buildRileySystemPrompt(rileySnapshot.state) }] : []),
               ...(averySnapshot ? [{ role: "system", content: buildAverySystemPrompt(averySnapshot.state) }] : []),
               ...(personaPolicyPrompt ? [{ role: "system", content: personaPolicyPrompt }] : []),
