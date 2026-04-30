@@ -85,6 +85,8 @@ const AVERY_WORKLOG_GUARD = [
 
 const VAULT_AUTONOMY_GUARD = [
   "Vault autonomy policy (proposal-first):",
+  "- If user request has explicit file/folder target, execute immediately via vault action.",
+  "- If target path/name is ambiguous, ask one concise follow-up question first.",
   "- If you think new folder/file structure will improve workflow, propose first; do not execute immediately.",
   "- Use this exact block when proposing:",
   "[VAULT_PROPOSAL]",
@@ -92,6 +94,7 @@ const VAULT_AUTONOMY_GUARD = [
   "[/VAULT_PROPOSAL]",
   "- Never claim execution before explicit user approval.",
   "- Execute only after user approval words like: 승인, 진행해, 적용해, 해줘, approve, go ahead.",
+  "- Do not claim false platform limits (e.g., 'cannot access file system') when vault action is available.",
   "- When you propose, ask for approval in natural persona voice (do not use fixed template wording).",
 ].join("\n");
 
