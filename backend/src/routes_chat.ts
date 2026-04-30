@@ -106,6 +106,26 @@ function isApprovalText(text: string): boolean {
   return /(승인|진행해|진행시켜|적용해|해줘|오케이|approve|go ahead|do it|proceed)/i.test(t);
 }
 
+function detectVaultCreateIntent(text: string): boolean {
+  const t = String(text || "");
+  return /(?:파일|file|폴더|folder|디렉터리|directory|csv|md|txt|json).*(?:생성|만들|작성|저장|create|write)|(?:create|write).*(?:file|folder|directory)/i.test(t);
+}
+
+function hasExplicitVaultTarget(text: string): boolean {
+  const t = String(text || "");
+  if (/([a-zA-Z0-9_./-]+\.(?:csv|md|txt|json))\b/i.test(t)) return true;
+  if (/(?:파일생성|파일 만들어|create file)\s+([^\n:]{1,140})/i.test(t)) return true;
+  if (/(?:폴더생성|폴더 만들어|create folder)\s+([^\n]{1,140})/i.test(t)) return true;
+  if (/["'`]([a-zA-Z0-9_./-]+)["'`]\s*(?:파일|file|폴더|folder)/i.test(t)) return true;
+  return false;
+}
+
+function routeVaultRequestMode(text: string): "command" | "dialog" | "none" {
+  if (!detectVaultCreateIntent(text)) return "none";
+  if (hasExplicitVaultTarget(text)) return "command";
+  return "dialog";
+}
+
 function parseVaultProposalFromReply(reply: string): VaultProposal | null {
   const m = String(reply || "").match(/\[VAULT_PROPOSAL\]([\s\S]*?)\[\/VAULT_PROPOSAL\]/i);
   if (!m) return null;
@@ -180,7 +200,7 @@ function stripVaultProposalBlock(reply: string): string {
 
 type TextApiKeys = { gemini: string; grok: string; openai: string; anthropic: string };
 
-async function renderVaultResultMessage(raw: string, model: string, apiKeys: TextApiKeys): Promise<string> {
+async function renderVaultResultMessage(raw: string, model: string, apiKeys: TextApiKeys, contextText = ""): Promise<string> {
   const msg = String(raw || "").trim();
   if (!msg) return "";
   const system = [
@@ -191,9 +211,11 @@ async function renderVaultResultMessage(raw: string, model: string, apiKeys: Tex
     "- Be concise and polite.",
     "- 1 to 3 short sentences.",
     "- No markdown list/code block.",
+    "- Reflect the conversation tone lightly and naturally.",
   ].join("\n");
   const messages = [
     { role: "system", content: system },
+    ...(String(contextText || "").trim() ? [{ role: "user", content: `latest_user_context:\n${String(contextText || "").trim()}` }] : []),
     { role: "user", content: `operation_result:\n${msg}` },
   ];
 
@@ -279,6 +301,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
   const shouldWriteRileyEvent = inRileyChat && (isWealthMutationText(latestUserText) || isWealthIntentText(latestUserText));
   const shouldWriteAveryEvent = inAveryChat && shouldPersistAveryWorklogText(latestUserText);
   const policyTargetPid = resolvePolicyTargetPid(participant_pids || []);
+  const vaultRouteMode = !isImageReq && (inRileyChat || inAveryChat) ? routeVaultRequestMode(latestUserText) : "none";
 
   try {
     const proposalPersona: "riley" | "avery" | null = inRileyChat ? "riley" : (inAveryChat ? "avery" : null);
@@ -287,27 +310,45 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       if (pending) {
         const exec = await executeVaultProposal(env, pending);
         if (exec.ok) await clearPendingVaultProposal(env, proposalPersona);
-        const natural = await renderVaultResultMessage(exec.message, model, apiKeys);
+        const natural = await renderVaultResultMessage(exec.message, model, apiKeys, latestUserText);
         return Response.json({ result: exec.ok ? "success" : "error", reply: natural }, { status: exec.ok ? 200 : 400, headers: cors });
       }
     }
 
-    if (!isImageReq && inRileyChat) {
+    if (!isImageReq && inRileyChat && vaultRouteMode === "command") {
       const vaultAction = await runRileyVaultActionFromText(env, latestUserText);
       if (vaultAction) {
-        if (!vaultAction.ok) return Response.json({ result: "error", error: vaultAction.error }, { status: 400, headers: cors });
-        const natural = await renderVaultResultMessage(vaultAction.message, model, apiKeys);
-        return Response.json({ result: "success", reply: natural }, { headers: cors });
+        if (!vaultAction.ok) {
+          if (/^path_missing:/i.test(String(vaultAction.error || ""))) {
+            // Ambiguous create request should stay conversational instead of hard failing.
+          } else {
+            return Response.json({ result: "error", error: vaultAction.error }, { status: 400, headers: cors });
+          }
+        } else {
+          const natural = await renderVaultResultMessage(vaultAction.message, model, apiKeys, latestUserText);
+          return Response.json({ result: "success", reply: natural }, { headers: cors });
+        }
       }
     }
-    if (!isImageReq && inAveryChat) {
+    if (!isImageReq && inAveryChat && vaultRouteMode === "command") {
       const vaultAction = await runAveryVaultActionFromText(env, latestUserText);
       if (vaultAction) {
-        if (!vaultAction.ok) return Response.json({ result: "error", error: vaultAction.error }, { status: 400, headers: cors });
-        const natural = await renderVaultResultMessage(vaultAction.message, model, apiKeys);
-        return Response.json({ result: "success", reply: natural }, { headers: cors });
+        if (!vaultAction.ok) {
+          if (/^path_missing:/i.test(String(vaultAction.error || ""))) {
+            // Ambiguous create request should stay conversational instead of hard failing.
+          } else {
+            return Response.json({ result: "error", error: vaultAction.error }, { status: 400, headers: cors });
+          }
+        } else {
+          const natural = await renderVaultResultMessage(vaultAction.message, model, apiKeys, latestUserText);
+          return Response.json({ result: "success", reply: natural }, { headers: cors });
+        }
       }
     }
+
+    const vaultRoutingPrompt = (!isImageReq && (inRileyChat || inAveryChat) && vaultRouteMode === "dialog")
+      ? "User intent suggests creating a file/folder but target path/name is ambiguous. Do not execute now. Ask one concise follow-up question in persona voice to confirm filename/path or offer 2-3 concrete options."
+      : "";
 
     let rileyWriteResult: { ok: boolean; error?: string; eventId?: string } | null = null;
     let promotionApplyMessage = "";
@@ -356,6 +397,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
           ...(averySnapshot ? [{ role: "system", content: buildAverySystemPrompt(averySnapshot.state) }] : []),
           ...(personaPolicyPrompt ? [{ role: "system", content: personaPolicyPrompt }] : []),
           ...(promotionPrompt ? [{ role: "system", content: promotionPrompt }] : []),
+          ...(vaultRoutingPrompt ? [{ role: "system", content: vaultRoutingPrompt }] : []),
           { role: "system", content: memPrompt },
           ...(policyApplyMessage ? [{ role: "system", content: `Policy apply status: ${policyApplyMessage}` }] : []),
           ...(promotionApplyMessage ? [{ role: "system", content: `Promotion apply status: ${promotionApplyMessage}` }] : []),
@@ -372,6 +414,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
               ...(averySnapshot ? [{ role: "system", content: buildAverySystemPrompt(averySnapshot.state) }] : []),
               ...(personaPolicyPrompt ? [{ role: "system", content: personaPolicyPrompt }] : []),
               ...(promotionPrompt ? [{ role: "system", content: promotionPrompt }] : []),
+              ...(vaultRoutingPrompt ? [{ role: "system", content: vaultRoutingPrompt }] : []),
               ...(policyApplyMessage ? [{ role: "system", content: `Policy apply status: ${policyApplyMessage}` }] : []),
               ...(promotionApplyMessage ? [{ role: "system", content: `Promotion apply status: ${promotionApplyMessage}` }] : []),
               ...messages,
