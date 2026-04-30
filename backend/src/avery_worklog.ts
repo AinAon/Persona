@@ -600,18 +600,24 @@ export async function runAveryVaultActionFromText(env: Env, text: string): Promi
   const token = await getPersonaDropboxAccessToken(env, "avery");
   if (!token) return { ok: false, error: "avery dropbox token missing" };
 
-  const fileMatch = raw.match(/(?:파일생성|파일 만들어|create file)\s+([^\n:]+)(?:::{1,3}([\s\S]*))?/i);
+  const wantsFile = /(?:파일|file|csv|md|txt).*(?:생성|만들|create)|(?:create).*(?:file)|\.(?:csv|md|txt|json)\b/i.test(raw);
+  const wantsFolder = /(?:폴더|folder|디렉터리|directory).*(?:생성|만들|create)|(?:create).*(?:folder|directory)/i.test(raw);
+
+  const fileMatch = raw.match(/(?:파일생성|파일 만들어|create file)\s+([^\n:]+)(?:::{1,3}([\s\S]*))?/i)
+    || raw.match(/([a-zA-Z0-9_./-]+\.(?:csv|md|txt|json))\s*(?:파일)?\s*(?:생성|만들어|만들어줘|create)/i);
   if (fileMatch) {
     const rel = String(fileMatch[1] || "").trim().replace(/^\/+/, "");
     const content = String(fileMatch[2] || "").replace(/^\s+|\s+$/g, "");
     if (!rel) return { ok: false, error: "file path required" };
     const safeRel = rel.replace(/^\/+/, "");
     const path = `/${safeRel}`;
-    const ok = await dropboxWriteText(token, path, content);
+    const defaultContent = rel.toLowerCase().endsWith(".csv") ? "date,kind,title,topic_key,context,tool,status,due_at,note\n" : "";
+    const ok = await dropboxWriteText(token, path, content || defaultContent);
     return ok ? { ok: true, message: `created file: ${path}` } : { ok: false, error: `failed to create file: ${path}` };
   }
 
-  const dirMatch = raw.match(/(?:폴더생성|폴더 만들어|create folder)\s+([^\n]+)$/i);
+  const dirMatch = raw.match(/(?:폴더생성|폴더 만들어|create folder)\s+([^\n]+)$/i)
+    || raw.match(/([a-zA-Z0-9_./-]+)\s*(?:폴더|folder)\s*(?:생성|만들어|만들어줘|create)/i);
   if (dirMatch) {
     const rel = String(dirMatch[1] || "").trim().replace(/^\/+/, "").replace(/\/+$/, "");
     if (!rel) return { ok: false, error: "folder path required" };
@@ -621,6 +627,7 @@ export async function runAveryVaultActionFromText(env: Env, text: string): Promi
     return ok ? { ok: true, message: `created folder: /${safeRel}` } : { ok: false, error: `failed to create folder: /${safeRel}` };
   }
 
+  if (wantsFile || wantsFolder) return { ok: false, error: "pattern_miss: provide path (e.g. 파일생성 a.csv ::: ...)" };
   return null;
 }
 
