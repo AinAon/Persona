@@ -183,15 +183,15 @@ function expandVaultResultMessage(raw: string): string {
   const created = msg.match(/^created file:\s*(\/\S+)/i);
   if (created) {
     const path = created[1];
-    return `${msg}\n요청한 파일을 실제로 생성했어. 저장 경로는 \`${path}\`야. 필요하면 바로 내용까지 채워 넣을게.`;
+    return `${msg}\n요청하신 파일을 실제로 생성했습니다. 저장 경로는 \`${path}\`입니다. 원하시면 이어서 내용까지 채워드리겠습니다.`;
   }
   const applied = msg.match(/^applied proposal:\s*(\d+)\s*action/i);
   if (applied) {
     const n = applied[1];
-    return `${msg}\n승인한 개선안을 적용했어. 총 ${n}개 항목을 반영했어. 원하면 적용된 파일/폴더 목록도 바로 보여줄게.`;
+    return `${msg}\n승인하신 개선안을 적용했습니다. 총 ${n}개 항목을 반영했습니다. 원하시면 적용된 파일/폴더 목록을 바로 보여드리겠습니다.`;
   }
   if (/^created folder:/i.test(msg)) {
-    return `${msg}\n요청한 폴더를 실제로 만들었어. 이어서 하위 파일 구조까지 바로 정리해줄 수 있어.`;
+    return `${msg}\n요청하신 폴더를 실제로 생성했습니다. 필요하시면 하위 파일 구조도 바로 정리해드리겠습니다.`;
   }
   return msg;
 }
