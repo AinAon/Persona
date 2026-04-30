@@ -89,24 +89,26 @@ export function getPersonaDropboxToken(env: Env, persona: Persona): string {
 }
 
 export async function getPersonaDropboxAccessToken(env: Env, persona: Persona): Promise<string> {
-  const direct = getPersonaDropboxToken(env, persona);
-  if (direct) return direct;
   const cfg = getDropboxAppConfig(env, persona);
-  if (!cfg.key || !cfg.secret || !cfg.refreshToken) return "";
-  const res = await fetch("https://api.dropboxapi.com/oauth2/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "refresh_token",
-      refresh_token: cfg.refreshToken,
-      client_id: cfg.key,
-      client_secret: cfg.secret,
-    }),
-  });
-  if (!res.ok) return "";
-  const raw = await res.json().catch(() => null) as any;
-  const token = String(raw?.access_token || "").trim();
-  return token;
+  if (cfg.key && cfg.secret && cfg.refreshToken) {
+    const res = await fetch("https://api.dropboxapi.com/oauth2/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: cfg.refreshToken,
+        client_id: cfg.key,
+        client_secret: cfg.secret,
+      }),
+    });
+    if (res.ok) {
+      const raw = await res.json().catch(() => null) as any;
+      const token = String(raw?.access_token || "").trim();
+      if (token) return token;
+    }
+  }
+  const direct = getPersonaDropboxToken(env, persona);
+  return direct || "";
 }
 
 export async function dropboxReadText(token: string, path: string): Promise<string | null> {
@@ -191,6 +193,31 @@ export async function dropboxMovePath(token: string, from_path: string, to_path:
 
 export async function dropboxWriteBytes(token: string, path: string, bytes: ArrayBuffer | Uint8Array): Promise<boolean> {
   return await dropboxUploadBytes(token, path, bytes);
+}
+
+export async function dropboxWriteBytesWithDetail(
+  token: string,
+  path: string,
+  bytes: ArrayBuffer | Uint8Array,
+): Promise<{ ok: boolean; status: number; detail: string }> {
+  await ensureFolder(token, dirname(path));
+  const res = await fetch(`${DROPBOX_CONTENT}/files/upload`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/octet-stream",
+      "Dropbox-API-Arg": JSON.stringify({
+        path,
+        mode: "overwrite",
+        autorename: false,
+        mute: true,
+        strict_conflict: false,
+      }),
+    },
+    body: bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes),
+  });
+  const detail = await res.text().catch(() => "");
+  return { ok: res.ok, status: res.status, detail };
 }
 
 export async function dropboxPathExists(token: string, path: string): Promise<boolean> {

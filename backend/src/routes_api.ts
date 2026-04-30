@@ -16,7 +16,7 @@ import { getAveryWorklogSnapshot, reconcileAveryWorklog } from "./avery_worklog"
 import { getRileyWealthSnapshot, reconcileRileyWealth } from "./riley_wealth";
 import { getPersonaPolicy } from "./persona_policy";
 import { getPromotionCandidates } from "./persona_promotion";
-import { dropboxDeletePath, dropboxReadBytes, dropboxReadText, dropboxWriteBytes, dropboxWriteText, dropboxWriteTextWithDetail, getPersonaDropboxAccessToken } from "./dropbox_vault";
+import { dropboxDeletePath, dropboxListFolder, dropboxReadBytes, dropboxReadText, dropboxWriteBytes, dropboxWriteBytesWithDetail, dropboxWriteText, dropboxWriteTextWithDetail, getPersonaDropboxAccessToken } from "./dropbox_vault";
 
 type SessionMeta = {
   id: string;
@@ -1302,6 +1302,56 @@ export async function handleApiRoute(
       String(body.cursor || "") || undefined,
     );
     return Response.json({ ok: true, prefix, ...result }, { headers: noStoreHeaders });
+  }
+
+  if (url.pathname === "/migrate/shared/copy-key" && request.method === "POST") {
+    const body = await request.json().catch(() => ({} as any)) as { key?: string };
+    const key = String(body.key || "").trim().replace(/^\/+/, "");
+    if (!key) return Response.json({ ok: false, error: "key required" }, { status: 400, headers: noStoreHeaders });
+    if (key.startsWith("session/deleted/") || key === "session/deleted_index.json") {
+      return Response.json({ ok: true, skipped: true, reason: "excluded_deleted", key }, { headers: noStoreHeaders });
+    }
+    const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
+    if (!sharedToken) {
+      return Response.json({ ok: false, error: "shared dropbox token missing" }, { status: 500, headers: noStoreHeaders });
+    }
+    const obj = await env.R2.get(key);
+    if (!obj || typeof obj.arrayBuffer !== "function") {
+      return Response.json({ ok: false, error: "r2 object not found", key }, { status: 404, headers: noStoreHeaders });
+    }
+    const bytes = await obj.arrayBuffer();
+    const wr = await dropboxWriteBytesWithDetail(sharedToken, `/${key}`, bytes);
+    return Response.json({ ok: wr.ok, key, target: `/${key}`, status: wr.status, detail: wr.detail }, { headers: noStoreHeaders });
+  }
+
+  if (url.pathname === "/migrate/shared/prune-unused" && request.method === "POST") {
+    const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
+    if (!sharedToken) {
+      return Response.json({ ok: false, error: "shared dropbox token missing" }, { status: 500, headers: noStoreHeaders });
+    }
+    const prefixes = ["/riley_memory", "/avery_memory", "/persona_policy", "/persona_promotion"];
+    let deleted = 0;
+    const failed: string[] = [];
+    for (const prefix of prefixes) {
+      const entries = await dropboxListFolder(sharedToken, prefix);
+      for (const e of entries) {
+        const p = String(e.path_display || e.path_lower || "").trim();
+        if (!p) continue;
+        const ok = await dropboxDeletePath(sharedToken, p);
+        if (ok) deleted++;
+        else failed.push(p);
+      }
+      // try delete root folder too
+      const okRoot = await dropboxDeletePath(sharedToken, prefix);
+      if (okRoot) deleted++;
+    }
+    return Response.json({
+      ok: failed.length === 0,
+      deleted,
+      failedCount: failed.length,
+      failed: failed.slice(0, 30),
+      prunedPrefixes: prefixes,
+    }, { headers: noStoreHeaders });
   }
 
   if (url.pathname === "/riley/wealth/reconcile" && request.method === "POST") {
