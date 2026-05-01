@@ -134,6 +134,7 @@
 .emotion-section .emotion-batch-btn{border-color:var(--group-border, var(--border2));color:var(--group-accent, var(--accent))}
 .emotion-section .emotion-batch-btn:hover{background:var(--group-accent, var(--accent));color:#fff}
 .emotion-section.group-free{--group-bg:rgba(59,130,246,.12);--group-border:rgba(96,165,250,.42);--group-accent:#3b82f6;--group-accent-2:#60a5fa}
+.emotion-section.group-neutral{--group-bg:rgba(255,255,255,.02);--group-border:rgba(255,255,255,.22);--group-accent:#e5e7eb;--group-accent-2:#ffffff}
 .emotion-section.group-premium-positive{--group-bg:rgba(34,197,94,.12);--group-border:rgba(74,222,128,.42);--group-accent:#22c55e;--group-accent-2:#4ade80}
 .emotion-section.group-premium-relax{--group-bg:rgba(14,165,233,.12);--group-border:rgba(56,189,248,.42);--group-accent:#0ea5e9;--group-accent-2:#38bdf8}
 .emotion-section.group-premium-negative{--group-bg:rgba(244,63,94,.12);--group-border:rgba(251,113,133,.42);--group-accent:#f43f5e;--group-accent-2:#fb7185}
@@ -319,6 +320,7 @@ const EMOTION_COMMON_PROMPT = (globalThis.EMOTION_COMMON_PROMPT_KO && typeof glo
 const DEFAULT_IMAGE_MODEL = 'gemini-3.1-flash-image-preview';
 const EMOTION_GROUP_ORDER = ['free', 'premium_positive', 'premium_relax', 'premium_negative', 'premium_timid', 'adult'];
 const EMOTION_GROUP_CLASS = {
+  neutral: 'group-neutral',
   free: 'group-free',
   premium_positive: 'group-premium-positive',
   premium_relax: 'group-premium-relax',
@@ -328,7 +330,7 @@ const EMOTION_GROUP_CLASS = {
 };
 function getEmotionGroup(id = '') {
   const key = String(id || '').toLowerCase();
-  if (key === 'neutral') return 'free';
+  if (key === 'neutral') return 'neutral';
   for (const group of EMOTION_GROUP_ORDER) {
     if ((EMOTION_PLAN[group] || []).includes(key)) return group;
   }
@@ -345,6 +347,8 @@ function getOrderedEmotionItems(items = []) {
   return [...(Array.isArray(items) ? items : [])].sort((a, b) => {
     const aId = String(a?.id || '').toLowerCase();
     const bId = String(b?.id || '').toLowerCase();
+    if (aId === 'neutral' && bId !== 'neutral') return -1;
+    if (bId === 'neutral' && aId !== 'neutral') return 1;
     const aGroup = getEmotionGroup(aId);
     const bGroup = getEmotionGroup(bId);
     const gr = (groupRank.get(aGroup) ?? 999) - (groupRank.get(bGroup) ?? 999);
