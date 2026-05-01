@@ -1,14 +1,46 @@
 import type { Env } from "./index";
 import { buildPersonaVaultPath, dropboxPathExists, dropboxReadText, dropboxWriteText, getPersonaDropboxAccessToken } from "./dropbox_vault";
+import {
+  loadPersonaDirective,
+  loadPersonaMemoryMarkdown,
+  runPersonaVaultActionFromText,
+  type PersonaRuntimeConfig,
+  type PersonaVaultActionResult,
+} from "./persona_runtime";
 
 const RILEY_LOG_KEY = "_memory/riley_memory.log.jsonl";
 const RILEY_STATE_KEY = "_memory/riley_state.json";
 const RILEY_PID = "p_riley";
 const RILEY_VAULT_LOG_PATH = buildPersonaVaultPath(RILEY_PID, "_memory/riley_memory.log.jsonl");
 const RILEY_VAULT_STATE_PATH = buildPersonaVaultPath(RILEY_PID, "_memory/riley_state.json");
-const RILEY_VAULT_DIRECTIVE_PATH = buildPersonaVaultPath(RILEY_PID, "p_riley_directive.md");
-const RILEY_VAULT_MEMORY_MD_PATH = buildPersonaVaultPath(RILEY_PID, "_memory/riley_memory.md");
 const RILEY_IDS = new Set(["p_riley", "riley"]);
+const RILEY_RUNTIME_CONFIG: PersonaRuntimeConfig = {
+  pid: RILEY_PID,
+  tokenPersona: "riley",
+  role: "wealth_manager",
+  directiveFile: "p_riley_directive.md",
+  memoryMarkdownFile: "riley_memory.md",
+  defaultDirectiveLines: [
+    "# Riley Directive (Priority 1)",
+    "",
+    "1) Always obey this directive first.",
+    "Role: wealth_manager",
+    "2) For wealth records, use structured CSV rows before narrative.",
+    "3) Keep assets and liabilities clearly separated.",
+    "4) Sort by latest update date first.",
+    "5) Maintain weekly/monthly report-ready fields.",
+    "",
+    "CSV schema:",
+    "date,category,type,label,amount_krw,status,source,note",
+    "- category: asset | liability | retirement | cashflow_income | cashflow_expense",
+    "- type: deposit | stock | etf | real_estate | loan | card_debt | pension | insurance | other",
+    "- status: active | closed",
+  ],
+  defaultCsvHeader: "date,category,type,label,amount_krw,status,source,note",
+  namingHints: {
+    ledgerBase: "master_wealth_ledger",
+  },
+};
 
 type WealthBucket = "assets" | "liabilities" | "retirement" | "fixed_cashflow";
 type WealthAction = "add" | "update" | "remove";
@@ -440,142 +472,15 @@ export async function getRileyWealthSnapshot(env: Env, tail = 30): Promise<{ sta
 }
 
 export async function loadRileyDirective(env: Env): Promise<string> {
-  const token = await getPersonaDropboxAccessToken(env, "riley");
-  if (token) {
-    const txt = await dropboxReadText(token, RILEY_VAULT_DIRECTIVE_PATH);
-    if (txt && txt.trim()) return txt.trim();
-  }
-  return [
-    "# Riley Directive (Priority 1)",
-    "",
-    "1) Always obey this directive first.",
-    "2) For wealth records, use structured CSV rows before narrative.",
-    "3) Keep assets and liabilities clearly separated.",
-    "4) Sort by latest update date first.",
-    "5) Maintain weekly/monthly report-ready fields.",
-    "",
-    "CSV schema:",
-    "date,category,type,label,amount_krw,status,source,note",
-    "- category: asset | liability | retirement | cashflow_income | cashflow_expense",
-    "- type: deposit | stock | etf | real_estate | loan | card_debt | pension | insurance | other",
-    "- status: active | closed",
-  ].join("\n");
+  return await loadPersonaDirective(env, RILEY_RUNTIME_CONFIG);
 }
 
 export async function loadRileyVaultMemoryMarkdown(env: Env): Promise<string> {
-  const token = await getPersonaDropboxAccessToken(env, "riley");
-  if (!token) return "";
-  const txt = await dropboxReadText(token, RILEY_VAULT_MEMORY_MD_PATH);
-  return String(txt || "").trim();
+  return await loadPersonaMemoryMarkdown(env, RILEY_RUNTIME_CONFIG);
 }
 
-type RileyVaultActionResult = { ok: true; message: string } | { ok: false; error: string };
-
-function ymdStampUnderscore(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}_${m}_${day}`;
-}
-
-function normalizeVaultRelPath(input: string): string {
-  return String(input || "")
-    .trim()
-    .replace(/^\/+/, "")
-    .replace(/\\/g, "/")
-    .replace(/\/{2,}/g, "/");
-}
-
-function inferRileyFilePath(raw: string): string | null {
-  const explicit =
-    raw.match(/(?:파일생성|파일 만들어|create file)\s+([^\n:]+)(?:::{1,3}([\s\S]*))?/i)?.[1]
-    || raw.match(/["'`]([a-zA-Z0-9_./-]+\.(?:csv|md|txt|json))["'`]/i)?.[1]
-    || raw.match(/([a-zA-Z0-9_./-]+\.(?:csv|md|txt|json))/i)?.[1];
-  if (explicit) return normalizeVaultRelPath(explicit);
-
-  const wantsFile = /(?:파일|file|csv|md|txt|json).*(?:생성|만들|작성|저장|create|write)|(?:create|write).*(?:file)|\.(?:csv|md|txt|json)\b/i.test(raw);
-  if (!wantsFile) return null;
-
-  const ext = /\bcsv\b|csv/i.test(raw) ? "csv"
-    : (/\bmd\b|markdown/i.test(raw) ? "md"
-      : (/\bjson\b/i.test(raw) ? "json" : "txt"));
-  const stamp = ymdStampUnderscore();
-  const base = /(작업\s*로그|work\s*log)/i.test(raw) ? `work_log_${stamp}`
-    : (/(자산|wealth|ledger)/i.test(raw) ? "master_wealth_ledger"
-      : (/(리포트|report)/i.test(raw) ? `report_${stamp}` : `note_${stamp}`));
-  return `${base}.${ext}`;
-}
-
-function inferRileyFolderPath(raw: string): string | null {
-  const explicit =
-    raw.match(/(?:폴더생성|폴더 만들어|create folder)\s+([^\n]+)$/i)?.[1]
-    || raw.match(/["'`]([a-zA-Z0-9_./-]+)["'`]\s*(?:폴더|folder)/i)?.[1]
-    || raw.match(/([a-zA-Z0-9_./-]+)\s*(?:폴더|folder)\s*(?:생성|만들어|만들어줘|create)/i)?.[1];
-  if (explicit) return normalizeVaultRelPath(explicit).replace(/\/+$/, "");
-
-  const wantsFolder = /(?:폴더|folder|디렉터리|directory).*(?:생성|만들|create)|(?:create).*(?:folder|directory)/i.test(raw);
-  if (!wantsFolder) return null;
-  return `folder_${ymdStampUnderscore()}`;
-}
-
-function extractInlineContent(raw: string): string {
-  const marked = raw.match(/:{3}([\s\S]*)$/);
-  if (marked) return String(marked[1] || "").trim();
-  const lines = raw.split(/\r?\n/);
-  if (lines.length >= 2) return lines.slice(1).join("\n").trim();
-  return "";
-}
-
-function encodeForFilePath(path: string, content: string): string {
-  const out = String(content || "");
-  if (!/\.csv$/i.test(path)) return out;
-  return out.startsWith("\uFEFF") ? out : `\uFEFF${out}`;
-}
-
-export async function runRileyVaultActionFromText(env: Env, text: string): Promise<RileyVaultActionResult | null> {
-  const raw = String(text || "").trim();
-  if (!raw) return null;
-  const token = await getPersonaDropboxAccessToken(env, "riley");
-  if (!token) return { ok: false, error: "riley dropbox token missing" };
-
-  const fileRel = inferRileyFilePath(raw);
-  if (fileRel) {
-    const safeRel = normalizeVaultRelPath(fileRel);
-    const content = extractInlineContent(raw);
-    const path = buildPersonaVaultPath(RILEY_PID, safeRel);
-    const defaultContent = safeRel.toLowerCase().endsWith(".csv") ? "date,category,type,label,amount_krw,status,source,note\n" : "";
-    const payload = encodeForFilePath(path, content || defaultContent);
-    const ok = await dropboxWriteText(token, path, payload);
-    return ok ? { ok: true, message: `created file: ${path}` } : { ok: false, error: `failed to create file: ${path}` };
-  }
-
-  const folderRel = inferRileyFolderPath(raw);
-  if (folderRel) {
-    const safeRel = normalizeVaultRelPath(folderRel).replace(/\/+$/, "");
-    if (!safeRel) return { ok: false, error: "folder path required" };
-    const path = buildPersonaVaultPath(RILEY_PID, `${safeRel}/.keep`);
-    const ok = await dropboxWriteText(token, path, "");
-    return ok ? { ok: true, message: `created folder: /${safeRel}` } : { ok: false, error: `failed to create folder: /${safeRel}` };
-  }
-
-  const wantsFile = /(?:파일|file|csv|md|txt|json|문서).*(?:생성|만들|작성|저장|create|write)|(?:create|write).*(?:file)/i.test(raw);
-  const wantsFolder = /(?:폴더|folder|디렉터리|directory).*(?:생성|만들|create)|(?:create).*(?:folder|directory)/i.test(raw);
-  if (/(csv|파일|file|문서)/i.test(raw) && /(생성|만들|작성|저장|create|write)/i.test(raw)) {
-    const ext = /\bcsv\b|csv/i.test(raw) ? "csv"
-      : (/\bmd\b|markdown/i.test(raw) ? "md"
-        : (/\bjson\b/i.test(raw) ? "json" : "txt"));
-    const stamp = ymdStampUnderscore();
-    const base = /(작업\s*로그|work\s*log)/i.test(raw) ? `work_log_${stamp}`
-      : (/(자산|wealth|ledger)/i.test(raw) ? "master_wealth_ledger" : `note_${stamp}`);
-    const path = buildPersonaVaultPath(RILEY_PID, `${base}.${ext}`);
-    const defaultContent = ext === "csv" ? "date,category,type,label,amount_krw,status,source,note\n" : "";
-    const payload = encodeForFilePath(path, defaultContent);
-    const ok = await dropboxWriteText(token, path, payload);
-    return ok ? { ok: true, message: `created file: ${path}` } : { ok: false, error: `failed to create file: ${path}` };
-  }
-  if (wantsFile || wantsFolder) return { ok: false, error: "path_missing: 파일명/폴더명을 한 번만 알려줘." };
-  return null;
+export async function runRileyVaultActionFromText(env: Env, text: string): Promise<PersonaVaultActionResult | null> {
+  return await runPersonaVaultActionFromText(env, RILEY_RUNTIME_CONFIG, text);
 }
 
 async function loadAllRileyEvents(env: Env): Promise<WealthEvent[]> {

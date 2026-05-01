@@ -68,11 +68,15 @@ function extractPid(item: unknown): string {
 }
 
 function buildDefaultDirectiveText(pid: string): string {
+  const role = pid === "p_riley"
+    ? "wealth_manager"
+    : (pid === "p_avery" ? "worklog_manager" : "general_assistant");
   const title = pid.replace(/^p_/, "");
   return [
     `# ${title} Directive (Priority 1)`,
     "",
     "1) Always obey this directive first.",
+    `Role: ${role}`,
   ].join("\n");
 }
 
@@ -1321,6 +1325,7 @@ export async function handleApiRoute(
       "# Riley Directive (Priority 1)",
       "",
       "1) Always obey this directive first.",
+      "Role: wealth_manager",
       "2) For wealth records, use structured CSV rows before narrative.",
       "3) Keep assets and liabilities clearly separated.",
       "4) Sort by latest update date first.",
@@ -1336,6 +1341,7 @@ export async function handleApiRoute(
       "# Avery Directive (Priority 1)",
       "",
       "1) Always obey this directive first.",
+      "Role: worklog_manager",
       "2) Keep worklog entries structured and concise.",
       "3) Track lifecycle clearly: active -> done -> removed.",
       "4) Ask at most one short follow-up question only when needed.",

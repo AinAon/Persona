@@ -156,6 +156,13 @@ function routeVaultRequestMode(text: string): "command" | "dialog" | "none" {
   return "dialog";
 }
 
+function extractFixedRoleFromDirective(directiveText: string, fallbackRole: string): string {
+  const txt = String(directiveText || "");
+  const m = txt.match(/^(?:role|역할)\s*:\s*([a-zA-Z0-9_-]{2,80})\s*$/im);
+  if (m && m[1]) return String(m[1]).trim().toLowerCase();
+  return fallbackRole;
+}
+
 function parseVaultProposalFromReply(reply: string): VaultProposal | null {
   const m = String(reply || "").match(/\[VAULT_PROPOSAL\]([\s\S]*?)\[\/VAULT_PROPOSAL\]/i);
   if (!m) return null;
@@ -376,9 +383,6 @@ type ChatBody = {
   userId?: string;
   session_id?: string;
   sessionId?: string;
-  persona_role?: string;
-  personaRole?: string;
-  role?: string;
   stream?: boolean;
 };
 
@@ -397,9 +401,6 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     userId,
     session_id,
     sessionId,
-    persona_role,
-    personaRole: personaRoleRaw,
-    role,
     stream = false,
   } = reqBody;
 
@@ -420,7 +421,6 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
   const shouldWriteAveryEvent = inAveryChat && shouldPersistAveryWorklogText(latestUserText);
   const policyTargetPid = resolvePolicyTargetPid(participant_pids || []);
   const profilePersonaPid = resolvePrimaryPersonaPid(participant_pids || []);
-  const personaRole = String(persona_role || personaRoleRaw || role || "").trim().toLowerCase();
   const vaultRouteMode = !isImageReq && (inRileyChat || inAveryChat) ? routeVaultRequestMode(latestUserText) : "none";
 
   try {
@@ -497,6 +497,11 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       : null;
     const rileyDirective = (!isImageReq && inRileyChat) ? await loadRileyDirective(env) : "";
     const averyDirective = (!isImageReq && inAveryChat) ? await loadAveryDirective(env) : "";
+    const fixedRole = profilePersonaPid === "p_riley"
+      ? extractFixedRoleFromDirective(rileyDirective, "wealth_manager")
+      : (profilePersonaPid === "p_avery"
+        ? extractFixedRoleFromDirective(averyDirective, "worklog_manager")
+        : "general_assistant");
     let attitudeAUpdateStatus = "";
     if (!isImageReq && profilePersonaPid) {
       const res = await processAttitudeACandidateUpdate(env, profilePersonaPid, userIdNorm, latestUserText);
@@ -530,7 +535,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       }
     }
     const profileSections = personaProfile
-      ? buildPersonaContextSections(personaProfile, sessionAttitude?.attitudeB || null, personaRole)
+      ? buildPersonaContextSections(personaProfile, sessionAttitude?.attitudeB || null, fixedRole)
       : null;
     const memPrompt = isImageReq
       ? ""

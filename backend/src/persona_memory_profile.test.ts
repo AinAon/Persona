@@ -3,6 +3,7 @@ import {
   buildPersonaProfilePrompt,
   inferAttitudeBFromUserText,
   mergeAttitudeB,
+  normalizePersonaPid,
   normalizeSessionId,
   normalizeUserId,
 } from "./persona_memory_profile";
@@ -12,6 +13,7 @@ describe("persona_memory_profile", () => {
     expect(normalizeUserId(" User-01 ")).toBe("user-01");
     expect(normalizeUserId("")).toBe("user_default");
     expect(normalizeSessionId(" Sess:ABC 123 ")).toBe("sess_abc_123");
+    expect(normalizePersonaPid("riley")).toBe("p_riley");
   });
 
   it("creates temporary attitude B from urgent/frustrated text", () => {
