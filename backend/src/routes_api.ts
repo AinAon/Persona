@@ -50,7 +50,7 @@ const DELETED_SESSION_R2_PREFIX = "session/deleted/";
 const SESSION_AUDIO_R2_PREFIXES = ["tts/session/", "audio/session/"];
 const SHARED_PREFIX = "/persona_shared";
 const SESSION_CHANGE_SEQ_KEY = "session_change_seq";
-const MEMORY_API_ENABLED = false;
+const LEGACY_MEMORY_API_ENABLED = false;
 
 function normalizePid(raw: unknown): string {
   const s = String(raw || "").trim().toLowerCase();
@@ -929,8 +929,12 @@ export async function handleApiRoute(
     }, { status: 502, headers: cors });
   }
 
-  if (!MEMORY_API_ENABLED && url.pathname.startsWith("/memory/")) {
-    return Response.json({ ok: false, error: "memory_disabled" }, { status: 410, headers: cors });
+  if (!LEGACY_MEMORY_API_ENABLED && url.pathname.startsWith("/memory/")) {
+    return Response.json({
+      ok: false,
+      error: "legacy_memory_disabled",
+      message: "Legacy /memory routes are disabled. Use persona profile memory via /chat (user_id + session_id).",
+    }, { status: 410, headers: cors });
   }
 
   if (url.pathname === "/memory/list" && request.method === "GET") {

@@ -37,6 +37,18 @@ import {
   buildPromotionSystemPrompt,
   saveCandidateFromReply,
 } from "./persona_promotion";
+import {
+  inferAttitudeBFromUserText,
+  loadPersonaUserProfile,
+  loadSessionAttitudeState,
+  mergeAttitudeB,
+  normalizeSessionId,
+  normalizeUserId,
+  processAttitudeACandidateUpdate,
+  resolvePrimaryPersonaPid,
+  saveSessionAttitudeState,
+} from "./persona_memory_profile";
+import { buildPersonaContext, buildPersonaContextSections } from "./persona_context";
 
 const IMAGE_MODELS = ["gemini-3.1-flash-image-preview", "grok-imagine-image-pro", "gpt-image-2"];
 const RATIO_TO_SIZE: Record<string, string> = {
@@ -360,6 +372,13 @@ type ChatBody = {
   images?: string[];
   participant_pids?: string[];
   persona_memory_prefs?: Record<string, { focus?: string[]; avoid?: string[]; redirectTo?: string }>;
+  user_id?: string;
+  userId?: string;
+  session_id?: string;
+  sessionId?: string;
+  persona_role?: string;
+  personaRole?: string;
+  role?: string;
   stream?: boolean;
 };
 
@@ -374,6 +393,13 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     resolution,
     images = [],
     participant_pids = [],
+    user_id,
+    userId,
+    session_id,
+    sessionId,
+    persona_role,
+    personaRole: personaRoleRaw,
+    role,
     stream = false,
   } = reqBody;
 
@@ -385,12 +411,16 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
   };
 
   const isImageReq = IMAGE_MODELS.includes(model) || !!prompt;
+  const userIdNorm = normalizeUserId(user_id || userId || "");
+  const sessionIdNorm = normalizeSessionId(session_id || sessionId || "");
   const inRileyChat = isRileyParticipant(participant_pids || []);
   const inAveryChat = isAveryParticipant(participant_pids || []);
   const latestUserText = extractLatestUserText(messages);
   const shouldWriteRileyEvent = inRileyChat && (isWealthMutationText(latestUserText) || isWealthIntentText(latestUserText));
   const shouldWriteAveryEvent = inAveryChat && shouldPersistAveryWorklogText(latestUserText);
   const policyTargetPid = resolvePolicyTargetPid(participant_pids || []);
+  const profilePersonaPid = resolvePrimaryPersonaPid(participant_pids || []);
+  const personaRole = String(persona_role || personaRoleRaw || role || "").trim().toLowerCase();
   const vaultRouteMode = !isImageReq && (inRileyChat || inAveryChat) ? routeVaultRequestMode(latestUserText) : "none";
 
   try {
@@ -467,8 +497,41 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       : null;
     const rileyDirective = (!isImageReq && inRileyChat) ? await loadRileyDirective(env) : "";
     const averyDirective = (!isImageReq && inAveryChat) ? await loadAveryDirective(env) : "";
+    let attitudeAUpdateStatus = "";
+    if (!isImageReq && profilePersonaPid) {
+      const res = await processAttitudeACandidateUpdate(env, profilePersonaPid, userIdNorm, latestUserText);
+      if (res.observed) {
+        attitudeAUpdateStatus = res.applied
+          ? `Attitude A updated (${res.reason}).`
+          : `Attitude A candidate observed (${res.reason}).`;
+      }
+    }
     const rileyMemoryMd = (!isImageReq && inRileyChat) ? await loadRileyVaultMemoryMarkdown(env) : "";
     const averyMemoryMd = (!isImageReq && inAveryChat) ? await loadAveryVaultMemoryMarkdown(env) : "";
+    const personaProfile = (!isImageReq && profilePersonaPid)
+      ? await loadPersonaUserProfile(env, profilePersonaPid, userIdNorm)
+      : null;
+    let sessionAttitude = (!isImageReq && profilePersonaPid && sessionIdNorm)
+      ? await loadSessionAttitudeState(env, profilePersonaPid, userIdNorm, sessionIdNorm)
+      : null;
+    if (!isImageReq && profilePersonaPid && sessionIdNorm) {
+      const inferred = inferAttitudeBFromUserText(latestUserText);
+      if (inferred) {
+        const merged = mergeAttitudeB(sessionAttitude?.attitudeB || null, inferred);
+        sessionAttitude = {
+          version: 1,
+          userId: userIdNorm,
+          personaPid: profilePersonaPid,
+          sessionId: sessionIdNorm,
+          attitudeB: merged,
+          updatedAt: new Date().toISOString(),
+        };
+        await saveSessionAttitudeState(env, sessionAttitude);
+      }
+    }
+    const profileSections = personaProfile
+      ? buildPersonaContextSections(personaProfile, sessionAttitude?.attitudeB || null, personaRole)
+      : null;
     const memPrompt = isImageReq
       ? ""
       : [
@@ -488,42 +551,31 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     const promotionPrompt = (!isImageReq && policyTargetPid)
       ? buildPromotionSystemPrompt(policyTargetPid)
       : "";
-    const effectiveMessages = (!isImageReq && memPrompt)
-      ? [
-          { role: "system", content: ANTI_HALLUCINATION_GUARD },
-          ...(rileyDirective ? [{ role: "system", content: `Priority 1 Directive (Riley):\n${rileyDirective}` }] : []),
-          ...(averyDirective ? [{ role: "system", content: `Priority 1 Directive (Avery):\n${averyDirective}` }] : []),
-          { role: "system", content: RESPONSE_VARIANCE_PROMPT },
-          ...(inRileyChat ? [{ role: "system", content: RILEY_NUMERIC_PRIORITY_GUARD }] : []),
-          ...(inAveryChat ? [{ role: "system", content: AVERY_WORKLOG_GUARD }] : []),
-          ...((inRileyChat || inAveryChat) ? [{ role: "system", content: VAULT_AUTONOMY_GUARD }] : []),
-          ...(rileySnapshot ? [{ role: "system", content: buildRileySystemPrompt(rileySnapshot.state) }] : []),
-          ...(averySnapshot ? [{ role: "system", content: buildAverySystemPrompt(averySnapshot.state) }] : []),
-          ...(personaPolicyPrompt ? [{ role: "system", content: personaPolicyPrompt }] : []),
-          ...(promotionPrompt ? [{ role: "system", content: promotionPrompt }] : []),
-          ...(vaultRoutingPrompt ? [{ role: "system", content: vaultRoutingPrompt }] : []),
-          { role: "system", content: memPrompt },
-          ...(policyApplyMessage ? [{ role: "system", content: `Policy apply status: ${policyApplyMessage}` }] : []),
-          ...(promotionApplyMessage ? [{ role: "system", content: `Promotion apply status: ${promotionApplyMessage}` }] : []),
-          ...messages
-        ]
-      : ((!isImageReq && (rileySnapshot || averySnapshot))
-          ? [
-              ...(inRileyChat ? [{ role: "system", content: RILEY_NUMERIC_PRIORITY_GUARD }] : []),
-              ...(inAveryChat ? [{ role: "system", content: AVERY_WORKLOG_GUARD }] : []),
-              ...((inRileyChat || inAveryChat) ? [{ role: "system", content: VAULT_AUTONOMY_GUARD }] : []),
-              ...(rileyDirective ? [{ role: "system", content: `Priority 1 Directive (Riley):\n${rileyDirective}` }] : []),
-              ...(averyDirective ? [{ role: "system", content: `Priority 1 Directive (Avery):\n${averyDirective}` }] : []),
-              ...(rileySnapshot ? [{ role: "system", content: buildRileySystemPrompt(rileySnapshot.state) }] : []),
-              ...(averySnapshot ? [{ role: "system", content: buildAverySystemPrompt(averySnapshot.state) }] : []),
-              ...(personaPolicyPrompt ? [{ role: "system", content: personaPolicyPrompt }] : []),
-              ...(promotionPrompt ? [{ role: "system", content: promotionPrompt }] : []),
-              ...(vaultRoutingPrompt ? [{ role: "system", content: vaultRoutingPrompt }] : []),
-              ...(policyApplyMessage ? [{ role: "system", content: `Policy apply status: ${policyApplyMessage}` }] : []),
-              ...(promotionApplyMessage ? [{ role: "system", content: `Promotion apply status: ${promotionApplyMessage}` }] : []),
-              ...messages,
-            ]
-          : messages);
+    const effectiveMessages = !isImageReq
+      ? buildPersonaContext(messages, {
+          globalRules: [ANTI_HALLUCINATION_GUARD],
+          personaBaseRules: [
+            ...(rileyDirective ? [`Priority 1 Directive (Riley):\n${rileyDirective}`] : []),
+            ...(averyDirective ? [`Priority 1 Directive (Avery):\n${averyDirective}`] : []),
+            ...(inRileyChat ? [RILEY_NUMERIC_PRIORITY_GUARD] : []),
+            ...(inAveryChat ? [AVERY_WORKLOG_GUARD] : []),
+            ...((inRileyChat || inAveryChat) ? [VAULT_AUTONOMY_GUARD] : []),
+          ],
+          sections: profileSections,
+          extraSystemBlocks: [
+            RESPONSE_VARIANCE_PROMPT,
+            ...(rileySnapshot ? [buildRileySystemPrompt(rileySnapshot.state)] : []),
+            ...(averySnapshot ? [buildAverySystemPrompt(averySnapshot.state)] : []),
+            ...(personaPolicyPrompt ? [personaPolicyPrompt] : []),
+            ...(promotionPrompt ? [promotionPrompt] : []),
+            ...(vaultRoutingPrompt ? [vaultRoutingPrompt] : []),
+            ...(memPrompt ? [memPrompt] : []),
+            ...(policyApplyMessage ? [`Policy apply status: ${policyApplyMessage}`] : []),
+            ...(promotionApplyMessage ? [`Promotion apply status: ${promotionApplyMessage}`] : []),
+            ...(attitudeAUpdateStatus ? [attitudeAUpdateStatus] : []),
+          ],
+        })
+      : messages;
     const preparedMessages = isImageReq
       ? effectiveMessages
       : await inlineImageUrlsInMessages(effectiveMessages);
