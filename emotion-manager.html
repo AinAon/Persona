@@ -439,11 +439,13 @@ function buildConsistencyLockBlock() {
   ];
 }
 function mergeEmotionList(stored = [], promptList = []) {
+  const removedIds = new Set(['exstasy', 'hunger']);
   const byId = new Map();
   for (const p of promptList) byId.set(p.id, { ...p });
   for (const raw of (Array.isArray(stored) ? stored : [])) {
     const id = String(raw?.id || '').trim().toLowerCase();
     if (!/^[a-z][a-z0-9_]*$/.test(id)) continue;
+    if (removedIds.has(id)) continue;
     const prev = byId.get(id) || { id, label: emotionLabelFromId(id), category: 'basic' };
     byId.set(id, {
       ...prev,
@@ -455,7 +457,16 @@ function mergeEmotionList(stored = [], promptList = []) {
   return [...byId.values()];
 }
 const PROMPT_EMOTIONS = buildPromptEmotionList();
-const STORED_EMOTIONS = JSON.parse(localStorage.getItem('em_emotions') || 'null');
+const STORED_EMOTIONS_RAW = JSON.parse(localStorage.getItem('em_emotions') || 'null');
+const STORED_EMOTIONS = Array.isArray(STORED_EMOTIONS_RAW)
+  ? STORED_EMOTIONS_RAW.filter((e) => {
+      const id = String(e?.id || '').trim().toLowerCase();
+      return id !== 'exstasy' && id !== 'hunger';
+    })
+  : STORED_EMOTIONS_RAW;
+if (Array.isArray(STORED_EMOTIONS_RAW) && STORED_EMOTIONS.length !== STORED_EMOTIONS_RAW.length) {
+  localStorage.setItem('em_emotions', JSON.stringify(STORED_EMOTIONS));
+}
 
 const state = {
   personas: JSON.parse(localStorage.getItem('em_personas') || '[]'),
