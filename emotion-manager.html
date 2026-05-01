@@ -1343,6 +1343,7 @@ function buildEmotionPrompt(pid, eid, slot, extraLines = []){
     '[Layout]',
     "Output의 얼굴 위치는 '이미지1'의 얼굴 위치(가운데상단)를 최대한 유지한다.",
     'Do not zoom in or out significantly. Maintain 2:3 portrait framing.',
+    'No text of any kind: no captions, subtitles, labels, logos, watermarks, speech bubbles, or UI overlays.',
     '',
     '[Variation]',
     `This is slot ${String(slot || '').toUpperCase()}. Make this variant visually distinct from other slots of the same emotion.`,
