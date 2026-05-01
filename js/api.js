@@ -2,18 +2,18 @@
 //  INDEXED DB (로컬 이미지 캐싱)
 // ══════════════════════════════
 const IMAGE_CACHE_SIZES = {
-  HD: 1000,
-  MD: 400,
+  HD: 1400,
+  MD: 640,
   LD: 200,
-  THUMB: 100,
+  THUMB: 160,
   AVATAR_W: 240,
   AVATAR_H: 360,
 };
 
 // Keep rectangular chat/profile thumbs fixed at the cropped chat size.
-const PROFILE_RECT_WIDTH_STEPS = [200, 300, 400, 600];
-const PROFILE_CIRCLE_STEPS = [160, 200, 240, 300];
-const PROFILE_FULL_WIDTH_STEPS = [1000];
+const PROFILE_RECT_WIDTH_STEPS = [240, 360, 480, 720, 960];
+const PROFILE_CIRCLE_STEPS = [160, 200, 240, 320, 400];
+const PROFILE_FULL_WIDTH_STEPS = [1200, 1600];
 
 // ══════════════════════════════
 //  IMAGE FETCH & CACHE
@@ -756,16 +756,16 @@ async function rebuildAllEmotionCachesWithProgress(onProgress) {
     const label = `${t.pid} ${t.emotion}${t.letter ? `_${t.letter}` : ''}`;
     if (t.emotion === 'neutral' && t.letter === 'a') {
       await getNeutralABaseImageHD(t.pid).catch(() => null);
-      await getNeutralImageThumb(t.pid, 80).catch(() => null);
+      await getNeutralImageThumb(t.pid, 128).catch(() => null);
       tick(label);
       continue;
     }
     if (t.letter) {
-      await getEmotionImageSuffixed(t.pid, t.emotion, t.letter, 400).catch(() => null);
-      await getEmotionCircleThumb(t.pid, t.emotion, t.letter, 100).catch(() => null);
+      await getEmotionImageSuffixed(t.pid, t.emotion, t.letter, 720).catch(() => null);
+      await getEmotionCircleThumb(t.pid, t.emotion, t.letter, 160).catch(() => null);
     } else {
-      await getEmotionImage(t.pid, t.emotion, 400).catch(() => null);
-      await getEmotionCircleThumb(t.pid, t.emotion, '', 100).catch(() => null);
+      await getEmotionImage(t.pid, t.emotion, 720).catch(() => null);
+      await getEmotionCircleThumb(t.pid, t.emotion, '', 160).catch(() => null);
     }
     tick(label);
   }
