@@ -96,18 +96,17 @@ const AVERY_WORKLOG_GUARD = [
 ].join(" ");
 
 const VAULT_AUTONOMY_GUARD = [
-  "Vault autonomy policy (proposal-first):",
-  "- If user request has explicit file/folder target, execute immediately via vault action.",
+  "Vault autonomy policy (execute-first):",
+  "- If user request is clear enough, execute immediately via vault action.",
   "- If target path/name is ambiguous, ask one concise follow-up question first.",
-  "- If you think new folder/file structure will improve workflow, propose first; do not execute immediately.",
+  "- You may use proposal block only for optional structure ideas or low-confidence plans.",
   "- Use this exact block when proposing:",
   "[VAULT_PROPOSAL]",
   "{\"persona\":\"riley|avery\",\"actions\":[{\"type\":\"create_folder\",\"path\":\"...\"},{\"type\":\"create_file\",\"path\":\"...\",\"content\":\"...\"}]}",
   "[/VAULT_PROPOSAL]",
-  "- Never claim execution before explicit user approval.",
-  "- Execute only after user approval words like: 승인, 진행해, 적용해, 해줘, approve, go ahead.",
+  "- Proposal approval is optional. If action is safe and clear, auto-apply.",
   "- Do not claim false platform limits (e.g., 'cannot access file system') when vault action is available.",
-  "- When you propose, ask for approval in natural persona voice (do not use fixed template wording).",
+  "- When you propose, keep it short and practical.",
 ].join("\n");
 
 const SESSION_INDEX_R2_KEY = "session/index.json";
@@ -682,14 +681,21 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
               await savePendingPolicyPatchFromReply(env, policyTargetPid, reply);
               await saveCandidateFromReply(env, policyTargetPid, reply);
             }
+            let proposalExecuted = false;
             if (proposalPersona) {
               const proposal = parseVaultProposalFromReply(reply);
               if (proposal && proposal.persona === proposalPersona) {
-                await savePendingVaultProposal(env, proposal);
+                const exec = await executeVaultProposal(env, proposal);
+                await writeVaultEvidence(env, proposalPersona, "proposal_apply", exec.ok, exec.message, latestUserText);
+                const natural = await renderVaultResultMessage(exec.message, model, apiKeys, latestUserText);
                 reply = stripVaultProposalBlock(reply).trim();
+                if (natural) {
+                  reply = [reply, natural].filter(Boolean).join("\n\n");
+                }
+                proposalExecuted = exec.ok;
               }
             }
-            reply = guardPersonaReply(reply, false, !!proposalPersona);
+            reply = guardPersonaReply(reply, proposalExecuted, !!proposalPersona);
             send({ type: "done", reply });
           } catch (err: any) {
             send({ type: "error", error: err?.message || "stream error" });
@@ -743,14 +749,21 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       await savePendingPolicyPatchFromReply(env, policyTargetPid, reply);
       await saveCandidateFromReply(env, policyTargetPid, reply);
     }
+    let proposalExecuted = false;
     if (proposalPersona) {
       const proposal = parseVaultProposalFromReply(reply);
       if (proposal && proposal.persona === proposalPersona) {
-        await savePendingVaultProposal(env, proposal);
+        const exec = await executeVaultProposal(env, proposal);
+        await writeVaultEvidence(env, proposalPersona, "proposal_apply", exec.ok, exec.message, latestUserText);
+        const natural = await renderVaultResultMessage(exec.message, model, apiKeys, latestUserText);
         reply = stripVaultProposalBlock(reply).trim();
+        if (natural) {
+          reply = [reply, natural].filter(Boolean).join("\n\n");
+        }
+        proposalExecuted = exec.ok;
       }
     }
-    reply = guardPersonaReply(reply, false, !!proposalPersona);
+    reply = guardPersonaReply(reply, proposalExecuted, !!proposalPersona);
 
     if (imageUrlOut) {
       return Response.json({ result: "success", reply, image_url: imageUrlOut, riley_write: rileyWriteResult }, { headers: cors });

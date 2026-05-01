@@ -3453,6 +3453,7 @@ async function openChat(id) {
 
   show('chatScreen');
   switchInputTab('chat');
+  setChatBusy(hasActiveGeneration(id));
 
   // 첫 번째 페르소나의 현재 유효 모델을 UI에 동기화 (기본/채팅방 오버라이드 반영)
   const modelEl = document.getElementById('chatModeSelect');
@@ -3712,7 +3713,7 @@ async function appendAIReplySequentially(reply, pList, suffixes, createdAt, tgtA
   const segments = parseResponse(reply, pList, allowedEmotionMap);
   const delays = segments.length > 1 ? 240 : 0;
   for (let i = 0; i < segments.length; i++) {
-    if (_chatGeneration?.cancelled || activeChatId !== renderSessionId) return;
+    if (isSessionGenerationCancelled(renderSessionId) || activeChatId !== renderSessionId) return;
     const seg = segments[i];
     const segText = seg?.content?.trim?.() ? seg.content : '';
     if (!segText) continue;
@@ -3720,7 +3721,7 @@ async function appendAIReplySequentially(reply, pList, suffixes, createdAt, tgtA
     if (!p) continue;
     const segReply = `[${p.pid}][emotion:${seg.emotion || 'neutral'}]${segText}[/${p.pid}]`;
     const html = await renderAIResponseHTML(segReply, [p], suffixes, createdAt, (pList || []).length <= 1);
-    if (_chatGeneration?.cancelled || activeChatId !== renderSessionId) return;
+    if (isSessionGenerationCancelled(renderSessionId) || activeChatId !== renderSessionId) return;
     const replyEl = document.createElement('div');
     replyEl.innerHTML = html;
     if (replyEl.firstElementChild) {
@@ -3857,7 +3858,38 @@ function setMode(m) {
 //  입력 탭 (채팅 / 이미지 / 컨텍스트)
 // ===============
 let _inputTab = 'chat'; // 현재 입력 탭
-let _chatGeneration = null;
+const _chatGenerations = new Map();
+
+function getChatGeneration(sessionId) {
+  const key = String(sessionId || '').trim();
+  if (!key) return null;
+  return _chatGenerations.get(key) || null;
+}
+
+function hasActiveGeneration(sessionId) {
+  const gen = getChatGeneration(sessionId);
+  return !!(gen && !gen.cancelled);
+}
+
+function isSessionGenerationCancelled(sessionId) {
+  const gen = getChatGeneration(sessionId);
+  return !gen || !!gen.cancelled;
+}
+
+function setChatGeneration(sessionId, generation) {
+  const key = String(sessionId || '').trim();
+  if (!key || !generation) return;
+  _chatGenerations.set(key, generation);
+}
+
+function clearChatGeneration(sessionId, expectedGeneration = null) {
+  const key = String(sessionId || '').trim();
+  if (!key) return;
+  const current = _chatGenerations.get(key);
+  if (!current) return;
+  if (expectedGeneration && current !== expectedGeneration) return;
+  _chatGenerations.delete(key);
+}
 let _lastImageModelValue = '';
 let _popupZoomed = false;
 let _popupPanning = false;
@@ -4273,7 +4305,7 @@ async function createLiveStreamBubble(tgtArea, persona, createdAt, renderSession
 
 function updateLiveStreamBubbleText(state, text, tgtArea) {
   if (!state?.bubbleEl || !tgtArea) return;
-  if (_chatGeneration?.cancelled || activeChatId !== state.renderSessionId) return;
+  if (isSessionGenerationCancelled(state.renderSessionId) || activeChatId !== state.renderSessionId) return;
   const pidRe = new RegExp(`\\[\\/?${state.pid}\\]`, 'g');
   const clean = String(text || '')
     .replace(pidRe, '')
@@ -4289,7 +4321,7 @@ function updateLiveStreamBubbleText(state, text, tgtArea) {
 
 async function finalizeLiveStreamBubble(state, reply, pList, suffixes, createdAt, tgtArea, renderSessionId) {
   if (!state?.root || !tgtArea) return false;
-  if (_chatGeneration?.cancelled || activeChatId !== renderSessionId) return false;
+  if (isSessionGenerationCancelled(renderSessionId) || activeChatId !== renderSessionId) return false;
   const html = await renderAIResponseHTML(reply, pList, suffixes, createdAt, (pList || []).length <= 1);
   const wrap = document.createElement('div');
   wrap.innerHTML = html;
@@ -4375,15 +4407,18 @@ function setChatBusy(isBusy) {
 }
 
 function stopGeneration() {
-  if (!_chatGeneration) return;
-  _chatGeneration.cancelled = true;
-  try { _chatGeneration.controller?.abort(); } catch {}
-  _chatGeneration = null;
+  const sid = String(activeChatId || '').trim();
+  if (!sid) return;
+  const gen = getChatGeneration(sid);
+  if (!gen) return;
+  gen.cancelled = true;
+  try { gen.controller?.abort(); } catch {}
+  clearChatGeneration(sid, gen);
   const area = document.getElementById('chatArea');
   const thinkEl = area?.querySelector?.('.thinking-bubble');
   if (thinkEl) thinkEl.remove();
-  isLoading = false;
-  setChatBusy(false);
+  isLoading = hasActiveGeneration(activeChatId);
+  setChatBusy(hasActiveGeneration(activeChatId));
   showToast('응답을 중지했어요.');
 }
 
@@ -4776,7 +4811,7 @@ function renderUserBubbleHTMLV3(text, atts) {
 }
 
 async function sendMessage() {
-  if (isLoading) return;
+  if (hasActiveGeneration(activeChatId)) return;
   const session = getActiveSession(); if (!session) return;
   if (session._loaded !== true && typeof loadSession === 'function') {
     try { await loadSession(session.id); } catch(e) {}
@@ -4803,9 +4838,10 @@ async function sendMessage() {
   }
   const sentAttachments = attachments.slice();
 
-  isLoading = true;
-  _chatGeneration = { controller: new AbortController(), cancelled: false, sessionId: renderSessionId };
-  setChatBusy(true);
+  const generationRef = { controller: new AbortController(), cancelled: false, sessionId: renderSessionId };
+  setChatGeneration(renderSessionId, generationRef);
+  isLoading = hasActiveGeneration(activeChatId);
+  setChatBusy(hasActiveGeneration(activeChatId));
   input.value = ''; input.style.height = 'auto';
 
   // 이미지 편집용 참조 이미지: attachments 클리어 전에 미리 캡처
@@ -4946,9 +4982,9 @@ async function sendMessage() {
 
     session.history.push({ role:'assistant', content:'(감정 테스트)', createdAt: emotionTestCreatedAt, personaSnapshot, _suffixes: {} });
     session.lastPreview = '(감정 테스트)'; session.updatedAt = Date.now();
-    isLoading = false;
-    _chatGeneration = null;
-    setChatBusy(false);
+    clearChatGeneration(renderSessionId, generationRef);
+    isLoading = hasActiveGeneration(activeChatId);
+    setChatBusy(hasActiveGeneration(activeChatId));
     input.focus();
     if (!session._demo) { saveSession(session.id); saveIndex(); }
     renderChatList();
@@ -5139,7 +5175,7 @@ async function sendMessage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(reqBody),
-          signal: _chatGeneration.controller.signal
+          signal: generationRef.controller.signal
         }, CHAT_REQUEST_TIMEOUT_MS);
         const data = await res.json();
         if (data.result !== 'success') {
@@ -5266,7 +5302,11 @@ async function sendMessage() {
   };
 
   // 이미지/채팅 모두 await — 이미지 생성 중 추가 전송 차단
-  try { await processApiAndRender(); } catch (e) { if (e?.name !== 'AbortError') throw e; } finally { isLoading = false; _chatGeneration = null; setChatBusy(false); }
+  try { await processApiAndRender(); } catch (e) { if (e?.name !== 'AbortError') throw e; } finally {
+    clearChatGeneration(renderSessionId, generationRef);
+    isLoading = hasActiveGeneration(activeChatId);
+    setChatBusy(hasActiveGeneration(activeChatId));
+  }
 }
 
 function handleFileSelect(input) {
@@ -7109,11 +7149,11 @@ async function appendAIReplyStreamingOneToOne(reply, pList, suffixes, createdAt,
   }
 
   for (const len of lengths) {
-    if (_chatGeneration?.cancelled || activeChatId !== renderSessionId) return;
+    if (isSessionGenerationCancelled(renderSessionId) || activeChatId !== renderSessionId) return;
     const partial = fullText.slice(0, len);
     const segReply = `[${p.pid}][emotion:${emotion}]${partial}[/${p.pid}]`;
     const html = await renderAIResponseHTML(segReply, [p], suffixes, createdAt, true);
-    if (_chatGeneration?.cancelled || activeChatId !== renderSessionId) return;
+    if (isSessionGenerationCancelled(renderSessionId) || activeChatId !== renderSessionId) return;
     container.innerHTML = html;
     const nextEl = container.firstElementChild;
     if (!nextEl) continue;
