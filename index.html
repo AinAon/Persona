@@ -389,6 +389,8 @@ body {
 
 /* ── 페르소나 그리드 ── */
 .persona-pane { flex: 1; overflow-y: auto; padding: 16px; }
+.persona-pane { scrollbar-width: none; -ms-overflow-style: none; }
+.persona-pane::-webkit-scrollbar { width: 0; height: 0; display: none; }
 .persona-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .persona-grid, .persona-card, .persona-card * {
   -webkit-touch-callout: none !important;
