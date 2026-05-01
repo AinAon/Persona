@@ -17,6 +17,7 @@ import { getRileyWealthSnapshot, reconcileRileyWealth } from "./riley_wealth";
 import { getPersonaPolicy } from "./persona_policy";
 import { getPromotionCandidates } from "./persona_promotion";
 import { buildPersonaVaultPath, dropboxDeletePath, dropboxListFolder, dropboxMovePath, dropboxPathExists, dropboxReadBytes, dropboxReadText, dropboxWriteBytes, dropboxWriteBytesWithDetail, dropboxWriteText, dropboxWriteTextWithDetail, getPersonaDropboxAccessToken } from "./dropbox_vault";
+import { loadPersonaUserProfile, normalizeUserId, savePersonaUserProfile } from "./persona_memory_profile";
 
 type SessionMeta = {
   id: string;
@@ -1371,8 +1372,11 @@ export async function handleApiRoute(
         { from: "/persona_policy/riley/approval.log.jsonl", to: buildPersonaVaultPath("p_riley", "_policy/approval.log.jsonl") },
         { from: "/persona_promotion/p_riley/candidates.json", to: buildPersonaVaultPath("p_riley", "_promotion/candidates.json") },
         { from: "/persona_promotion/riley/candidates.json", to: buildPersonaVaultPath("p_riley", "_promotion/candidates.json") },
-        { from: "/riley_memory/riley_memory.log.jsonl", to: buildPersonaVaultPath("p_riley", "_memory/riley_memory.log.jsonl") },
-        { from: "/riley_memory/riley_state.json", to: buildPersonaVaultPath("p_riley", "_memory/riley_state.json") },
+        { from: "/riley_memory/riley_memory.log.jsonl", to: buildPersonaVaultPath("p_riley", "_memory/p_riley_memory.log.jsonl") },
+        { from: "/riley_memory/riley_state.json", to: buildPersonaVaultPath("p_riley", "_memory/p_riley_state.json") },
+        { from: buildPersonaVaultPath("p_riley", "_memory/riley_memory.log.jsonl"), to: buildPersonaVaultPath("p_riley", "_memory/p_riley_memory.log.jsonl") },
+        { from: buildPersonaVaultPath("p_riley", "_memory/riley_state.json"), to: buildPersonaVaultPath("p_riley", "_memory/p_riley_state.json") },
+        { from: buildPersonaVaultPath("p_riley", "_memory/riley_memory.md"), to: buildPersonaVaultPath("p_riley", "_memory/p_riley_memory.md") },
       ],
       avery: [
         { from: "/persona_policy/p_avery/policy.md", to: buildPersonaVaultPath("p_avery", "_policy/policy.md") },
@@ -1383,8 +1387,11 @@ export async function handleApiRoute(
         { from: "/persona_policy/avery/approval.log.jsonl", to: buildPersonaVaultPath("p_avery", "_policy/approval.log.jsonl") },
         { from: "/persona_promotion/p_avery/candidates.json", to: buildPersonaVaultPath("p_avery", "_promotion/candidates.json") },
         { from: "/persona_promotion/avery/candidates.json", to: buildPersonaVaultPath("p_avery", "_promotion/candidates.json") },
-        { from: "/avery_memory/avery_worklog.log.jsonl", to: buildPersonaVaultPath("p_avery", "_memory/avery_worklog.log.jsonl") },
-        { from: "/avery_memory/avery_worklog_state.json", to: buildPersonaVaultPath("p_avery", "_memory/avery_worklog_state.json") },
+        { from: "/avery_memory/avery_worklog.log.jsonl", to: buildPersonaVaultPath("p_avery", "_memory/p_avery_worklog.log.jsonl") },
+        { from: "/avery_memory/avery_worklog_state.json", to: buildPersonaVaultPath("p_avery", "_memory/p_avery_worklog_state.json") },
+        { from: buildPersonaVaultPath("p_avery", "_memory/avery_worklog.log.jsonl"), to: buildPersonaVaultPath("p_avery", "_memory/p_avery_worklog.log.jsonl") },
+        { from: buildPersonaVaultPath("p_avery", "_memory/avery_worklog_state.json"), to: buildPersonaVaultPath("p_avery", "_memory/p_avery_worklog_state.json") },
+        { from: buildPersonaVaultPath("p_avery", "_memory/avery_memory.md"), to: buildPersonaVaultPath("p_avery", "_memory/p_avery_memory.md") },
       ],
     };
 
@@ -1571,6 +1578,51 @@ export async function handleApiRoute(
           ensured,
         },
       }, { headers: cors });
+    }
+    return null;
+  }
+
+  if (url.pathname === "/persona-profile/bio") {
+    if (request.method === "GET") {
+      const pid = normalizePid(url.searchParams.get("pid") || "");
+      const userId = normalizeUserId(url.searchParams.get("userId") || "user_default");
+      if (!pid) return Response.json({ ok: false, error: "pid required" }, { status: 400, headers: cors });
+      const profile = await loadPersonaUserProfile(env, pid, userId);
+      if (!profile) return Response.json({ ok: false, error: "profile unavailable" }, { status: 500, headers: cors });
+      return Response.json({ ok: true, pid, userId, bio: String(profile.bioSummary || "") }, { headers: cors });
+    }
+    if (request.method === "PUT") {
+      const body = (await request.json()) as { bio?: string; userId?: string; pids?: string[] };
+      const bio = String(body?.bio || "").trim();
+      const userId = normalizeUserId(body?.userId || "user_default");
+
+      let pids = Array.isArray(body?.pids) ? body!.pids.map((x) => normalizePid(x)).filter(Boolean) : [];
+      if (!pids.length) {
+        const fromR2 = await r2Json<unknown[] | null>(env, PERSONAS_R2_KEY, null);
+        if (Array.isArray(fromR2)) {
+          pids = [...new Set(fromR2.map(extractPid).filter(Boolean))];
+        } else {
+          const kvRaw = await env.KV.get(PERSONAS_KEY);
+          let parsedKv: unknown[] = [];
+          try { parsedKv = kvRaw ? JSON.parse(kvRaw) : []; } catch { parsedKv = []; }
+          pids = [...new Set(parsedKv.map(extractPid).filter(Boolean))];
+        }
+      }
+      if (!pids.length) return Response.json({ ok: false, error: "no persona pids found" }, { status: 400, headers: cors });
+
+      const updated: string[] = [];
+      const failed: string[] = [];
+      for (const pid of pids) {
+        const profile = await loadPersonaUserProfile(env, pid, userId);
+        if (!profile) { failed.push(pid); continue; }
+        const ok = await savePersonaUserProfile(env, {
+          ...profile,
+          bioSummary: bio,
+        });
+        if (ok) updated.push(pid);
+        else failed.push(pid);
+      }
+      return Response.json({ ok: failed.length === 0, userId, updated, failed }, { headers: cors });
     }
     return null;
   }

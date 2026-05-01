@@ -958,6 +958,8 @@ async function planGroupResponse(session, pList, userText = '') {
       body: JSON.stringify({
         model: getRouterModel(session, pList),
         participant_pids: candidates.map((c) => c.pid),
+        user_id: 'user_default',
+        session_id: String(session?.id || ''),
         messages: routerMessages
       })
     });
@@ -1604,9 +1606,11 @@ function renderSettingsPane() {
   if (delBtn) delBtn.style.display = userProfile.image ? 'block' : 'none';
   const nameEl = document.getElementById('settingsUserName');
   const bioEl = document.getElementById('settingsUserBio');
+  const memoryBioEl = document.getElementById('settingsMemoryBio');
   const hpEl = document.getElementById('settingsHallucinationPolicy');
   if (nameEl) nameEl.value = userProfile.name || '';
   if (bioEl) bioEl.value = userProfile.bio || '';
+  if (memoryBioEl) memoryBioEl.value = userProfile.memoryBio || '';
   if (hpEl) hpEl.value = userProfile.hallucinationPolicy || '';
   
   // 시작 화면 설정
@@ -1662,6 +1666,7 @@ function getBubbleTypingDelay(ch = '') {
 function saveSettingsUserProfile() {
   userProfile.name = document.getElementById('settingsUserName')?.value.trim() || '';
   userProfile.bio = document.getElementById('settingsUserBio')?.value.trim() || '';
+  userProfile.memoryBio = document.getElementById('settingsMemoryBio')?.value.trim() || '';
   userProfile.hallucinationPolicy = document.getElementById('settingsHallucinationPolicy')?.value.trim() || '';
   userProfile.defaultTab = document.getElementById('settingsDefaultTab')?.value || 'persona';
   userProfile.chatAvatarStyle = document.getElementById('settingsAvatarStyle')?.value || 'square';
@@ -1673,6 +1678,7 @@ function saveSettingsUserProfile() {
   applyFontSize(userProfile.fontSize);
   saveUserProfile();
   saveUserProfileKV();
+  savePersonaMemoryBioKV(userProfile.memoryBio || '').catch(() => {});
   updateChatListAvatarVisibilityButton();
   renderChatList();
   showToast('설정 저장됨 ✓');
@@ -4563,6 +4569,58 @@ function autoResize(el) {
   el.style.height = Math.min(el.scrollHeight, 220) + 'px';
 }
 
+function flattenTextForMemory(content) {
+  if (!content) return '';
+  if (typeof content === 'string') return content.trim();
+  if (Array.isArray(content)) {
+    return content
+      .filter(x => x && x.type === 'text')
+      .map(x => String(x.text || '').trim())
+      .filter(Boolean)
+      .join(' ');
+  }
+  return String(content || '').trim();
+}
+
+function summarizeHistoryForMemory(history = []) {
+  const out = [];
+  for (let i = history.length - 1; i >= 0 && out.length < 4; i--) {
+    const m = history[i] || {};
+    const role = String(m.role || '');
+    if (role !== 'user' && role !== 'assistant') continue;
+    const t = flattenTextForMemory(m.content).replace(/\s+/g, ' ').trim();
+    if (!t) continue;
+    out.push(`${role}: ${t.length > 120 ? `${t.slice(0, 120)}...` : t}`);
+  }
+  return out.reverse().join(' | ');
+}
+
+function buildPersonaCrossSessionMemory(session, pList = []) {
+  const curId = String(session?.id || '');
+  const lines = [];
+  const sourceSessions = Array.isArray(sessions) ? sessions : [];
+  for (const p of (pList || [])) {
+    const pid = String(p?.pid || '').trim();
+    if (!pid) continue;
+    const related = sourceSessions
+      .filter(s => String(s?.id || '') && String(s.id) !== curId)
+      .filter(s => Array.isArray(s?.participantPids) && s.participantPids.includes(pid))
+      .sort((a, b) => Number(b?.updatedAt || 0) - Number(a?.updatedAt || 0))
+      .slice(0, 5);
+    if (!related.length) continue;
+    lines.push(`[${pid}] cross-session context:`);
+    for (const rs of related) {
+      const title = String(rs?.roomName || rs?.id || '').trim() || 'room';
+      const snippet = summarizeHistoryForMemory(Array.isArray(rs?.history) ? rs.history : []);
+      if (!snippet) continue;
+      lines.push(`- ${title}: ${snippet}`);
+    }
+  }
+  if (!lines.length) return '';
+  lines.push('- 위 내용은 연속성 참고용. 현재 방의 최신 대화/요청을 최우선으로 처리.');
+  return lines.join('\n');
+}
+
 function buildSystemPrompt(session, pListOverride = null, availableEmotionMap = null) {
   const pList = pListOverride || (session.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
   const worldPart = session.worldContext ? `${session.worldContext}\n\n` : '';
@@ -4608,6 +4666,7 @@ function buildSystemPrompt(session, pListOverride = null, availableEmotionMap = 
   const antiHallucinationPart = userHallucinationPolicy
     ? `${antiHallucinationBase}\n사용자 추가 지침: ${userHallucinationPolicy}`
     : antiHallucinationBase;
+  const crossSessionPart = buildPersonaCrossSessionMemory(session, pList);
 
   return `${worldPart}${userPart}${personaPart}
 
@@ -4621,7 +4680,7 @@ emotion: ${EMOTIONS.join('/')}
 인칭은 자연스러운 맥락에서만 가급적 사용. 매 발화 시작에 붙이지 말 것
 필요한 태그 내용은 마크다운(**, 코드블록, 목록 등) 사용 가능
 
-${antiHallucinationPart}`;
+${antiHallucinationPart}${crossSessionPart ? `\n\n${crossSessionPart}` : ''}`;
 }
 
 function renderUserBubbleHTML(text, atts) {
@@ -4979,7 +5038,9 @@ async function sendMessage() {
               const payload = {
                 messages: personaMessages,
                 model,
-                participant_pids: [persona.pid]
+                participant_pids: [persona.pid],
+                user_id: 'user_default',
+                session_id: String(session?.id || '')
               };
               let rawReply = '';
               {
@@ -5053,6 +5114,8 @@ async function sendMessage() {
             model: targetModel,
             prompt: promptText,
             participant_pids: Array.from(new Set(session.participantPids || [])),
+            user_id: 'user_default',
+            session_id: String(session?.id || ''),
             resolution: _selectedImageResolution,
             ...(isGptImg && refImages.length === 0
               ? { size: RATIO_TO_OPENAI_SIZE[ratio] || '1024x1024' }
@@ -5065,7 +5128,9 @@ async function sendMessage() {
           reqBody = {
             messages: apiMessages,
             model: targetModel,
-            participant_pids: Array.from(new Set(session.participantPids || []))
+            participant_pids: Array.from(new Set(session.participantPids || [])),
+            user_id: 'user_default',
+            session_id: String(session?.id || '')
           };
         }
 
@@ -5615,6 +5680,8 @@ async function compressChat() {
       body: JSON.stringify({
         model: compressModel,
         participant_pids: Array.from(new Set(s.participantPids || [])),
+        user_id: 'user_default',
+        session_id: String(s?.id || ''),
         messages: [
 		{ role:'system', content:'대화를 핵심만 남겨 간결하게 요약해줘. 한국어로.' },
 		{ role:'user',   content:`아래 대화를 요약해줘.\n\n${histText}` }

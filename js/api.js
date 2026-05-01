@@ -1330,7 +1330,28 @@ async function loadUserProfileKV() {
     LOCAL_ONLY_PROFILE_KEYS.forEach(k => { if (userProfile[k] !== undefined) localOnly[k] = userProfile[k]; });
     userProfile = { ...userProfile, ...kvProfile, ...localOnly };
     saveUserProfile();
+    if (userProfile.memoryBio) {
+      try { await savePersonaMemoryBioKV(userProfile.memoryBio); } catch {}
+    }
   } catch(e) {}
+}
+
+async function savePersonaMemoryBioKV(bio = '') {
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) return { ok: false };
+  try {
+    const res = await fetch(`${wUrl}/persona-profile/bio`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        bio: String(bio || ''),
+        userId: 'user_default'
+      })
+    });
+    return await res.json();
+  } catch {
+    return { ok: false };
+  }
 }
 
 // Memory API

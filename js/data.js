@@ -77,6 +77,7 @@ const CACHE_USER_KEY = 'pc4_user';
 let userProfile = {
   name: '',
   bio: '',
+  memoryBio: '',
   image: null,
   hallucinationPolicy: '',
   typingSpeed: 'medium',

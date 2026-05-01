@@ -14,6 +14,7 @@ export type PersonaRuntimeConfig = {
   role: string;
   directiveFile: string;
   memoryMarkdownFile: string;
+  legacyMemoryMarkdownFiles?: string[];
   defaultDirectiveLines: string[];
   defaultCsvHeader: string;
   namingHints?: {
@@ -57,6 +58,30 @@ function encodeForFilePath(path: string, content: string): string {
   const out = String(content || "");
   if (!/\.csv$/i.test(path)) return out;
   return out.startsWith("\uFEFF") ? out : `\uFEFF${out}`;
+}
+
+function normalizeFilePayload(path: string, content: string, defaultCsvHeader: string): string {
+  const ext = String(path || "").toLowerCase();
+  const raw = String(content || "");
+
+  if (ext.endsWith(".json")) {
+    if (!raw.trim()) return "{\n}\n";
+    try {
+      const parsed = JSON.parse(raw);
+      return `${JSON.stringify(parsed, null, 2)}\n`;
+    } catch {
+      return raw.endsWith("\n") ? raw : `${raw}\n`;
+    }
+  }
+
+  if (ext.endsWith(".csv")) {
+    const base = raw.trim() ? raw : `${defaultCsvHeader}\n`;
+    const csv = base.endsWith("\n") ? base : `${base}\n`;
+    return encodeForFilePath(path, csv);
+  }
+
+  if (!raw) return "";
+  return raw.endsWith("\n") ? raw : `${raw}\n`;
 }
 
 function inferDeletePath(raw: string): string | null {
@@ -127,7 +152,14 @@ export async function loadPersonaMemoryMarkdown(env: Env, cfg: PersonaRuntimeCon
   if (!token) return "";
   const path = buildPersonaVaultPath(cfg.pid, `_memory/${cfg.memoryMarkdownFile}`);
   const txt = await dropboxReadText(token, path);
-  return String(txt || "").trim();
+  if (txt && String(txt).trim()) return String(txt).trim();
+  for (const legacyName of cfg.legacyMemoryMarkdownFiles || []) {
+    const legacyPath = buildPersonaVaultPath(cfg.pid, `_memory/${String(legacyName || "").trim()}`);
+    if (!legacyPath) continue;
+    const legacyText = await dropboxReadText(token, legacyPath);
+    if (legacyText && String(legacyText).trim()) return String(legacyText).trim();
+  }
+  return "";
 }
 
 export async function runPersonaVaultActionFromText(
@@ -153,8 +185,7 @@ export async function runPersonaVaultActionFromText(
     const safeRel = normalizeVaultRelPath(fileRel);
     const content = extractInlineContent(raw);
     const path = buildPersonaVaultPath(cfg.pid, safeRel);
-    const defaultContent = safeRel.toLowerCase().endsWith(".csv") ? `${cfg.defaultCsvHeader}\n` : "";
-    const payload = encodeForFilePath(path, content || defaultContent);
+    const payload = normalizeFilePayload(path, content, cfg.defaultCsvHeader);
     const ok = await dropboxWriteText(token, path, payload);
     return ok ? { ok: true, message: `created file: ${path}` } : { ok: false, error: `failed to create file: ${path}` };
   }

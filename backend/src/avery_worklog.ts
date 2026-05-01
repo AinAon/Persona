@@ -8,18 +8,23 @@ import {
   type PersonaVaultActionResult,
 } from "./persona_runtime";
 
-const AVERY_LOG_KEY = "_memory/avery_worklog.log.jsonl";
-const AVERY_STATE_KEY = "_memory/avery_worklog_state.json";
+const AVERY_LOG_KEY = "_memory/p_avery_worklog.log.jsonl";
+const AVERY_STATE_KEY = "_memory/p_avery_worklog_state.json";
+const AVERY_LEGACY_LOG_KEY = "_memory/avery_worklog.log.jsonl";
+const AVERY_LEGACY_STATE_KEY = "_memory/avery_worklog_state.json";
 const AVERY_PID = "p_avery";
-const AVERY_VAULT_LOG_PATH = buildPersonaVaultPath(AVERY_PID, "_memory/avery_worklog.log.jsonl");
-const AVERY_VAULT_STATE_PATH = buildPersonaVaultPath(AVERY_PID, "_memory/avery_worklog_state.json");
+const AVERY_VAULT_LOG_PATH = buildPersonaVaultPath(AVERY_PID, "_memory/p_avery_worklog.log.jsonl");
+const AVERY_VAULT_STATE_PATH = buildPersonaVaultPath(AVERY_PID, "_memory/p_avery_worklog_state.json");
+const AVERY_VAULT_LEGACY_LOG_PATH = buildPersonaVaultPath(AVERY_PID, "_memory/avery_worklog.log.jsonl");
+const AVERY_VAULT_LEGACY_STATE_PATH = buildPersonaVaultPath(AVERY_PID, "_memory/avery_worklog_state.json");
 const AVERY_IDS = new Set(["p_avery", "avery"]);
 const AVERY_RUNTIME_CONFIG: PersonaRuntimeConfig = {
   pid: AVERY_PID,
   tokenPersona: "avery",
   role: "worklog_manager",
   directiveFile: "p_avery_directive.md",
-  memoryMarkdownFile: "avery_memory.md",
+  memoryMarkdownFile: "p_avery_memory.md",
+  legacyMemoryMarkdownFiles: ["avery_memory.md"],
   defaultDirectiveLines: [
     "# Avery Directive (Priority 1)",
     "",
@@ -147,11 +152,28 @@ function toItemId(kind: WorkKind, title: string): string {
 async function r2Text(env: Env, key: string): Promise<string | null> {
   const token = await getPersonaDropboxAccessToken(env, "avery");
   if (token) {
-    const txt = await dropboxReadText(token, key === AVERY_LOG_KEY ? AVERY_VAULT_LOG_PATH : AVERY_VAULT_STATE_PATH);
-    if (txt != null) return txt;
+    if (key === AVERY_LOG_KEY) {
+      const next = await dropboxReadText(token, AVERY_VAULT_LOG_PATH);
+      if (next != null && String(next).trim()) return next;
+      const legacy = await dropboxReadText(token, AVERY_VAULT_LEGACY_LOG_PATH);
+      if (legacy != null && String(legacy).trim()) return legacy;
+    } else {
+      const next = await dropboxReadText(token, AVERY_VAULT_STATE_PATH);
+      if (next != null && String(next).trim()) return next;
+      const legacy = await dropboxReadText(token, AVERY_VAULT_LEGACY_STATE_PATH);
+      if (legacy != null && String(legacy).trim()) return legacy;
+    }
   }
   try {
     const obj = await env.R2.get(key);
+    if (!obj && key === AVERY_LOG_KEY) {
+      const legacy = await env.R2.get(AVERY_LEGACY_LOG_KEY);
+      if (legacy && typeof legacy.text === "function") return await legacy.text();
+    }
+    if (!obj && key === AVERY_STATE_KEY) {
+      const legacy = await env.R2.get(AVERY_LEGACY_STATE_KEY);
+      if (legacy && typeof legacy.text === "function") return await legacy.text();
+    }
     if (!obj) return null;
     if (typeof obj.text === "function") return await obj.text();
     return null;
@@ -174,7 +196,7 @@ async function r2PutJson(env: Env, key: string, value: unknown): Promise<void> {
   const token = await getPersonaDropboxAccessToken(env, "avery");
   if (!token) return;
   const path = key === AVERY_LOG_KEY ? AVERY_VAULT_LOG_PATH : AVERY_VAULT_STATE_PATH;
-  await dropboxWriteText(token, path, JSON.stringify(value));
+  await dropboxWriteText(token, path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
 function computeStats(items: AveryItem[]): AveryState["stats"] {
@@ -288,7 +310,7 @@ function defaultState(): AveryState {
     meta: {
       last_event_id: "",
       last_updated_at: iso,
-      source_log: "avery_worklog.log.jsonl",
+      source_log: "p_avery_worklog.log.jsonl",
     },
   };
 }
@@ -627,7 +649,7 @@ export async function reconcileAveryWorklog(env: Env): Promise<{
   for (const e of events) rebuilt = applyEventToState(rebuilt, e);
   rebuilt.meta.last_event_id = events.length ? events[events.length - 1].event_id : "";
   rebuilt.meta.last_updated_at = events.length ? events[events.length - 1].timestamp : nowIso();
-  rebuilt.meta.source_log = "avery_worklog.log.jsonl";
+  rebuilt.meta.source_log = "p_avery_worklog.log.jsonl";
 
   const changed = JSON.stringify(oldState.stats) !== JSON.stringify(rebuilt.stats)
     || oldState.items.length !== rebuilt.items.length;

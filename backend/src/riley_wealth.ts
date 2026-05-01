@@ -8,18 +8,23 @@ import {
   type PersonaVaultActionResult,
 } from "./persona_runtime";
 
-const RILEY_LOG_KEY = "_memory/riley_memory.log.jsonl";
-const RILEY_STATE_KEY = "_memory/riley_state.json";
+const RILEY_LOG_KEY = "_memory/p_riley_memory.log.jsonl";
+const RILEY_STATE_KEY = "_memory/p_riley_state.json";
+const RILEY_LEGACY_LOG_KEY = "_memory/riley_memory.log.jsonl";
+const RILEY_LEGACY_STATE_KEY = "_memory/riley_state.json";
 const RILEY_PID = "p_riley";
-const RILEY_VAULT_LOG_PATH = buildPersonaVaultPath(RILEY_PID, "_memory/riley_memory.log.jsonl");
-const RILEY_VAULT_STATE_PATH = buildPersonaVaultPath(RILEY_PID, "_memory/riley_state.json");
+const RILEY_VAULT_LOG_PATH = buildPersonaVaultPath(RILEY_PID, "_memory/p_riley_memory.log.jsonl");
+const RILEY_VAULT_STATE_PATH = buildPersonaVaultPath(RILEY_PID, "_memory/p_riley_state.json");
+const RILEY_VAULT_LEGACY_LOG_PATH = buildPersonaVaultPath(RILEY_PID, "_memory/riley_memory.log.jsonl");
+const RILEY_VAULT_LEGACY_STATE_PATH = buildPersonaVaultPath(RILEY_PID, "_memory/riley_state.json");
 const RILEY_IDS = new Set(["p_riley", "riley"]);
 const RILEY_RUNTIME_CONFIG: PersonaRuntimeConfig = {
   pid: RILEY_PID,
   tokenPersona: "riley",
   role: "wealth_manager",
   directiveFile: "p_riley_directive.md",
-  memoryMarkdownFile: "riley_memory.md",
+  memoryMarkdownFile: "p_riley_memory.md",
+  legacyMemoryMarkdownFiles: ["riley_memory.md"],
   defaultDirectiveLines: [
     "# Riley Directive (Priority 1)",
     "",
@@ -128,7 +133,14 @@ function safeNumber(v: unknown): number {
 async function r2Text(env: Env, key: string): Promise<string | null> {
   const token = await getPersonaDropboxAccessToken(env, "riley");
   if (!token) return null;
-  return await dropboxReadText(token, key === RILEY_LOG_KEY ? RILEY_VAULT_LOG_PATH : RILEY_VAULT_STATE_PATH);
+  if (key === RILEY_LOG_KEY) {
+    const next = await dropboxReadText(token, RILEY_VAULT_LOG_PATH);
+    if (next != null && String(next).trim()) return next;
+    return await dropboxReadText(token, RILEY_VAULT_LEGACY_LOG_PATH);
+  }
+  const next = await dropboxReadText(token, RILEY_VAULT_STATE_PATH);
+  if (next != null && String(next).trim()) return next;
+  return await dropboxReadText(token, RILEY_VAULT_LEGACY_STATE_PATH);
 }
 
 async function r2Json<T>(env: Env, key: string, fallback: T): Promise<T> {
@@ -145,7 +157,7 @@ async function r2PutJson(env: Env, key: string, value: unknown): Promise<void> {
   const token = await getPersonaDropboxAccessToken(env, "riley");
   if (!token) return;
   const path = key === RILEY_LOG_KEY ? RILEY_VAULT_LOG_PATH : RILEY_VAULT_STATE_PATH;
-  await dropboxWriteText(token, path, JSON.stringify(value));
+  await dropboxWriteText(token, path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
 let migratedOnce = false;
@@ -159,6 +171,8 @@ async function migrateRileyFromR2ToDropboxNoOverwrite(env: Env): Promise<void> {
   const pairs: Array<{ r2Key: string; dbxPath: string }> = [
     { r2Key: RILEY_LOG_KEY, dbxPath: RILEY_VAULT_LOG_PATH },
     { r2Key: RILEY_STATE_KEY, dbxPath: RILEY_VAULT_STATE_PATH },
+    { r2Key: RILEY_LEGACY_LOG_KEY, dbxPath: RILEY_VAULT_LOG_PATH },
+    { r2Key: RILEY_LEGACY_STATE_KEY, dbxPath: RILEY_VAULT_STATE_PATH },
   ];
 
   for (const pair of pairs) {
@@ -186,7 +200,7 @@ function defaultState(): RileyState {
     meta: {
       last_event_id: "",
       last_updated_at: iso,
-      source_log: "riley_memory.log.jsonl",
+      source_log: "p_riley_memory.log.jsonl",
     },
   };
 }
@@ -515,7 +529,7 @@ export async function reconcileRileyWealth(env: Env): Promise<{
   for (const e of events) rebuilt = applyEventToState(rebuilt, e);
   rebuilt.meta.last_event_id = events.length ? events[events.length - 1].event_id : "";
   rebuilt.meta.last_updated_at = events.length ? events[events.length - 1].timestamp : nowIso();
-  rebuilt.meta.source_log = "riley_memory.log.jsonl";
+  rebuilt.meta.source_log = "p_riley_memory.log.jsonl";
   const changed = JSON.stringify(oldState.totals) !== JSON.stringify(rebuilt.totals)
     || JSON.stringify(oldState.fixed_cashflow) !== JSON.stringify(rebuilt.fixed_cashflow)
     || oldState.assets.length !== rebuilt.assets.length
