@@ -309,7 +309,7 @@ const EMOTION_PROMPTS = (globalThis.EMOTION_PROMPTS_KO && typeof globalThis.EMOT
   : {};
 const EMOTION_PLAN = (globalThis.EMOTION_PLAN_KO && typeof globalThis.EMOTION_PLAN_KO === 'object')
   ? globalThis.EMOTION_PLAN_KO
-  : { free: [], premium: [], adult: [] };
+  : { free: [], premium_positive: [], premium_relax: [], premium_negative: [], premium_timid: [], adult: [] };
 const EMOTION_MODEL_BY_ID = (globalThis.EMOTION_MODEL_BY_ID && typeof globalThis.EMOTION_MODEL_BY_ID === 'object')
   ? globalThis.EMOTION_MODEL_BY_ID
   : {};
@@ -332,8 +332,6 @@ function getEmotionGroup(id = '') {
   for (const group of EMOTION_GROUP_ORDER) {
     if ((EMOTION_PLAN[group] || []).includes(key)) return group;
   }
-  if ((EMOTION_PLAN.adult || []).includes(key)) return 'adult';
-  if ((EMOTION_PLAN.premium || []).includes(key)) return 'premium_positive';
   if ((EMOTION_PLAN.free || []).includes(key)) return 'free';
   return 'custom';
 }
@@ -362,7 +360,6 @@ function getEmotionTier(id = '') {
   if (group === 'adult') return 'adult';
   if (group.startsWith('premium_')) return 'premium';
   if (group === 'free') return 'free';
-  if ((EMOTION_PLAN.premium || []).includes(key)) return 'premium';
   if ((EMOTION_PLAN.free || []).includes(key)) return 'free';
   return 'free';
 }

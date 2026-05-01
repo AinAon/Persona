@@ -34,12 +34,6 @@ globalThis.EMOTION_PLAN_KO = {
   premium_relax: ['relief', 'sleepy', 'thinking', 'absentminded'],
   premium_negative: ['disgust', 'contempt', 'cry', 'pain'],
   premium_timid: ['shy', 'worry', 'confusion', 'horror'],
-  premium: [
-    'subtlesmile', 'expecting', 'laugh', 'playful',
-    'relief', 'sleepy', 'thinking', 'absentminded',
-    'disgust', 'contempt', 'cry', 'pain',
-    'shy', 'worry', 'confusion', 'horror'
-  ],
   adult: ['arousal', 'orgasm', 'ecstasy', 'drunken'],
 };
 
@@ -57,16 +51,13 @@ globalThis.EMOTION_COMMON_PROMPT_KO = {
   ],
   background: [
     "'이미지1'과 같은 배경을 사용한다. 카메라 앵글 변화에 따라 바뀔 수 있다.",
-    'Do not introduce new background elements or drastically change the lighting.',
   ],
   pose: [
     "'Expression'에 어울리는 새로운 포즈를 취한다.",
     "'이미지1'의 포즈와 다른 창의적인 포즈를 취한다.",
-    'Natural, expressive body language is encouraged.',
   ],
   layout: [
     "Output의 얼굴 위치는 '이미지1'의 얼굴 위치(가운데상단)를 최대한 유지한다.",
-    'Do not zoom in or out significantly. Maintain 2:3 portrait framing.',
     'No text of any kind: no captions, subtitles, labels, logos, watermarks, speech bubbles, or UI overlays.',
   ],
   variation: [
@@ -79,7 +70,7 @@ globalThis.EMOTION_COMMON_PROMPT_KO = {
   resolution: '1K',
   gaze: {
     default: 'Prefer direct eye contact with the camera in most generations (around 80%). Off-camera gaze is allowed only if it clearly strengthens the emotion.',
-    avoidEyeContactEmotionIds: ['absentminded', 'shy', 'worry', 'sad', 'thinking', 'sleepy', 'pain', 'confusion'],
+    avoidEyeContactEmotionIds: ['absentminded', 'shy', 'thinking', 'sleepy', 'pain'],
     avoidEyeContactInstruction: 'Prefer off-camera gaze or downward/side glance when it supports the emotion. Direct eye contact is optional.',
   },
 };
