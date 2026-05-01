@@ -5237,9 +5237,15 @@ async function sendMessage() {
 
     const assistantCreatedAt = Date.now();
     const lastHist = currentSession.history?.[currentSession.history.length - 1];
+    const normalizeDupText = (v) => String(v || '')
+      .replace(/\[[a-zA-Z0-9_:-]+\]/g, '')
+      .replace(/\[\/[a-zA-Z0-9_:-]+\]/g, '')
+      .replace(/\[emotion:[^\]]*\]/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
     const duplicateAssistant =
       lastHist?.role === 'assistant' &&
-      String(lastHist?.content || '').trim() === String(reply || '').trim() &&
+      normalizeDupText(lastHist?.content || '') === normalizeDupText(reply || '') &&
       (assistantCreatedAt - Number(lastHist?.createdAt || 0)) <= 5000;
     if (duplicateAssistant) {
       showToast('중복 응답을 자동으로 정리했어요.');

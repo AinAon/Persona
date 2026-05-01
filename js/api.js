@@ -908,20 +908,43 @@ function canonicalMessageForDedup(msg) {
   return rest;
 }
 
+function extractTextForDedup(content) {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content
+      .filter((x) => x && x.type === 'text')
+      .map((x) => String(x.text || ''))
+      .join(' ');
+  }
+  try {
+    return JSON.stringify(content ?? '');
+  } catch {
+    return String(content || '');
+  }
+}
+
+function normalizeTextForDedup(raw) {
+  return String(raw || '')
+    .replace(/\[[a-zA-Z0-9_:-]+\]/g, '')
+    .replace(/\[\/[a-zA-Z0-9_:-]+\]/g, '')
+    .replace(/\[emotion:[^\]]*\]/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function dedupeMessageKey(msg) {
+  const role = String(msg?.role || '');
+  const createdAt = Number(msg?.createdAt || 0);
+  const text = normalizeTextForDedup(extractTextForDedup(msg?.content));
+  return `${role}|${createdAt}|${text}`;
+}
+
 function dedupeHistoryMessages(history) {
   const arr = Array.isArray(history) ? history : [];
   const seen = new Set();
   const out = [];
   for (const msg of arr) {
-    let key = '';
-    try {
-      key = JSON.stringify(canonicalMessageForDedup(msg));
-    } catch {
-      const role = String(msg?.role || '');
-      const createdAt = Number(msg?.createdAt || 0);
-      const content = typeof msg?.content === 'string' ? msg.content : JSON.stringify(msg?.content ?? null);
-      key = `${role}|${createdAt}|${content}`;
-    }
+    const key = dedupeMessageKey(canonicalMessageForDedup(msg));
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(msg);
@@ -1090,20 +1113,8 @@ async function loadSession(id, options = {}) {
   }
   let hadLocalCache = false;
   const messageKey = (m) => {
-    try {
-      if (!m || typeof m !== 'object') return String(m || '');
-      return JSON.stringify(canonicalMessageForDedup(m));
-    } catch {
-      const role = String(m?.role || '');
-      const createdAt = Number(m?.createdAt || 0);
-      let contentKey = '';
-      try {
-        contentKey = typeof m?.content === 'string' ? m.content : JSON.stringify(m?.content ?? null);
-      } catch {
-        contentKey = String(m?.content || '');
-      }
-      return `${role}|${createdAt}|${contentKey}`;
-    }
+    if (!m || typeof m !== 'object') return String(m || '');
+    return dedupeMessageKey(canonicalMessageForDedup(m));
   };
   const mergeHistories = (a, b) => {
     const merged = [];

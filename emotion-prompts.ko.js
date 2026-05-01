@@ -19,7 +19,7 @@ globalThis.EMOTION_PROMPTS_KO = {
   horror: '공포 (Horror): 공포를 느껴 온 몸이 얼어붙은 듯 경직되고 눈이 커진 긴장된 표정으로 변경',
   pain: '고통 (Pain): 입을 앞으로 벌리며 신음하듯 얼굴을 찡그리고, 신체적 혹은 정신적으로 강한 고통을 느끼는 표정으로 변경',
   sleepy: '졸림 (Sleepy): 눈이 반쯤 감기고 눈꺼풀이 무겁게 내려앉은 채로 시선이 흐릿하게 풀리는 표정. 입술이 살짝 벌어지고 얼굴 전체가 나른하게 늘어진 얼굴로 변경(종종 하품으로 변경)',
-  hunger: '굶주림 (Hunger): 오래 굶어 비쩍 마른 느낌이 분명하게 드러나는 표정으로 변경. 핼쑥한 얼굴선, 힘 빠진 눈빛, 메마른 분위기를 강조',
+  thinking: '고뇌 (Thinking): 매우 진지하게 고뇌하는 표정. 눈동자를 왼쪽 위로 향하는 등 생각하는 표정으로 변경.',
   absentminded: '딴청 (Absentminded): 카메라와 절대 눈을 마주치지 않는 표정으로 변경. 시선을 옆이나 아래로 흘리고, 집중이 다른 곳에 가 있는 분위기',
   expecting: '기대하는 (Expecting): 반짝반짝 빛나는 눈으로 카메라를 바라보는 표정으로 변경. 기대감과 설렘이 분명히 느껴지게',
   arousal: '흥분 (Arousal): 눈을 가늘게 뜨거나 살짝 위로 향한 채 입을 반쯤 벌리고 헐떡이는 표정. 눈썹이 살짝 찌푸려지고 머리카락이 땀에 살짝 젖어 있는 얼굴로 변경',  
@@ -30,7 +30,7 @@ globalThis.EMOTION_PROMPTS_KO = {
 
 globalThis.EMOTION_PLAN_KO = {
   free: ['happy', 'sad', 'angry', 'surprise'],
-  premium: ['subtlesmile', 'confusion', 'cry', 'disgust', 'horror', 'laugh', 'playful', 'relief', 'shy', 'worry', 'pain', 'sleepy', 'hunger', 'absentminded', 'expecting', 'contempt'],
+  premium: ['subtlesmile', 'confusion', 'cry', 'disgust', 'horror', 'laugh', 'playful', 'relief', 'shy', 'worry', 'pain', 'sleepy', 'thinking', 'absentminded', 'expecting', 'contempt'],
   adult: ['arousal', 'orgasm', 'exstasy', 'drunken'],
 };
 
