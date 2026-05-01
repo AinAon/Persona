@@ -10,7 +10,25 @@ function dbxHeaders(token: string): HeadersInit {
   };
 }
 
-type Persona = "riley" | "avery" | "shared";
+export type Persona = "riley" | "avery" | "shared";
+
+function normalizePid(pidOrAlias: string): string {
+  const raw = String(pidOrAlias || "").trim().toLowerCase();
+  if (!raw) return "";
+  if (raw.startsWith("p_")) return raw;
+  if (raw === "riley" || raw === "avery") return `p_${raw}`;
+  if (/^[a-z0-9_-]+$/i.test(raw)) return `p_${raw}`;
+  return "";
+}
+
+export function buildPersonaVaultPath(pidOrAlias: string, relativePath = ""): string {
+  const pid = normalizePid(pidOrAlias);
+  const rel = String(relativePath || "").trim().replace(/^\/+/, "");
+  if (rel.startsWith("_vault/")) return `/${rel}`;
+  if (!pid) return rel ? `/${rel}` : "/";
+  const root = `/_vault/${pid}`;
+  return rel ? `${root}/${rel}` : root;
+}
 
 function getDropboxAppConfig(env: Env, persona: Persona): { key: string; secret: string; refreshToken: string } {
   const key = String(
@@ -89,26 +107,32 @@ export function getPersonaDropboxToken(env: Env, persona: Persona): string {
 }
 
 export async function getPersonaDropboxAccessToken(env: Env, persona: Persona): Promise<string> {
-  const cfg = getDropboxAppConfig(env, persona);
-  if (cfg.key && cfg.secret && cfg.refreshToken) {
-    const res = await fetch("https://api.dropboxapi.com/oauth2/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type: "refresh_token",
-        refresh_token: cfg.refreshToken,
-        client_id: cfg.key,
-        client_secret: cfg.secret,
-      }),
-    });
-    if (res.ok) {
-      const raw = await res.json().catch(() => null) as any;
-      const token = String(raw?.access_token || "").trim();
-      if (token) return token;
+  const fallbacks: Persona[] = persona === "shared" ? ["shared"] : [persona, "shared"];
+  for (const p of fallbacks) {
+    const cfg = getDropboxAppConfig(env, p);
+    if (cfg.key && cfg.secret && cfg.refreshToken) {
+      const res = await fetch("https://api.dropboxapi.com/oauth2/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "refresh_token",
+          refresh_token: cfg.refreshToken,
+          client_id: cfg.key,
+          client_secret: cfg.secret,
+        }),
+      });
+      if (res.ok) {
+        const raw = await res.json().catch(() => null) as any;
+        const token = String(raw?.access_token || "").trim();
+        if (token) return token;
+      }
     }
   }
-  const direct = getPersonaDropboxToken(env, persona);
-  return direct || "";
+  for (const p of fallbacks) {
+    const direct = getPersonaDropboxToken(env, p);
+    if (direct) return direct;
+  }
+  return "";
 }
 
 export async function dropboxReadText(token: string, path: string): Promise<string | null> {

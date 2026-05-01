@@ -1,5 +1,5 @@
 import type { Env } from "./index";
-import { dropboxReadText, dropboxWriteText, getPersonaDropboxAccessToken } from "./dropbox_vault";
+import { buildPersonaVaultPath, dropboxReadText, dropboxWriteText, getPersonaDropboxAccessToken } from "./dropbox_vault";
 
 type PromotionCandidate = {
   id: string;
@@ -32,31 +32,28 @@ function key(pid: string): string { return `_promotion/candidates.json`; }
 
 function normalizePid(pid: string): string { return String(pid || "").trim().toLowerCase(); }
 
-function pidToPersona(pid: string): "riley" | "avery" | null {
+function tokenPersonaFromPid(pid: string): "riley" | "avery" | "shared" {
   const p = normalizePid(pid);
   if (p === "p_riley" || p === "riley") return "riley";
   if (p === "p_avery" || p === "avery") return "avery";
-  return null;
+  return "shared";
 }
 
-function vaultPathFromR2Key(path: string): string {
-  return `/${String(path || "").replace(/^\/+/, "")}`;
+function vaultPathFromR2Key(pid: string, path: string): string {
+  return buildPersonaVaultPath(normalizePid(pid), path);
 }
 
 async function load(env: Env, pid: string): Promise<CandidateDoc> {
   const k = key(pid);
-  const persona = pidToPersona(pid);
-  if (persona) {
-    const token = await getPersonaDropboxAccessToken(env, persona);
-    if (token) {
-      const txt = await dropboxReadText(token, vaultPathFromR2Key(k));
-      if (txt) {
-        try {
-          const parsed = JSON.parse(txt) as CandidateDoc;
-          return parsed?.version === 1 && Array.isArray(parsed.items) ? parsed : { version: 1, items: [] };
-        } catch {
-          return { version: 1, items: [] };
-        }
+  const token = await getPersonaDropboxAccessToken(env, tokenPersonaFromPid(pid));
+  if (token) {
+    const txt = await dropboxReadText(token, vaultPathFromR2Key(pid, k));
+    if (txt) {
+      try {
+        const parsed = JSON.parse(txt) as CandidateDoc;
+        return parsed?.version === 1 && Array.isArray(parsed.items) ? parsed : { version: 1, items: [] };
+      } catch {
+        return { version: 1, items: [] };
       }
     }
   }
@@ -73,13 +70,10 @@ async function load(env: Env, pid: string): Promise<CandidateDoc> {
 async function save(env: Env, pid: string, doc: CandidateDoc): Promise<void> {
   const payload = JSON.stringify(doc, null, 2);
   const k = key(pid);
-  const persona = pidToPersona(pid);
-  if (persona) {
-    const token = await getPersonaDropboxAccessToken(env, persona);
-    if (token) {
-      const ok = await dropboxWriteText(token, vaultPathFromR2Key(k), payload);
-      if (ok) return;
-    }
+  const token = await getPersonaDropboxAccessToken(env, tokenPersonaFromPid(pid));
+  if (token) {
+    const ok = await dropboxWriteText(token, vaultPathFromR2Key(pid, k), payload);
+    if (ok) return;
   }
   await env.R2.put(k, payload, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
 }

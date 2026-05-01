@@ -16,7 +16,7 @@ import { getAveryWorklogSnapshot, reconcileAveryWorklog } from "./avery_worklog"
 import { getRileyWealthSnapshot, reconcileRileyWealth } from "./riley_wealth";
 import { getPersonaPolicy } from "./persona_policy";
 import { getPromotionCandidates } from "./persona_promotion";
-import { dropboxDeletePath, dropboxListFolder, dropboxMovePath, dropboxPathExists, dropboxReadBytes, dropboxReadText, dropboxWriteBytes, dropboxWriteBytesWithDetail, dropboxWriteText, dropboxWriteTextWithDetail, getPersonaDropboxAccessToken } from "./dropbox_vault";
+import { buildPersonaVaultPath, dropboxDeletePath, dropboxListFolder, dropboxMovePath, dropboxPathExists, dropboxReadBytes, dropboxReadText, dropboxWriteBytes, dropboxWriteBytesWithDetail, dropboxWriteText, dropboxWriteTextWithDetail, getPersonaDropboxAccessToken } from "./dropbox_vault";
 
 type SessionMeta = {
   id: string;
@@ -51,6 +51,48 @@ const SESSION_AUDIO_R2_PREFIXES = ["tts/session/", "audio/session/"];
 const SHARED_PREFIX = "/persona_shared";
 const SESSION_CHANGE_SEQ_KEY = "session_change_seq";
 const MEMORY_API_ENABLED = false;
+
+function normalizePid(raw: unknown): string {
+  const s = String(raw || "").trim().toLowerCase();
+  if (!s) return "";
+  if (s.startsWith("p_")) return s;
+  if (/^[a-z0-9_-]+$/i.test(s)) return `p_${s}`;
+  return "";
+}
+
+function extractPid(item: unknown): string {
+  if (typeof item === "string") return normalizePid(item);
+  if (!item || typeof item !== "object") return "";
+  const rec = item as Record<string, unknown>;
+  return normalizePid(rec.pid);
+}
+
+function buildDefaultDirectiveText(pid: string): string {
+  const title = pid.replace(/^p_/, "");
+  return [
+    `# ${title} Directive (Priority 1)`,
+    "",
+    "1) Always obey this directive first.",
+  ].join("\n");
+}
+
+async function ensurePersonaVaultLayout(token: string, pid: string): Promise<{ pid: string; ok: boolean; failed: string[] }> {
+  const failed: string[] = [];
+  const folders = ["_memory", "_policy", "_promotion"];
+  for (const folder of folders) {
+    const keepPath = buildPersonaVaultPath(pid, `${folder}/.keep`);
+    const ok = await dropboxWriteText(token, keepPath, "");
+    if (!ok) failed.push(keepPath);
+  }
+
+  const directivePath = buildPersonaVaultPath(pid, `${pid}_directive.md`);
+  const exists = await dropboxPathExists(token, directivePath);
+  if (!exists) {
+    const ok = await dropboxWriteText(token, directivePath, buildDefaultDirectiveText(pid));
+    if (!ok) failed.push(directivePath);
+  }
+  return { pid, ok: failed.length === 0, failed };
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -1267,10 +1309,9 @@ export async function handleApiRoute(
   }
 
   if (url.pathname === "/vault/directives/sync" && request.method === "POST") {
-    const rileyToken = await getPersonaDropboxAccessToken(env, "riley");
-    const averyToken = await getPersonaDropboxAccessToken(env, "avery");
-    if (!rileyToken || !averyToken) {
-      return Response.json({ ok: false, error: "riley/avery dropbox token missing" }, { status: 500, headers: noStoreHeaders });
+    const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
+    if (!sharedToken) {
+      return Response.json({ ok: false, error: "shared dropbox token missing" }, { status: 500, headers: noStoreHeaders });
     }
     const rileyContent = [
       "# Riley Directive (Priority 1)",
@@ -1299,42 +1340,41 @@ export async function handleApiRoute(
       "Suggested fields:",
       "date,kind,title,topic_key,context,tool,status,due_at,note",
     ].join("\n");
-    const rileyOk = await dropboxWriteText(rileyToken, "/riley_directive.md", rileyContent);
-    const averyOk = await dropboxWriteText(averyToken, "/avery_directive.md", averyContent);
+    const rileyOk = await dropboxWriteText(sharedToken, buildPersonaVaultPath("p_riley", "p_riley_directive.md"), rileyContent);
+    const averyOk = await dropboxWriteText(sharedToken, buildPersonaVaultPath("p_avery", "p_avery_directive.md"), averyContent);
     return Response.json({ ok: rileyOk && averyOk, rileyOk, averyOk }, { headers: noStoreHeaders });
   }
 
   if (url.pathname === "/vault/layout/migrate" && request.method === "POST") {
-    const rileyToken = await getPersonaDropboxAccessToken(env, "riley");
-    const averyToken = await getPersonaDropboxAccessToken(env, "avery");
-    if (!rileyToken || !averyToken) {
-      return Response.json({ ok: false, error: "riley/avery dropbox token missing" }, { status: 500, headers: noStoreHeaders });
+    const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
+    if (!sharedToken) {
+      return Response.json({ ok: false, error: "shared dropbox token missing" }, { status: 500, headers: noStoreHeaders });
     }
 
     const plan: Record<"riley" | "avery", Array<{ from: string; to: string }>> = {
       riley: [
-        { from: "/persona_policy/p_riley/policy.md", to: "/_policy/policy.md" },
-        { from: "/persona_policy/riley/policy.md", to: "/_policy/policy.md" },
-        { from: "/persona_policy/p_riley/pending.json", to: "/_policy/pending.json" },
-        { from: "/persona_policy/riley/pending.json", to: "/_policy/pending.json" },
-        { from: "/persona_policy/p_riley/approval.log.jsonl", to: "/_policy/approval.log.jsonl" },
-        { from: "/persona_policy/riley/approval.log.jsonl", to: "/_policy/approval.log.jsonl" },
-        { from: "/persona_promotion/p_riley/candidates.json", to: "/_promotion/candidates.json" },
-        { from: "/persona_promotion/riley/candidates.json", to: "/_promotion/candidates.json" },
-        { from: "/riley_memory/riley_memory.log.jsonl", to: "/_memory/riley_memory.log.jsonl" },
-        { from: "/riley_memory/riley_state.json", to: "/_memory/riley_state.json" },
+        { from: "/persona_policy/p_riley/policy.md", to: buildPersonaVaultPath("p_riley", "_policy/policy.md") },
+        { from: "/persona_policy/riley/policy.md", to: buildPersonaVaultPath("p_riley", "_policy/policy.md") },
+        { from: "/persona_policy/p_riley/pending.json", to: buildPersonaVaultPath("p_riley", "_policy/pending.json") },
+        { from: "/persona_policy/riley/pending.json", to: buildPersonaVaultPath("p_riley", "_policy/pending.json") },
+        { from: "/persona_policy/p_riley/approval.log.jsonl", to: buildPersonaVaultPath("p_riley", "_policy/approval.log.jsonl") },
+        { from: "/persona_policy/riley/approval.log.jsonl", to: buildPersonaVaultPath("p_riley", "_policy/approval.log.jsonl") },
+        { from: "/persona_promotion/p_riley/candidates.json", to: buildPersonaVaultPath("p_riley", "_promotion/candidates.json") },
+        { from: "/persona_promotion/riley/candidates.json", to: buildPersonaVaultPath("p_riley", "_promotion/candidates.json") },
+        { from: "/riley_memory/riley_memory.log.jsonl", to: buildPersonaVaultPath("p_riley", "_memory/riley_memory.log.jsonl") },
+        { from: "/riley_memory/riley_state.json", to: buildPersonaVaultPath("p_riley", "_memory/riley_state.json") },
       ],
       avery: [
-        { from: "/persona_policy/p_avery/policy.md", to: "/_policy/policy.md" },
-        { from: "/persona_policy/avery/policy.md", to: "/_policy/policy.md" },
-        { from: "/persona_policy/p_avery/pending.json", to: "/_policy/pending.json" },
-        { from: "/persona_policy/avery/pending.json", to: "/_policy/pending.json" },
-        { from: "/persona_policy/p_avery/approval.log.jsonl", to: "/_policy/approval.log.jsonl" },
-        { from: "/persona_policy/avery/approval.log.jsonl", to: "/_policy/approval.log.jsonl" },
-        { from: "/persona_promotion/p_avery/candidates.json", to: "/_promotion/candidates.json" },
-        { from: "/persona_promotion/avery/candidates.json", to: "/_promotion/candidates.json" },
-        { from: "/avery_memory/avery_worklog.log.jsonl", to: "/_memory/avery_worklog.log.jsonl" },
-        { from: "/avery_memory/avery_worklog_state.json", to: "/_memory/avery_worklog_state.json" },
+        { from: "/persona_policy/p_avery/policy.md", to: buildPersonaVaultPath("p_avery", "_policy/policy.md") },
+        { from: "/persona_policy/avery/policy.md", to: buildPersonaVaultPath("p_avery", "_policy/policy.md") },
+        { from: "/persona_policy/p_avery/pending.json", to: buildPersonaVaultPath("p_avery", "_policy/pending.json") },
+        { from: "/persona_policy/avery/pending.json", to: buildPersonaVaultPath("p_avery", "_policy/pending.json") },
+        { from: "/persona_policy/p_avery/approval.log.jsonl", to: buildPersonaVaultPath("p_avery", "_policy/approval.log.jsonl") },
+        { from: "/persona_policy/avery/approval.log.jsonl", to: buildPersonaVaultPath("p_avery", "_policy/approval.log.jsonl") },
+        { from: "/persona_promotion/p_avery/candidates.json", to: buildPersonaVaultPath("p_avery", "_promotion/candidates.json") },
+        { from: "/persona_promotion/avery/candidates.json", to: buildPersonaVaultPath("p_avery", "_promotion/candidates.json") },
+        { from: "/avery_memory/avery_worklog.log.jsonl", to: buildPersonaVaultPath("p_avery", "_memory/avery_worklog.log.jsonl") },
+        { from: "/avery_memory/avery_worklog_state.json", to: buildPersonaVaultPath("p_avery", "_memory/avery_worklog_state.json") },
       ],
     };
 
@@ -1359,8 +1399,8 @@ export async function handleApiRoute(
       return { moved, skippedMissing, skippedExists, failed, removedRoots };
     };
 
-    const riley = await run(rileyToken, "riley");
-    const avery = await run(averyToken, "avery");
+    const riley = await run(sharedToken, "riley");
+    const avery = await run(sharedToken, "avery");
     const ok = riley.failed.length === 0 && avery.failed.length === 0;
     return Response.json({ ok, riley, avery }, { headers: noStoreHeaders });
   }
@@ -1502,7 +1542,25 @@ export async function handleApiRoute(
       } catch {
         // KV daily write limit may be exceeded; R2 remains source of truth.
       }
-      return Response.json({ ok: true }, { headers: cors });
+      const uniquePids = [...new Set(payload.map(extractPid).filter(Boolean))];
+      const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
+      if (!sharedToken) {
+        return Response.json({
+          ok: true,
+          vaultLayout: { ok: false, reason: "shared dropbox token missing", attemptedPids: uniquePids },
+        }, { headers: cors });
+      }
+      const ensured: Array<{ pid: string; ok: boolean; failed: string[] }> = [];
+      for (const pid of uniquePids) {
+        ensured.push(await ensurePersonaVaultLayout(sharedToken, pid));
+      }
+      return Response.json({
+        ok: true,
+        vaultLayout: {
+          ok: ensured.every((x) => x.ok),
+          ensured,
+        },
+      }, { headers: cors });
     }
     return null;
   }

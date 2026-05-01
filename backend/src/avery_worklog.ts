@@ -1,12 +1,13 @@
 import type { Env } from "./index";
-import { dropboxReadText, dropboxWriteText, getPersonaDropboxAccessToken } from "./dropbox_vault";
+import { buildPersonaVaultPath, dropboxReadText, dropboxWriteText, getPersonaDropboxAccessToken } from "./dropbox_vault";
 
 const AVERY_LOG_KEY = "_memory/avery_worklog.log.jsonl";
 const AVERY_STATE_KEY = "_memory/avery_worklog_state.json";
-const AVERY_VAULT_LOG_PATH = "/_memory/avery_worklog.log.jsonl";
-const AVERY_VAULT_STATE_PATH = "/_memory/avery_worklog_state.json";
-const AVERY_VAULT_DIRECTIVE_PATH = "/avery_directive.md";
-const AVERY_VAULT_MEMORY_MD_PATH = "/_memory/avery_memory.md";
+const AVERY_PID = "p_avery";
+const AVERY_VAULT_LOG_PATH = buildPersonaVaultPath(AVERY_PID, "_memory/avery_worklog.log.jsonl");
+const AVERY_VAULT_STATE_PATH = buildPersonaVaultPath(AVERY_PID, "_memory/avery_worklog_state.json");
+const AVERY_VAULT_DIRECTIVE_PATH = buildPersonaVaultPath(AVERY_PID, "p_avery_directive.md");
+const AVERY_VAULT_MEMORY_MD_PATH = buildPersonaVaultPath(AVERY_PID, "_memory/avery_memory.md");
 const AVERY_IDS = new Set(["p_avery", "avery"]);
 
 type WorkKind = "worklog" | "error" | "solution" | "todo" | "reminder";
@@ -673,7 +674,7 @@ export async function runAveryVaultActionFromText(env: Env, text: string): Promi
   if (fileRel) {
     const safeRel = normalizeVaultRelPath(fileRel);
     const content = extractInlineContent(raw);
-    const path = `/${safeRel}`;
+    const path = buildPersonaVaultPath(AVERY_PID, safeRel);
     const defaultContent = safeRel.toLowerCase().endsWith(".csv") ? "date,kind,title,topic_key,context,tool,status,due_at,note\n" : "";
     const payload = encodeForFilePath(path, content || defaultContent);
     const ok = await dropboxWriteText(token, path, payload);
@@ -684,7 +685,7 @@ export async function runAveryVaultActionFromText(env: Env, text: string): Promi
   if (folderRel) {
     const safeRel = normalizeVaultRelPath(folderRel).replace(/\/+$/, "");
     if (!safeRel) return { ok: false, error: "folder path required" };
-    const path = `/${safeRel}/.keep`;
+    const path = buildPersonaVaultPath(AVERY_PID, `${safeRel}/.keep`);
     const ok = await dropboxWriteText(token, path, "");
     return ok ? { ok: true, message: `created folder: /${safeRel}` } : { ok: false, error: `failed to create folder: /${safeRel}` };
   }
@@ -697,7 +698,7 @@ export async function runAveryVaultActionFromText(env: Env, text: string): Promi
         : (/\bjson\b/i.test(raw) ? "json" : "txt"));
     const stamp = ymdStampUnderscore();
     const base = /(작업\s*로그|work\s*log)/i.test(raw) ? `work_log_${stamp}` : `note_${stamp}`;
-    const path = `/${base}.${ext}`;
+    const path = buildPersonaVaultPath(AVERY_PID, `${base}.${ext}`);
     const defaultContent = ext === "csv" ? "date,kind,title,topic_key,context,tool,status,due_at,note\n" : "";
     const payload = encodeForFilePath(path, defaultContent);
     const ok = await dropboxWriteText(token, path, payload);

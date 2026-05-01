@@ -1,5 +1,5 @@
 import type { Env } from "./index";
-import { dropboxDeletePath, dropboxReadText, dropboxWriteText, getPersonaDropboxAccessToken } from "./dropbox_vault";
+import { buildPersonaVaultPath, dropboxDeletePath, dropboxReadText, dropboxWriteText, getPersonaDropboxAccessToken } from "./dropbox_vault";
 
 type PersonaPolicyPatch = {
   personaPid: string;
@@ -49,25 +49,22 @@ function normalizePid(pid: string): string {
   return String(pid || "").trim().toLowerCase();
 }
 
-function pidToPersona(pid: string): "riley" | "avery" | null {
+function tokenPersonaFromPid(pid: string): "riley" | "avery" | "shared" {
   const p = normalizePid(pid);
   if (p === "p_riley" || p === "riley") return "riley";
   if (p === "p_avery" || p === "avery") return "avery";
-  return null;
+  return "shared";
 }
 
-function vaultPathFromR2Key(key: string): string {
-  return `/${String(key || "").replace(/^\/+/, "")}`;
+function vaultPathFromR2Key(pid: string, key: string): string {
+  return buildPersonaVaultPath(normalizePid(pid), key);
 }
 
 async function readPolicyText(env: Env, pid: string, key: string): Promise<string | null> {
-  const persona = pidToPersona(pid);
-  if (persona) {
-    const token = await getPersonaDropboxAccessToken(env, persona);
-    if (token) {
-      const txt = await dropboxReadText(token, vaultPathFromR2Key(key));
-      if (txt != null) return txt;
-    }
+  const token = await getPersonaDropboxAccessToken(env, tokenPersonaFromPid(pid));
+  if (token) {
+    const txt = await dropboxReadText(token, vaultPathFromR2Key(pid, key));
+    if (txt != null) return txt;
   }
   const obj = await env.R2.get(key);
   if (!obj) return null;
@@ -75,25 +72,19 @@ async function readPolicyText(env: Env, pid: string, key: string): Promise<strin
 }
 
 async function writePolicyText(env: Env, pid: string, key: string, text: string, contentType: string): Promise<void> {
-  const persona = pidToPersona(pid);
-  if (persona) {
-    const token = await getPersonaDropboxAccessToken(env, persona);
-    if (token) {
-      const ok = await dropboxWriteText(token, vaultPathFromR2Key(key), text);
-      if (ok) return;
-    }
+  const token = await getPersonaDropboxAccessToken(env, tokenPersonaFromPid(pid));
+  if (token) {
+    const ok = await dropboxWriteText(token, vaultPathFromR2Key(pid, key), text);
+    if (ok) return;
   }
   await env.R2.put(key, text, { httpMetadata: { contentType } });
 }
 
 async function deletePolicyText(env: Env, pid: string, key: string): Promise<void> {
-  const persona = pidToPersona(pid);
-  if (persona) {
-    const token = await getPersonaDropboxAccessToken(env, persona);
-    if (token) {
-      const ok = await dropboxDeletePath(token, vaultPathFromR2Key(key));
-      if (ok) return;
-    }
+  const token = await getPersonaDropboxAccessToken(env, tokenPersonaFromPid(pid));
+  if (token) {
+    const ok = await dropboxDeletePath(token, vaultPathFromR2Key(pid, key));
+    if (ok) return;
   }
   await env.R2.delete(key);
 }

@@ -2,7 +2,7 @@ import type { CorsHeaders, Env } from "./index";
 import { generateGeminiImage, generateGeminiText, generateImagenImage, streamGeminiText } from "./model_gemini";
 import { generateOpenAIImage, generateOpenAIText, streamOpenAIText } from "./model_openai";
 import { generateGrokImage, generateGrokText, streamGrokText } from "./model_grok";
-import { dropboxWriteText, getPersonaDropboxAccessToken } from "./dropbox_vault";
+import { buildPersonaVaultPath, dropboxWriteText, getPersonaDropboxAccessToken } from "./dropbox_vault";
 import {
   appendAveryWorklogEvent,
   buildAverySystemPrompt,
@@ -248,10 +248,14 @@ function guardPersonaReply(reply: string, hasExecutionEvidence: boolean, inPerso
 async function executeVaultProposal(env: Env, proposal: VaultProposal): Promise<{ ok: boolean; message: string }> {
   const token = await getPersonaDropboxAccessToken(env, proposal.persona);
   if (!token) return { ok: false, message: `${proposal.persona} dropbox token missing` };
+  const pid = proposal.persona === "riley" ? "p_riley" : "p_avery";
   let okCount = 0;
   const failed: string[] = [];
   for (const a of proposal.actions) {
-    const path = `/${String(a.path || "").trim().replace(/^\/+/, "")}`;
+    const rawPath = String(a.path || "").trim().replace(/\\/g, "/");
+    const path = rawPath.startsWith("/_vault/") || rawPath.startsWith("_vault/")
+      ? `/${rawPath.replace(/^\/+/, "")}`
+      : buildPersonaVaultPath(pid, rawPath.replace(/^\/+/, ""));
     if (!path || path === "/") continue;
     if (a.type === "create_folder") {
       const ok = await dropboxWriteText(token, `${path.replace(/\/+$/, "")}/.keep`, "");
@@ -472,10 +476,10 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
           "- Public/private memory feature is disabled.",
           "- Do not create, update, or reference generic memory store entries.",
           ...(rileyMemoryMd
-            ? ["Riley vault memory markdown (/_memory/riley_memory.md):", rileyMemoryMd]
+            ? ["Riley vault memory markdown (/_vault/p_riley/_memory/riley_memory.md):", rileyMemoryMd]
             : []),
           ...(averyMemoryMd
-            ? ["Avery vault memory markdown (/_memory/avery_memory.md):", averyMemoryMd]
+            ? ["Avery vault memory markdown (/_vault/p_avery/_memory/avery_memory.md):", averyMemoryMd]
             : []),
         ].join("\n");
     const personaPolicyPrompt = (!isImageReq && policyTargetPid)

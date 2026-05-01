@@ -1,12 +1,13 @@
 import type { Env } from "./index";
-import { dropboxPathExists, dropboxReadText, dropboxWriteText, getPersonaDropboxAccessToken } from "./dropbox_vault";
+import { buildPersonaVaultPath, dropboxPathExists, dropboxReadText, dropboxWriteText, getPersonaDropboxAccessToken } from "./dropbox_vault";
 
 const RILEY_LOG_KEY = "_memory/riley_memory.log.jsonl";
 const RILEY_STATE_KEY = "_memory/riley_state.json";
-const RILEY_VAULT_LOG_PATH = "/_memory/riley_memory.log.jsonl";
-const RILEY_VAULT_STATE_PATH = "/_memory/riley_state.json";
-const RILEY_VAULT_DIRECTIVE_PATH = "/riley_directive.md";
-const RILEY_VAULT_MEMORY_MD_PATH = "/_memory/riley_memory.md";
+const RILEY_PID = "p_riley";
+const RILEY_VAULT_LOG_PATH = buildPersonaVaultPath(RILEY_PID, "_memory/riley_memory.log.jsonl");
+const RILEY_VAULT_STATE_PATH = buildPersonaVaultPath(RILEY_PID, "_memory/riley_state.json");
+const RILEY_VAULT_DIRECTIVE_PATH = buildPersonaVaultPath(RILEY_PID, "p_riley_directive.md");
+const RILEY_VAULT_MEMORY_MD_PATH = buildPersonaVaultPath(RILEY_PID, "_memory/riley_memory.md");
 const RILEY_IDS = new Set(["p_riley", "riley"]);
 
 type WealthBucket = "assets" | "liabilities" | "retirement" | "fixed_cashflow";
@@ -542,7 +543,7 @@ export async function runRileyVaultActionFromText(env: Env, text: string): Promi
   if (fileRel) {
     const safeRel = normalizeVaultRelPath(fileRel);
     const content = extractInlineContent(raw);
-    const path = `/${safeRel}`;
+    const path = buildPersonaVaultPath(RILEY_PID, safeRel);
     const defaultContent = safeRel.toLowerCase().endsWith(".csv") ? "date,category,type,label,amount_krw,status,source,note\n" : "";
     const payload = encodeForFilePath(path, content || defaultContent);
     const ok = await dropboxWriteText(token, path, payload);
@@ -553,7 +554,7 @@ export async function runRileyVaultActionFromText(env: Env, text: string): Promi
   if (folderRel) {
     const safeRel = normalizeVaultRelPath(folderRel).replace(/\/+$/, "");
     if (!safeRel) return { ok: false, error: "folder path required" };
-    const path = `/${safeRel}/.keep`;
+    const path = buildPersonaVaultPath(RILEY_PID, `${safeRel}/.keep`);
     const ok = await dropboxWriteText(token, path, "");
     return ok ? { ok: true, message: `created folder: /${safeRel}` } : { ok: false, error: `failed to create folder: /${safeRel}` };
   }
@@ -567,7 +568,7 @@ export async function runRileyVaultActionFromText(env: Env, text: string): Promi
     const stamp = ymdStampUnderscore();
     const base = /(작업\s*로그|work\s*log)/i.test(raw) ? `work_log_${stamp}`
       : (/(자산|wealth|ledger)/i.test(raw) ? "master_wealth_ledger" : `note_${stamp}`);
-    const path = `/${base}.${ext}`;
+    const path = buildPersonaVaultPath(RILEY_PID, `${base}.${ext}`);
     const defaultContent = ext === "csv" ? "date,category,type,label,amount_krw,status,source,note\n" : "";
     const payload = encodeForFilePath(path, defaultContent);
     const ok = await dropboxWriteText(token, path, payload);
