@@ -290,28 +290,7 @@ const PROFILE_CIRCLE_STEPS = [160, 200, 240, 300];
 const PROFILE_FULL_WIDTH_STEPS = [1000];
 const EMOTION_PROMPTS = (globalThis.EMOTION_PROMPTS_KO && typeof globalThis.EMOTION_PROMPTS_KO === 'object')
   ? globalThis.EMOTION_PROMPTS_KO
-  : {
-      neutral: '중립적인 표정. 미소 없이 차분하고 안정적인 얼굴.',
-      subtlesmile: '은은한 미소. 과하지 않게 자연스럽고 부드러운 표정.',
-      happy: '밝고 즐거운 미소. 생기 있고 긍정적인 행복한 표정.',
-      sad: '슬픈 표정. 눈빛과 입가에 가벼운 우울감과 처짐이 느껴지게.',
-      angry: '분노한 표정. 눈썹과 턱에 힘이 들어간 강한 긴장감.',
-      surprise: '놀란 표정. 눈이 커지고 입이 살짝 벌어진 순간.',
-      arousal: '고조된 감정이 느껴지는 표정. 강한 몰입감과 긴장감.',
-      confusion: '혼란스러운 표정. 확신 없는 시선과 미세한 찌푸림.',
-      cry: '울음을 참지 못한 표정. 감정이 터진 듯한 눈가와 입가.',
-      disgust: '불쾌한 표정. 코와 입 주변에 거부감이 드러나게.',
-      contempt: '경멸하는 표정. 한쪽 입꼬리와 냉소적인 시선.',
-      horror: '공포에 질린 표정. 경직된 얼굴 근육과 극도의 긴장감.',
-      laugh: '웃는 표정. 자연스럽고 활기찬 웃음의 에너지.',
-      orgasm: '강한 쾌감이 드러나는 절정의 표정.',
-      playful: '장난기 있는 표정. 가볍고 도발적인 미소.',
-      relief: '안도한 표정. 긴장이 풀리며 편안해진 얼굴.',
-      shy: '수줍은 표정. 시선 회피와 부드러운 미소.',
-      worry: '걱정스러운 표정. 불안한 눈빛과 이마의 긴장.',
-      pain: '고통스러운 표정. 얼굴 근육이 수축된 불편감.',
-      sleepy: '졸린 표정. 무거운 눈꺼풀과 나른한 분위기.',
-    };
+  : {};
 const EMOTION_PLAN = (globalThis.EMOTION_PLAN_KO && typeof globalThis.EMOTION_PLAN_KO === 'object')
   ? globalThis.EMOTION_PLAN_KO
   : { free: [], premium: [], adult: [] };
@@ -1739,7 +1718,7 @@ async function generatePremiumEmotionBatch1(){
 async function generatePremiumEmotionBatch2(){
   const pid = state.activePid;
   if (!pid) return;
-  const ids = ['shy', 'worry', 'pain', 'sleepy'];
+  const ids = ['shy', 'worry', 'thinking', 'sleepy'];
   return runBatchSetByGroups(pid, ids, 'Premium 2', DEFAULT_IMAGE_MODEL);
 }
 
@@ -1753,7 +1732,7 @@ async function generatePremiumEmotionBatch3(){
 async function generatePremiumEmotionBatch4(){
   const pid = state.activePid;
   if (!pid) return;
-  const ids = ['horror', 'hunger', 'absentminded', 'expecting'];
+  const ids = ['horror', 'pain', 'absentminded', 'expecting'];
   return runBatchSetByGroups(pid, ids, 'Premium 4', DEFAULT_IMAGE_MODEL);
 }
 
