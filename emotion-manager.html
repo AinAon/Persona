@@ -1739,7 +1739,7 @@ async function generatePremiumEmotionBatch4(){
 async function generateAdultEmotionBatch(){
   const pid = state.activePid;
   if (!pid) return;
-  const ids = ['arousal', 'orgasm', 'exstasy', 'drunken'];
+  const ids = ['arousal', 'orgasm', 'ecstasy', 'drunken'];
   return runBatchSetByGroups(pid, ids, 'Adult Emo', 'grok-imagine-image-pro');
 }
 
