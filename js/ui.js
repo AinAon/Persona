@@ -523,9 +523,27 @@ function updateChatBottomAnchor(area = document.getElementById('chatArea')) {
   if (firstContent) firstContent.classList.add('chat-bottom-anchor');
 }
 
-function stickChatToBottom(area = document.getElementById('chatArea')) {
+function isChatNearBottom(area = document.getElementById('chatArea'), threshold = 56) {
+  if (!area) return true;
+  return (area.scrollTop + area.clientHeight) >= (area.scrollHeight - threshold);
+}
+
+function bindChatAutoStick(area = document.getElementById('chatArea')) {
   if (!area) return;
+  if (area.dataset.autoStickBound === '1') return;
+  area.dataset.autoStickBound = '1';
+  if (!area.dataset.autoStick) area.dataset.autoStick = '1';
+  area.addEventListener('scroll', () => {
+    area.dataset.autoStick = isChatNearBottom(area) ? '1' : '0';
+  }, { passive: true });
+}
+
+function stickChatToBottom(area = document.getElementById('chatArea'), options = {}) {
+  if (!area) return;
+  const force = !!options.force;
+  if (!force && area.dataset.autoStick === '0') return;
   area.scrollTop = area.scrollHeight;
+  if (force) area.dataset.autoStick = '1';
 }
 
 function layoutHorizontalMasonryRows(root = document) {
@@ -2812,6 +2830,7 @@ async function renderChatList(options = {}) {
     sessions: (sessions || []).map(s => ({
       id: s?.id || '',
       updatedAt: Number(s?.updatedAt || 0),
+      lastMessageAt: Number(s?.lastMessageAt || 0),
       roomName: s?.roomName || '',
       lastPreview: s?.lastPreview || '',
       hidden: !!s?.hidden,
@@ -2901,6 +2920,7 @@ async function renderChatList(options = {}) {
     const avWidth = showListAvatars ? (pList.length > 0 ? (80 + (pList.length - 1) * 52) : 80) : 0;
 
     const previewText = sanitizeChatListPreview(s.lastPreview || buildSessionPreviewFallback(s), s) || '대화를 시작해봐';
+    const lastMsgTs = getSessionLastMessageSortTs(s);
     item.innerHTML = `
       <div class="chat-avatars-row" style="width:${avWidth}px;flex-shrink:0;${showListAvatars ? '' : 'display:none;'}">${avEls.join('')}</div>
       <div class="chat-list-info">
@@ -2908,7 +2928,7 @@ async function renderChatList(options = {}) {
         <div class="chat-list-preview" style="${isSinglePersonaChat ? `color:hsl(${accentHue},32%,72%);` : ''}">${esc(previewText)}</div>
       </div>
       <div class="chat-list-meta">
-        <span class="chat-list-time" style="${isSinglePersonaChat ? `color:hsl(${accentHue},24%,62%);` : ''}">${timeLabel(s.updatedAt)}</span>
+        <span class="chat-list-time" style="${isSinglePersonaChat ? `color:hsl(${accentHue},24%,62%);` : ''}">${timeLabel(lastMsgTs || s.updatedAt)}</span>
       </div>`;
     item.style.cssText += itemBgStyle;
 
@@ -3495,6 +3515,8 @@ async function renderChatArea() {
   if (session._markdownDemo) return; // 데모는 직접 관리
   const area = document.getElementById('chatArea');
   const empty = document.getElementById('chatEmpty2');
+  bindChatAutoStick(area);
+  area.dataset.autoStick = '1';
 
   if (!session.history || !session.history.length) {
     area.classList.remove('has-messages');
@@ -3542,7 +3564,7 @@ async function renderChatArea() {
   area.querySelectorAll('.msg-group').forEach(enhanceRenderedMessage);
   bindImageLoadBottomStick(area);
   layoutHorizontalMasonryRows(area);
-  requestAnimationFrame(() => { stickChatToBottom(area); });
+  requestAnimationFrame(() => { stickChatToBottom(area, { force: true }); });
   if (_pendingArchiveFocus) setTimeout(() => focusPendingArchiveMessage(), 40);
   if (shouldSavePatchedSuffix && !session._demo) {
     session.updatedAt = Date.now();
@@ -4932,7 +4954,7 @@ async function sendMessage() {
   }
   area.appendChild(thinkEl);
   updateChatBottomAnchor(area);
-  area.scrollTop = area.scrollHeight;
+  stickChatToBottom(area, { force: true });
 
   const pListAll = getSessionPersonas(session);
 
@@ -4978,7 +5000,7 @@ async function sendMessage() {
       area.appendChild(replyEl.firstElementChild);
       updateChatBottomAnchor(area);
     }
-    area.scrollTop = area.scrollHeight;
+    stickChatToBottom(area, { force: true });
 
     session.history.push({ role:'assistant', content:'(감정 테스트)', createdAt: emotionTestCreatedAt, personaSnapshot, _suffixes: {} });
     session.lastPreview = '(감정 테스트)'; session.updatedAt = Date.now();
