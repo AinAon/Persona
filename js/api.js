@@ -890,7 +890,8 @@ async function saveIndex() {
   const idx = buildIndex();
   setLocalSessionIndex(idx);
   if (typeof syncIndexToGoogleWorkspace === 'function') {
-    syncIndexToGoogleWorkspace(idx).catch(() => {});
+    const syncTask = syncIndexToGoogleWorkspace(idx);
+    if (syncTask && typeof syncTask.catch === 'function') syncTask.catch(() => {});
   }
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl) return;
@@ -1012,7 +1013,8 @@ async function saveSession(id) {
   const localSaved = setLocalSession(id, history);
   const session = { ...buildIndex().find(x=>x.id===id), history };
   if (typeof syncSessionToGoogleWorkspace === 'function') {
-    syncSessionToGoogleWorkspace(session).catch(() => {});
+    const syncTask = syncSessionToGoogleWorkspace(session);
+    if (syncTask && typeof syncTask.catch === 'function') syncTask.catch(() => {});
   }
   if (!localSaved) {
     console.warn('[session] local save failed', { id, historyLen: history.length });
