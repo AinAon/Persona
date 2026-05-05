@@ -1580,6 +1580,10 @@ list-style-position: outside;
         <div style="display:flex;flex-direction:column;gap:8px;padding:10px 12px;border:1px solid var(--border2);border-radius:10px;background:var(--card)">
           <div id="adminModeState" style="font-size:12px;color:var(--muted)">일반 계정 모드</div>
           <div style="display:flex;gap:8px;align-items:center">
+            <button type="button" onclick="chooseAdminMode()" style="height:32px;padding:0 10px;border-radius:8px;border:1px solid var(--border2);background:var(--text);color:var(--bg);font-family:'Pretendard',sans-serif;font-size:12px;cursor:pointer">관리자 모드로 전환</button>
+            <button type="button" onclick="chooseUserMode()" style="height:32px;padding:0 10px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--muted);font-family:'Pretendard',sans-serif;font-size:12px;cursor:pointer">사용자 모드로 전환</button>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
             <input class="edit-input" id="adminPasswordInput" type="password" placeholder="관리자 비밀번호" style="font-size:13px;padding:8px 10px;flex:1">
             <button type="button" onclick="enableAdminModeFromInput()" style="height:34px;padding:0 12px;border-radius:8px;border:1px solid var(--border2);background:var(--text);color:var(--bg);font-family:'Pretendard',sans-serif;font-size:12px;font-weight:700;cursor:pointer">활성화</button>
             <button type="button" onclick="disableAdminMode()" style="height:34px;padding:0 10px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--muted);font-family:'Pretendard',sans-serif;font-size:12px;cursor:pointer">해제</button>
