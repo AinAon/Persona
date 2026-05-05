@@ -427,7 +427,7 @@ function enhanceRenderedMessage(container) {
       btn.className = 'copy-btn user-copy-btn';
       btn.type = 'button';
       btn.title = '복사';
-      btn.dataset.copyText = encodeCopyPayload(userMsg.innerText || '');
+      btn.dataset.copyText = encodeCopyPayload(getBubbleCopyText(userMsg));
       btn.innerHTML = '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="10" height="11" rx="2"/><path d="M13 5V3.5A1.5 1.5 0 0 0 11.5 2h-7A1.5 1.5 0 0 0 3 3.5v10A1.5 1.5 0 0 0 4.5 15H5"/></svg>';
       btn.onclick = () => copyBubble(btn, btn.dataset.copyText, true);
       userActions.appendChild(btn);
@@ -456,7 +456,7 @@ function enhanceRenderedMessage(container) {
       }
       btn.title = '복사';
       btn.onclick = () => copyBubble(btn, btn.dataset.copyText, true);
-      btn.dataset.copyText = encodeCopyPayload(aiBubble.innerText || '');
+      btn.dataset.copyText = encodeCopyPayload(getBubbleCopyText(aiBubble));
     }
   }
 
@@ -514,6 +514,35 @@ function attachMessageMeta(container, ts, align = 'left') {
     || container.querySelector('.user-msg')
     || container;
   rightWrap.insertAdjacentHTML('afterend', metaHTML);
+}
+
+function getBubbleCopyText(el) {
+  if (!el) return '';
+  const topLists = Array.from(el.querySelectorAll(':scope > ol, :scope > ul'));
+  if (!topLists.length) return (el.innerText || '').trim();
+  const lines = [];
+  const walk = (listEl, depth = 0) => {
+    const isOrdered = listEl.tagName === 'OL';
+    const indent = '  '.repeat(depth);
+    let index = Number(listEl.getAttribute('start') || 1);
+    if (!Number.isFinite(index) || index < 1) index = 1;
+    const items = Array.from(listEl.children).filter((n) => n && n.tagName === 'LI');
+    for (const li of items) {
+      const marker = isOrdered ? `${index}.` : '•';
+      const parts = [];
+      for (const node of Array.from(li.childNodes)) {
+        if (node.nodeType === Node.ELEMENT_NODE && (node.tagName === 'OL' || node.tagName === 'UL')) continue;
+        const t = String(node.textContent || '').trim();
+        if (t) parts.push(t);
+      }
+      lines.push(`${indent}${marker} ${parts.join(' ').trim()}`.trimEnd());
+      const nested = Array.from(li.children).filter((n) => n && (n.tagName === 'OL' || n.tagName === 'UL'));
+      for (const nl of nested) walk(nl, depth + 1);
+      index += 1;
+    }
+  };
+  topLists.forEach((listEl) => walk(listEl, 0));
+  return lines.join('\n').trim();
 }
 
 function updateChatBottomAnchor(area = document.getElementById('chatArea')) {
@@ -3125,7 +3154,8 @@ function handleGlobalShortcutKeys(event) {
   } catch {}
   event.preventDefault();
   event.stopPropagation();
-  if (activeChatId) toggleChatProfileOverride();
+  const chatScreenOpen = document.getElementById('chatScreen')?.classList.contains('active');
+  if (chatScreenOpen && activeChatId) toggleChatProfileOverride();
   else toggleChatListAvatarVisibility();
 }
 
