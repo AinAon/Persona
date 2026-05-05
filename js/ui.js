@@ -3482,7 +3482,7 @@ async function renderChatArea() {
     const el = document.createElement('div');
     if (msg.role === 'user') {
   let text = typeof msg.content === 'string' ? msg.content : (Array.isArray(msg.content) ? msg.content.find(c=>c.type==='text')?.text||'(메시지)' : '(또는 텍스트)');
-  el.innerHTML = msg._rendered || renderUserMessageHTML(msg);
+  el.innerHTML = renderUserMessageHTML(msg);
 } else {
       const pList = getSessionPersonas(session);
       const renderPersonas = msg.personaSnapshot
