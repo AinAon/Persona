@@ -6,7 +6,9 @@
     "mobile:prepare": "node scripts/prepare-mobile-web.js",
     "mobile:sync": "npm run mobile:prepare && cap sync android",
     "mobile:apk": "npm run mobile:sync && cd android && gradlew assembleDebug",
-    "mobile:apk:user": "npm run mobile:sync && cd android && gradlew assembleUserDebug"
+    "mobile:apk:user": "npm run mobile:sync && cd android && gradlew assembleUserDebug",
+    "mobile:apk:admin:release": "npm run mobile:sync && cd android && gradlew assembleAdminRelease",
+    "mobile:apk:user:release": "npm run mobile:sync && cd android && gradlew assembleUserRelease"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.4",

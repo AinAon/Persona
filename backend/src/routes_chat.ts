@@ -390,10 +390,19 @@ type ChatBody = {
   stream?: boolean;
 };
 
+const DEFAULT_USER_CHAT_MODEL_KEY = "settings:default_user_chat_model";
+const DEFAULT_USER_CHAT_MODEL_FALLBACK = "gemini-3.1-flash-lite-preview";
+
+async function resolveDefaultUserChatModel(env: Env): Promise<string> {
+  const raw = await env.KV.get(DEFAULT_USER_CHAT_MODEL_KEY);
+  const model = String(raw || "").trim();
+  return model || DEFAULT_USER_CHAT_MODEL_FALLBACK;
+}
+
 export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders): Promise<Response> {
   const {
     messages = [],
-    model = "grok-4.20-non-reasoning",
+    model: requestedModel = "",
     keys,
     prompt,
     aspect_ratio,
@@ -407,6 +416,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     sessionId,
     stream = false,
   } = reqBody;
+  const model = String(requestedModel || "").trim() || await resolveDefaultUserChatModel(env);
 
   const apiKeys = {
     gemini: keys?.gemini || env.GEMINI_KEY || "",

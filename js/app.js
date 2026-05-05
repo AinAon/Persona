@@ -448,6 +448,31 @@ async function syncPersonasFromWorkerForStartup(wUrl, timeoutMs = 4000) {
 
 const ENABLE_STARTUP_CACHE_PROCEDURES = true;
 let _loadingLogoHoldBound = false;
+const DEFAULT_USER_MODEL_FALLBACK = 'gemini-3.1-flash-lite-preview';
+
+async function fetchDefaultUserModelFromWorker() {
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) return DEFAULT_USER_MODEL_FALLBACK;
+  try {
+    const res = await fetch(`${wUrl}/settings/default-user-model`, { cache: 'no-store' });
+    const data = await res.json().catch(() => ({}));
+    const model = String(data?.model || '').trim();
+    return model || DEFAULT_USER_MODEL_FALLBACK;
+  } catch {
+    return DEFAULT_USER_MODEL_FALLBACK;
+  }
+}
+
+async function applyUserDefaultModelIfNeeded() {
+  const isAdmin = (typeof isPersonaAdminMode !== 'function') || isPersonaAdminMode();
+  if (isAdmin) return;
+  const model = await fetchDefaultUserModelFromWorker();
+  const select = document.getElementById('chatModeSelect');
+  if (!select) return;
+  if (!String(select.value || '').trim() || String(select.value).includes('grok-4.20')) {
+    select.value = model;
+  }
+}
 
 function bindLoadingLogoHoldToRecover() {
   if (_loadingLogoHoldBound) return;
@@ -532,6 +557,7 @@ async function init() {
       await loadGoogleWorkspaceData(false).catch(() => false);
     }
   }
+  await applyUserDefaultModelIfNeeded();
   loadUserProfile();
   applyFontSize(userProfile.fontSize || 15);
   switchTab(userProfile.defaultTab || 'persona');
@@ -609,3 +635,4 @@ init().catch((e) => {
   try { setLoading(false); } catch(err) {}
 });
 window.isAdminOnlyPersonaPid = isAdminOnlyPersonaPid;
+window.fetchDefaultUserModelFromWorker = fetchDefaultUserModelFromWorker;

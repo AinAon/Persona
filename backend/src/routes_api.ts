@@ -53,6 +53,20 @@ const SESSION_AUDIO_R2_PREFIXES = ["tts/session/", "audio/session/"];
 const SHARED_PREFIX = "/persona_shared";
 const SESSION_CHANGE_SEQ_KEY = "session_change_seq";
 const LEGACY_MEMORY_API_ENABLED = false;
+const DEFAULT_USER_CHAT_MODEL_KEY = "settings:default_user_chat_model";
+const DEFAULT_USER_CHAT_MODEL_FALLBACK = "gemini-3.1-flash-lite-preview";
+const ALLOWED_DEFAULT_CHAT_MODELS = new Set([
+  "gemini-3.1-flash-lite-preview",
+  "gemini-3.1-pro-preview",
+  "gemini-2.5-flash",
+  "gpt-5.4-nano",
+  "gpt-5.4-mini",
+  "gpt-5.4",
+  "grok-4-1-fast-reasoning-latest",
+  "grok-4-1-fast-non-reasoning-latest",
+  "grok-4.20-reasoning-latest",
+  "grok-4.20-non-reasoning-latest",
+]);
 
 function normalizePid(raw: unknown): string {
   const s = String(raw || "").trim().toLowerCase();
@@ -150,6 +164,16 @@ function requireAdminOps(request: Request, env: Env, cors: CorsHeaders): Respons
     return Response.json({ ok: false, error: "admin_ops_token_required" }, { status: 401, headers: cors });
   }
   return null;
+}
+
+function isAllowedAdminEmail(auth: AuthContext | null | undefined, env: Env): boolean {
+  const allowed = String(env.ADMIN_GOOGLE_EMAILS || "")
+    .split(",")
+    .map((x) => x.trim().toLowerCase())
+    .filter(Boolean);
+  if (!allowed.length) return false;
+  const email = String(auth?.email || "").trim().toLowerCase();
+  return !!email && allowed.includes(email);
 }
 
 function toIntInRange(raw: string | null, min: number, max: number): number | null {
@@ -680,6 +704,26 @@ export async function handleApiRoute(
     const body = (await request.json()) as { credential?: string };
     const verified = await verifyGoogleIdToken(env, String(body?.credential || ""));
     return Response.json({ ok: true, user: verified }, { headers: noStoreHeaders });
+  }
+
+  if (url.pathname === "/settings/default-user-model" && request.method === "GET") {
+    const raw = await env.KV.get(DEFAULT_USER_CHAT_MODEL_KEY);
+    const value = String(raw || "").trim();
+    const model = ALLOWED_DEFAULT_CHAT_MODELS.has(value) ? value : DEFAULT_USER_CHAT_MODEL_FALLBACK;
+    return Response.json({ ok: true, model }, { headers: noStoreHeaders });
+  }
+
+  if (url.pathname === "/settings/default-user-model" && request.method === "POST") {
+    if (!isAllowedAdminEmail(auth, env)) {
+      return Response.json({ ok: false, error: "admin_email_required" }, { status: 403, headers: noStoreHeaders });
+    }
+    const body = await request.json().catch(() => ({} as any)) as { model?: string };
+    const model = String(body?.model || "").trim();
+    if (!ALLOWED_DEFAULT_CHAT_MODELS.has(model)) {
+      return Response.json({ ok: false, error: "unsupported_model" }, { status: 400, headers: noStoreHeaders });
+    }
+    await env.KV.put(DEFAULT_USER_CHAT_MODEL_KEY, model);
+    return Response.json({ ok: true, model }, { headers: noStoreHeaders });
   }
 
   if (url.pathname === "/oauth/dropbox/start" && request.method === "GET") {

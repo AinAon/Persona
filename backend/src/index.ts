@@ -50,6 +50,7 @@ export interface Env {
   GOOGLE_CLIENT_IDS?: string;
   ALLOW_ADMIN_OPS?: string;
   ADMIN_OPS_TOKEN?: string;
+  ADMIN_GOOGLE_EMAILS?: string;
 }
 
 const CORS: CorsHeaders = {

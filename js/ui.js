@@ -805,7 +805,7 @@ function getTargetModelForRequest(session, isImageReq) {
   const pListForModel = (session.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
   const targetModel = pListForModel.find(p => p.defaultModel)?.defaultModel
     || document.getElementById('chatModeSelect')?.value
-    || 'grok-4.20-non-reasoning-latest';
+    || 'gemini-3.1-flash-lite-preview';
   const sel = document.getElementById('chatModeSelect');
   if (sel && sel.value !== targetModel) sel.value = targetModel;
   return targetModel;
@@ -829,7 +829,7 @@ function getPersonaModel(sessionOrPersona, maybePersona = null) {
     || session?.overrideModel
     || persona?.defaultModel
     || document.getElementById('chatModeSelect')?.value
-    || 'grok-4.20-non-reasoning-latest';
+    || 'gemini-3.1-flash-lite-preview';
 }
 
 function stripPersonaTagsForPreview(text, session = null) {
@@ -913,7 +913,7 @@ function getRouterModel(session, pList = []) {
   return session?.overrideModel
     || pList.find((p) => p?.defaultModel)?.defaultModel
     || document.getElementById('chatModeSelect')?.value
-    || 'grok-4.20-non-reasoning-latest';
+    || 'gemini-3.1-flash-lite-preview';
 }
 
 function extractJsonObject(raw = '') {
@@ -1657,7 +1657,50 @@ function renderSettingsPane() {
   const typingEl = document.getElementById('settingsTypingSpeed');
   if (typingEl) typingEl.value = getBubbleTypingSpeedPreset();
   setSettingsSegmentValue('settingsTypingSpeed', getBubbleTypingSpeedPreset(), 'settingsTypingSpeedSeg');
+  loadAdminDefaultUserModelSetting().catch(() => {});
   // Public/private memory UI disabled by policy.
+}
+
+async function loadAdminDefaultUserModelSetting() {
+  const isAdmin = (typeof isPersonaAdminMode !== 'function') || isPersonaAdminMode();
+  const wrap = document.getElementById('adminDefaultModelWrap');
+  if (!wrap) return;
+  if (!isAdmin) {
+    wrap.style.display = 'none';
+    return;
+  }
+  wrap.style.display = '';
+  const stateEl = document.getElementById('adminDefaultModelState');
+  const selectEl = document.getElementById('adminDefaultModelSelect');
+  if (!selectEl) return;
+  const model = (typeof fetchDefaultUserModelFromWorker === 'function')
+    ? await fetchDefaultUserModelFromWorker()
+    : 'gemini-3.1-flash-lite-preview';
+  selectEl.value = model || 'gemini-3.1-flash-lite-preview';
+  if (stateEl) stateEl.textContent = `현재 기본값: ${getChatModelLabel(selectEl.value)}`;
+}
+
+async function saveAdminDefaultUserModelSetting() {
+  const isAdmin = (typeof isPersonaAdminMode !== 'function') || isPersonaAdminMode();
+  if (!isAdmin) return;
+  const selectEl = document.getElementById('adminDefaultModelSelect');
+  const stateEl = document.getElementById('adminDefaultModelState');
+  if (!selectEl) return;
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) return;
+  try {
+    const res = await fetch(`${wUrl}/settings/default-user-model`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: String(selectEl.value || '').trim() })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.ok) throw new Error(String(data?.error || 'save_failed'));
+    if (stateEl) stateEl.textContent = `현재 기본값: ${getChatModelLabel(String(data.model || selectEl.value || ''))}`;
+    showToast('일반 사용자 기본 모델 저장 완료');
+  } catch (e) {
+    showToast(`저장 실패: ${String(e?.message || e || 'unknown')}`);
+  }
 }
 
 function previewFontSize(val) {
@@ -2165,7 +2208,9 @@ function createNewPersona() {
     showToast('일반 사용자 모드에서는 최초 1회만 생성할 수 있어');
     return;
   }
-  const p = { pid: nextPid(), name: '', bio: '', tags: [], hue: 200, image: null, hidden: false };
+  const modelSelectVal = String(document.getElementById('chatModeSelect')?.value || '').trim();
+  const userDefaultModel = modelSelectVal || 'gemini-3.1-flash-lite-preview';
+  const p = { pid: nextPid(), name: '', bio: '', tags: [], hue: 200, image: null, hidden: false, defaultModel: userDefaultModel };
   isNewPersona = true; editingPid = p.pid;
   personas.push(p);
   document.getElementById('editTitle').textContent = '새 페르소나';
@@ -4931,7 +4976,7 @@ async function sendMessage() {
           }));
           const groupedByModel = new Map();
           for (const entry of responderEntries) {
-            const key = entry.model || 'grok-4.20-non-reasoning-latest';
+            const key = entry.model || 'gemini-3.1-flash-lite-preview';
             if (!groupedByModel.has(key)) groupedByModel.set(key, []);
             groupedByModel.get(key).push(entry.persona);
           }
@@ -5617,7 +5662,7 @@ async function compressChat() {
     const compressModel = s.overrideModel
       || pList.find(p=>p.defaultModel)?.defaultModel
       || document.getElementById('chatModeSelect')?.value
-      || 'grok-4.20-non-reasoning-latest';
+      || 'gemini-3.1-flash-lite-preview';
     const res = await fetch(wUrl + '/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
