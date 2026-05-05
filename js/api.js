@@ -79,7 +79,8 @@ function buildImageVariantUrl(key, {
   if (fit) sp.set('fit', String(fit));
   if (q) sp.set('q', String(Math.max(1, Math.min(100, Math.round(q)))));
   if (f) sp.set('f', String(f));
-  return `${wUrl}/image-variant/${encodeURIComponent(safeKey).replace(/%2F/gi, '/')}${sp.toString() ? `?${sp.toString()}` : ''}`;
+  const url = `${wUrl}/image-variant/${encodeURIComponent(safeKey).replace(/%2F/gi, '/')}${sp.toString() ? `?${sp.toString()}` : ''}`;
+  return typeof appendPersonaAuthToUrl === 'function' ? appendPersonaAuthToUrl(url) : url;
 }
 
 async function fetchImageFromWorker(key, variantOptions = {}, timeoutMs = 4500) {
@@ -94,7 +95,8 @@ async function fetchImageFromWorker(key, variantOptions = {}, timeoutMs = 4500) 
     } catch {}
   }
   try {
-    const raw = await fetchWithTimeout(cacheBustUrl(`${wUrl}/image/${safeKey}`), {}, timeoutMs);
+    const imageUrl = typeof appendPersonaAuthToUrl === 'function' ? appendPersonaAuthToUrl(`${wUrl}/image/${safeKey}`) : `${wUrl}/image/${safeKey}`;
+    const raw = await fetchWithTimeout(cacheBustUrl(imageUrl), {}, timeoutMs);
     if (raw?.ok) return raw;
   } catch {}
   return null;
@@ -1269,7 +1271,8 @@ async function uploadToR2(imageRef, folder, fname) {
 
     const res = await fetch(wUrl + '/image', { method: 'POST', body: form });
     const data = await res.json();
-    return data.url || imageRef;
+    const outUrl = data.url || imageRef;
+    return typeof appendPersonaAuthToUrl === 'function' ? appendPersonaAuthToUrl(outUrl) : outUrl;
   } catch(e) {
     console.error('R2 Upload failed:', e);
     return imageRef;

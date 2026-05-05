@@ -2718,7 +2718,8 @@ async function savePersonaEdit() {
       const res = await fetch(workerUrl + '/image', { method: 'POST', body: form });
       const data = await res.json();
       if (!data.url) throw new Error(data.error || '업로드 실패');
-      p.imageUrl = `${data.url}${String(data.url).includes('?') ? '&' : '?'}v=${personaUpdatedAt}`;
+      const imageUrl = typeof appendPersonaAuthToUrl === 'function' ? appendPersonaAuthToUrl(data.url) : data.url;
+      p.imageUrl = `${imageUrl}${String(imageUrl).includes('?') ? '&' : '?'}v=${personaUpdatedAt}`;
     } catch(e) {
       alert('업로드 실패: ' + e.message);
       return;
@@ -5880,7 +5881,9 @@ async function loadArchiveManifestFromR2() {
       const mapped = sourceMap.get(normalizedKey) || sourceMap.get(key) || {};
       return {
         key: normalizedKey,
-        url: `${wUrl}/image/${encodeURIComponent(normalizedKey).replace(/%2F/gi, '/')}`,
+        url: typeof appendPersonaAuthToUrl === 'function'
+          ? appendPersonaAuthToUrl(`${wUrl}/image/${encodeURIComponent(normalizedKey).replace(/%2F/gi, '/')}`)
+          : `${wUrl}/image/${encodeURIComponent(normalizedKey).replace(/%2F/gi, '/')}`,
         type: getArchiveTypeByKey(normalizedKey),
         chatId: mapped.chatId || null,
         messageIndex: Number.isFinite(mapped.messageIndex) ? mapped.messageIndex : null,
@@ -5903,7 +5906,9 @@ async function ensureArchiveManifest() {
         return {
           ...it,
           key: normalizedKey,
-          url: base ? `${base}/image/${encodeURIComponent(normalizedKey).replace(/%2F/gi, '/')}` : String(it?.url || ''),
+          url: base
+            ? (typeof appendPersonaAuthToUrl === 'function' ? appendPersonaAuthToUrl(`${base}/image/${encodeURIComponent(normalizedKey).replace(/%2F/gi, '/')}`) : `${base}/image/${encodeURIComponent(normalizedKey).replace(/%2F/gi, '/')}`)
+            : String(it?.url || ''),
           type: getArchiveTypeByKey(normalizedKey),
         };
       })

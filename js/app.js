@@ -327,7 +327,9 @@ function connectSessionEvents() {
     _sessionEventsReconnectTimer = null;
   }
   closeSessionEvents();
-  const es = new EventSource(`${wUrl}/events/sessions?since=${Number(_lastSessionEventSeq || 0)}`);
+  let eventsUrl = `${wUrl}/events/sessions?since=${Number(_lastSessionEventSeq || 0)}`;
+  if (typeof appendPersonaAuthToUrl === 'function') eventsUrl = appendPersonaAuthToUrl(eventsUrl);
+  const es = new EventSource(eventsUrl);
   _sessionEvents = es;
 
   es.addEventListener('session_update', (evt) => {
@@ -498,6 +500,7 @@ async function init() {
     try { if (typeof setLoadingEscapeVisible === 'function') setLoadingEscapeVisible(true); } catch(e) {}
   }, 8000);
   if (!shouldBlockLoading) setLoading(false);
+  try { if (typeof initGoogleLogin === 'function') initGoogleLogin(); } catch(e) {}
   loadUserProfile();
   applyFontSize(userProfile.fontSize || 15);
   switchTab(userProfile.defaultTab || 'persona');
