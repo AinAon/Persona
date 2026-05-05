@@ -1315,7 +1315,8 @@ const LOCAL_ONLY_PROFILE_KEYS = ['defaultTab', 'chatAvatarStyle', 'chatListAvata
 function saveUserProfile() {
   setLocalUserProfile(userProfile);
   if (typeof syncProfileToGoogleWorkspace === 'function') {
-    syncProfileToGoogleWorkspace(userProfile).catch(() => {});
+    const syncTask = syncProfileToGoogleWorkspace(userProfile);
+    if (syncTask && typeof syncTask.catch === 'function') syncTask.catch(() => {});
   }
 }
 
