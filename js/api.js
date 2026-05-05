@@ -23,22 +23,35 @@ const PROFILE_FULL_WIDTH_STEPS = [1200, 1600];
 //  R2 파일 목록 캐시
 // ══════════════════════════════
 const _imageListCache = {}; // { pid: ['profile/p_riley/riley_neutral.jpg', ...] }
+const _remoteImageSourceInFlight = {}; // { safeKey: Promise<string|null> }
 const REMOTE_SAVE_DEBOUNCE_MS = 1200;
 let _remoteIndexSaveTimer = null;
 let _remoteIndexPayload = null;
 const _remoteSessionSaveTimers = {};
 const _remoteSessionPayloadById = {};
 
+function getRuntimeCacheScope() {
+  try {
+    if (typeof getPersonaStorageNamespace === 'function') return String(getPersonaStorageNamespace() || 'default');
+  } catch {}
+  return 'default';
+}
+
+function scopedPidCacheKey(pid) {
+  return `${getRuntimeCacheScope()}:${String(pid || '')}`;
+}
+
 async function getImageList(pid) {
-  if (_imageListCache[pid]) return _imageListCache[pid];
+  const k = scopedPidCacheKey(pid);
+  if (_imageListCache[k]) return _imageListCache[k];
   try {
     const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
     if (!wUrl) return [];
     const resp = await fetch(`${wUrl}/image-list/profile/${pid}`);
     if (!resp.ok) return [];
     const data = await resp.json();
-    _imageListCache[pid] = data.keys || [];
-    return _imageListCache[pid];
+    _imageListCache[k] = data.keys || [];
+    return _imageListCache[k];
   } catch(e) { return []; }
 }
 
@@ -87,27 +100,52 @@ async function fetchImageFromWorker(key, variantOptions = {}, timeoutMs = 4500) 
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl || !key) return null;
   const safeKey = String(key).replace(/^\/+/, '');
-  const variantUrl = buildImageVariantUrl(safeKey, variantOptions);
-  let canUseVariantFetch = !!variantUrl;
+  const cacheKey = `remote_src_${safeKey}`;
   try {
-    const workerOrigin = new URL(wUrl).origin;
-    const pageOrigin = window.location.origin;
-    // Cross-origin + Cloudflare image transform redirect(/cdn-cgi/image) often drops CORS headers.
-    // In that case, skip variant fetch and fall back to /image direct fetch.
-    if (workerOrigin !== pageOrigin) canUseVariantFetch = false;
+    const cached = await idbGet(cacheKey);
+    if (cached && /^data:image\//i.test(String(cached))) {
+      return new Response(await dataUrlToBlob(cached), { status: 200 });
+    }
   } catch {}
-  if (canUseVariantFetch) {
-    try {
-      const resized = await fetchWithTimeout(cacheBustUrl(variantUrl), {}, timeoutMs);
-      if (resized?.ok) return resized;
-    } catch {}
+
+  if (!_remoteImageSourceInFlight[safeKey]) {
+    _remoteImageSourceInFlight[safeKey] = (async () => {
+      try {
+        const imageUrl = typeof appendPersonaAuthToUrl === 'function'
+          ? appendPersonaAuthToUrl(`${wUrl}/image/${safeKey}`)
+          : `${wUrl}/image/${safeKey}`;
+        const raw = await fetchWithTimeout(cacheBustUrl(imageUrl), {}, timeoutMs);
+        if (!raw?.ok) return null;
+        const blob = await raw.blob();
+        const dataUrl = await blobToDataUrl(blob);
+        if (!/^data:image\//i.test(String(dataUrl || ''))) return null;
+        await idbSet(cacheKey, dataUrl).catch(() => {});
+        return dataUrl;
+      } catch {
+        return null;
+      } finally {
+        delete _remoteImageSourceInFlight[safeKey];
+      }
+    })();
   }
-  try {
-    const imageUrl = typeof appendPersonaAuthToUrl === 'function' ? appendPersonaAuthToUrl(`${wUrl}/image/${safeKey}`) : `${wUrl}/image/${safeKey}`;
-    const raw = await fetchWithTimeout(cacheBustUrl(imageUrl), {}, timeoutMs);
-    if (raw?.ok) return raw;
-  } catch {}
-  return null;
+
+  const fetched = await _remoteImageSourceInFlight[safeKey];
+  if (!fetched) return null;
+  return new Response(await dataUrlToBlob(fetched), { status: 200 });
+}
+
+async function blobToDataUrl(blob) {
+  return await new Promise((resolve, reject) => {
+    const rd = new FileReader();
+    rd.onload = () => resolve(rd.result);
+    rd.onerror = () => reject(rd.error || new Error('blob_to_dataurl_failed'));
+    rd.readAsDataURL(blob);
+  });
+}
+
+async function dataUrlToBlob(dataUrl) {
+  const res = await fetch(String(dataUrl || ''));
+  return await res.blob();
 }
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = 5000) {
@@ -124,13 +162,14 @@ const _neutralCache = {};
 const NEUTRAL_DEBUG_LOG = false;
 
 async function getNeutralImage(pid) {
-  if (_neutralCache[pid]) return _neutralCache[pid];
+  const k = scopedPidCacheKey(pid);
+  if (_neutralCache[k]) return _neutralCache[k];
   // IDB 시도
   try {
     const cachedA = await idbGet(`emotion_${pid}_neutral_a`);
-    if (cachedA) { _neutralCache[pid] = cachedA; return cachedA; }
+    if (cachedA) { _neutralCache[k] = cachedA; return cachedA; }
     const cached = await idbGet(`emotion_${pid}_neutral`);
-    if (cached) { _neutralCache[pid] = cached; return cached; }
+    if (cached) { _neutralCache[k] = cached; return cached; }
   } catch(e) {}
   // IDB 없으면 직접 fetch
   return await loadNeutralDirect(pid);
@@ -661,7 +700,7 @@ async function preloadEmotionImages() {
   // 감정 이미지는 on-demand 로드 (suffix 시스템)
   // neutral만 메모리 캐싱 (IDB 생략 → 모바일 호환성)
   for (const p of personas) {
-    if (_neutralCache[p.pid]) continue;
+    if (_neutralCache[scopedPidCacheKey(p.pid)]) continue;
     await loadNeutralDirect(p.pid);
   }
 }
@@ -678,7 +717,8 @@ async function loadNeutralDirect(pid) {
     return null;
   }
 
-  if (_neutralCache[pid]) return _neutralCache[pid];
+  const ck = scopedPidCacheKey(pid);
+  if (_neutralCache[ck]) return _neutralCache[ck];
 
   try {
     const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
@@ -721,7 +761,7 @@ async function loadNeutralDirect(pid) {
         });
 
         const { sqMd } = await generateThumbnailSet(dataUrl, pid, c.cacheEmotion);
-        _neutralCache[pid] = sqMd;
+        _neutralCache[ck] = sqMd;
         return sqMd;
       } catch (e) {
         continue;
