@@ -88,7 +88,15 @@ async function fetchImageFromWorker(key, variantOptions = {}, timeoutMs = 4500) 
   if (!wUrl || !key) return null;
   const safeKey = String(key).replace(/^\/+/, '');
   const variantUrl = buildImageVariantUrl(safeKey, variantOptions);
-  if (variantUrl) {
+  let canUseVariantFetch = !!variantUrl;
+  try {
+    const workerOrigin = new URL(wUrl).origin;
+    const pageOrigin = window.location.origin;
+    // Cross-origin + Cloudflare image transform redirect(/cdn-cgi/image) often drops CORS headers.
+    // In that case, skip variant fetch and fall back to /image direct fetch.
+    if (workerOrigin !== pageOrigin) canUseVariantFetch = false;
+  } catch {}
+  if (canUseVariantFetch) {
     try {
       const resized = await fetchWithTimeout(cacheBustUrl(variantUrl), {}, timeoutMs);
       if (resized?.ok) return resized;
