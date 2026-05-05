@@ -518,7 +518,7 @@ function attachMessageMeta(container, ts, align = 'left') {
 
 function getBubbleCopyText(el) {
   if (!el) return '';
-  const topLists = Array.from(el.querySelectorAll(':scope > ol, :scope > ul'));
+  const topLists = Array.from(el.querySelectorAll('ol, ul')).filter((listEl) => !listEl.closest('li ol, li ul'));
   if (!topLists.length) return (el.innerText || '').trim();
   const lines = [];
   const walk = (listEl, depth = 0) => {
@@ -4699,7 +4699,7 @@ function renderUserBubbleHTML(text, atts) {
       <img class="bubble-img" src="${url}" onclick="openImagePopup('${url}')">
     </div>`;
   });
-  if (text) html += fmt(text);
+  if (text) html += `<div class="md-content user-md-content">${fmt(text)}</div>`;
   return html;
 }
 
