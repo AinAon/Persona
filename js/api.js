@@ -79,7 +79,8 @@ function buildImageVariantUrl(key, {
   if (fit) sp.set('fit', String(fit));
   if (q) sp.set('q', String(Math.max(1, Math.min(100, Math.round(q)))));
   if (f) sp.set('f', String(f));
-  return `${wUrl}/image-variant/${encodeURIComponent(safeKey).replace(/%2F/gi, '/')}${sp.toString() ? `?${sp.toString()}` : ''}`;
+  const url = `${wUrl}/image-variant/${encodeURIComponent(safeKey).replace(/%2F/gi, '/')}${sp.toString() ? `?${sp.toString()}` : ''}`;
+  return typeof appendPersonaAuthToUrl === 'function' ? appendPersonaAuthToUrl(url) : url;
 }
 
 async function fetchImageFromWorker(key, variantOptions = {}, timeoutMs = 4500) {
@@ -94,7 +95,8 @@ async function fetchImageFromWorker(key, variantOptions = {}, timeoutMs = 4500) 
     } catch {}
   }
   try {
-    const raw = await fetchWithTimeout(cacheBustUrl(`${wUrl}/image/${safeKey}`), {}, timeoutMs);
+    const imageUrl = typeof appendPersonaAuthToUrl === 'function' ? appendPersonaAuthToUrl(`${wUrl}/image/${safeKey}`) : `${wUrl}/image/${safeKey}`;
+    const raw = await fetchWithTimeout(cacheBustUrl(imageUrl), {}, timeoutMs);
     if (raw?.ok) return raw;
   } catch {}
   return null;
@@ -842,6 +844,9 @@ function savePersonas() {
       body: JSON.stringify({ personas: toSave })
     }).catch(() => {});
   }
+  if (typeof syncPersonasToGoogleWorkspace === 'function') {
+    syncPersonasToGoogleWorkspace(toSave).catch(() => {});
+  }
 }
 
 function buildIndex() {
@@ -884,6 +889,9 @@ function getSessionPreviewFromHistory(history) {
 async function saveIndex() {
   const idx = buildIndex();
   setLocalSessionIndex(idx);
+  if (typeof syncIndexToGoogleWorkspace === 'function') {
+    syncIndexToGoogleWorkspace(idx).catch(() => {});
+  }
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl) return;
   // 인덱스 저장
@@ -1002,12 +1010,15 @@ async function saveSession(id) {
   s.lastMessageAt = history.reduce((max, m) => Math.max(max, Number(m?.createdAt || 0)), 0);
   s.lastPreview = getSessionPreviewFromHistory(history);
   const localSaved = setLocalSession(id, history);
+  const session = { ...buildIndex().find(x=>x.id===id), history };
+  if (typeof syncSessionToGoogleWorkspace === 'function') {
+    syncSessionToGoogleWorkspace(session).catch(() => {});
+  }
   if (!localSaved) {
     console.warn('[session] local save failed', { id, historyLen: history.length });
   }
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl) return;
-  const session = { ...buildIndex().find(x=>x.id===id), history };
   _remoteSessionPayloadById[id] = session;
   if (_remoteSessionSaveTimers[id]) clearTimeout(_remoteSessionSaveTimers[id]);
   _remoteSessionSaveTimers[id] = setTimeout(() => {
@@ -1073,7 +1084,16 @@ async function loadIndex() {
     const prevById = new Map((sessions || []).map((s) => [s?.id, s]));
     const res = await fetch(wUrl + '/sessions');
     const data = await res.json();
-    const index = Array.isArray(data.sessions) ? data.sessions : [];
+    const indexRaw = Array.isArray(data.sessions) ? data.sessions : [];
+    const index = indexRaw
+      .map((item) => {
+        const participants = Array.isArray(item?.participantPids) ? item.participantPids : [];
+        const filtered = (typeof window.isAdminOnlyPersonaPid === 'function' && typeof isPersonaAdminMode === 'function' && !isPersonaAdminMode())
+          ? participants.filter((pid) => !window.isAdminOnlyPersonaPid(pid))
+          : participants;
+        return { ...item, participantPids: Array.from(new Set(filtered.filter(Boolean))) };
+      })
+      .filter((item) => (item.participantPids || []).length > 0);
     const localIndex = Array.isArray(getLocalSessionIndex()) ? getLocalSessionIndex() : [];
     const activeIds = new Set(index.map(item => item?.id).filter(Boolean));
 
@@ -1269,7 +1289,8 @@ async function uploadToR2(imageRef, folder, fname) {
 
     const res = await fetch(wUrl + '/image', { method: 'POST', body: form });
     const data = await res.json();
-    return data.url || imageRef;
+    const outUrl = data.url || imageRef;
+    return typeof appendPersonaAuthToUrl === 'function' ? appendPersonaAuthToUrl(outUrl) : outUrl;
   } catch(e) {
     console.error('R2 Upload failed:', e);
     return imageRef;
@@ -1293,6 +1314,9 @@ const LOCAL_ONLY_PROFILE_KEYS = ['defaultTab', 'chatAvatarStyle', 'chatListAvata
 
 function saveUserProfile() {
   setLocalUserProfile(userProfile);
+  if (typeof syncProfileToGoogleWorkspace === 'function') {
+    syncProfileToGoogleWorkspace(userProfile).catch(() => {});
+  }
 }
 
 function loadUserProfile() {

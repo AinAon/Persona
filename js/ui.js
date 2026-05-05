@@ -805,7 +805,7 @@ function getTargetModelForRequest(session, isImageReq) {
   const pListForModel = (session.participantPids||[]).map(pid=>getPersona(pid)).filter(Boolean);
   const targetModel = pListForModel.find(p => p.defaultModel)?.defaultModel
     || document.getElementById('chatModeSelect')?.value
-    || 'grok-4.20-non-reasoning-latest';
+    || 'gemini-3.1-flash-lite-preview';
   const sel = document.getElementById('chatModeSelect');
   if (sel && sel.value !== targetModel) sel.value = targetModel;
   return targetModel;
@@ -829,7 +829,7 @@ function getPersonaModel(sessionOrPersona, maybePersona = null) {
     || session?.overrideModel
     || persona?.defaultModel
     || document.getElementById('chatModeSelect')?.value
-    || 'grok-4.20-non-reasoning-latest';
+    || 'gemini-3.1-flash-lite-preview';
 }
 
 function stripPersonaTagsForPreview(text, session = null) {
@@ -913,7 +913,7 @@ function getRouterModel(session, pList = []) {
   return session?.overrideModel
     || pList.find((p) => p?.defaultModel)?.defaultModel
     || document.getElementById('chatModeSelect')?.value
-    || 'grok-4.20-non-reasoning-latest';
+    || 'gemini-3.1-flash-lite-preview';
 }
 
 function extractJsonObject(raw = '') {
@@ -1596,6 +1596,9 @@ async function getPersonaCircleThumb(pid, emotion = 'neutral', letter = '', disp
 //  TAB SWITCHING & SETTINGS
 // ══════════════════════════════
 function switchTab(tab) {
+  if (tab === 'archive' && typeof isPersonaAdminMode === 'function' && !isPersonaAdminMode()) {
+    tab = 'chat';
+  }
   activeTab = tab;
   // 하단 탭 활성화
   document.getElementById('btabPersona').classList.toggle('active', tab === 'persona');
@@ -1610,11 +1613,13 @@ function switchTab(tab) {
   if (archivePaneEl) archivePaneEl.style.display = tab === 'archive' ? 'flex' : 'none';
   if (tab === 'settings') renderSettingsPane();
   if (tab === 'archive') renderArchivePane();
+  if (typeof applyPersonaAdminGate === 'function') applyPersonaAdminGate();
   // 페르소나 선택 초기화
   if (tab !== 'persona') clearPersonaSelection();
 }
 
 function renderSettingsPane() {
+  if (typeof applyPersonaAdminGate === 'function') applyPersonaAdminGate();
   const av = document.getElementById('settingsUserAv');
   if (av) av.innerHTML = userProfile.image
     ? `<img src="${userProfile.image}" style="width:100%;height:100%;object-fit:cover;">`
@@ -1652,7 +1657,50 @@ function renderSettingsPane() {
   const typingEl = document.getElementById('settingsTypingSpeed');
   if (typingEl) typingEl.value = getBubbleTypingSpeedPreset();
   setSettingsSegmentValue('settingsTypingSpeed', getBubbleTypingSpeedPreset(), 'settingsTypingSpeedSeg');
+  loadAdminDefaultUserModelSetting().catch(() => {});
   // Public/private memory UI disabled by policy.
+}
+
+async function loadAdminDefaultUserModelSetting() {
+  const isAdmin = (typeof isPersonaAdminMode !== 'function') || isPersonaAdminMode();
+  const wrap = document.getElementById('adminDefaultModelWrap');
+  if (!wrap) return;
+  if (!isAdmin) {
+    wrap.style.display = 'none';
+    return;
+  }
+  wrap.style.display = '';
+  const stateEl = document.getElementById('adminDefaultModelState');
+  const selectEl = document.getElementById('adminDefaultModelSelect');
+  if (!selectEl) return;
+  const model = (typeof fetchDefaultUserModelFromWorker === 'function')
+    ? await fetchDefaultUserModelFromWorker()
+    : 'gemini-3.1-flash-lite-preview';
+  selectEl.value = model || 'gemini-3.1-flash-lite-preview';
+  if (stateEl) stateEl.textContent = `현재 기본값: ${getChatModelLabel(selectEl.value)}`;
+}
+
+async function saveAdminDefaultUserModelSetting() {
+  const isAdmin = (typeof isPersonaAdminMode !== 'function') || isPersonaAdminMode();
+  if (!isAdmin) return;
+  const selectEl = document.getElementById('adminDefaultModelSelect');
+  const stateEl = document.getElementById('adminDefaultModelState');
+  if (!selectEl) return;
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) return;
+  try {
+    const res = await fetch(`${wUrl}/settings/default-user-model`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: String(selectEl.value || '').trim() })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.ok) throw new Error(String(data?.error || 'save_failed'));
+    if (stateEl) stateEl.textContent = `현재 기본값: ${getChatModelLabel(String(data.model || selectEl.value || ''))}`;
+    showToast('일반 사용자 기본 모델 저장 완료');
+  } catch (e) {
+    showToast(`저장 실패: ${String(e?.message || e || 'unknown')}`);
+  }
 }
 
 function previewFontSize(val) {
@@ -1864,7 +1912,9 @@ async function renderPersonaGrid() {
     <div class="add-card-icon">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
     </div>`;
-  fragment.appendChild(addCard);
+  if (typeof isPersonaAdminMode !== 'function' || isPersonaAdminMode()) {
+    fragment.appendChild(addCard);
+  }
 
   grid.innerHTML = '';
   grid.appendChild(fragment);
@@ -1887,6 +1937,7 @@ function setupPersonaGridBlankTapClear(grid) {
 }
 
 function setupTouchDrag(grid) {
+  if (typeof isPersonaAdminMode === 'function' && !isPersonaAdminMode()) return;
   if (grid.dataset.touchDragBound === '1') return;
   grid.dataset.touchDragBound = '1';
 
@@ -2132,8 +2183,17 @@ function setupTouchDrag(grid) {
 //  PERSONA EDIT
 // ══════════════════════════════
 let isNewPersona = false;
+const USER_PERSONA_INITIALIZED_KEY = 'user_persona_initialized_v1';
+
+function canCreatePersonaNow() {
+  const isAdmin = (typeof isPersonaAdminMode !== 'function') || isPersonaAdminMode();
+  if (isAdmin) return true;
+  const inited = typeof getLocalItem === 'function' ? (getLocalItem(USER_PERSONA_INITIALIZED_KEY) === '1') : true;
+  return !inited;
+}
 
 async function openPersonaEdit(pid) {
+  if (typeof isPersonaAdminMode === 'function' && !isPersonaAdminMode()) return;
   editingPid = pid; isNewPersona = false;
   const p = getPersona(pid);
   document.getElementById('editTitle').textContent = p ? p.name || '페르소나 편집' : '새 페르소나';
@@ -2144,7 +2204,13 @@ async function openPersonaEdit(pid) {
 }
 
 function createNewPersona() {
-  const p = { pid: nextPid(), name: '', bio: '', tags: [], hue: 200, image: null, hidden: false };
+  if (!canCreatePersonaNow()) {
+    showToast('일반 사용자 모드에서는 최초 1회만 생성할 수 있어');
+    return;
+  }
+  const modelSelectVal = String(document.getElementById('chatModeSelect')?.value || '').trim();
+  const userDefaultModel = modelSelectVal || 'gemini-3.1-flash-lite-preview';
+  const p = { pid: nextPid(), name: '', bio: '', tags: [], hue: 200, image: null, hidden: false, defaultModel: userDefaultModel };
   isNewPersona = true; editingPid = p.pid;
   personas.push(p);
   document.getElementById('editTitle').textContent = '새 페르소나';
@@ -2155,7 +2221,8 @@ function createNewPersona() {
 function renderEditFooter(isExisting) {
   const footer = document.getElementById('editFooter');
   const deleteBtn = document.getElementById('editDeleteTitleBtn');
-  if (deleteBtn) deleteBtn.style.display = isExisting ? 'inline-flex' : 'none';
+  const isAdmin = typeof isPersonaAdminMode !== 'function' || isPersonaAdminMode();
+  if (deleteBtn) deleteBtn.style.display = isExisting && isAdmin ? 'inline-flex' : 'none';
   if (isExisting) {
     footer.innerHTML = `
       <button class="edit-cancel-btn" onclick="cancelPersonaEdit()">취소</button>
@@ -2173,6 +2240,7 @@ function cancelPersonaEdit() {
 }
 
 function deletePersonaFromEdit() {
+  if (typeof isPersonaAdminMode === 'function' && !isPersonaAdminMode()) return;
   if (personas.length <= 1) { showToast('마지막 페르소나는 삭제할 수 없어'); return; }
   if (!confirm('이 페르소나를 삭제할까?')) return;
   if (!confirm('정말 삭제할까? 이 작업은 되돌릴 수 없어.')) return;
@@ -2360,54 +2428,6 @@ async function handleMultiImageUpload(input) {
   if (!files.length) return;
   await handleMultiImageFiles(files);
   if (input) input.value = '';
-  return;
-  const p = getPersona(editingPid); if (!p) return;
-  const filesLegacy = [...input.files]; if (!filesLegacy.length) return;
-  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-  if (!wUrl) { alert('Worker URL 없음'); return; }
-
-  showToast(`⏳ ${files.length}개 업로드 중...`, 10000);
-  let ok = 0, fail = 0;
-  for (const file of files) {
-    try {
-      const dataUrl = await new Promise(r => {
-        const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(file);
-      });
-      const resized = await resizeImage(dataUrl, 1200, 0.93);
-      const b64 = resized.split(',')[1];
-      const byteArr = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-      const blob = new Blob([byteArr], { type: 'image/jpeg' });
-      const form = new FormData();
-      form.append('file', blob, file.name);
-      form.append('folder', `profile/${p.pid}`);
-      const res = await fetch(wUrl + '/image', { method: 'POST', body: form });
-      const data = await res.json();
-      if (data.url) {
-        ok++;
-        const fname = file.name.replace(/\.jpg$/i, '');
-        const namePrefix = p.pid + '_';
-        if (fname.startsWith(namePrefix)) {
-          const rest = fname.slice(namePrefix.length);
-          const parts = rest.split('_');
-          const emotion = parts[0];
-          const letter = parts[1] || '';
-          if (emotion === 'neutral') {
-            const { sqMd } = await generateThumbnailSet(resized, p.pid, 'neutral_a').catch(() => ({ sqMd: null }));
-            if (sqMd) {
-              _neutralCache[p.pid] = sqMd;
-              renderPersonaGrid();
-            }
-          } else {
-            const emotionKey = letter ? `${emotion}_${letter}` : emotion;
-            await generateThumbnailSet(resized, p.pid, emotionKey).catch(() => {});
-          }
-        }
-      } else { fail++; }
-    } catch(e) { fail++; }
-  }
-  if (typeof _imageListCache !== 'undefined') delete _imageListCache[p.pid];
-  showToast(`✓ ${ok}개 완료${fail ? ` / ${fail}개 실패` : ''}`);
-  input.value = '';
 }
 
 function renderEditMultiUploadList() {
@@ -2431,118 +2451,6 @@ function renderEditMultiUploadList() {
         : `<div class="edit-upload-state"><div class="attachment-spinner"></div></div>`;
     return `<div class="edit-upload-thumb ${stateClass}">${thumb}${stateBadge}</div>`;
   }).join('');
-}
-
-function initEditMultiDropzone_legacy() {
-  const zone = document.getElementById('editMultiDropzone');
-  const input = document.getElementById('editMultiImgInput');
-  if (!zone || !input || zone.dataset.bound === '1') return;
-  zone.dataset.bound = '1';
-
-  let dragDepth = 0;
-  const mark = (on) => zone.classList.toggle('dragover', !!on);
-  const hasImageFiles = (dt) => {
-    const files = [...(dt?.files || [])];
-    if (files.some(f => (f?.type || '').startsWith('image/'))) return true;
-    const items = [...(dt?.items || [])];
-    return items.some(it => it.kind === 'file' && (it.type || '').startsWith('image/'));
-  };
-
-  zone.addEventListener('keydown', e => {
-    if (e.key !== 'Enter' && e.key !== ' ') return;
-    e.preventDefault();
-    input.click();
-  });
-
-  zone.addEventListener('dragenter', e => {
-    if (!hasImageFiles(e.dataTransfer)) return;
-    e.preventDefault();
-    e.stopPropagation();
-    dragDepth++;
-    mark(true);
-  });
-
-  zone.addEventListener('dragover', e => {
-    if (!hasImageFiles(e.dataTransfer)) return;
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
-    mark(true);
-  });
-
-  zone.addEventListener('dragleave', e => {
-    e.preventDefault();
-    e.stopPropagation();
-    dragDepth = Math.max(0, dragDepth - 1);
-    if (dragDepth === 0) mark(false);
-  });
-
-  zone.addEventListener('drop', async e => {
-    e.preventDefault();
-    e.stopPropagation();
-    dragDepth = 0;
-    mark(false);
-    const files = [...(e.dataTransfer?.files || [])].filter(f => (f?.type || '').startsWith('image/'));
-    if (!files.length) {
-      showToast('이미지 파일만 업로드할 수 있어요.');
-      return;
-    }
-    if (!files.length) {
-      showToast('이미지 파일만 업로드할 수 있어');
-      return;
-    }
-    await handleMultiImageFiles(files);
-  });
-}
-
-async function handleMultiImageFiles_legacy(fileList) {
-  const p = getPersona(editingPid); if (!p) return;
-  const files = [...(fileList || [])].filter(f => (f?.type || '').startsWith('image/'));
-  if (!files.length) return;
-  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-  if (!wUrl) { alert('Worker URL 없음'); return; }
-
-  showToast(`총${files.length}개 업로드 중...`, 10000);
-  let ok = 0, fail = 0;
-  for (const file of files) {
-    try {
-      const dataUrl = await new Promise(r => {
-        const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(file);
-      });
-      const resized = await resizeImage(dataUrl, 1200, 0.93);
-      const b64 = resized.split(',')[1];
-      const byteArr = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-      const blob = new Blob([byteArr], { type: 'image/jpeg' });
-      const form = new FormData();
-      form.append('file', blob, file.name);
-      form.append('folder', `profile/${p.pid}`);
-      const res = await fetch(wUrl + '/image', { method: 'POST', body: form });
-      const data = await res.json();
-      if (data.url) {
-        ok++;
-        const fname = file.name.replace(/\.jpg$/i, '');
-        const namePrefix = p.pid + '_';
-        if (fname.startsWith(namePrefix)) {
-          const rest = fname.slice(namePrefix.length);
-          const parts = rest.split('_');
-          const emotion = parts[0];
-          const letter = parts[1] || '';
-          if (emotion === 'neutral') {
-            const { sqMd } = await generateThumbnailSet(resized, p.pid, 'neutral_a').catch(() => ({ sqMd: null }));
-            if (sqMd) {
-              _neutralCache[p.pid] = sqMd;
-              renderPersonaGrid();
-            }
-          } else {
-            const emotionKey = letter ? `${emotion}_${letter}` : emotion;
-            await generateThumbnailSet(resized, p.pid, emotionKey).catch(() => {});
-          }
-        }
-      } else { fail++; }
-    } catch(e) { fail++; }
-  }
-  if (typeof _imageListCache !== 'undefined') delete _imageListCache[p.pid];
-  showToast(`총${ok}개 성공${fail ? ` / ${fail}개 실패` : ''}`);
 }
 
 function initEditMultiDropzone() {
@@ -2718,7 +2626,8 @@ async function savePersonaEdit() {
       const res = await fetch(workerUrl + '/image', { method: 'POST', body: form });
       const data = await res.json();
       if (!data.url) throw new Error(data.error || '업로드 실패');
-      p.imageUrl = `${data.url}${String(data.url).includes('?') ? '&' : '?'}v=${personaUpdatedAt}`;
+      const imageUrl = typeof appendPersonaAuthToUrl === 'function' ? appendPersonaAuthToUrl(data.url) : data.url;
+      p.imageUrl = `${imageUrl}${String(imageUrl).includes('?') ? '&' : '?'}v=${personaUpdatedAt}`;
     } catch(e) {
       alert('업로드 실패: ' + e.message);
       return;
@@ -2726,6 +2635,9 @@ async function savePersonaEdit() {
     delete p._pendingImage;
   }
   p.updatedAt = personaUpdatedAt;
+  if (typeof isPersonaAdminMode === 'function' && !isPersonaAdminMode()) {
+    try { if (typeof setLocalItem === 'function') setLocalItem(USER_PERSONA_INITIALIZED_KEY, '1'); } catch {}
+  }
   savePersonas(); renderPersonaGrid(); goMain();
   showToast('저장됨 ✓');
 }
@@ -2955,6 +2867,7 @@ function closeRestoreModal() {
 }
 
 async function openRestoreModal() {
+  if (typeof isPersonaAdminMode === 'function' && !isPersonaAdminMode()) return;
   const modal = document.getElementById('restoreModal');
   if (!modal) return;
   modal.classList.add('open');
@@ -4518,6 +4431,9 @@ function handleImageModelChanged() {
 }
 
 function switchInputTab(tab) {
+  if ((tab === 'image' || tab === 'context') && typeof isPersonaAdminMode === 'function' && !isPersonaAdminMode()) {
+    tab = 'chat';
+  }
   _inputTab = tab;
   const normalized = tab === 'context' ? 'project' : tab;
   const tabbar = document.querySelector('.input-tabbar');
@@ -4576,6 +4492,10 @@ function toggleComposerTools() {
 }
 
 function selectToolMode(mode) {
+  if ((mode === 'image' || mode === 'project') && typeof isPersonaAdminMode === 'function' && !isPersonaAdminMode()) {
+    switchInputTab('chat');
+    return;
+  }
   if (mode === 'project') {
     switchInputTab('context');
     showToast('?프로젝트 기능은 준비중이야');
@@ -5056,7 +4976,7 @@ async function sendMessage() {
           }));
           const groupedByModel = new Map();
           for (const entry of responderEntries) {
-            const key = entry.model || 'grok-4.20-non-reasoning-latest';
+            const key = entry.model || 'gemini-3.1-flash-lite-preview';
             if (!groupedByModel.has(key)) groupedByModel.set(key, []);
             groupedByModel.get(key).push(entry.persona);
           }
@@ -5436,6 +5356,7 @@ async function removeAttachment(i) {
 //  SETTINGS DRAWER & PROMPT MODAL
 // ================================
 function openDrawer() {
+  if (typeof isPersonaAdminMode === 'function' && !isPersonaAdminMode()) return;
   const s = getActiveSession(); if (!s) return;
   const el = document.getElementById('chatDrawer');
   renderDrawerBody(s); el.classList.add('open');
@@ -5741,7 +5662,7 @@ async function compressChat() {
     const compressModel = s.overrideModel
       || pList.find(p=>p.defaultModel)?.defaultModel
       || document.getElementById('chatModeSelect')?.value
-      || 'grok-4.20-non-reasoning-latest';
+      || 'gemini-3.1-flash-lite-preview';
     const res = await fetch(wUrl + '/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -5880,7 +5801,9 @@ async function loadArchiveManifestFromR2() {
       const mapped = sourceMap.get(normalizedKey) || sourceMap.get(key) || {};
       return {
         key: normalizedKey,
-        url: `${wUrl}/image/${encodeURIComponent(normalizedKey).replace(/%2F/gi, '/')}`,
+        url: typeof appendPersonaAuthToUrl === 'function'
+          ? appendPersonaAuthToUrl(`${wUrl}/image/${encodeURIComponent(normalizedKey).replace(/%2F/gi, '/')}`)
+          : `${wUrl}/image/${encodeURIComponent(normalizedKey).replace(/%2F/gi, '/')}`,
         type: getArchiveTypeByKey(normalizedKey),
         chatId: mapped.chatId || null,
         messageIndex: Number.isFinite(mapped.messageIndex) ? mapped.messageIndex : null,
@@ -5903,7 +5826,9 @@ async function ensureArchiveManifest() {
         return {
           ...it,
           key: normalizedKey,
-          url: base ? `${base}/image/${encodeURIComponent(normalizedKey).replace(/%2F/gi, '/')}` : String(it?.url || ''),
+          url: base
+            ? (typeof appendPersonaAuthToUrl === 'function' ? appendPersonaAuthToUrl(`${base}/image/${encodeURIComponent(normalizedKey).replace(/%2F/gi, '/')}`) : `${base}/image/${encodeURIComponent(normalizedKey).replace(/%2F/gi, '/')}`)
+            : String(it?.url || ''),
           type: getArchiveTypeByKey(normalizedKey),
         };
       })

@@ -49,6 +49,7 @@ import {
   saveSessionAttitudeState,
 } from "./persona_memory_profile";
 import { buildPersonaContext, buildPersonaContextSections } from "./persona_context";
+import { scopedKvKey, scopedR2Key } from "./auth";
 
 const IMAGE_MODELS = ["gemini-3.1-flash-image-preview", "grok-imagine-image-pro", "gpt-image-2"];
 const RATIO_TO_SIZE: Record<string, string> = {
@@ -389,10 +390,19 @@ type ChatBody = {
   stream?: boolean;
 };
 
+const DEFAULT_USER_CHAT_MODEL_KEY = "settings:default_user_chat_model";
+const DEFAULT_USER_CHAT_MODEL_FALLBACK = "gemini-3.1-flash-lite-preview";
+
+async function resolveDefaultUserChatModel(env: Env): Promise<string> {
+  const raw = await env.KV.get(DEFAULT_USER_CHAT_MODEL_KEY);
+  const model = String(raw || "").trim();
+  return model || DEFAULT_USER_CHAT_MODEL_FALLBACK;
+}
+
 export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders): Promise<Response> {
   const {
     messages = [],
-    model = "grok-4.20-non-reasoning",
+    model: requestedModel = "",
     keys,
     prompt,
     aspect_ratio,
@@ -406,6 +416,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     sessionId,
     stream = false,
   } = reqBody;
+  const model = String(requestedModel || "").trim() || await resolveDefaultUserChatModel(env);
 
   const apiKeys = {
     gemini: keys?.gemini || env.GEMINI_KEY || "",
@@ -541,7 +552,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       ? buildPersonaContextSections(personaProfile, sessionAttitude?.attitudeB || null, fixedRole)
       : null;
     const crossSessionContext = (!isImageReq && profilePersonaPid)
-      ? await buildPersonaCrossSessionContextBlock(env, profilePersonaPid, sessionIdNorm)
+      ? await buildPersonaCrossSessionContextBlock(env, profilePersonaPid, sessionIdNorm, userIdNorm)
       : "";
     const memPrompt = isImageReq
       ? ""
@@ -858,8 +869,8 @@ async function r2ReadText(env: Env, key: string): Promise<string | null> {
   }
 }
 
-async function loadSessionIndexLite(env: Env): Promise<SessionIndexLite[]> {
-  const fromR2 = await r2ReadText(env, SESSION_INDEX_R2_KEY);
+async function loadSessionIndexLite(env: Env, userId = "user_default"): Promise<SessionIndexLite[]> {
+  const fromR2 = await r2ReadText(env, scopedR2Key(userId, SESSION_INDEX_R2_KEY));
   if (fromR2) {
     try {
       const parsed = JSON.parse(fromR2);
@@ -868,7 +879,7 @@ async function loadSessionIndexLite(env: Env): Promise<SessionIndexLite[]> {
       // ignore
     }
   }
-  const fromKv = await env.KV.get(SESSION_INDEX_KV_KEY);
+  const fromKv = await env.KV.get(scopedKvKey(userId, SESSION_INDEX_KV_KEY));
   if (fromKv) {
     try {
       const parsed = JSON.parse(fromKv);
@@ -899,18 +910,18 @@ function summarizeSessionHistory(history: unknown[]): string {
   return picked.reverse().join(" | ");
 }
 
-async function loadSessionPayloadText(env: Env, id: string): Promise<string | null> {
+async function loadSessionPayloadText(env: Env, id: string, userId = "user_default"): Promise<string | null> {
   const sid = String(id || "").trim();
   if (!sid) return null;
-  const fromR2 = await r2ReadText(env, `${SESSION_R2_PREFIX}${sid}.json`);
+  const fromR2 = await r2ReadText(env, scopedR2Key(userId, `${SESSION_R2_PREFIX}${sid}.json`));
   if (fromR2) return fromR2;
-  return await env.KV.get(`session:${sid}`);
+  return await env.KV.get(scopedKvKey(userId, `session:${sid}`));
 }
 
-async function buildPersonaCrossSessionContextBlock(env: Env, personaPid: string, currentSessionId = ""): Promise<string> {
+async function buildPersonaCrossSessionContextBlock(env: Env, personaPid: string, currentSessionId = "", userId = "user_default"): Promise<string> {
   const pid = String(personaPid || "").trim().toLowerCase();
   if (!pid) return "";
-  const index = await loadSessionIndexLite(env);
+  const index = await loadSessionIndexLite(env, userId);
   const current = String(currentSessionId || "").trim();
   const sessions = index
     .filter((s) => String(s?.id || "").trim())
@@ -925,7 +936,7 @@ async function buildPersonaCrossSessionContextBlock(env: Env, personaPid: string
     const sid = String(s.id || "").trim();
     const room = asTrimmedText(s.roomName || sid) || sid;
     let snippet = "";
-    const payloadText = await loadSessionPayloadText(env, sid);
+    const payloadText = await loadSessionPayloadText(env, sid, userId);
     if (payloadText) {
       try {
         const parsed = JSON.parse(payloadText) as Record<string, unknown>;

@@ -1,0 +1,11 @@
+{
+  "appId": "com.ainaon.persona",
+  "appName": "Persona",
+  "webDir": "mobile-web",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}

@@ -1,5 +1,6 @@
 import { handleApiRoute } from "./routes_api";
 import { handleChat } from "./routes_chat";
+import { AuthError, getAuthContext } from "./auth";
 
 export type CorsHeaders = Record<string, string>;
 
@@ -45,12 +46,17 @@ export interface Env {
   QWEN_KEY?: string;
   DASHSCOPE_BASE_URL?: string;
   DASHSCOPE_WS_URL?: string;
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_IDS?: string;
+  ALLOW_ADMIN_OPS?: string;
+  ADMIN_OPS_TOKEN?: string;
+  ADMIN_GOOGLE_EMAILS?: string;
 }
 
 const CORS: CorsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Admin-Token",
 };
 
 export default {
@@ -58,17 +64,23 @@ export default {
     try {
       if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
       const url = new URL(request.url);
+      const auth = await getAuthContext(request, env);
 
       if (url.pathname === "/chat" && request.method === "POST") {
         const reqBody = await request.json();
-        return await handleChat(reqBody, env, CORS);
+        (reqBody as Record<string, unknown>).userId = auth?.userId || "user_default";
+        (reqBody as Record<string, unknown>).user_id = auth?.userId || "user_default";
+        return await handleChat(reqBody as any, env, CORS);
       }
 
-      const apiResponse = await handleApiRoute(request, env, url, CORS);
+      const apiResponse = await handleApiRoute(request, env, url, CORS, auth);
       if (apiResponse) return apiResponse;
 
       return new Response("Not Found", { status: 404, headers: CORS });
     } catch (error) {
+      if (error instanceof AuthError) {
+        return Response.json({ ok: false, error: error.message }, { status: error.status, headers: CORS });
+      }
       const message = error instanceof Error ? error.message : String(error || "unknown_error");
       return Response.json({ ok: false, error: message }, { status: 500, headers: CORS });
     }

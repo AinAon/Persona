@@ -18,6 +18,7 @@ import { getPersonaPolicy } from "./persona_policy";
 import { getPromotionCandidates } from "./persona_promotion";
 import { buildPersonaVaultPath, dropboxDeletePath, dropboxListFolder, dropboxMovePath, dropboxPathExists, dropboxReadBytes, dropboxReadText, dropboxWriteBytes, dropboxWriteBytesWithDetail, dropboxWriteText, dropboxWriteTextWithDetail, getPersonaDropboxAccessToken } from "./dropbox_vault";
 import { loadPersonaUserProfile, normalizeUserId, savePersonaUserProfile } from "./persona_memory_profile";
+import { type AuthContext, effectiveUserId, googleAuthConfig, scopedKvKey, scopedR2Key, unscopedR2Key, verifyGoogleIdToken } from "./auth";
 
 type SessionMeta = {
   id: string;
@@ -52,6 +53,20 @@ const SESSION_AUDIO_R2_PREFIXES = ["tts/session/", "audio/session/"];
 const SHARED_PREFIX = "/persona_shared";
 const SESSION_CHANGE_SEQ_KEY = "session_change_seq";
 const LEGACY_MEMORY_API_ENABLED = false;
+const DEFAULT_USER_CHAT_MODEL_KEY = "settings:default_user_chat_model";
+const DEFAULT_USER_CHAT_MODEL_FALLBACK = "gemini-3.1-flash-lite-preview";
+const ALLOWED_DEFAULT_CHAT_MODELS = new Set([
+  "gemini-3.1-flash-lite-preview",
+  "gemini-3.1-pro-preview",
+  "gemini-2.5-flash",
+  "gpt-5.4-nano",
+  "gpt-5.4-mini",
+  "gpt-5.4",
+  "grok-4-1-fast-reasoning-latest",
+  "grok-4-1-fast-non-reasoning-latest",
+  "grok-4.20-reasoning-latest",
+  "grok-4.20-non-reasoning-latest",
+]);
 
 function normalizePid(raw: unknown): string {
   const s = String(raw || "").trim().toLowerCase();
@@ -130,6 +145,37 @@ function getDropboxAppConfig(env: Env, persona: "riley" | "avery" | "shared"): {
   return { key, secret };
 }
 
+function isAdminOpsEnabled(env: Env): boolean {
+  return String(env.ALLOW_ADMIN_OPS || "").trim() === "1";
+}
+
+function hasValidAdminOpsToken(request: Request, env: Env): boolean {
+  const expected = String(env.ADMIN_OPS_TOKEN || "").trim();
+  if (!expected) return false;
+  const provided = String(request.headers.get("X-Admin-Token") || "").trim();
+  return !!provided && provided === expected;
+}
+
+function requireAdminOps(request: Request, env: Env, cors: CorsHeaders): Response | null {
+  if (!isAdminOpsEnabled(env)) {
+    return Response.json({ ok: false, error: "admin_ops_locked" }, { status: 403, headers: cors });
+  }
+  if (!hasValidAdminOpsToken(request, env)) {
+    return Response.json({ ok: false, error: "admin_ops_token_required" }, { status: 401, headers: cors });
+  }
+  return null;
+}
+
+function isAllowedAdminEmail(auth: AuthContext | null | undefined, env: Env): boolean {
+  const allowed = String(env.ADMIN_GOOGLE_EMAILS || "")
+    .split(",")
+    .map((x) => x.trim().toLowerCase())
+    .filter(Boolean);
+  if (!allowed.length) return false;
+  const email = String(auth?.email || "").trim().toLowerCase();
+  return !!email && allowed.includes(email);
+}
+
 function toIntInRange(raw: string | null, min: number, max: number): number | null {
   if (!raw) return null;
   const n = Number(raw);
@@ -175,12 +221,12 @@ function parseSessionLike(raw: string | null): SessionMeta | null {
   }
 }
 
-function sessionR2Key(id: string): string {
-  return `${SESSION_R2_PREFIX}${id}.json`;
+function sessionR2Key(id: string, userId = "user_default"): string {
+  return scopedR2Key(userId, `${SESSION_R2_PREFIX}${id}.json`);
 }
 
-function deletedSessionR2Key(id: string): string {
-  return `${DELETED_SESSION_R2_PREFIX}${id}.json`;
+function deletedSessionR2Key(id: string, userId = "user_default"): string {
+  return scopedR2Key(userId, `${DELETED_SESSION_R2_PREFIX}${id}.json`);
 }
 
 async function sha256Hex(input: string): Promise<string> {
@@ -311,54 +357,54 @@ async function r2PutJson(env: Env, key: string, value: unknown): Promise<void> {
   );
 }
 
-async function getSessionIndex(env: Env): Promise<SessionMeta[]> {
-  const fromR2 = await r2Json<SessionMeta[] | null>(env, SESSION_INDEX_R2_KEY, null);
+async function getSessionIndex(env: Env, userId = "user_default"): Promise<SessionMeta[]> {
+  const fromR2 = await r2Json<SessionMeta[] | null>(env, scopedR2Key(userId, SESSION_INDEX_R2_KEY), null);
   if (Array.isArray(fromR2)) return fromR2;
-  const legacy = await env.KV.get(SESSION_INDEX_KEY);
+  const legacy = await env.KV.get(scopedKvKey(userId, SESSION_INDEX_KEY));
   return legacy ? JSON.parse(legacy) : [];
 }
 
-async function putSessionIndex(env: Env, sessions: SessionMeta[]): Promise<void> {
-  await r2PutJson(env, SESSION_INDEX_R2_KEY, sessions);
+async function putSessionIndex(env: Env, sessions: SessionMeta[], userId = "user_default"): Promise<void> {
+  await r2PutJson(env, scopedR2Key(userId, SESSION_INDEX_R2_KEY), sessions);
 }
 
-async function getSessionChangeSeq(env: Env): Promise<number> {
-  const raw = await env.KV.get(SESSION_CHANGE_SEQ_KEY);
+async function getSessionChangeSeq(env: Env, userId = "user_default"): Promise<number> {
+  const raw = await env.KV.get(scopedKvKey(userId, SESSION_CHANGE_SEQ_KEY));
   const n = Number(raw || 0);
   return Number.isFinite(n) ? n : 0;
 }
 
-async function bumpSessionChangeSeq(env: Env): Promise<number> {
+async function bumpSessionChangeSeq(env: Env, userId = "user_default"): Promise<number> {
   const seq = Date.now();
   try {
-    await env.KV.put(SESSION_CHANGE_SEQ_KEY, String(seq));
+    await env.KV.put(scopedKvKey(userId, SESSION_CHANGE_SEQ_KEY), String(seq));
   } catch {
     // ignore; realtime signal is best-effort
   }
   return seq;
 }
 
-async function getDeletedSessionIndex(env: Env): Promise<DeletedSessionMeta[]> {
-  const fromR2 = await r2Json<DeletedSessionMeta[] | null>(env, DELETED_SESSION_INDEX_R2_KEY, null);
+async function getDeletedSessionIndex(env: Env, userId = "user_default"): Promise<DeletedSessionMeta[]> {
+  const fromR2 = await r2Json<DeletedSessionMeta[] | null>(env, scopedR2Key(userId, DELETED_SESSION_INDEX_R2_KEY), null);
   if (Array.isArray(fromR2)) return fromR2;
-  const legacy = await env.KV.get(DELETED_SESSION_INDEX_KEY);
+  const legacy = await env.KV.get(scopedKvKey(userId, DELETED_SESSION_INDEX_KEY));
   return legacy ? JSON.parse(legacy) : [];
 }
 
-async function putDeletedSessionIndex(env: Env, sessions: DeletedSessionMeta[]): Promise<void> {
-  await r2PutJson(env, DELETED_SESSION_INDEX_R2_KEY, sessions);
+async function putDeletedSessionIndex(env: Env, sessions: DeletedSessionMeta[], userId = "user_default"): Promise<void> {
+  await r2PutJson(env, scopedR2Key(userId, DELETED_SESSION_INDEX_R2_KEY), sessions);
 }
 
-async function getSessionPayloadText(env: Env, id: string): Promise<string | null> {
-  const fromR2 = await r2Text(env, sessionR2Key(id));
+async function getSessionPayloadText(env: Env, id: string, userId = "user_default"): Promise<string | null> {
+  const fromR2 = await r2Text(env, sessionR2Key(id, userId));
   if (fromR2) return fromR2;
-  return await env.KV.get(`session:${id}`);
+  return await env.KV.get(scopedKvKey(userId, `session:${id}`));
 }
 
-async function getDeletedSessionPayloadText(env: Env, id: string): Promise<string | null> {
-  const fromR2 = await r2Text(env, deletedSessionR2Key(id));
+async function getDeletedSessionPayloadText(env: Env, id: string, userId = "user_default"): Promise<string | null> {
+  const fromR2 = await r2Text(env, deletedSessionR2Key(id, userId));
   if (fromR2) return fromR2;
-  return await env.KV.get(`deleted:session:${id}`);
+  return await env.KV.get(scopedKvKey(userId, `deleted:session:${id}`));
 }
 
 async function listKvByPrefix(env: Env, prefix: string, max = 500): Promise<string[]> {
@@ -546,11 +592,11 @@ async function listMemoriesForBackup(
   return { items: out, truncated: false };
 }
 
-async function getRecoverableSessions(env: Env): Promise<RecoverableSessionMeta[]> {
-  const activeIndex = await getSessionIndex(env);
+async function getRecoverableSessions(env: Env, userId = "user_default"): Promise<RecoverableSessionMeta[]> {
+  const activeIndex = await getSessionIndex(env, userId);
   const activeIds = new Set(activeIndex.map((s) => String(s.id || "")));
 
-  const deletedIndex = await getDeletedSessionIndex(env);
+  const deletedIndex = await getDeletedSessionIndex(env, userId);
   const map = new Map<string, RecoverableSessionMeta>();
 
   for (const d of deletedIndex) {
@@ -558,9 +604,9 @@ async function getRecoverableSessions(env: Env): Promise<RecoverableSessionMeta[
     map.set(d.id, { ...d, source: "deleted_index" });
   }
 
-  const deletedKeys = await listKvByPrefix(env, "deleted:session:");
+  const deletedKeys = await listKvByPrefix(env, scopedKvKey(userId, "deleted:session:"));
   for (const key of deletedKeys) {
-    const id = key.replace(/^deleted:session:/, "");
+    const id = key.replace(scopedKvKey(userId, "deleted:session:"), "");
     if (!id || map.has(id)) continue;
     const raw = await env.KV.get(key);
     const meta = parseSessionLike(raw);
@@ -568,9 +614,9 @@ async function getRecoverableSessions(env: Env): Promise<RecoverableSessionMeta[
     map.set(id, toRecoverable(meta, "deleted_kv", Date.now()));
   }
 
-  const deletedR2Keys = await listR2ByPrefix(env, DELETED_SESSION_R2_PREFIX);
+  const deletedR2Keys = await listR2ByPrefix(env, scopedR2Key(userId, DELETED_SESSION_R2_PREFIX));
   for (const key of deletedR2Keys) {
-    const id = key.replace(DELETED_SESSION_R2_PREFIX, "").replace(/\.json$/, "");
+    const id = unscopedR2Key(userId, key).replace(DELETED_SESSION_R2_PREFIX, "").replace(/\.json$/, "");
     if (!id || map.has(id)) continue;
     const raw = await r2Text(env, key);
     const meta = parseSessionLike(raw);
@@ -578,9 +624,9 @@ async function getRecoverableSessions(env: Env): Promise<RecoverableSessionMeta[
     map.set(id, toRecoverable(meta, "deleted_kv", Date.now()));
   }
 
-  const sessionKeys = await listKvByPrefix(env, "session:");
+  const sessionKeys = await listKvByPrefix(env, scopedKvKey(userId, "session:"));
   for (const key of sessionKeys) {
-    const id = key.replace(/^session:/, "");
+    const id = key.replace(scopedKvKey(userId, "session:"), "");
     if (!id || activeIds.has(id) || map.has(id)) continue;
     const raw = await env.KV.get(key);
     const meta = parseSessionLike(raw);
@@ -588,9 +634,9 @@ async function getRecoverableSessions(env: Env): Promise<RecoverableSessionMeta[
     map.set(id, toRecoverable(meta, "orphan_session_kv", Date.now()));
   }
 
-  const sessionR2Keys = await listR2ByPrefix(env, SESSION_R2_PREFIX);
+  const sessionR2Keys = await listR2ByPrefix(env, scopedR2Key(userId, SESSION_R2_PREFIX));
   for (const key of sessionR2Keys) {
-    const id = key.replace(SESSION_R2_PREFIX, "").replace(/\.json$/, "");
+    const id = unscopedR2Key(userId, key).replace(SESSION_R2_PREFIX, "").replace(/\.json$/, "");
     if (!id || activeIds.has(id) || map.has(id)) continue;
     const raw = await r2Text(env, key);
     const meta = parseSessionLike(raw);
@@ -601,12 +647,12 @@ async function getRecoverableSessions(env: Env): Promise<RecoverableSessionMeta[
   return [...map.values()].sort((a, b) => (b.deletedAt || b.updatedAt || 0) - (a.deletedAt || a.updatedAt || 0));
 }
 
-async function restoreSessionById(env: Env, sessionId: string): Promise<{ ok: boolean; error?: string; session?: SessionMeta }> {
+async function restoreSessionById(env: Env, sessionId: string, userId = "user_default"): Promise<{ ok: boolean; error?: string; session?: SessionMeta }> {
   const id = String(sessionId || "").trim();
   if (!id) return { ok: false, error: "id required" };
 
-  const deletedRaw = await getDeletedSessionPayloadText(env, id);
-  const activeRaw = await getSessionPayloadText(env, id);
+  const deletedRaw = await getDeletedSessionPayloadText(env, id, userId);
+  const activeRaw = await getSessionPayloadText(env, id, userId);
   const raw = deletedRaw || activeRaw;
   if (!raw) return { ok: false, error: "session not found" };
 
@@ -620,21 +666,21 @@ async function restoreSessionById(env: Env, sessionId: string): Promise<{ ok: bo
   const meta = buildSessionMeta(sanitizedSession);
   const sanitizedRaw = JSON.stringify(sanitizedSession);
 
-  await env.R2.put(sessionR2Key(id), sanitizedRaw, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
-  await env.KV.delete(`session:${id}`);
+  await env.R2.put(sessionR2Key(id, userId), sanitizedRaw, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
+  await env.KV.delete(scopedKvKey(userId, `session:${id}`));
 
-  const index = await getSessionIndex(env);
+  const index = await getSessionIndex(env, userId);
   const existingIndex = index.findIndex((s) => s.id === id);
   if (existingIndex >= 0) index[existingIndex] = meta;
   else index.unshift(meta);
-  await putSessionIndex(env, index);
+  await putSessionIndex(env, index, userId);
 
-  const deletedIndex = await getDeletedSessionIndex(env);
-  await putDeletedSessionIndex(env, deletedIndex.filter((s) => s.id !== id));
-  await env.KV.delete(`deleted:session:${id}`);
-  await env.R2.delete(deletedSessionR2Key(id));
+  const deletedIndex = await getDeletedSessionIndex(env, userId);
+  await putDeletedSessionIndex(env, deletedIndex.filter((s) => s.id !== id), userId);
+  await env.KV.delete(scopedKvKey(userId, `deleted:session:${id}`));
+  await env.R2.delete(deletedSessionR2Key(id, userId));
   for (const base of SESSION_AUDIO_R2_PREFIXES) {
-    await deleteR2ByPrefix(env, `${base}${id}/`);
+    await deleteR2ByPrefix(env, scopedR2Key(userId, `${base}${id}/`));
   }
 
   return { ok: true, session: meta };
@@ -645,9 +691,44 @@ export async function handleApiRoute(
   env: Env,
   url: URL,
   cors: CorsHeaders,
+  auth?: AuthContext | null,
 ): Promise<Response | null> {
   const noStoreHeaders = { ...cors, "Cache-Control": "no-store" };
+  const userId = effectiveUserId(auth);
+
+  if (url.pathname === "/auth/config" && request.method === "GET") {
+    return Response.json(googleAuthConfig(env), { headers: noStoreHeaders });
+  }
+
+  if (url.pathname === "/auth/google" && request.method === "POST") {
+    const body = (await request.json()) as { credential?: string };
+    const verified = await verifyGoogleIdToken(env, String(body?.credential || ""));
+    return Response.json({ ok: true, user: verified }, { headers: noStoreHeaders });
+  }
+
+  if (url.pathname === "/settings/default-user-model" && request.method === "GET") {
+    const raw = await env.KV.get(DEFAULT_USER_CHAT_MODEL_KEY);
+    const value = String(raw || "").trim();
+    const model = ALLOWED_DEFAULT_CHAT_MODELS.has(value) ? value : DEFAULT_USER_CHAT_MODEL_FALLBACK;
+    return Response.json({ ok: true, model }, { headers: noStoreHeaders });
+  }
+
+  if (url.pathname === "/settings/default-user-model" && request.method === "POST") {
+    if (!isAllowedAdminEmail(auth, env)) {
+      return Response.json({ ok: false, error: "admin_email_required" }, { status: 403, headers: noStoreHeaders });
+    }
+    const body = await request.json().catch(() => ({} as any)) as { model?: string };
+    const model = String(body?.model || "").trim();
+    if (!ALLOWED_DEFAULT_CHAT_MODELS.has(model)) {
+      return Response.json({ ok: false, error: "unsupported_model" }, { status: 400, headers: noStoreHeaders });
+    }
+    await env.KV.put(DEFAULT_USER_CHAT_MODEL_KEY, model);
+    return Response.json({ ok: true, model }, { headers: noStoreHeaders });
+  }
+
   if (url.pathname === "/oauth/dropbox/start" && request.method === "GET") {
+    const blocked = requireAdminOps(request, env, noStoreHeaders);
+    if (blocked) return blocked;
     const personaRaw = String(url.searchParams.get("persona") || "").trim().toLowerCase();
     const persona = personaRaw === "avery" ? "avery" : (personaRaw === "riley" ? "riley" : (personaRaw === "shared" || personaRaw === "persona_shared" ? "shared" : ""));
     if (!persona) return Response.json({ ok: false, error: "persona must be riley, avery, or shared" }, { status: 400, headers: cors });
@@ -665,6 +746,8 @@ export async function handleApiRoute(
   }
 
   if (url.pathname === "/oauth/dropbox/callback" && request.method === "GET") {
+    const blocked = requireAdminOps(request, env, noStoreHeaders);
+    if (blocked) return blocked;
     const code = String(url.searchParams.get("code") || "").trim();
     const state = String(url.searchParams.get("state") || "").trim().toLowerCase();
     const persona = state.startsWith("avery:")
@@ -763,7 +846,7 @@ export async function handleApiRoute(
     });
     const cacheHash = await sha256Hex(cacheBasis);
     const cachePrefix = sessionIdSafe ? `tts/session/${sessionIdSafe}` : "tts/global";
-    const cacheKey = `${cachePrefix}/${cacheHash}.${ttsFormatToExt(format)}`;
+    const cacheKey = scopedR2Key(userId, `${cachePrefix}/${cacheHash}.${ttsFormatToExt(format)}`);
     const cached = await env.R2.get(cacheKey);
     if (cached) {
       try {
@@ -1223,6 +1306,8 @@ export async function handleApiRoute(
   }
 
   if (url.pathname === "/debug/dropbox/riley" && request.method === "GET") {
+    const blocked = requireAdminOps(request, env, noStoreHeaders);
+    if (blocked) return blocked;
     const token = await getPersonaDropboxAccessToken(env, "riley");
     if (!token) {
       return Response.json({ ok: false, stage: "token", error: "empty_access_token_from_refresh_flow" }, { status: 500, headers: noStoreHeaders });
@@ -1242,6 +1327,8 @@ export async function handleApiRoute(
   }
 
   if (url.pathname === "/bench/storage" && request.method === "GET") {
+    const blocked = requireAdminOps(request, env, noStoreHeaders);
+    if (blocked) return blocked;
     const loops = Math.max(1, Math.min(30, Number(url.searchParams.get("loops") || 10)));
     const personaRaw = String(url.searchParams.get("persona") || "riley").trim().toLowerCase();
     const persona = personaRaw === "avery" ? "avery" : "riley";
@@ -1318,6 +1405,8 @@ export async function handleApiRoute(
   }
 
   if (url.pathname === "/vault/directives/sync" && request.method === "POST") {
+    const blocked = requireAdminOps(request, env, noStoreHeaders);
+    if (blocked) return blocked;
     const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
     if (!sharedToken) {
       return Response.json({ ok: false, error: "shared dropbox token missing" }, { status: 500, headers: noStoreHeaders });
@@ -1357,6 +1446,8 @@ export async function handleApiRoute(
   }
 
   if (url.pathname === "/vault/layout/migrate" && request.method === "POST") {
+    const blocked = requireAdminOps(request, env, noStoreHeaders);
+    if (blocked) return blocked;
     const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
     if (!sharedToken) {
       return Response.json({ ok: false, error: "shared dropbox token missing" }, { status: 500, headers: noStoreHeaders });
@@ -1423,6 +1514,8 @@ export async function handleApiRoute(
   }
 
   if (url.pathname === "/migrate/shared/run" && request.method === "POST") {
+    const blocked = requireAdminOps(request, env, noStoreHeaders);
+    if (blocked) return blocked;
     const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
     if (!sharedToken) {
       return Response.json({ ok: false, error: "shared dropbox token missing" }, { status: 500, headers: noStoreHeaders });
@@ -1442,6 +1535,8 @@ export async function handleApiRoute(
   }
 
   if (url.pathname === "/migrate/shared/page" && request.method === "POST") {
+    const blocked = requireAdminOps(request, env, noStoreHeaders);
+    if (blocked) return blocked;
     const body = await request.json().catch(() => ({} as any)) as { prefix?: string; limit?: number; cursor?: string };
     const prefix = String(body.prefix || "").trim();
     if (!prefix) {
@@ -1462,6 +1557,8 @@ export async function handleApiRoute(
   }
 
   if (url.pathname === "/migrate/shared/copy-key" && request.method === "POST") {
+    const blocked = requireAdminOps(request, env, noStoreHeaders);
+    if (blocked) return blocked;
     const body = await request.json().catch(() => ({} as any)) as { key?: string };
     const key = String(body.key || "").trim().replace(/^\/+/, "");
     if (!key) return Response.json({ ok: false, error: "key required" }, { status: 400, headers: noStoreHeaders });
@@ -1482,6 +1579,8 @@ export async function handleApiRoute(
   }
 
   if (url.pathname === "/migrate/shared/prune-unused" && request.method === "POST") {
+    const blocked = requireAdminOps(request, env, noStoreHeaders);
+    if (blocked) return blocked;
     const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
     if (!sharedToken) {
       return Response.json({ ok: false, error: "shared dropbox token missing" }, { status: 500, headers: noStoreHeaders });
@@ -1545,17 +1644,17 @@ export async function handleApiRoute(
 
   if (url.pathname === "/personas") {
     if (request.method === "GET") {
-      const fromR2 = await r2Json<unknown[] | null>(env, PERSONAS_R2_KEY, null);
+      const fromR2 = await r2Json<unknown[] | null>(env, scopedR2Key(userId, PERSONAS_R2_KEY), null);
       if (Array.isArray(fromR2)) return Response.json({ personas: fromR2 }, { headers: cors });
-      const data = await env.KV.get(PERSONAS_KEY);
+      const data = await env.KV.get(scopedKvKey(userId, PERSONAS_KEY));
       return Response.json({ personas: data ? JSON.parse(data) : [] }, { headers: cors });
     }
     if (request.method === "PUT") {
       const { personas } = (await request.json()) as { personas: unknown[] };
       const payload = Array.isArray(personas) ? personas : [];
-      await r2PutJson(env, PERSONAS_R2_KEY, payload);
+      await r2PutJson(env, scopedR2Key(userId, PERSONAS_R2_KEY), payload);
       try {
-        await env.KV.put(PERSONAS_KEY, JSON.stringify(payload));
+        await env.KV.put(scopedKvKey(userId, PERSONAS_KEY), JSON.stringify(payload));
       } catch {
         // KV daily write limit may be exceeded; R2 remains source of truth.
       }
@@ -1585,24 +1684,24 @@ export async function handleApiRoute(
   if (url.pathname === "/persona-profile/bio") {
     if (request.method === "GET") {
       const pid = normalizePid(url.searchParams.get("pid") || "");
-      const userId = normalizeUserId(url.searchParams.get("userId") || "user_default");
+      const profileUserId = normalizeUserId(userId);
       if (!pid) return Response.json({ ok: false, error: "pid required" }, { status: 400, headers: cors });
-      const profile = await loadPersonaUserProfile(env, pid, userId);
+      const profile = await loadPersonaUserProfile(env, pid, profileUserId);
       if (!profile) return Response.json({ ok: false, error: "profile unavailable" }, { status: 500, headers: cors });
-      return Response.json({ ok: true, pid, userId, bio: String(profile.bioSummary || "") }, { headers: cors });
+      return Response.json({ ok: true, pid, userId: profileUserId, bio: String(profile.bioSummary || "") }, { headers: cors });
     }
     if (request.method === "PUT") {
-      const body = (await request.json()) as { bio?: string; userId?: string; pids?: string[] };
+      const body = (await request.json()) as { bio?: string; pids?: string[] };
       const bio = String(body?.bio || "").trim();
-      const userId = normalizeUserId(body?.userId || "user_default");
+      const profileUserId = normalizeUserId(userId);
 
       let pids = Array.isArray(body?.pids) ? body!.pids.map((x) => normalizePid(x)).filter(Boolean) : [];
       if (!pids.length) {
-        const fromR2 = await r2Json<unknown[] | null>(env, PERSONAS_R2_KEY, null);
+        const fromR2 = await r2Json<unknown[] | null>(env, scopedR2Key(userId, PERSONAS_R2_KEY), null);
         if (Array.isArray(fromR2)) {
           pids = [...new Set(fromR2.map(extractPid).filter(Boolean))];
         } else {
-          const kvRaw = await env.KV.get(PERSONAS_KEY);
+          const kvRaw = await env.KV.get(scopedKvKey(userId, PERSONAS_KEY));
           let parsedKv: unknown[] = [];
           try { parsedKv = kvRaw ? JSON.parse(kvRaw) : []; } catch { parsedKv = []; }
           pids = [...new Set(parsedKv.map(extractPid).filter(Boolean))];
@@ -1613,7 +1712,7 @@ export async function handleApiRoute(
       const updated: string[] = [];
       const failed: string[] = [];
       for (const pid of pids) {
-        const profile = await loadPersonaUserProfile(env, pid, userId);
+        const profile = await loadPersonaUserProfile(env, pid, profileUserId);
         if (!profile) { failed.push(pid); continue; }
         const ok = await savePersonaUserProfile(env, {
           ...profile,
@@ -1622,19 +1721,19 @@ export async function handleApiRoute(
         if (ok) updated.push(pid);
         else failed.push(pid);
       }
-      return Response.json({ ok: failed.length === 0, userId, updated, failed }, { headers: cors });
+      return Response.json({ ok: failed.length === 0, userId: profileUserId, updated, failed }, { headers: cors });
     }
     return null;
   }
 
   if (url.pathname === "/profile") {
     if (request.method === "GET") {
-      const data = await env.KV.get("user_profile");
+      const data = await env.KV.get(scopedKvKey(userId, "user_profile"));
       return Response.json({ profile: data || "" }, { headers: cors });
     }
     if (request.method === "PUT") {
       const { profile } = (await request.json()) as { profile: string };
-      await env.KV.put("user_profile", profile);
+      await env.KV.put(scopedKvKey(userId, "user_profile"), profile);
       return Response.json({ ok: true }, { headers: cors });
     }
     return null;
@@ -1650,7 +1749,7 @@ export async function handleApiRoute(
           controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`));
         };
         send("ready", { ok: true, ts: Date.now() });
-        let last = await getSessionChangeSeq(env);
+        let last = await getSessionChangeSeq(env, userId);
         if (Number.isFinite(since) && since > 0 && last > since) {
           send("session_update", { seq: last, ts: Date.now() });
         }
@@ -1658,7 +1757,7 @@ export async function handleApiRoute(
         let heartbeatAt = 0;
         while (!canceled && (Date.now() - startedAt) < 55000) {
           await sleep(1200);
-          const current = await getSessionChangeSeq(env);
+          const current = await getSessionChangeSeq(env, userId);
           if (current > last) {
             last = current;
             send("session_update", { seq: current, ts: Date.now() });
@@ -1688,47 +1787,47 @@ export async function handleApiRoute(
 
   if (url.pathname === "/sessions") {
     if (request.method === "GET") {
-      const sessions = await getSessionIndex(env);
+      const sessions = await getSessionIndex(env, userId);
       return Response.json({ sessions }, { headers: noStoreHeaders });
     }
     if (request.method === "PUT") {
       const { sessions } = (await request.json()) as { sessions: unknown[] };
-      await putSessionIndex(env, (Array.isArray(sessions) ? sessions : []) as SessionMeta[]);
-      await bumpSessionChangeSeq(env);
+      await putSessionIndex(env, (Array.isArray(sessions) ? sessions : []) as SessionMeta[], userId);
+      await bumpSessionChangeSeq(env, userId);
       return Response.json({ ok: true }, { headers: cors });
     }
     return null;
   }
 
   if (url.pathname === "/sessions/deleted" && request.method === "GET") {
-    const sessions = await getDeletedSessionIndex(env);
+    const sessions = await getDeletedSessionIndex(env, userId);
     return Response.json({ sessions }, { headers: cors });
   }
 
   if (url.pathname === "/sessions/recoverable" && request.method === "GET") {
-    const sessions = await getRecoverableSessions(env);
+    const sessions = await getRecoverableSessions(env, userId);
     return Response.json({ sessions }, { headers: cors });
   }
 
   if (url.pathname === "/session/restore" && request.method === "POST") {
     const { id } = (await request.json()) as { id?: string };
-    const restored = await restoreSessionById(env, String(id || ""));
+    const restored = await restoreSessionById(env, String(id || ""), userId);
     if (!restored.ok) {
       const status = restored.error === "id required" ? 400 : 404;
       return Response.json({ ok: false, error: restored.error }, { status, headers: cors });
     }
-    await bumpSessionChangeSeq(env);
+    await bumpSessionChangeSeq(env, userId);
     return Response.json({ ok: true, session: restored.session }, { headers: cors });
   }
 
   if (url.pathname === "/session/recover" && request.method === "POST") {
     const { id } = (await request.json()) as { id?: string };
-    const recovered = await restoreSessionById(env, String(id || ""));
+    const recovered = await restoreSessionById(env, String(id || ""), userId);
     if (!recovered.ok) {
       const status = recovered.error === "id required" ? 400 : 404;
       return Response.json({ ok: false, error: recovered.error }, { status, headers: cors });
     }
-    await bumpSessionChangeSeq(env);
+    await bumpSessionChangeSeq(env, userId);
     return Response.json({ ok: true, session: recovered.session }, { headers: cors });
   }
 
@@ -1737,34 +1836,34 @@ export async function handleApiRoute(
     const sessionId = String(id || "").trim();
     if (!sessionId) return Response.json({ ok: false, error: "id required" }, { status: 400, headers: cors });
 
-    await env.KV.delete(`session:${sessionId}`);
-    await env.KV.delete(`deleted:session:${sessionId}`);
-    await env.R2.delete(sessionR2Key(sessionId));
-    await env.R2.delete(deletedSessionR2Key(sessionId));
+    await env.KV.delete(scopedKvKey(userId, `session:${sessionId}`));
+    await env.KV.delete(scopedKvKey(userId, `deleted:session:${sessionId}`));
+    await env.R2.delete(sessionR2Key(sessionId, userId));
+    await env.R2.delete(deletedSessionR2Key(sessionId, userId));
     for (const base of SESSION_AUDIO_R2_PREFIXES) {
-      await deleteR2ByPrefix(env, `${base}${sessionId}/`);
+      await deleteR2ByPrefix(env, scopedR2Key(userId, `${base}${sessionId}/`));
     }
 
-    const index = await getSessionIndex(env);
-    await putSessionIndex(env, index.filter((s) => s.id !== sessionId));
+    const index = await getSessionIndex(env, userId);
+    await putSessionIndex(env, index.filter((s) => s.id !== sessionId), userId);
 
-    const deletedIndex = await getDeletedSessionIndex(env);
-    await putDeletedSessionIndex(env, deletedIndex.filter((s) => s.id !== sessionId));
+    const deletedIndex = await getDeletedSessionIndex(env, userId);
+    await putDeletedSessionIndex(env, deletedIndex.filter((s) => s.id !== sessionId), userId);
 
-    await bumpSessionChangeSeq(env);
+    await bumpSessionChangeSeq(env, userId);
     return Response.json({ ok: true }, { headers: cors });
   }
 
   if (url.pathname.startsWith("/session/")) {
-    return await handleSessionRoute(request, env, url.pathname.slice(9), cors);
+    return await handleSessionRoute(request, env, url.pathname.slice(9), cors, userId);
   }
 
   if (url.pathname.startsWith("/image-list/") && request.method === "GET") {
     const rawPrefix = decodeURIComponent(url.pathname.slice(12));
     const normalizedPrefix = rawPrefix.replace(/^\/+|\/+$/g, "");
     const listPrefix = normalizedPrefix ? `${normalizedPrefix}/` : "";
-    const list = await env.R2.list({ prefix: listPrefix });
-    const keys = (list.objects || []).map((o) => o.key);
+    const list = await env.R2.list({ prefix: scopedR2Key(userId, listPrefix) });
+    const keys = (list.objects || []).map((o) => unscopedR2Key(userId, o.key));
     return Response.json({ keys }, { headers: cors });
   }
 
@@ -1822,11 +1921,15 @@ export async function handleApiRoute(
     }
 
     if (!options.length) {
-      return Response.redirect(`${url.origin}/image/${encodeURIComponent(key).replace(/%2F/gi, "/")}`, 302);
+      const authToken = String(url.searchParams.get("authToken") || "");
+      const authQuery = authToken ? `?authToken=${encodeURIComponent(authToken)}` : "";
+      return Response.redirect(`${url.origin}/image/${encodeURIComponent(key).replace(/%2F/gi, "/")}${authQuery}`, 302);
     }
 
     const sourcePath = `image/${key}`;
-    const location = `${url.origin}/cdn-cgi/image/${options.join(",")}/${sourcePath}`;
+    const authToken = String(url.searchParams.get("authToken") || "");
+    const authQuery = authToken ? `?authToken=${encodeURIComponent(authToken)}` : "";
+    const location = `${url.origin}/cdn-cgi/image/${options.join(",")}/${sourcePath}${authQuery}`;
     return Response.redirect(location, 302);
   }
 
@@ -1839,9 +1942,10 @@ export async function handleApiRoute(
     const folder = String(formData.get("folder") || "").replace(/\/+$/, "");
     const fileName = file?.name || String(formData.get("fileName") || `${Date.now()}.jpg`);
     const key = folder ? `${folder}/${fileName}` : fileName;
+    const storageKey = scopedR2Key(userId, key);
 
     if (file) {
-      await env.R2.put(key, file.stream(), {
+      await env.R2.put(storageKey, file.stream(), {
         httpMetadata: { contentType: file.type || "image/jpeg" },
       });
     } else {
@@ -1850,7 +1954,7 @@ export async function handleApiRoute(
         return Response.json({ error: `remote fetch failed: ${remote.status}` }, { status: 400, headers: cors });
       }
       const contentType = (remote.headers.get("content-type") || "image/jpeg").split(";")[0];
-      await env.R2.put(key, remote.body, {
+      await env.R2.put(storageKey, remote.body, {
         httpMetadata: { contentType },
       });
     }
@@ -1859,7 +1963,7 @@ export async function handleApiRoute(
 
   if (url.pathname.startsWith("/image/") && request.method === "GET") {
     const key = decodeURIComponent(url.pathname.slice(7));
-    const obj = await env.R2.get(key);
+    const obj = await env.R2.get(scopedR2Key(userId, key));
     if (!obj) return new Response("Not Found", { status: 404, headers: cors });
     return new Response(obj.body, {
       headers: {
@@ -1873,7 +1977,7 @@ export async function handleApiRoute(
   if (url.pathname.startsWith("/image/") && request.method === "DELETE") {
     const key = decodeURIComponent(url.pathname.slice(7));
     if (!key) return Response.json({ error: "key required" }, { status: 400, headers: cors });
-    await env.R2.delete(key);
+    await env.R2.delete(scopedR2Key(userId, key));
     return Response.json({ ok: true, key }, { headers: cors });
   }
 
@@ -1885,17 +1989,18 @@ async function handleSessionRoute(
   env: Env,
   id: string,
   cors: CorsHeaders,
+  userId = "user_default",
 ): Promise<Response | null> {
   const noStoreHeaders = { ...cors, "Cache-Control": "no-store" };
   if (request.method === "GET") {
-    const data = await getSessionPayloadText(env, id);
+    const data = await getSessionPayloadText(env, id, userId);
     return Response.json({ session: data ? JSON.parse(data) : null }, { headers: noStoreHeaders });
   }
 
   if (request.method === "PUT") {
     const { session } = (await request.json()) as { session: Record<string, unknown> };
     const incomingUpdatedAt = Number((session as any)?.updatedAt || 0);
-    const existingRaw = await getSessionPayloadText(env, id);
+    const existingRaw = await getSessionPayloadText(env, id, userId);
     let mergedSession: Record<string, unknown> = { ...(session || {}) };
     if (existingRaw) {
       try {
@@ -1913,47 +2018,47 @@ async function handleSessionRoute(
       }
     }
     const payload = JSON.stringify(mergedSession);
-    await env.R2.put(sessionR2Key(id), payload, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
-    await env.KV.delete(`session:${id}`);
+    await env.R2.put(sessionR2Key(id, userId), payload, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
+    await env.KV.delete(scopedKvKey(userId, `session:${id}`));
 
-    const index = await getSessionIndex(env);
+    const index = await getSessionIndex(env, userId);
     const meta: SessionMeta = buildSessionMeta(mergedSession);
 
     const existingIndex = index.findIndex((s) => s.id === id);
     if (existingIndex >= 0) index[existingIndex] = meta;
     else index.unshift(meta);
 
-    await putSessionIndex(env, index);
-    await bumpSessionChangeSeq(env);
+    await putSessionIndex(env, index, userId);
+    await bumpSessionChangeSeq(env, userId);
     return Response.json({ ok: true }, { headers: cors });
   }
 
   if (request.method === "DELETE") {
-    const existingRaw = await getSessionPayloadText(env, id);
+    const existingRaw = await getSessionPayloadText(env, id, userId);
     if (existingRaw) {
       try {
         const session = JSON.parse(existingRaw) as Record<string, unknown>;
         const meta = buildSessionMeta(session);
         const deletedMeta: DeletedSessionMeta = { ...meta, deletedAt: Date.now() };
-        await env.R2.put(deletedSessionR2Key(id), existingRaw, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
-        await env.KV.delete(`deleted:session:${id}`);
-        const deletedIndex = await getDeletedSessionIndex(env);
+        await env.R2.put(deletedSessionR2Key(id, userId), existingRaw, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
+        await env.KV.delete(scopedKvKey(userId, `deleted:session:${id}`));
+        const deletedIndex = await getDeletedSessionIndex(env, userId);
         const nextDeleted = [deletedMeta, ...deletedIndex.filter((s) => s.id !== id)].slice(0, 200);
-        await putDeletedSessionIndex(env, nextDeleted);
+        await putDeletedSessionIndex(env, nextDeleted, userId);
       } catch {
         // ignore archival parse failure and continue hard-delete path
       }
     }
 
-    await env.KV.delete(`session:${id}`);
-    await env.R2.delete(sessionR2Key(id));
+    await env.KV.delete(scopedKvKey(userId, `session:${id}`));
+    await env.R2.delete(sessionR2Key(id, userId));
     for (const base of SESSION_AUDIO_R2_PREFIXES) {
-      await deleteR2ByPrefix(env, `${base}${id}/`);
+      await deleteR2ByPrefix(env, scopedR2Key(userId, `${base}${id}/`));
     }
-    let index = await getSessionIndex(env);
+    let index = await getSessionIndex(env, userId);
     index = index.filter((s) => s.id !== id);
-    await putSessionIndex(env, index);
-    await bumpSessionChangeSeq(env);
+    await putSessionIndex(env, index, userId);
+    await bumpSessionChangeSeq(env, userId);
     return Response.json({ ok: true }, { headers: cors });
   }
 

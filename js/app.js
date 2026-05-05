@@ -70,11 +70,23 @@ window.getDemoReply = function(session) {
 // ══════════════════════════════
 //  INITIALIZATION
 // ══════════════════════════════
+function isAdminOnlyPersonaPid(pidRaw) {
+  const pid = String(pidRaw || '').trim().toLowerCase();
+  return pid === 'p_riley' || pid === 'riley' || pid === 'p_avery' || pid === 'avery';
+}
+
+function sanitizePersonasForCurrentMode(list) {
+  const src = Array.isArray(list) ? list : [];
+  const isAdminMode = (typeof isPersonaAdminMode === 'function') ? isPersonaAdminMode() : false;
+  if (isAdminMode) return src;
+  return src.filter((p) => !isAdminOnlyPersonaPid(p?.pid));
+}
+
 function loadPersonasFromCache() {
   try {
     const cached = getLocalPersonas();
     if (cached) {
-      const parsed = cached;
+      const parsed = sanitizePersonasForCurrentMode(cached);
       if (parsed && parsed.length) {
         // pid 중복 제거
         const seen = new Set();
@@ -327,7 +339,9 @@ function connectSessionEvents() {
     _sessionEventsReconnectTimer = null;
   }
   closeSessionEvents();
-  const es = new EventSource(`${wUrl}/events/sessions?since=${Number(_lastSessionEventSeq || 0)}`);
+  let eventsUrl = `${wUrl}/events/sessions?since=${Number(_lastSessionEventSeq || 0)}`;
+  if (typeof appendPersonaAuthToUrl === 'function') eventsUrl = appendPersonaAuthToUrl(eventsUrl);
+  const es = new EventSource(eventsUrl);
   _sessionEvents = es;
 
   es.addEventListener('session_update', (evt) => {
@@ -363,7 +377,7 @@ async function syncPersonasFromWorkerForStartup(wUrl, timeoutMs = 4000) {
   ]);
   if (!result || result.timedOut) return false;
 
-  const kvPersonas = Array.isArray(result.personas) ? result.personas : [];
+  const kvPersonas = sanitizePersonasForCurrentMode(Array.isArray(result.personas) ? result.personas : []);
   if (kvPersonas.length) {
     const prevByPid = new Map((personas || []).map(p => [String(p?.pid || ''), p]));
     const seen = new Set();
@@ -415,7 +429,7 @@ async function syncPersonasFromWorkerForStartup(wUrl, timeoutMs = 4000) {
     .catch(() => []);
   if (!Array.isArray(celebs) || !celebs.length) return false;
 
-  const nextCelebs = celebs.map(p => ({ ...p, type: p.type || 'celebrity' }));
+  const nextCelebs = sanitizePersonasForCurrentMode(celebs.map(p => ({ ...p, type: p.type || 'celebrity' })));
   applyPersonaTtsDefaults(nextCelebs);
   const sameCelebs = personasSignature(nextCelebs) === personasSignature(personas);
   if (!sameCelebs) {
@@ -434,6 +448,31 @@ async function syncPersonasFromWorkerForStartup(wUrl, timeoutMs = 4000) {
 
 const ENABLE_STARTUP_CACHE_PROCEDURES = true;
 let _loadingLogoHoldBound = false;
+const DEFAULT_USER_MODEL_FALLBACK = 'gemini-3.1-flash-lite-preview';
+
+async function fetchDefaultUserModelFromWorker() {
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) return DEFAULT_USER_MODEL_FALLBACK;
+  try {
+    const res = await fetch(`${wUrl}/settings/default-user-model`, { cache: 'no-store' });
+    const data = await res.json().catch(() => ({}));
+    const model = String(data?.model || '').trim();
+    return model || DEFAULT_USER_MODEL_FALLBACK;
+  } catch {
+    return DEFAULT_USER_MODEL_FALLBACK;
+  }
+}
+
+async function applyUserDefaultModelIfNeeded() {
+  const isAdmin = (typeof isPersonaAdminMode !== 'function') || isPersonaAdminMode();
+  if (isAdmin) return;
+  const model = await fetchDefaultUserModelFromWorker();
+  const select = document.getElementById('chatModeSelect');
+  if (!select) return;
+  if (!String(select.value || '').trim() || String(select.value).includes('grok-4.20')) {
+    select.value = model;
+  }
+}
 
 function bindLoadingLogoHoldToRecover() {
   if (_loadingLogoHoldBound) return;
@@ -498,6 +537,27 @@ async function init() {
     try { if (typeof setLoadingEscapeVisible === 'function') setLoadingEscapeVisible(true); } catch(e) {}
   }, 8000);
   if (!shouldBlockLoading) setLoading(false);
+  try { if (typeof initGoogleLogin === 'function') initGoogleLogin(); } catch(e) {}
+  const isAdminMode = (typeof isPersonaAdminMode !== 'function') ? false : isPersonaAdminMode();
+  const authUser = (typeof getPersonaAuthUser === 'function') ? getPersonaAuthUser() : null;
+  if (!isAdminMode && !authUser) {
+    personas = [];
+    sessions = [];
+    try { setLocalPersonas([]); } catch {}
+    try { setLocalSessionIndex([]); } catch {}
+    if (typeof renderPersonaGrid === 'function') await renderPersonaGrid();
+    if (typeof renderChatList === 'function') await renderChatList();
+    if (shouldBlockLoading) setLoading(false);
+    showToast('Google 로그인 후 첫 페르소나를 생성해 주세요');
+    return;
+  }
+  if (!isAdminMode && authUser && typeof ensureGoogleWorkspaceAccess === 'function') {
+    ensureGoogleWorkspaceAccess(false).catch(() => {});
+    if (typeof loadGoogleWorkspaceData === 'function') {
+      await loadGoogleWorkspaceData(false).catch(() => false);
+    }
+  }
+  await applyUserDefaultModelIfNeeded();
   loadUserProfile();
   applyFontSize(userProfile.fontSize || 15);
   switchTab(userProfile.defaultTab || 'persona');
@@ -511,6 +571,14 @@ async function init() {
     if (activeTab === 'settings') renderSettingsPane();
   }).catch(()=>{});
   await refreshAllCaches({ force: false, showLoading: true, loadingLabel: '로컬 캐시 로드 중...' });
+  if (!isAdminMode && authUser) {
+    const initialized = (typeof getLocalItem === 'function') ? (getLocalItem('user_persona_initialized_v1') === '1') : false;
+    if (!initialized && (!Array.isArray(personas) || personas.length === 0) && typeof createNewPersona === 'function') {
+      setLoading(false);
+      createNewPersona();
+      return;
+    }
+  }
   connectSessionEvents();
   startLiveSyncLoop();
   document.addEventListener('visibilitychange', () => {
@@ -529,88 +597,6 @@ async function init() {
   if (loadingEscapeTimer) clearTimeout(loadingEscapeTimer);
   clearTimeout(loadingFailsafe);
   if (typeof setLoadingEscapeVisible === 'function') setLoadingEscapeVisible(false);
-  return;
-
-  // neutral 이미지 IDB에서 로드 (neutral_a 우선)
-  for (const [pid] of Object.entries(EMOTION_PROFILE_MAP)) {
-    const key = `emotion_${pid}_neutral_a`;
-    try {
-      const cached = await idbGet(key) || await idbGet(`emotion_${pid}_neutral`);
-      if (cached) _neutralCache[pid] = cached;
-    } catch(e) {}
-  }
-
-  // 앱 시작 시에는 전체 생성 대신 상태 점검만 수행
-  if (ENABLE_STARTUP_CACHE_PROCEDURES) {
-    await checkCacheStateWithProgress((done, total, label, isMissing) => {
-      const tail = isMissing ? ' (missing)' : '';
-      if (shouldBlockLoading) setLoading(true, `캐시 점검 ${done}/${total} - ${label}${tail}`);
-    }).catch(() => null);
-  }
-
-  // 진입 전 최소 시각 캐시 로딩(그리드 + 채팅목록)
-  if (ENABLE_STARTUP_CACHE_PROCEDURES) {
-    await runStartupVisualWarmup((done, total, label) => {
-      if (shouldBlockLoading) setLoading(true, `시작 준비 ${done}/${total} - ${label}`);
-    }).catch(() => null);
-  }
-
-  // 페르소나 그리드 + 채팅 목록 렌더링
-  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-  if (wUrl) {
-    if (shouldBlockLoading) setLoading(true, '초기 동기화 확인 중...');
-    await syncPersonasFromWorkerForStartup(wUrl, 12000).catch(() => false);
-  }
-  if (typeof renderPersonaGrid === 'function') await renderPersonaGrid();
-  if (typeof renderChatList === 'function') await renderChatList();
-
-  if (shouldBlockLoading) setLoading(false);
-  if (typeof setLoadingEscapeVisible === 'function') setLoadingEscapeVisible(false);
-
-  // 백그라운드 워밍업(추가 캐시 보강)
-  setTimeout(() => { runGlobalCacheWarmup().catch(() => {}); }, 200);
-
-
-  // 백그라운드: Worker KV에서 페르소나 + 세션 동기화
-  if (wUrl) {
-    loadIndex().catch(()=>{});
-
-    // KV에서 페르소나 로드 (celebrity.json + GAS 대체)
-    // duplicate personas sync disabled (already synced during loading)
-    /* fetch(wUrl + '/personas').then(r => r.json()).then(data => {
-      const kvPersonas = data.personas || [];
-      if (kvPersonas.length) {
-        // pid 기준 중복 제거
-        const seen = new Set();
-        const nextPersonas = kvPersonas.filter(p => {
-          if (seen.has(p.pid)) return false;
-          seen.add(p.pid); return true;
-        });
-        const samePersonas = personasSignature(nextPersonas) === personasSignature(personas);
-        if (!samePersonas) {
-          personas = nextPersonas;
-          setLocalPersonas(personas);
-          preloadEmotionImages();
-        }
-      } else {
-        // KV에 없으면 celebrity.json에서 초기 로드 (최초 1회)
-        fetch('celebrity.json').then(r => r.ok ? r.json() : []).catch(() => []).then(celebs => {
-          if (!celebs.length) return;
-          personas = celebs.map(p => ({ ...p, type: p.type || 'celebrity' }));
-          setLocalPersonas(personas);
-          // KV에도 저장
-          fetch(wUrl + '/personas', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ personas })
-          }).catch(()=>{});
-          preloadEmotionImages();
-        });
-      }
-    }).catch(() => {}); */
-  }
-  if (loadingEscapeTimer) clearTimeout(loadingEscapeTimer);
-  clearTimeout(loadingFailsafe);
 }
 
 // 앱 실행
@@ -623,7 +609,7 @@ window.forceRecoverApp = async function() {
       const pData = await pRes.json().catch(() => ({}));
       if (Array.isArray(pData.personas)) {
         const seen = new Set();
-        personas = pData.personas.filter(p => p && p.pid && !seen.has(p.pid) && seen.add(p.pid));
+        personas = sanitizePersonasForCurrentMode(pData.personas).filter(p => p && p.pid && !seen.has(p.pid) && seen.add(p.pid));
         applyPersonaTtsDefaults(personas);
         setLocalPersonas(personas);
       }
@@ -648,3 +634,5 @@ init().catch((e) => {
   console.error('init failed:', e);
   try { setLoading(false); } catch(err) {}
 });
+window.isAdminOnlyPersonaPid = isAdminOnlyPersonaPid;
+window.fetchDefaultUserModelFromWorker = fetchDefaultUserModelFromWorker;

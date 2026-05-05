@@ -1306,16 +1306,6 @@ function closeViewer(){
   if (state.viewer) { state.viewer.destroy(); state.viewer = null; }
 }
 
-async function gasCall(payload){
-  if (!state.gasUrl) throw new Error('GAS URL is empty.');
-  const res = await fetch(state.gasUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({ secretKey: GAS_SECRET, ...payload }),
-  });
-  return await res.json();
-}
-
 function dataUrlToBlob(dataUrl){
   const [meta, b64] = String(dataUrl || '').split(',');
   const mime = (meta && meta.match(/data:([^;]+);base64/i)?.[1]) || 'image/jpeg';
