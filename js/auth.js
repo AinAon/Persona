@@ -25,6 +25,10 @@ function getPersonaAdminKey() {
 }
 
 function isPersonaAdminMode() {
+  try {
+    const qs = new URLSearchParams(location.search || '');
+    if (qs.get('basic') === '1' || sessionStorage.getItem('persona_force_basic') === '1') return false;
+  } catch {}
   try { return localStorage.getItem(getPersonaAdminKey()) === '1'; } catch { return false; }
 }
 

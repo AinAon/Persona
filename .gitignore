@@ -1,0 +1,7 @@
+node_modules/
+mobile-web/
+android/.gradle/
+android/app/build/
+android/build/
+*.apk
+*.aab

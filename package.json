@@ -1,0 +1,17 @@
+{
+  "name": "persona-mobile-shell",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "mobile:prepare": "node scripts/prepare-mobile-web.js",
+    "mobile:sync": "npm run mobile:prepare && cap sync android",
+    "mobile:apk": "npm run mobile:sync && cd android && gradlew assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.4.4",
+    "@capacitor/core": "^7.4.4"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.4.4"
+  }
+}
