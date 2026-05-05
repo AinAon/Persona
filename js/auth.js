@@ -6,6 +6,7 @@ const PERSONA_GOOGLE_OAUTH_EXPIRES_AT_KEY = 'persona_google_oauth_expires_at';
 const PERSONA_GOOGLE_DRIVE_FILE_ID_KEY = 'persona_google_drive_file_id';
 const PERSONA_GOOGLE_SHEET_ID_KEY = 'persona_google_sheet_id';
 const PERSONA_TEMP_LOGIN_KEY = 'persona_temp_login_v1';
+const PERSONA_APP_ROLE_CHOICE_KEY = 'persona_app_role_choice_v1';
 const GOOGLE_RW_SCOPES = [
   'https://www.googleapis.com/auth/drive.file',
   'https://www.googleapis.com/auth/spreadsheets'
@@ -218,6 +219,38 @@ function hideAuthGate() {
   gate.classList.add('hidden');
 }
 
+function getAppRoleChoice() {
+  try { return localStorage.getItem(PERSONA_APP_ROLE_CHOICE_KEY) || ''; } catch { return ''; }
+}
+
+function setAppRoleChoice(role) {
+  try { localStorage.setItem(PERSONA_APP_ROLE_CHOICE_KEY, String(role || '')); } catch {}
+}
+
+function showRoleChooserIfNeeded() {
+  const modal = document.getElementById('roleChooser');
+  if (!modal) return;
+  const chosen = getAppRoleChoice();
+  if (chosen === 'admin' || chosen === 'user') {
+    modal.classList.add('hidden');
+    return;
+  }
+  modal.classList.remove('hidden');
+}
+
+function chooseUserMode() {
+  setAppRoleChoice('user');
+  setPersonaAdminMode(false);
+  signInTemporaryUser();
+}
+
+function chooseAdminMode() {
+  setAppRoleChoice('admin');
+  setPersonaAdminMode(true);
+  hideAuthGate();
+  location.reload();
+}
+
 function setGoogleWorkspaceToken(token, expiresInSec) {
   const ttl = Number(expiresInSec || 0);
   const expiresAt = Date.now() + Math.max(60, ttl) * 1000;
@@ -410,6 +443,11 @@ function signOutGoogle() {
 
 document.addEventListener('DOMContentLoaded', () => {
   ensurePersonaAuthFreshness();
+  const chooseUserBtn = document.getElementById('chooseUserModeBtn');
+  const chooseAdminBtn = document.getElementById('chooseAdminModeBtn');
+  if (chooseUserBtn) chooseUserBtn.onclick = chooseUserMode;
+  if (chooseAdminBtn) chooseAdminBtn.onclick = chooseAdminMode;
+  showRoleChooserIfNeeded();
   installPersonaAdminStyle();
   applyPersonaAdminGate();
 });
@@ -431,5 +469,7 @@ window.showAuthGate = showAuthGate;
 window.hideAuthGate = hideAuthGate;
 window.hasLoggedInPersonaUser = hasLoggedInPersonaUser;
 window.signInTemporaryUser = signInTemporaryUser;
+window.chooseUserMode = chooseUserMode;
+window.chooseAdminMode = chooseAdminMode;
 window.PERSONA_GOOGLE_DRIVE_FILE_ID_KEY = PERSONA_GOOGLE_DRIVE_FILE_ID_KEY;
 window.PERSONA_GOOGLE_SHEET_ID_KEY = PERSONA_GOOGLE_SHEET_ID_KEY;
