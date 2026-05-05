@@ -844,6 +844,9 @@ function savePersonas() {
       body: JSON.stringify({ personas: toSave })
     }).catch(() => {});
   }
+  if (typeof syncPersonasToGoogleWorkspace === 'function') {
+    syncPersonasToGoogleWorkspace(toSave).catch(() => {});
+  }
 }
 
 function buildIndex() {
@@ -886,6 +889,9 @@ function getSessionPreviewFromHistory(history) {
 async function saveIndex() {
   const idx = buildIndex();
   setLocalSessionIndex(idx);
+  if (typeof syncIndexToGoogleWorkspace === 'function') {
+    syncIndexToGoogleWorkspace(idx).catch(() => {});
+  }
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl) return;
   // 인덱스 저장
@@ -1004,12 +1010,15 @@ async function saveSession(id) {
   s.lastMessageAt = history.reduce((max, m) => Math.max(max, Number(m?.createdAt || 0)), 0);
   s.lastPreview = getSessionPreviewFromHistory(history);
   const localSaved = setLocalSession(id, history);
+  const session = { ...buildIndex().find(x=>x.id===id), history };
+  if (typeof syncSessionToGoogleWorkspace === 'function') {
+    syncSessionToGoogleWorkspace(session).catch(() => {});
+  }
   if (!localSaved) {
     console.warn('[session] local save failed', { id, historyLen: history.length });
   }
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl) return;
-  const session = { ...buildIndex().find(x=>x.id===id), history };
   _remoteSessionPayloadById[id] = session;
   if (_remoteSessionSaveTimers[id]) clearTimeout(_remoteSessionSaveTimers[id]);
   _remoteSessionSaveTimers[id] = setTimeout(() => {
@@ -1296,6 +1305,9 @@ const LOCAL_ONLY_PROFILE_KEYS = ['defaultTab', 'chatAvatarStyle', 'chatListAvata
 
 function saveUserProfile() {
   setLocalUserProfile(userProfile);
+  if (typeof syncProfileToGoogleWorkspace === 'function') {
+    syncProfileToGoogleWorkspace(userProfile).catch(() => {});
+  }
 }
 
 function loadUserProfile() {

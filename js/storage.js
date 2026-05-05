@@ -2,7 +2,21 @@
 const IDB_NAME = 'personachat_v4';
 const IDB_STORE = 'images';
 const IDB_VER = 3;
+const LEGACY_TO_ADMIN_MIGRATED_KEY = 'pc4_migrated_to_admin_v1';
 let _idb = null;
+
+function getStorageNsPrefix() {
+  try {
+    const ns = (typeof getPersonaStorageNamespace === 'function' ? getPersonaStorageNamespace() : 'user_local_default');
+    return `pc4ns:${String(ns || 'user_local_default')}:`;
+  } catch {
+    return 'pc4ns:user_local_default:';
+  }
+}
+
+function toScopedKey(key) {
+  return `${getStorageNsPrefix()}${String(key || '')}`;
+}
 
 function openIDB() {
   if (_idb) return Promise.resolve(_idb);
@@ -85,15 +99,15 @@ async function idbClearAll() {
 }
 
 function getLocalItem(key) {
-  try { return localStorage.getItem(key); } catch { return null; }
+  try { return localStorage.getItem(toScopedKey(key)); } catch { return null; }
 }
 
 function setLocalItem(key, value) {
-  try { localStorage.setItem(key, value); return true; } catch { return false; }
+  try { localStorage.setItem(toScopedKey(key), value); return true; } catch { return false; }
 }
 
 function removeLocalItem(key) {
-  try { localStorage.removeItem(key); return true; } catch { return false; }
+  try { localStorage.removeItem(toScopedKey(key)); return true; } catch { return false; }
 }
 
 function getLocalJSON(key, fallback = null) {
@@ -117,3 +131,37 @@ function getLocalUserProfile() { return getLocalJSON(CACHE_USER_KEY, null); }
 function setLocalUserProfile(data) { return setLocalJSON(CACHE_USER_KEY, data); }
 function getImageCacheBustToken() { return getLocalItem('img_cache_bust'); }
 function setImageCacheBustToken(token) { return setLocalItem('img_cache_bust', String(token)); }
+
+function migrateLegacyLocalStorageToAdminNamespaceOnce() {
+  try {
+    if (localStorage.getItem(LEGACY_TO_ADMIN_MIGRATED_KEY) === '1') return;
+    const adminNs = `pc4ns:admin_local_default:`;
+    const keysToMove = [
+      CACHE_PERSONAS_KEY,
+      CACHE_INDEX_KEY,
+      CACHE_USER_KEY,
+      'img_cache_bust',
+      'group_router_debug',
+      'em_cache_ping'
+    ];
+    for (const k of keysToMove) {
+      const v = localStorage.getItem(k);
+      if (v != null && localStorage.getItem(`${adminNs}${k}`) == null) {
+        localStorage.setItem(`${adminNs}${k}`, v);
+      }
+      localStorage.removeItem(k);
+    }
+    const allKeys = Object.keys(localStorage);
+    for (const key of allKeys) {
+      if (!key.startsWith(CACHE_SESSION_PREFIX)) continue;
+      const val = localStorage.getItem(key);
+      if (val != null && localStorage.getItem(`${adminNs}${key}`) == null) {
+        localStorage.setItem(`${adminNs}${key}`, val);
+      }
+      localStorage.removeItem(key);
+    }
+    localStorage.setItem(LEGACY_TO_ADMIN_MIGRATED_KEY, '1');
+  } catch {}
+}
+
+migrateLegacyLocalStorageToAdminNamespaceOnce();

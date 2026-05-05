@@ -501,6 +501,25 @@ async function init() {
   }, 8000);
   if (!shouldBlockLoading) setLoading(false);
   try { if (typeof initGoogleLogin === 'function') initGoogleLogin(); } catch(e) {}
+  const isAdminMode = (typeof isPersonaAdminMode !== 'function') ? false : isPersonaAdminMode();
+  const authUser = (typeof getPersonaAuthUser === 'function') ? getPersonaAuthUser() : null;
+  if (!isAdminMode && !authUser) {
+    personas = [];
+    sessions = [];
+    try { setLocalPersonas([]); } catch {}
+    try { setLocalSessionIndex([]); } catch {}
+    if (typeof renderPersonaGrid === 'function') await renderPersonaGrid();
+    if (typeof renderChatList === 'function') await renderChatList();
+    if (shouldBlockLoading) setLoading(false);
+    showToast('Google 로그인 후 첫 페르소나를 생성해 주세요');
+    return;
+  }
+  if (!isAdminMode && authUser && typeof ensureGoogleWorkspaceAccess === 'function') {
+    ensureGoogleWorkspaceAccess(false).catch(() => {});
+    if (typeof loadGoogleWorkspaceData === 'function') {
+      await loadGoogleWorkspaceData(false).catch(() => false);
+    }
+  }
   loadUserProfile();
   applyFontSize(userProfile.fontSize || 15);
   switchTab(userProfile.defaultTab || 'persona');
@@ -514,6 +533,14 @@ async function init() {
     if (activeTab === 'settings') renderSettingsPane();
   }).catch(()=>{});
   await refreshAllCaches({ force: false, showLoading: true, loadingLabel: '로컬 캐시 로드 중...' });
+  if (!isAdminMode && authUser) {
+    const initialized = (typeof getLocalItem === 'function') ? (getLocalItem('user_persona_initialized_v1') === '1') : false;
+    if (!initialized && (!Array.isArray(personas) || personas.length === 0) && typeof createNewPersona === 'function') {
+      setLoading(false);
+      createNewPersona();
+      return;
+    }
+  }
   connectSessionEvents();
   startLiveSyncLoop();
   document.addEventListener('visibilitychange', () => {

@@ -19,12 +19,14 @@ Commands:
 npm install
 npm run mobile:sync
 npm run mobile:apk
+npm run mobile:apk:user
 ```
 
 Output after a successful debug build:
 
 ```text
 android/app/build/outputs/apk/debug/app-debug.apk
+android/app/build/outputs/apk/user/debug/app-user-debug.apk
 ```
 
 Requirements:
@@ -37,3 +39,4 @@ Current local machine status at setup time:
 - `npm run mobile:sync` succeeded.
 - JDK 21 and Android SDK command-line tools were installed locally.
 - `npm run mobile:apk` succeeded and produced `android/app/build/outputs/apk/debug/app-debug.apk`.
+- `npm run mobile:apk:user` succeeded and produced `android/app/build/outputs/apk/user/debug/app-user-debug.apk`.

@@ -1,6 +1,17 @@
 const PERSONA_AUTH_TOKEN_KEY = 'persona_google_id_token';
 const PERSONA_AUTH_USER_KEY = 'persona_google_user';
 const PERSONA_ADMIN_PASSWORD = '1234';
+const PERSONA_GOOGLE_OAUTH_TOKEN_KEY = 'persona_google_oauth_token';
+const PERSONA_GOOGLE_OAUTH_EXPIRES_AT_KEY = 'persona_google_oauth_expires_at';
+const PERSONA_GOOGLE_DRIVE_FILE_ID_KEY = 'persona_google_drive_file_id';
+const PERSONA_GOOGLE_SHEET_ID_KEY = 'persona_google_sheet_id';
+const GOOGLE_RW_SCOPES = [
+  'https://www.googleapis.com/auth/drive.file',
+  'https://www.googleapis.com/auth/spreadsheets'
+].join(' ');
+
+let _googleOauthClientId = '';
+let _googleTokenClient = null;
 
 function getPersonaAuthToken() {
   try { return localStorage.getItem(PERSONA_AUTH_TOKEN_KEY) || ''; } catch { return ''; }
@@ -22,6 +33,16 @@ function getPersonaAccountKey() {
 
 function getPersonaAdminKey() {
   return `persona_admin_enabled_${getPersonaAccountKey()}`;
+}
+
+function getPersonaStorageMode() {
+  return isPersonaAdminMode() ? 'admin' : 'user';
+}
+
+function getPersonaStorageNamespace() {
+  if (getPersonaStorageMode() === 'admin') return 'admin_local_default';
+  const accountKey = getPersonaAccountKey();
+  return `${getPersonaStorageMode()}_${accountKey}`;
 }
 
 function isPersonaAdminMode() {
@@ -120,6 +141,49 @@ function clearPersonaAuth() {
   } catch {}
 }
 
+function setGoogleWorkspaceToken(token, expiresInSec) {
+  const ttl = Number(expiresInSec || 0);
+  const expiresAt = Date.now() + Math.max(60, ttl) * 1000;
+  try {
+    localStorage.setItem(PERSONA_GOOGLE_OAUTH_TOKEN_KEY, String(token || ''));
+    localStorage.setItem(PERSONA_GOOGLE_OAUTH_EXPIRES_AT_KEY, String(expiresAt));
+  } catch {}
+}
+
+function getGoogleWorkspaceToken() {
+  try {
+    const token = localStorage.getItem(PERSONA_GOOGLE_OAUTH_TOKEN_KEY) || '';
+    const expiresAt = Number(localStorage.getItem(PERSONA_GOOGLE_OAUTH_EXPIRES_AT_KEY) || 0);
+    if (!token || !expiresAt || Date.now() > (expiresAt - 30000)) return '';
+    return token;
+  } catch {
+    return '';
+  }
+}
+
+async function requestGoogleWorkspaceToken(interactive = true) {
+  if (!_googleTokenClient || !_googleOauthClientId) return '';
+  const current = getGoogleWorkspaceToken();
+  if (current) return current;
+  return await new Promise((resolve) => {
+    _googleTokenClient.callback = (resp) => {
+      if (!resp || resp.error) return resolve('');
+      setGoogleWorkspaceToken(resp.access_token || '', Number(resp.expires_in || 0));
+      resolve(getGoogleWorkspaceToken());
+    };
+    _googleTokenClient.requestAccessToken({
+      prompt: interactive ? 'consent' : '',
+      scope: GOOGLE_RW_SCOPES
+    });
+  });
+}
+
+async function ensureGoogleWorkspaceAccess(interactive = true) {
+  const user = getPersonaAuthUser();
+  if (!user || isPersonaAdminMode()) return '';
+  return await requestGoogleWorkspaceToken(interactive);
+}
+
 function isWorkerUrl(url) {
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl || !url) return false;
@@ -194,6 +258,7 @@ async function initGoogleLogin() {
       target.textContent = 'GOOGLE_CLIENT_ID 미설정';
       return;
     }
+    _googleOauthClientId = String(cfg.clientId || '').trim();
     if (!window.google?.accounts?.id) {
       target.textContent = 'Google SDK 로딩 중';
       setTimeout(initGoogleLogin, 700);
@@ -205,6 +270,7 @@ async function initGoogleLogin() {
       callback: async (response) => {
         try {
           await verifyGoogleCredential(response?.credential || '');
+          await ensureGoogleWorkspaceAccess(true).catch(() => '');
           renderAuthState();
           location.reload();
         } catch (e) {
@@ -214,6 +280,13 @@ async function initGoogleLogin() {
       }
     });
     window.google.accounts.id.renderButton(target, { theme: 'outline', size: 'medium', width: 240 });
+    if (window.google?.accounts?.oauth2 && _googleOauthClientId) {
+      _googleTokenClient = window.google.accounts.oauth2.initTokenClient({
+        client_id: _googleOauthClientId,
+        scope: GOOGLE_RW_SCOPES,
+        callback: () => {}
+      });
+    }
   } catch (e) {
     target.textContent = '로그인 설정 확인 실패';
   }
@@ -222,6 +295,17 @@ async function initGoogleLogin() {
 function signOutGoogle() {
   setPersonaAdminMode(false);
   clearPersonaAuth();
+  try {
+    localStorage.removeItem(PERSONA_GOOGLE_OAUTH_TOKEN_KEY);
+    localStorage.removeItem(PERSONA_GOOGLE_OAUTH_EXPIRES_AT_KEY);
+    localStorage.removeItem(PERSONA_GOOGLE_DRIVE_FILE_ID_KEY);
+    localStorage.removeItem(PERSONA_GOOGLE_SHEET_ID_KEY);
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith(`${PERSONA_GOOGLE_DRIVE_FILE_ID_KEY}_`) || key.startsWith(`${PERSONA_GOOGLE_SHEET_ID_KEY}_`)) {
+        localStorage.removeItem(key);
+      }
+    }
+  } catch {}
   renderAuthState();
   location.reload();
 }
@@ -240,3 +324,9 @@ window.isPersonaAdminMode = isPersonaAdminMode;
 window.applyPersonaAdminGate = applyPersonaAdminGate;
 window.enableAdminModeFromInput = enableAdminModeFromInput;
 window.disableAdminMode = disableAdminMode;
+window.getPersonaStorageMode = getPersonaStorageMode;
+window.getPersonaStorageNamespace = getPersonaStorageNamespace;
+window.ensureGoogleWorkspaceAccess = ensureGoogleWorkspaceAccess;
+window.getGoogleWorkspaceToken = getGoogleWorkspaceToken;
+window.PERSONA_GOOGLE_DRIVE_FILE_ID_KEY = PERSONA_GOOGLE_DRIVE_FILE_ID_KEY;
+window.PERSONA_GOOGLE_SHEET_ID_KEY = PERSONA_GOOGLE_SHEET_ID_KEY;

@@ -16,6 +16,19 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    flavorDimensions "mode"
+    productFlavors {
+        admin {
+            dimension "mode"
+            applicationIdSuffix ".admin"
+            versionNameSuffix "-admin"
+        }
+        user {
+            dimension "mode"
+            applicationIdSuffix ".user"
+            versionNameSuffix "-user"
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false

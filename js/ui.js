@@ -2140,6 +2140,14 @@ function setupTouchDrag(grid) {
 //  PERSONA EDIT
 // ══════════════════════════════
 let isNewPersona = false;
+const USER_PERSONA_INITIALIZED_KEY = 'user_persona_initialized_v1';
+
+function canCreatePersonaNow() {
+  const isAdmin = (typeof isPersonaAdminMode !== 'function') || isPersonaAdminMode();
+  if (isAdmin) return true;
+  const inited = typeof getLocalItem === 'function' ? (getLocalItem(USER_PERSONA_INITIALIZED_KEY) === '1') : true;
+  return !inited;
+}
 
 async function openPersonaEdit(pid) {
   if (typeof isPersonaAdminMode === 'function' && !isPersonaAdminMode()) return;
@@ -2153,7 +2161,10 @@ async function openPersonaEdit(pid) {
 }
 
 function createNewPersona() {
-  if (typeof isPersonaAdminMode === 'function' && !isPersonaAdminMode()) return;
+  if (!canCreatePersonaNow()) {
+    showToast('일반 사용자 모드에서는 최초 1회만 생성할 수 있어');
+    return;
+  }
   const p = { pid: nextPid(), name: '', bio: '', tags: [], hue: 200, image: null, hidden: false };
   isNewPersona = true; editingPid = p.pid;
   personas.push(p);
@@ -2739,6 +2750,9 @@ async function savePersonaEdit() {
     delete p._pendingImage;
   }
   p.updatedAt = personaUpdatedAt;
+  if (typeof isPersonaAdminMode === 'function' && !isPersonaAdminMode()) {
+    try { if (typeof setLocalItem === 'function') setLocalItem(USER_PERSONA_INITIALIZED_KEY, '1'); } catch {}
+  }
   savePersonas(); renderPersonaGrid(); goMain();
   showToast('저장됨 ✓');
 }
