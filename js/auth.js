@@ -196,6 +196,7 @@ function isWorkerUrl(url) {
 }
 
 function appendPersonaAuthToUrl(url) {
+  if (isPersonaAdminMode()) return url;
   const token = getPersonaAuthToken();
   if (!token || !isWorkerUrl(url)) return url;
   try {
@@ -210,6 +211,7 @@ function appendPersonaAuthToUrl(url) {
 (function installPersonaAuthFetchPatch() {
   const nativeFetch = window.fetch.bind(window);
   window.fetch = function personaAuthFetch(input, init = {}) {
+    if (isPersonaAdminMode()) return nativeFetch(input, init);
     const token = getPersonaAuthToken();
     const url = typeof input === 'string' ? input : input?.url;
     if (!token || !isWorkerUrl(url)) return nativeFetch(input, init);

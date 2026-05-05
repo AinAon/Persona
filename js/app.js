@@ -70,11 +70,23 @@ window.getDemoReply = function(session) {
 // ══════════════════════════════
 //  INITIALIZATION
 // ══════════════════════════════
+function isAdminOnlyPersonaPid(pidRaw) {
+  const pid = String(pidRaw || '').trim().toLowerCase();
+  return pid === 'p_riley' || pid === 'riley' || pid === 'p_avery' || pid === 'avery';
+}
+
+function sanitizePersonasForCurrentMode(list) {
+  const src = Array.isArray(list) ? list : [];
+  const isAdminMode = (typeof isPersonaAdminMode === 'function') ? isPersonaAdminMode() : false;
+  if (isAdminMode) return src;
+  return src.filter((p) => !isAdminOnlyPersonaPid(p?.pid));
+}
+
 function loadPersonasFromCache() {
   try {
     const cached = getLocalPersonas();
     if (cached) {
-      const parsed = cached;
+      const parsed = sanitizePersonasForCurrentMode(cached);
       if (parsed && parsed.length) {
         // pid 중복 제거
         const seen = new Set();
@@ -365,7 +377,7 @@ async function syncPersonasFromWorkerForStartup(wUrl, timeoutMs = 4000) {
   ]);
   if (!result || result.timedOut) return false;
 
-  const kvPersonas = Array.isArray(result.personas) ? result.personas : [];
+  const kvPersonas = sanitizePersonasForCurrentMode(Array.isArray(result.personas) ? result.personas : []);
   if (kvPersonas.length) {
     const prevByPid = new Map((personas || []).map(p => [String(p?.pid || ''), p]));
     const seen = new Set();
@@ -417,7 +429,7 @@ async function syncPersonasFromWorkerForStartup(wUrl, timeoutMs = 4000) {
     .catch(() => []);
   if (!Array.isArray(celebs) || !celebs.length) return false;
 
-  const nextCelebs = celebs.map(p => ({ ...p, type: p.type || 'celebrity' }));
+  const nextCelebs = sanitizePersonasForCurrentMode(celebs.map(p => ({ ...p, type: p.type || 'celebrity' })));
   applyPersonaTtsDefaults(nextCelebs);
   const sameCelebs = personasSignature(nextCelebs) === personasSignature(personas);
   if (!sameCelebs) {
@@ -653,7 +665,7 @@ window.forceRecoverApp = async function() {
       const pData = await pRes.json().catch(() => ({}));
       if (Array.isArray(pData.personas)) {
         const seen = new Set();
-        personas = pData.personas.filter(p => p && p.pid && !seen.has(p.pid) && seen.add(p.pid));
+        personas = sanitizePersonasForCurrentMode(pData.personas).filter(p => p && p.pid && !seen.has(p.pid) && seen.add(p.pid));
         applyPersonaTtsDefaults(personas);
         setLocalPersonas(personas);
       }
@@ -678,3 +690,4 @@ init().catch((e) => {
   console.error('init failed:', e);
   try { setLoading(false); } catch(err) {}
 });
+window.isAdminOnlyPersonaPid = isAdminOnlyPersonaPid;

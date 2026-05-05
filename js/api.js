@@ -1084,7 +1084,16 @@ async function loadIndex() {
     const prevById = new Map((sessions || []).map((s) => [s?.id, s]));
     const res = await fetch(wUrl + '/sessions');
     const data = await res.json();
-    const index = Array.isArray(data.sessions) ? data.sessions : [];
+    const indexRaw = Array.isArray(data.sessions) ? data.sessions : [];
+    const index = indexRaw
+      .map((item) => {
+        const participants = Array.isArray(item?.participantPids) ? item.participantPids : [];
+        const filtered = (typeof window.isAdminOnlyPersonaPid === 'function' && typeof isPersonaAdminMode === 'function' && !isPersonaAdminMode())
+          ? participants.filter((pid) => !window.isAdminOnlyPersonaPid(pid))
+          : participants;
+        return { ...item, participantPids: Array.from(new Set(filtered.filter(Boolean))) };
+      })
+      .filter((item) => (item.participantPids || []).length > 0);
     const localIndex = Array.isArray(getLocalSessionIndex()) ? getLocalSessionIndex() : [];
     const activeIds = new Set(index.map(item => item?.id).filter(Boolean));
 
