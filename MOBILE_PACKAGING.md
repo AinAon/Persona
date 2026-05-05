@@ -35,4 +35,5 @@ Requirements:
 Current local machine status at setup time:
 
 - `npm run mobile:sync` succeeded.
-- `npm run mobile:apk` stopped because `JAVA_HOME` and `java` were missing.
+- JDK 21 and Android SDK command-line tools were installed locally.
+- `npm run mobile:apk` succeeded and produced `android/app/build/outputs/apk/debug/app-debug.apk`.

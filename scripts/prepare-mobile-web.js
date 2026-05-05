@@ -37,9 +37,4 @@ fs.mkdirSync(out, { recursive: true });
 files.forEach(copyFile);
 dirs.forEach(copyDir);
 
-const indexPath = path.join(out, 'index.html');
-let index = fs.readFileSync(indexPath, 'utf8');
-index = index.replace('<body>', '<body data-mobile-shell="true">');
-fs.writeFileSync(indexPath, index, 'utf8');
-
 console.log(`Prepared mobile web assets in ${out}`);
