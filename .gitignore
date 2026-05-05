@@ -5,3 +5,6 @@ android/app/build/
 android/build/
 *.apk
 *.aab
+backend/node_modules/
+backend/backup/
+_r2_backup_*/

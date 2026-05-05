@@ -48,12 +48,14 @@ export interface Env {
   DASHSCOPE_WS_URL?: string;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_IDS?: string;
+  ALLOW_ADMIN_OPS?: string;
+  ADMIN_OPS_TOKEN?: string;
 }
 
 const CORS: CorsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Admin-Token",
 };
 
 export default {

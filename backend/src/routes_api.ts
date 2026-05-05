@@ -131,6 +131,27 @@ function getDropboxAppConfig(env: Env, persona: "riley" | "avery" | "shared"): {
   return { key, secret };
 }
 
+function isAdminOpsEnabled(env: Env): boolean {
+  return String(env.ALLOW_ADMIN_OPS || "").trim() === "1";
+}
+
+function hasValidAdminOpsToken(request: Request, env: Env): boolean {
+  const expected = String(env.ADMIN_OPS_TOKEN || "").trim();
+  if (!expected) return false;
+  const provided = String(request.headers.get("X-Admin-Token") || "").trim();
+  return !!provided && provided === expected;
+}
+
+function requireAdminOps(request: Request, env: Env, cors: CorsHeaders): Response | null {
+  if (!isAdminOpsEnabled(env)) {
+    return Response.json({ ok: false, error: "admin_ops_locked" }, { status: 403, headers: cors });
+  }
+  if (!hasValidAdminOpsToken(request, env)) {
+    return Response.json({ ok: false, error: "admin_ops_token_required" }, { status: 401, headers: cors });
+  }
+  return null;
+}
+
 function toIntInRange(raw: string | null, min: number, max: number): number | null {
   if (!raw) return null;
   const n = Number(raw);
@@ -662,6 +683,8 @@ export async function handleApiRoute(
   }
 
   if (url.pathname === "/oauth/dropbox/start" && request.method === "GET") {
+    const blocked = requireAdminOps(request, env, noStoreHeaders);
+    if (blocked) return blocked;
     const personaRaw = String(url.searchParams.get("persona") || "").trim().toLowerCase();
     const persona = personaRaw === "avery" ? "avery" : (personaRaw === "riley" ? "riley" : (personaRaw === "shared" || personaRaw === "persona_shared" ? "shared" : ""));
     if (!persona) return Response.json({ ok: false, error: "persona must be riley, avery, or shared" }, { status: 400, headers: cors });
@@ -679,6 +702,8 @@ export async function handleApiRoute(
   }
 
   if (url.pathname === "/oauth/dropbox/callback" && request.method === "GET") {
+    const blocked = requireAdminOps(request, env, noStoreHeaders);
+    if (blocked) return blocked;
     const code = String(url.searchParams.get("code") || "").trim();
     const state = String(url.searchParams.get("state") || "").trim().toLowerCase();
     const persona = state.startsWith("avery:")
@@ -1237,6 +1262,8 @@ export async function handleApiRoute(
   }
 
   if (url.pathname === "/debug/dropbox/riley" && request.method === "GET") {
+    const blocked = requireAdminOps(request, env, noStoreHeaders);
+    if (blocked) return blocked;
     const token = await getPersonaDropboxAccessToken(env, "riley");
     if (!token) {
       return Response.json({ ok: false, stage: "token", error: "empty_access_token_from_refresh_flow" }, { status: 500, headers: noStoreHeaders });
@@ -1256,6 +1283,8 @@ export async function handleApiRoute(
   }
 
   if (url.pathname === "/bench/storage" && request.method === "GET") {
+    const blocked = requireAdminOps(request, env, noStoreHeaders);
+    if (blocked) return blocked;
     const loops = Math.max(1, Math.min(30, Number(url.searchParams.get("loops") || 10)));
     const personaRaw = String(url.searchParams.get("persona") || "riley").trim().toLowerCase();
     const persona = personaRaw === "avery" ? "avery" : "riley";
@@ -1332,6 +1361,8 @@ export async function handleApiRoute(
   }
 
   if (url.pathname === "/vault/directives/sync" && request.method === "POST") {
+    const blocked = requireAdminOps(request, env, noStoreHeaders);
+    if (blocked) return blocked;
     const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
     if (!sharedToken) {
       return Response.json({ ok: false, error: "shared dropbox token missing" }, { status: 500, headers: noStoreHeaders });
@@ -1371,6 +1402,8 @@ export async function handleApiRoute(
   }
 
   if (url.pathname === "/vault/layout/migrate" && request.method === "POST") {
+    const blocked = requireAdminOps(request, env, noStoreHeaders);
+    if (blocked) return blocked;
     const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
     if (!sharedToken) {
       return Response.json({ ok: false, error: "shared dropbox token missing" }, { status: 500, headers: noStoreHeaders });
@@ -1437,6 +1470,8 @@ export async function handleApiRoute(
   }
 
   if (url.pathname === "/migrate/shared/run" && request.method === "POST") {
+    const blocked = requireAdminOps(request, env, noStoreHeaders);
+    if (blocked) return blocked;
     const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
     if (!sharedToken) {
       return Response.json({ ok: false, error: "shared dropbox token missing" }, { status: 500, headers: noStoreHeaders });
@@ -1456,6 +1491,8 @@ export async function handleApiRoute(
   }
 
   if (url.pathname === "/migrate/shared/page" && request.method === "POST") {
+    const blocked = requireAdminOps(request, env, noStoreHeaders);
+    if (blocked) return blocked;
     const body = await request.json().catch(() => ({} as any)) as { prefix?: string; limit?: number; cursor?: string };
     const prefix = String(body.prefix || "").trim();
     if (!prefix) {
@@ -1476,6 +1513,8 @@ export async function handleApiRoute(
   }
 
   if (url.pathname === "/migrate/shared/copy-key" && request.method === "POST") {
+    const blocked = requireAdminOps(request, env, noStoreHeaders);
+    if (blocked) return blocked;
     const body = await request.json().catch(() => ({} as any)) as { key?: string };
     const key = String(body.key || "").trim().replace(/^\/+/, "");
     if (!key) return Response.json({ ok: false, error: "key required" }, { status: 400, headers: noStoreHeaders });
@@ -1496,6 +1535,8 @@ export async function handleApiRoute(
   }
 
   if (url.pathname === "/migrate/shared/prune-unused" && request.method === "POST") {
+    const blocked = requireAdminOps(request, env, noStoreHeaders);
+    if (blocked) return blocked;
     const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
     if (!sharedToken) {
       return Response.json({ ok: false, error: "shared dropbox token missing" }, { status: 500, headers: noStoreHeaders });
