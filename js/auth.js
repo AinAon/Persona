@@ -5,6 +5,7 @@ const PERSONA_GOOGLE_OAUTH_TOKEN_KEY = 'persona_google_oauth_token';
 const PERSONA_GOOGLE_OAUTH_EXPIRES_AT_KEY = 'persona_google_oauth_expires_at';
 const PERSONA_GOOGLE_DRIVE_FILE_ID_KEY = 'persona_google_drive_file_id';
 const PERSONA_GOOGLE_SHEET_ID_KEY = 'persona_google_sheet_id';
+const PERSONA_TEMP_LOGIN_KEY = 'persona_temp_login_v1';
 const GOOGLE_RW_SCOPES = [
   'https://www.googleapis.com/auth/drive.file',
   'https://www.googleapis.com/auth/spreadsheets'
@@ -15,6 +16,32 @@ let _googleTokenClient = null;
 
 function getPersonaAuthToken() {
   try { return localStorage.getItem(PERSONA_AUTH_TOKEN_KEY) || ''; } catch { return ''; }
+}
+
+function isGoogleJwtToken(token) {
+  const t = String(token || '').trim();
+  return !!t && t.split('.').length === 3;
+}
+
+function parseJwtPayload(token) {
+  try {
+    const t = String(token || '').trim();
+    const parts = t.split('.');
+    if (parts.length !== 3) return null;
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+    const json = atob(padded);
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
+function isGoogleJwtExpired(token) {
+  const payload = parseJwtPayload(token);
+  const exp = Number(payload?.exp || 0);
+  if (!exp) return true;
+  return (Date.now() / 1000) > (exp - 30);
 }
 
 function getPersonaAuthUser() {
@@ -139,6 +166,56 @@ function clearPersonaAuth() {
     localStorage.removeItem(PERSONA_AUTH_TOKEN_KEY);
     localStorage.removeItem(PERSONA_AUTH_USER_KEY);
   } catch {}
+  try { localStorage.removeItem(PERSONA_TEMP_LOGIN_KEY); } catch {}
+}
+
+function isTemporaryPersonaUser(user) {
+  return !!user && user.temporary === true;
+}
+
+function signInTemporaryUser() {
+  const user = {
+    userId: `temp_${Date.now().toString(36)}`,
+    email: '',
+    name: '임시 사용자',
+    picture: '',
+    temporary: true,
+  };
+  setPersonaAuth('', user);
+  try { localStorage.setItem(PERSONA_TEMP_LOGIN_KEY, '1'); } catch {}
+  renderAuthState();
+  hideAuthGate();
+  location.reload();
+}
+
+function ensurePersonaAuthFreshness() {
+  const user = getPersonaAuthUser();
+  if (!user) return null;
+  if (isTemporaryPersonaUser(user)) return user;
+  const token = getPersonaAuthToken();
+  if (!isGoogleJwtToken(token) || isGoogleJwtExpired(token)) {
+    clearPersonaAuth();
+    return null;
+  }
+  return user;
+}
+
+function hasLoggedInPersonaUser() {
+  return !!ensurePersonaAuthFreshness();
+}
+
+function showAuthGate(message = '') {
+  const gate = document.getElementById('authGate');
+  if (!gate) return;
+  const msgEl = document.getElementById('authGateMessage');
+  if (msgEl) msgEl.textContent = message || 'Google 로그인 후 사용 가능합니다.';
+  gate.classList.remove('hidden');
+}
+
+function hideAuthGate() {
+  const gate = document.getElementById('authGate');
+  if (!gate) return;
+  gate.classList.add('hidden');
 }
 
 function setGoogleWorkspaceToken(token, expiresInSec) {
@@ -198,6 +275,7 @@ function isWorkerUrl(url) {
 function appendPersonaAuthToUrl(url) {
   if (isPersonaAdminMode()) return url;
   const token = getPersonaAuthToken();
+  if (!isGoogleJwtToken(token)) return url;
   if (!token || !isWorkerUrl(url)) return url;
   try {
     const u = new URL(String(url), window.location.href);
@@ -213,6 +291,7 @@ function appendPersonaAuthToUrl(url) {
   window.fetch = function personaAuthFetch(input, init = {}) {
     if (isPersonaAdminMode()) return nativeFetch(input, init);
     const token = getPersonaAuthToken();
+    if (!isGoogleJwtToken(token)) return nativeFetch(input, init);
     const url = typeof input === 'string' ? input : input?.url;
     if (!token || !isWorkerUrl(url)) return nativeFetch(input, init);
 
@@ -238,35 +317,47 @@ async function verifyGoogleCredential(credential) {
 
 function renderAuthState() {
   const box = document.getElementById('googleLoginState');
-  const user = getPersonaAuthUser();
+  const user = ensurePersonaAuthFreshness();
   if (!box) return;
   if (!user) {
     box.textContent = '로그인 필요';
     return;
   }
-  box.textContent = user.email || user.name || user.userId || 'Google 로그인됨';
+  box.textContent = isTemporaryPersonaUser(user)
+    ? `${user.name || '임시 사용자'} (임시 로그인)`
+    : (user.email || user.name || user.userId || 'Google 로그인됨');
   applyPersonaAdminGate();
+}
+
+function tryAutoGoogleLogin() {
+  try {
+    if (!window.google?.accounts?.id) return;
+    window.google.accounts.id.prompt();
+  } catch {}
 }
 
 async function initGoogleLogin() {
   renderAuthState();
-  const target = document.getElementById('googleLoginButton');
+  const firstTarget = document.getElementById('googleLoginButton');
+  const targets = [firstTarget, ...Array.from(document.querySelectorAll('[data-google-login-button="1"]'))].filter(Boolean);
+  const tempBtns = Array.from(document.querySelectorAll('[data-temp-login-btn="1"]'));
+  for (const btn of tempBtns) btn.onclick = signInTemporaryUser;
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-  if (!target || !wUrl) return;
+  if (!targets.length || !wUrl) return;
   try {
     const cfgRes = await fetch(`${wUrl}/auth/config`, { cache: 'no-store' });
     const cfg = await cfgRes.json();
     if (!cfg?.enabled || !cfg?.clientId) {
-      target.textContent = 'GOOGLE_CLIENT_ID 미설정';
+      for (const target of targets) target.textContent = 'Google 로그인 설정 없음 (임시 로그인 사용)';
       return;
     }
     _googleOauthClientId = String(cfg.clientId || '').trim();
     if (!window.google?.accounts?.id) {
-      target.textContent = 'Google SDK 로딩 중';
+      for (const target of targets) target.textContent = 'Google SDK 로딩 중';
       setTimeout(initGoogleLogin, 700);
       return;
     }
-    target.textContent = '';
+    for (const target of targets) target.textContent = '';
     window.google.accounts.id.initialize({
       client_id: cfg.clientId,
       callback: async (response) => {
@@ -281,7 +372,12 @@ async function initGoogleLogin() {
         }
       }
     });
-    window.google.accounts.id.renderButton(target, { theme: 'outline', size: 'medium', width: 240 });
+    for (const target of targets) {
+      window.google.accounts.id.renderButton(target, { theme: 'outline', size: 'medium', width: 240 });
+    }
+    if (!hasLoggedInPersonaUser()) {
+      tryAutoGoogleLogin();
+    }
     if (window.google?.accounts?.oauth2 && _googleOauthClientId) {
       _googleTokenClient = window.google.accounts.oauth2.initTokenClient({
         client_id: _googleOauthClientId,
@@ -290,7 +386,7 @@ async function initGoogleLogin() {
       });
     }
   } catch (e) {
-    target.textContent = '로그인 설정 확인 실패';
+    for (const target of targets) target.textContent = '로그인 설정 확인 실패';
   }
 }
 
@@ -313,6 +409,7 @@ function signOutGoogle() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  ensurePersonaAuthFreshness();
   installPersonaAdminStyle();
   applyPersonaAdminGate();
 });
@@ -330,5 +427,9 @@ window.getPersonaStorageMode = getPersonaStorageMode;
 window.getPersonaStorageNamespace = getPersonaStorageNamespace;
 window.ensureGoogleWorkspaceAccess = ensureGoogleWorkspaceAccess;
 window.getGoogleWorkspaceToken = getGoogleWorkspaceToken;
+window.showAuthGate = showAuthGate;
+window.hideAuthGate = hideAuthGate;
+window.hasLoggedInPersonaUser = hasLoggedInPersonaUser;
+window.signInTemporaryUser = signInTemporaryUser;
 window.PERSONA_GOOGLE_DRIVE_FILE_ID_KEY = PERSONA_GOOGLE_DRIVE_FILE_ID_KEY;
 window.PERSONA_GOOGLE_SHEET_ID_KEY = PERSONA_GOOGLE_SHEET_ID_KEY;

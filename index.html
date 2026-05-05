@@ -1181,6 +1181,11 @@ select.edit-input { appearance: none; -webkit-appearance: none; background-image
 .loading-spinner { width: 26px; height: 26px; border: 2px solid rgba(255,255,255,.15); border-top-color: rgba(255,255,255,.7); border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .loading-text { font-size: 11px; color: rgba(255,255,255,.4); letter-spacing: .06em; }
+.auth-gate { position: fixed; inset: 0; z-index: 1200; background: rgba(10,10,12,.94); display: flex; align-items: center; justify-content: center; padding: 18px; }
+.auth-gate.hidden { display: none; }
+.auth-gate-card { width: min(440px, 92vw); border: 1px solid var(--border2); border-radius: 14px; background: var(--card); padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+.auth-gate-title { font-size: 16px; font-weight: 700; color: var(--text); }
+.auth-gate-desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
 
 /* ── 토스트 ── */
 .toast { position: fixed; bottom: 90px; left: 50%; transform: translate(-50%, 8px); background: var(--card); border: 1px solid var(--border2); padding: 6px 14px; border-radius: 100px; font-size: 11px; color: var(--muted); z-index: 500; pointer-events: none; opacity: 0; transition: opacity .2s, transform .2s; white-space: nowrap; }
@@ -1416,6 +1421,14 @@ list-style-position: outside;
   <div class="loading-spinner"></div>
   <div class="loading-text" id="loadingText">Loading...</div>
 </div>
+<div class="auth-gate hidden" id="authGate">
+  <div class="auth-gate-card">
+    <div class="auth-gate-title">로그인이 필요합니다</div>
+    <div class="auth-gate-desc" id="authGateMessage">Google 로그인 후 사용 가능합니다.</div>
+    <div data-google-login-button="1"></div>
+    <button type="button" data-temp-login-btn="1" style="height:34px;padding:0 12px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text);font-family:'Pretendard',sans-serif;font-size:12px;cursor:pointer">임시 로그인 (테스트용)</button>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 
 <div class="crop-overlay" id="cropOverlay">
@@ -1543,6 +1556,7 @@ list-style-position: outside;
           <div id="googleLoginState" style="min-width:0;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">로그인 필요</div>
           <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
             <div id="googleLoginButton"></div>
+            <button type="button" data-temp-login-btn="1" style="height:32px;padding:0 10px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--muted);font-family:'Pretendard',sans-serif;font-size:12px;cursor:pointer">임시 로그인</button>
             <button type="button" onclick="signOutGoogle()" style="height:32px;padding:0 10px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--muted);font-family:'Pretendard',sans-serif;font-size:12px;cursor:pointer">로그아웃</button>
           </div>
         </div>

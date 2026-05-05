@@ -521,9 +521,10 @@ function bindLoadingLogoHoldToRecover() {
 async function init() {
   bindLoadingLogoHoldToRecover();
   let loadingEscapeTimer = null;
-  const cachedPersonas = getLocalPersonas();
-  const cachedSessionIndex = getLocalSessionIndex();
-  const shouldBlockLoading = true;
+  const isAdminMode = (typeof isPersonaAdminMode !== 'function') ? false : isPersonaAdminMode();
+  const authUser = (typeof getPersonaAuthUser === 'function') ? getPersonaAuthUser() : null;
+  const hasLogin = (typeof hasLoggedInPersonaUser === 'function') ? hasLoggedInPersonaUser() : !!authUser;
+  const shouldBlockLoading = isAdminMode || hasLogin;
   // Failsafe: loading overlay should not stay forever if init flow is interrupted.
   let loadingFailsafe = shouldBlockLoading ? setTimeout(() => {
     try {
@@ -538,19 +539,20 @@ async function init() {
   }, 8000);
   if (!shouldBlockLoading) setLoading(false);
   try { if (typeof initGoogleLogin === 'function') initGoogleLogin(); } catch(e) {}
-  const isAdminMode = (typeof isPersonaAdminMode !== 'function') ? false : isPersonaAdminMode();
-  const authUser = (typeof getPersonaAuthUser === 'function') ? getPersonaAuthUser() : null;
-  if (!isAdminMode && !authUser) {
+  if (!isAdminMode && !hasLogin) {
     personas = [];
     sessions = [];
     try { setLocalPersonas([]); } catch {}
     try { setLocalSessionIndex([]); } catch {}
     if (typeof renderPersonaGrid === 'function') await renderPersonaGrid();
     if (typeof renderChatList === 'function') await renderChatList();
+    if (typeof showAuthGate === 'function') {
+      showAuthGate('로그인 후 첫 페르소나를 1회 생성해 주세요.');
+    }
     if (shouldBlockLoading) setLoading(false);
-    showToast('Google 로그인 후 첫 페르소나를 생성해 주세요');
     return;
   }
+  if (typeof hideAuthGate === 'function') hideAuthGate();
   if (!isAdminMode && authUser && typeof ensureGoogleWorkspaceAccess === 'function') {
     ensureGoogleWorkspaceAccess(false).catch(() => {});
     if (typeof loadGoogleWorkspaceData === 'function') {
