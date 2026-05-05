@@ -1,5 +1,6 @@
 const PERSONA_AUTH_TOKEN_KEY = 'persona_google_id_token';
 const PERSONA_AUTH_USER_KEY = 'persona_google_user';
+const PERSONA_ADMIN_PASSWORD = '1234';
 
 function getPersonaAuthToken() {
   try { return localStorage.getItem(PERSONA_AUTH_TOKEN_KEY) || ''; } catch { return ''; }
@@ -12,6 +13,93 @@ function getPersonaAuthUser() {
   } catch {
     return null;
   }
+}
+
+function getPersonaAccountKey() {
+  const user = getPersonaAuthUser();
+  return String(user?.userId || user?.email || 'local_default').replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+function getPersonaAdminKey() {
+  return `persona_admin_enabled_${getPersonaAccountKey()}`;
+}
+
+function isPersonaAdminMode() {
+  try { return localStorage.getItem(getPersonaAdminKey()) === '1'; } catch { return false; }
+}
+
+function setPersonaAdminMode(enabled) {
+  try {
+    if (enabled) localStorage.setItem(getPersonaAdminKey(), '1');
+    else localStorage.removeItem(getPersonaAdminKey());
+  } catch {}
+  applyPersonaAdminGate();
+}
+
+function applyPersonaAdminGate() {
+  const isAdmin = isPersonaAdminMode();
+  document.body?.classList.toggle('is-admin', isAdmin);
+  document.body?.classList.toggle('is-basic-user', !isAdmin);
+  const label = document.getElementById('adminModeState');
+  if (label) label.textContent = isAdmin ? '관리자 모드 활성화' : '일반 계정 모드';
+  const input = document.getElementById('adminPasswordInput');
+  if (input && isAdmin) input.value = '';
+}
+
+function enableAdminModeFromInput() {
+  const input = document.getElementById('adminPasswordInput');
+  const value = String(input?.value || '').trim();
+  if (value !== PERSONA_ADMIN_PASSWORD) {
+    const label = document.getElementById('adminModeState');
+    if (label) label.textContent = '비밀번호가 맞지 않습니다';
+    return;
+  }
+  setPersonaAdminMode(true);
+  location.reload();
+}
+
+function disableAdminMode() {
+  setPersonaAdminMode(false);
+  location.reload();
+}
+
+function installPersonaAdminStyle() {
+  if (document.getElementById('personaAdminGateStyle')) return;
+  const style = document.createElement('style');
+  style.id = 'personaAdminGateStyle';
+  style.textContent = `
+body.is-basic-user #btabArchive,
+body.is-basic-user #archivePane,
+body.is-basic-user #chatRefreshBtn,
+body.is-basic-user #chatProfileToggleBtn,
+body.is-basic-user .chat-settings-btn,
+body.is-basic-user #itab-image,
+body.is-basic-user #itab-context,
+body.is-basic-user #itab-opts-image,
+body.is-basic-user #itab-opts-context,
+body.is-basic-user #imageArea,
+body.is-basic-user #popupDeleteBtn,
+body.is-basic-user #editDeleteTitleBtn,
+body.is-basic-user .archive-batch-delete,
+body.is-basic-user .archive-batch-cancel,
+body.is-basic-user .persona-card.add-card,
+body.is-basic-user button[onclick*="openRestoreModal"],
+body.is-basic-user button[onclick*="clearImageCache"],
+body.is-basic-user button[onclick*="clearTtsAudioCache"],
+body.is-basic-user button[onclick*="openEmotionManager"],
+body.is-basic-user button[onclick*="deleteChat"],
+body.is-basic-user button[onclick*="resetChat"],
+body.is-basic-user button[onclick*="openInviteModal"],
+body.is-basic-user .composer-tools-item#toolMode_image,
+body.is-basic-user .composer-tools-item#toolMode_project,
+body.is-basic-user [data-admin-only="true"] {
+  display: none !important;
+}
+body.is-basic-user .input-tabbar {
+  display: none !important;
+}
+`;
+  document.head.appendChild(style);
 }
 
 function setPersonaAuth(token, user) {
@@ -87,6 +175,7 @@ function renderAuthState() {
     return;
   }
   box.textContent = user.email || user.name || user.userId || 'Google 로그인됨';
+  applyPersonaAdminGate();
 }
 
 async function initGoogleLogin() {
@@ -127,13 +216,23 @@ async function initGoogleLogin() {
 }
 
 function signOutGoogle() {
+  setPersonaAdminMode(false);
   clearPersonaAuth();
   renderAuthState();
   location.reload();
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+  installPersonaAdminStyle();
+  applyPersonaAdminGate();
+});
 
 window.getPersonaAuthToken = getPersonaAuthToken;
 window.getPersonaAuthUser = getPersonaAuthUser;
 window.appendPersonaAuthToUrl = appendPersonaAuthToUrl;
 window.initGoogleLogin = initGoogleLogin;
 window.signOutGoogle = signOutGoogle;
+window.isPersonaAdminMode = isPersonaAdminMode;
+window.applyPersonaAdminGate = applyPersonaAdminGate;
+window.enableAdminModeFromInput = enableAdminModeFromInput;
+window.disableAdminMode = disableAdminMode;

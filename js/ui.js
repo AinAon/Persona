@@ -1596,6 +1596,9 @@ async function getPersonaCircleThumb(pid, emotion = 'neutral', letter = '', disp
 //  TAB SWITCHING & SETTINGS
 // ══════════════════════════════
 function switchTab(tab) {
+  if (tab === 'archive' && typeof isPersonaAdminMode === 'function' && !isPersonaAdminMode()) {
+    tab = 'chat';
+  }
   activeTab = tab;
   // 하단 탭 활성화
   document.getElementById('btabPersona').classList.toggle('active', tab === 'persona');
@@ -1610,11 +1613,13 @@ function switchTab(tab) {
   if (archivePaneEl) archivePaneEl.style.display = tab === 'archive' ? 'flex' : 'none';
   if (tab === 'settings') renderSettingsPane();
   if (tab === 'archive') renderArchivePane();
+  if (typeof applyPersonaAdminGate === 'function') applyPersonaAdminGate();
   // 페르소나 선택 초기화
   if (tab !== 'persona') clearPersonaSelection();
 }
 
 function renderSettingsPane() {
+  if (typeof applyPersonaAdminGate === 'function') applyPersonaAdminGate();
   const av = document.getElementById('settingsUserAv');
   if (av) av.innerHTML = userProfile.image
     ? `<img src="${userProfile.image}" style="width:100%;height:100%;object-fit:cover;">`
@@ -1864,7 +1869,9 @@ async function renderPersonaGrid() {
     <div class="add-card-icon">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
     </div>`;
-  fragment.appendChild(addCard);
+  if (typeof isPersonaAdminMode !== 'function' || isPersonaAdminMode()) {
+    fragment.appendChild(addCard);
+  }
 
   grid.innerHTML = '';
   grid.appendChild(fragment);
@@ -1887,6 +1894,7 @@ function setupPersonaGridBlankTapClear(grid) {
 }
 
 function setupTouchDrag(grid) {
+  if (typeof isPersonaAdminMode === 'function' && !isPersonaAdminMode()) return;
   if (grid.dataset.touchDragBound === '1') return;
   grid.dataset.touchDragBound = '1';
 
@@ -2134,6 +2142,7 @@ function setupTouchDrag(grid) {
 let isNewPersona = false;
 
 async function openPersonaEdit(pid) {
+  if (typeof isPersonaAdminMode === 'function' && !isPersonaAdminMode()) return;
   editingPid = pid; isNewPersona = false;
   const p = getPersona(pid);
   document.getElementById('editTitle').textContent = p ? p.name || '페르소나 편집' : '새 페르소나';
@@ -2144,6 +2153,7 @@ async function openPersonaEdit(pid) {
 }
 
 function createNewPersona() {
+  if (typeof isPersonaAdminMode === 'function' && !isPersonaAdminMode()) return;
   const p = { pid: nextPid(), name: '', bio: '', tags: [], hue: 200, image: null, hidden: false };
   isNewPersona = true; editingPid = p.pid;
   personas.push(p);
@@ -2155,7 +2165,8 @@ function createNewPersona() {
 function renderEditFooter(isExisting) {
   const footer = document.getElementById('editFooter');
   const deleteBtn = document.getElementById('editDeleteTitleBtn');
-  if (deleteBtn) deleteBtn.style.display = isExisting ? 'inline-flex' : 'none';
+  const isAdmin = typeof isPersonaAdminMode !== 'function' || isPersonaAdminMode();
+  if (deleteBtn) deleteBtn.style.display = isExisting && isAdmin ? 'inline-flex' : 'none';
   if (isExisting) {
     footer.innerHTML = `
       <button class="edit-cancel-btn" onclick="cancelPersonaEdit()">취소</button>
@@ -2173,6 +2184,7 @@ function cancelPersonaEdit() {
 }
 
 function deletePersonaFromEdit() {
+  if (typeof isPersonaAdminMode === 'function' && !isPersonaAdminMode()) return;
   if (personas.length <= 1) { showToast('마지막 페르소나는 삭제할 수 없어'); return; }
   if (!confirm('이 페르소나를 삭제할까?')) return;
   if (!confirm('정말 삭제할까? 이 작업은 되돌릴 수 없어.')) return;
@@ -2956,6 +2968,7 @@ function closeRestoreModal() {
 }
 
 async function openRestoreModal() {
+  if (typeof isPersonaAdminMode === 'function' && !isPersonaAdminMode()) return;
   const modal = document.getElementById('restoreModal');
   if (!modal) return;
   modal.classList.add('open');
@@ -4519,6 +4532,9 @@ function handleImageModelChanged() {
 }
 
 function switchInputTab(tab) {
+  if ((tab === 'image' || tab === 'context') && typeof isPersonaAdminMode === 'function' && !isPersonaAdminMode()) {
+    tab = 'chat';
+  }
   _inputTab = tab;
   const normalized = tab === 'context' ? 'project' : tab;
   const tabbar = document.querySelector('.input-tabbar');
@@ -4577,6 +4593,10 @@ function toggleComposerTools() {
 }
 
 function selectToolMode(mode) {
+  if ((mode === 'image' || mode === 'project') && typeof isPersonaAdminMode === 'function' && !isPersonaAdminMode()) {
+    switchInputTab('chat');
+    return;
+  }
   if (mode === 'project') {
     switchInputTab('context');
     showToast('?프로젝트 기능은 준비중이야');
@@ -5437,6 +5457,7 @@ async function removeAttachment(i) {
 //  SETTINGS DRAWER & PROMPT MODAL
 // ================================
 function openDrawer() {
+  if (typeof isPersonaAdminMode === 'function' && !isPersonaAdminMode()) return;
   const s = getActiveSession(); if (!s) return;
   const el = document.getElementById('chatDrawer');
   renderDrawerBody(s); el.classList.add('open');
