@@ -1411,9 +1411,14 @@ white-space: nowrap;
 /* 5. 머릿글/리스트 기호 말풍선 밖으로 이탈 방지 */
 .md-content ol,
 .md-content ul {
-padding-left: 0 !important;
+padding-left: 1.35em !important;
 margin: 8px 0;
-list-style-position: inside;
+list-style-position: outside;
+}
+
+.md-content li {
+padding-left: 0 !important;
+margin-left: 0;
 }
 
 </style>
