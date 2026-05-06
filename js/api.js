@@ -177,7 +177,7 @@ async function getNeutralImage(pid) {
 }
 
 function parseProfileVariantKey(key, pid) {
-  const m = String(key || '').match(new RegExp(`^profile/${pid}/${pid}_([a-z]+)(?:_([a-z]))?\\.jpg$`, 'i'));
+  const m = String(key || '').match(new RegExp(`^profile/${pid}/${pid}_([a-z]+)(?:_([a-z0-9_-]+))?\\.jpg$`, 'i'));
   if (!m) return null;
   return { emotion: String(m[1] || '').toLowerCase(), letter: String(m[2] || '').toLowerCase() };
 }
