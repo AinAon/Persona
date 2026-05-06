@@ -1394,6 +1394,65 @@ export async function handleApiRoute(
     }, { headers: noStoreHeaders });
   }
 
+  if (url.pathname === "/debug/dropbox/session" && request.method === "GET") {
+    const blocked = requireAdminOps(request, env, noStoreHeaders);
+    if (blocked) return blocked;
+    const userId = String(url.searchParams.get("user_id") || "user_default").trim() || "user_default";
+    const token = await getPersonaDropboxAccessToken(env, "shared");
+    if (!token) {
+      return Response.json({
+        ok: false,
+        stage: "token",
+        error: "shared_dropbox_token_missing",
+        userId,
+      }, { status: 500, headers: noStoreHeaders });
+    }
+    const folder = sessionUserFolder(userId);
+    const indexPath = sessionDbxIndexPath(userId);
+    const deletedIndexPath = deletedSessionDbxIndexPath(userId);
+    const folderEntries = await dropboxListFolder(token, folder).catch(() => []);
+    const dataEntries = await dropboxListFolder(token, `${folder}/data`).catch(() => []);
+    const deletedEntries = await dropboxListFolder(token, `${folder}/deleted`).catch(() => []);
+    const indexText = await dropboxReadText(token, indexPath).catch(() => null);
+    const deletedIndexText = await dropboxReadText(token, deletedIndexPath).catch(() => null);
+    let indexCount = 0;
+    let deletedIndexCount = 0;
+    try {
+      const arr = JSON.parse(String(indexText || "[]"));
+      if (Array.isArray(arr)) indexCount = arr.length;
+    } catch {}
+    try {
+      const arr = JSON.parse(String(deletedIndexText || "[]"));
+      if (Array.isArray(arr)) deletedIndexCount = arr.length;
+    } catch {}
+    return Response.json({
+      ok: true,
+      userId,
+      paths: {
+        folder,
+        index: indexPath,
+        deletedIndex: deletedIndexPath,
+        dataFolder: `${folder}/data`,
+        deletedFolder: `${folder}/deleted`,
+      },
+      exists: {
+        index: indexText != null,
+        deletedIndex: deletedIndexText != null,
+      },
+      counts: {
+        index: indexCount,
+        deletedIndex: deletedIndexCount,
+        dataFiles: Array.isArray(dataEntries) ? dataEntries.filter((e) => String(e?.[".tag"] || "") === "file").length : 0,
+        deletedFiles: Array.isArray(deletedEntries) ? deletedEntries.filter((e) => String(e?.[".tag"] || "") === "file").length : 0,
+      },
+      samples: {
+        folderEntries: (folderEntries || []).slice(0, 20),
+        dataEntries: (dataEntries || []).slice(0, 20),
+        deletedEntries: (deletedEntries || []).slice(0, 20),
+      },
+    }, { headers: noStoreHeaders });
+  }
+
   if (url.pathname === "/bench/storage" && request.method === "GET") {
     const blocked = requireAdminOps(request, env, noStoreHeaders);
     if (blocked) return blocked;
