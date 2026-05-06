@@ -1259,6 +1259,7 @@ async function loadSession(id, options = {}) {
       return;
     }
 
+    const hadObjectHistory = !!(remoteSession && remoteSession.history && !Array.isArray(remoteSession.history) && typeof remoteSession.history === 'object');
     const remoteHistory = dedupeHistoryMessages(normalizeSessionHistoryShape(remoteSession.history));
     const localHistory = dedupeHistoryMessages(Array.isArray(s.history) ? s.history : []);
     const localLastTs = getLastTs(localHistory);
@@ -1298,6 +1299,11 @@ async function loadSession(id, options = {}) {
     s.history = remoteHistory;
     s._loaded = true;
     setLocalSession(id, s.history);
+    if (hadObjectHistory) {
+      // Heal malformed remote session payload (`history` object -> array) on first successful load.
+      saveSession(id);
+      saveIndex();
+    }
     if (activeChatId === id) renderChatArea();
   } catch(e) {}
 }
