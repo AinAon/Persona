@@ -234,6 +234,26 @@ If evidence is weak, request one targeted follow-up check instead of continuing 
 
 ---
 
+## Patch Verification and Rollback Rule
+
+Before applying a patch, identify the most likely root cause and the smallest verification step that can prove or disprove it.
+
+After applying a patch:
+
+1. run the smallest relevant verification that reproduces the issue or validates the fix
+2. if the issue is not resolved, revert the patch before trying another unrelated fix
+3. do not stack additional patches on top of an unverified or failed patch
+4. preserve useful evidence from the failed attempt in a short note
+5. only keep the patch if verification shows that it addressed the root cause or safely improves diagnosis
+
+When reverting, revert only the changes introduced by the failed patch.
+
+Do not discard unrelated user changes, local edits, generated assets, or existing work unless explicitly approved.
+
+If rollback is unsafe because the patch changed user data, storage, schema, cache, or persistence behavior, stop and report the rollback risk before proceeding.
+
+---
+
 ## Structural Fix Priority Rule
 
 Do not stack quick patches only to mask symptoms.
