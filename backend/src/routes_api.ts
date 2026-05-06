@@ -382,6 +382,29 @@ function mergeDeletedMetaById(lists: DeletedSessionMeta[][]): DeletedSessionMeta
   return [...map.values()].sort((a, b) => Number(b.deletedAt || 0) - Number(a.deletedAt || 0));
 }
 
+async function rebuildSessionIndexFromDropboxData(env: Env, userId = "user_default"): Promise<SessionMeta[]> {
+  const token = await getSharedDropboxToken(env);
+  if (!token) return [];
+  const dataFolder = `${sessionUserFolder(userId)}/data`;
+  const entries = await dropboxListFolder(token, dataFolder).catch(() => []);
+  const files = (entries || []).filter((e) => String(e?.[".tag"] || "") === "file");
+  const out: SessionMeta[] = [];
+  for (const f of files) {
+    const path = String(f.path_display || f.path_lower || "").trim();
+    if (!path) continue;
+    const raw = await dropboxReadText(token, path).catch(() => null);
+    if (!raw) continue;
+    const parsed = parseSessionLike(raw);
+    if (!parsed) continue;
+    out.push(parsed);
+  }
+  out.sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+  if (out.length > 0) {
+    await dropboxWriteJson(env, sessionDbxIndexPath(userId), out).catch(() => false);
+  }
+  return out;
+}
+
 async function migrateLegacySessionFilesToCanonical(env: Env, userId = "user_default"): Promise<void> {
   const canonicalIndex = (await dropboxReadJson<SessionMeta[]>(env, sessionDbxIndexPath(userId))) || [];
   const canonicalDeleted = (await dropboxReadJson<DeletedSessionMeta[]>(env, deletedSessionDbxIndexPath(userId))) || [];
@@ -587,6 +610,9 @@ async function getSessionIndex(env: Env, userId = "user_default"): Promise<Sessi
     const moved = await dropboxWriteJson(env, sessionDbxIndexPath(userId), fromOlderLegacyDropbox).catch(() => false);
     if (moved) await dropboxDeleteIfExists(env, olderLegacySessionDbxIndexPath(userId));
     return fromOlderLegacyDropbox;
+  }
+  if (Array.isArray(fromDropbox) && fromDropbox.length === 0) {
+    return await rebuildSessionIndexFromDropboxData(env, userId);
   }
   return Array.isArray(fromDropbox) ? fromDropbox : [];
 }
