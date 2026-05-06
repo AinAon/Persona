@@ -665,8 +665,14 @@ async function putDeletedSessionIndex(env: Env, sessions: DeletedSessionMeta[], 
 }
 
 async function getSessionPayloadText(env: Env, id: string, userId = "user_default"): Promise<string | null> {
-  const fromDropbox = await dropboxReadJson<unknown>(env, sessionDbxDataPath(id, userId));
-  if (fromDropbox && typeof fromDropbox === "object") return prettyJson(fromDropbox);
+  const token = await getSharedDropboxToken(env);
+  const fromDropboxRaw = token ? await dropboxReadText(token, sessionDbxDataPath(id, userId)) : null;
+  if (fromDropboxRaw) {
+    try {
+      const parsed = JSON.parse(fromDropboxRaw);
+      if (parsed && typeof parsed === "object") return prettyJson(parsed);
+    } catch {}
+  }
   const fromLegacyDropbox = await dropboxReadJson<unknown>(env, legacySessionDbxDataPath(id, userId));
   if (fromLegacyDropbox && typeof fromLegacyDropbox === "object") {
     const moved = await dropboxWriteJson(env, sessionDbxDataPath(id, userId), fromLegacyDropbox).catch(() => false);
@@ -2180,7 +2186,9 @@ export async function handleApiRoute(
     }
     if (request.method === "PUT") {
       const { sessions } = (await request.json()) as { sessions: unknown[] };
-      await putSessionIndex(env, (Array.isArray(sessions) ? sessions : []) as SessionMeta[], userId);
+      const incoming = (Array.isArray(sessions) ? sessions : []) as SessionMeta[];
+      const current = await getSessionIndex(env, userId);
+      await putSessionIndex(env, mergeSessionMetaById([current, incoming]), userId);
       await bumpSessionChangeSeq(env, userId);
       return Response.json({ ok: true }, { headers: cors });
     }
@@ -2407,7 +2415,20 @@ async function handleSessionRoute(
         // ignore parse failure and proceed with incoming payload
       }
     }
-    await dropboxWriteJson(env, sessionDbxDataPath(id, userId), mergedSession);
+    const token = await getSharedDropboxToken(env);
+    const writePath = sessionDbxDataPath(id, userId);
+    const writeResult = token
+      ? await dropboxWriteTextWithDetail(token, writePath, prettyJson(mergedSession))
+      : { ok: false, status: 0, detail: "shared_dropbox_token_missing" };
+    if (!writeResult.ok) {
+      return Response.json({
+        ok: false,
+        error: "session_data_write_failed",
+        path: writePath,
+        status: writeResult.status,
+        detail: writeResult.detail,
+      }, { status: 500, headers: noStoreHeaders });
+    }
 
     const index = await getSessionIndex(env, userId);
     const meta: SessionMeta = buildSessionMeta(mergedSession);
