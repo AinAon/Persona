@@ -410,27 +410,24 @@ async function getEmotionImageSuffixed(pid, emotion, letter, displayPx = 200) {
   }
 }
 
-// 메시지 렌더링 전 suffix 결정 (파일 목록 기반 랜덤 선택)
+// 메시지 렌더링 전 suffix 결정 (LLM 감정 태그 -> 검증된 suffix 주입)
 async function resolveMessageSuffixes(rawText, pList, existingSuffixes = null) {
   if (existingSuffixes) return existingSuffixes;
   const segments = parseResponse(rawText, pList);
   const suffixes = {};
+  const imageListByPid = new Map();
   for (const seg of segments) {
     const p = pList[seg.idx];
     if (!p) continue;
     const key = `${p.pid}:${seg.emotion}`;
     if (suffixes[key] !== undefined) continue;
-    // 파일 목록에서 해당 감정의 suffix 목록 추출
-    const keys = await getImageList(p.pid);
+    if (!imageListByPid.has(p.pid)) imageListByPid.set(p.pid, await getImageList(p.pid));
+    const keys = imageListByPid.get(p.pid) || [];
     const { suffixed, hasBase } = getSuffixesForEmotion(keys, p.pid, seg.emotion);
-    if (suffixed.length > 0) {
-      // 랜덤 suffix 선택
-      suffixes[key] = suffixed[Math.floor(Math.random() * suffixed.length)];
-    } else if (hasBase) {
-      suffixes[key] = ''; // suffix 없는 기본 파일
-    } else {
-      suffixes[key] = null; // 없음 → neutral fallback
-    }
+    const sortedSuffixes = [...new Set((suffixed || []).map((x) => String(x || '').trim()).filter(Boolean))].sort();
+    if (sortedSuffixes.length > 0) suffixes[key] = sortedSuffixes[0];
+    else if (hasBase) suffixes[key] = '';
+    else suffixes[key] = null; // 렌더 단계에서 neutral fallback
   }
   return suffixes;
 }
