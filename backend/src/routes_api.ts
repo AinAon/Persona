@@ -398,36 +398,6 @@ function mergeDeletedMetaById(lists: DeletedSessionMeta[][]): DeletedSessionMeta
   return [...map.values()].sort((a, b) => Number(b.deletedAt || 0) - Number(a.deletedAt || 0));
 }
 
-async function rebuildSessionIndexFromDropboxData(env: Env, userId = "user_default"): Promise<SessionMeta[]> {
-  const token = await getSharedDropboxToken(env);
-  if (!token) return [];
-  const dataFolder = `${sessionUserFolder(userId)}/data`;
-  const entries = await dropboxListFolder(token, dataFolder).catch(() => []);
-  const files = (entries || []).filter((e) => String(e?.[".tag"] || "") === "file");
-  const out: SessionMeta[] = [];
-  for (const f of files) {
-    const path = String(f.path_display || f.path_lower || "").trim();
-    if (!path) continue;
-    const raw = await dropboxReadText(token, path).catch(() => null);
-    if (!raw) continue;
-    const parsed = parseSessionLike(raw);
-    if (!parsed) continue;
-    out.push(parsed);
-  }
-  out.sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
-  if (out.length > 0) {
-    await dropboxWriteJson(env, sessionDbxIndexPath(userId), out).catch(() => false);
-  }
-  return out;
-}
-
-async function syncSessionIndexFromDropboxData(env: Env, userId = "user_default"): Promise<SessionMeta[]> {
-  const rebuilt = await rebuildSessionIndexFromDropboxData(env, userId);
-  if (rebuilt.length > 0) return rebuilt;
-  const current = await dropboxReadJson<SessionMeta[]>(env, sessionDbxIndexPath(userId));
-  if (Array.isArray(current)) return current;
-  return [];
-}
 
 async function migrateLegacySessionFilesToCanonical(env: Env, userId = "user_default"): Promise<void> {
   const canonicalIndex = (await dropboxReadJson<SessionMeta[]>(env, sessionDbxIndexPath(userId))) || [];
@@ -2208,8 +2178,7 @@ export async function handleApiRoute(
 
   if (url.pathname === "/sessions") {
     if (request.method === "GET") {
-      await migrateLegacySessionFilesToCanonical(env, userId);
-      const sessions = await syncSessionIndexFromDropboxData(env, userId);
+      const sessions = await getSessionIndex(env, userId);
       return Response.json({ sessions }, { headers: noStoreHeaders });
     }
     if (request.method === "PUT") {
