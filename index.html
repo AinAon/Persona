@@ -1436,6 +1436,34 @@ margin-left: 0 !important;
 text-indent: 0 !important;
 }
 
+/* 7. 사용자 전용 리스트 블록 (마크다운 리스트 의존 제거) */
+.user-list-block {
+display: flex;
+flex-direction: column;
+gap: 4px;
+}
+
+.user-list-row {
+display: grid;
+grid-template-columns: auto 1fr;
+align-items: start;
+column-gap: 6px;
+}
+
+.user-list-marker {
+min-width: 1.6em;
+text-align: right;
+white-space: nowrap;
+color: inherit;
+opacity: .95;
+}
+
+.user-list-text {
+min-width: 0;
+overflow-wrap: anywhere;
+word-break: break-word;
+}
+
 </style>
 
 </head>

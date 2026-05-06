@@ -4764,6 +4764,30 @@ function renderUserBubbleHTMLV2(text, atts) {
   return html;
 }
 
+function renderUserTextBlock(text) {
+  const raw = String(text || '');
+  if (!raw.trim()) return '';
+  const lines = raw.split(/\r?\n/);
+  const numRe = /^\s*(\d+)\.\s+(.+)$/;
+  const bulletRe = /^\s*[-*•]\s+(.+)$/;
+  const parsed = lines.map((ln) => {
+    const n = ln.match(numRe);
+    if (n) return { type: 'num', marker: `${n[1]}.`, content: n[2] };
+    const b = ln.match(bulletRe);
+    if (b) return { type: 'bullet', marker: '•', content: b[1] };
+    return { type: 'plain', marker: '', content: ln };
+  });
+  const listLikeCount = parsed.filter((x) => (x.type === 'num' || x.type === 'bullet')).length;
+  const plainCount = parsed.filter((x) => x.type === 'plain' && String(x.content || '').trim()).length;
+  const listOnly = listLikeCount >= 2 && plainCount === 0;
+  if (!listOnly) return fmt(raw);
+  const items = parsed.map((row) => {
+    const markerCls = row.type === 'num' ? 'num' : 'bullet';
+    return `<div class="user-list-row"><span class="user-list-marker ${markerCls}">${esc(row.marker)}</span><span class="user-list-text">${esc(row.content)}</span></div>`;
+  }).join('');
+  return `<div class="user-list-block">${items}</div>`;
+}
+
 function renderUserMessageHTML(msg) {
   const attachmentsForRender = getMessageAttachments(msg);
   const text = typeof msg?.content === 'string'
@@ -4808,7 +4832,7 @@ function renderUserBubbleHTMLV3(text, atts) {
     }
   });
   if (imageItemsHtml) html += `<div class="bubble-img-container${imageCount > 1 ? ' multi' : ''}">${imageItemsHtml}</div>`;
-  if (text) html += fmt(text);
+  if (text) html += renderUserTextBlock(text);
   return html;
 }
 
