@@ -613,9 +613,6 @@ async function getSessionIndex(env: Env, userId = "user_default"): Promise<Sessi
     if (moved) await dropboxDeleteIfExists(env, olderLegacySessionDbxIndexPath(userId));
     return fromOlderLegacyDropbox;
   }
-  if (Array.isArray(fromDropbox) && fromDropbox.length === 0) {
-    return await rebuildSessionIndexFromDropboxData(env, userId);
-  }
   return Array.isArray(fromDropbox) ? fromDropbox : [];
 }
 
