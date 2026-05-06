@@ -1405,6 +1405,16 @@ margin: 8px 0;
 list-style-position: inside;
 }
 
+/* 사용자 말풍선은 마커 바깥 이탈 방지 (강제) */
+.user-msg .md-content ol,
+.user-msg .md-content ul,
+.user-msg ol,
+.user-msg ul {
+  margin-left: 0 !important;
+  padding-left: 0 !important;
+  list-style-position: inside !important;
+}
+
 </style>
 
 </head>
