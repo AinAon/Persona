@@ -1063,6 +1063,34 @@ function wrapPersonaReply(pid, reply) {
   return `[${pid}]${text}[/${pid}]`;
 }
 
+function normalizeAssistantEmotionReply(rawReply, pList, allowedEmotionMap = null) {
+  const text = String(rawReply || '').trim();
+  if (!text) return '';
+  const personas = Array.isArray(pList) ? pList : [];
+  if (!personas.length) return text;
+  const segments = parseResponse(text, personas, allowedEmotionMap);
+  if (!Array.isArray(segments) || !segments.length) {
+    const pid0 = String(personas[0]?.pid || 'p');
+    return `[${pid0}][emotion:neutral]${text}[/${pid0}]`;
+  }
+  const out = [];
+  for (const seg of segments) {
+    const p = personas[seg?.idx] || personas[0];
+    if (!p) continue;
+    const pid = String(p.pid || '').trim();
+    if (!pid) continue;
+    const emotion = clampEmotionForPid(seg?.emotion || 'neutral', pid, allowedEmotionMap);
+    const content = String(seg?.content || '').trim();
+    if (!content) continue;
+    out.push(`[${pid}][emotion:${emotion}]${content}[/${pid}]`);
+  }
+  if (!out.length) {
+    const pid0 = String(personas[0]?.pid || 'p');
+    return `[${pid0}][emotion:neutral]${text}[/${pid0}]`;
+  }
+  return out.join('\n');
+}
+
 function isImageWorkflowMessage(msg) {
   return !!msg?._imageWorkflow;
 }
@@ -5204,6 +5232,9 @@ async function sendMessage() {
     }
 
     const pList = pListAll;
+    if (!isImageReq) {
+      reply = normalizeAssistantEmotionReply(reply, pList, availableEmotionMap);
+    }
     const personaSnapshot = pList.map(p=>({pid:p.pid, name:p.name}));
     const suffixes = await resolveMessageSuffixes(reply, pList);
 
