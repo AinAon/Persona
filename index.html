@@ -1421,6 +1421,21 @@ padding-left: 0 !important;
 margin-left: 0;
 }
 
+/* 6. 사용자 말풍선 리스트는 별도로 고정 (전역 마크다운 스타일 간섭 차단) */
+.user-msg .md-content ol,
+.user-msg .md-content ul {
+padding-inline-start: 1.45em !important;
+padding-left: 1.45em !important;
+margin: 8px 0 !important;
+list-style-position: outside !important;
+}
+
+.user-msg .md-content li {
+padding-left: 0 !important;
+margin-left: 0 !important;
+text-indent: 0 !important;
+}
+
 </style>
 
 </head>
