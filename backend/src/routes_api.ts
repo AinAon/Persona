@@ -321,6 +321,22 @@ async function dropboxDeleteIfExists(env: Env, path: string): Promise<void> {
   try { await dropboxDeletePath(token, path); } catch {}
 }
 
+async function cleanupObsoleteDefaultSessionFolders(env: Env, userId = "user_default"): Promise<void> {
+  const u = normalizeUserId(userId);
+  if (u !== "user_default") return;
+  const token = await getSharedDropboxToken(env);
+  if (!token) return;
+  const obsoleteRoots = [
+    "/users/user_default/session",
+    "/persona_shared/users/user_default/session",
+    "/persona_shared/user_default/session",
+    "/persona_shared/session/user_default",
+  ];
+  for (const p of obsoleteRoots) {
+    try { await dropboxDeletePath(token, p); } catch {}
+  }
+}
+
 async function sha256Hex(input: string): Promise<string> {
   const data = new TextEncoder().encode(input);
   const digest = await crypto.subtle.digest("SHA-256", data);
@@ -470,6 +486,7 @@ async function getSessionIndex(env: Env, userId = "user_default"): Promise<Sessi
 
 async function putSessionIndex(env: Env, sessions: SessionMeta[], userId = "user_default"): Promise<void> {
   const ok = await dropboxWriteJson(env, sessionDbxIndexPath(userId), sessions);
+  await cleanupObsoleteDefaultSessionFolders(env, userId);
   if (!ok) {
     await r2PutJson(env, scopedR2Key(userId, SESSION_INDEX_R2_KEY), sessions);
   }
@@ -512,6 +529,7 @@ async function getDeletedSessionIndex(env: Env, userId = "user_default"): Promis
 
 async function putDeletedSessionIndex(env: Env, sessions: DeletedSessionMeta[], userId = "user_default"): Promise<void> {
   const ok = await dropboxWriteJson(env, deletedSessionDbxIndexPath(userId), sessions);
+  await cleanupObsoleteDefaultSessionFolders(env, userId);
   if (!ok) {
     await r2PutJson(env, scopedR2Key(userId, DELETED_SESSION_INDEX_R2_KEY), sessions);
   }
