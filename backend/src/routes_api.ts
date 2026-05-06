@@ -257,11 +257,13 @@ function deletedSessionDbxIndexPath(userId = "user_default"): string {
 }
 
 function sessionDbxDataPath(id: string, userId = "user_default"): string {
-  return `${sessionUserFolder(userId)}/data/${id}.json`;
+  const safeId = String(id || "").trim();
+  return `${sessionUserFolder(userId)}/data/${safeId.endsWith(".json") ? safeId : `${safeId}.json`}`;
 }
 
 function deletedSessionDbxDataPath(id: string, userId = "user_default"): string {
-  return `${sessionUserFolder(userId)}/deleted/${id}.json`;
+  const safeId = String(id || "").trim();
+  return `${sessionUserFolder(userId)}/deleted/${safeId.endsWith(".json") ? safeId : `${safeId}.json`}`;
 }
 
 function legacySessionDbxIndexPath(userId = "user_default"): string {
@@ -273,11 +275,13 @@ function legacyDeletedSessionDbxIndexPath(userId = "user_default"): string {
 }
 
 function legacySessionDbxDataPath(id: string, userId = "user_default"): string {
-  return `${legacySessionUserFolder(userId)}/data/${id}.json`;
+  const safeId = String(id || "").trim();
+  return `${legacySessionUserFolder(userId)}/data/${safeId.endsWith(".json") ? safeId : `${safeId}.json`}`;
 }
 
 function legacyDeletedSessionDbxDataPath(id: string, userId = "user_default"): string {
-  return `${legacySessionUserFolder(userId)}/deleted/${id}.json`;
+  const safeId = String(id || "").trim();
+  return `${legacySessionUserFolder(userId)}/deleted/${safeId.endsWith(".json") ? safeId : `${safeId}.json`}`;
 }
 
 function olderLegacySessionDbxIndexPath(userId = "user_default"): string {
@@ -289,11 +293,13 @@ function olderLegacyDeletedSessionDbxIndexPath(userId = "user_default"): string 
 }
 
 function olderLegacySessionDbxDataPath(id: string, userId = "user_default"): string {
-  return `${olderLegacySessionUserFolder(userId)}/data/${id}.json`;
+  const safeId = String(id || "").trim();
+  return `${olderLegacySessionUserFolder(userId)}/data/${safeId.endsWith(".json") ? safeId : `${safeId}.json`}`;
 }
 
 function olderLegacyDeletedSessionDbxDataPath(id: string, userId = "user_default"): string {
-  return `${olderLegacySessionUserFolder(userId)}/deleted/${id}.json`;
+  const safeId = String(id || "").trim();
+  return `${olderLegacySessionUserFolder(userId)}/deleted/${safeId.endsWith(".json") ? safeId : `${safeId}.json`}`;
 }
 
 function sharedUsersLegacySessionDbxIndexPath(userId = "user_default"): string {
