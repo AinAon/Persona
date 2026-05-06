@@ -51,6 +51,7 @@ const SESSION_R2_PREFIX = "session/data/";
 const DELETED_SESSION_R2_PREFIX = "session/deleted/";
 const SESSION_AUDIO_R2_PREFIXES = ["tts/session/", "audio/session/"];
 const SHARED_PREFIX = "/persona_shared";
+const SESSION_DBX_ROOT = `${SHARED_PREFIX}/session`;
 const SESSION_CHANGE_SEQ_KEY = "session_change_seq";
 const LEGACY_MEMORY_API_ENABLED = false;
 const DEFAULT_USER_CHAT_MODEL_KEY = "settings:default_user_chat_model";
@@ -229,6 +230,55 @@ function deletedSessionR2Key(id: string, userId = "user_default"): string {
   return scopedR2Key(userId, `${DELETED_SESSION_R2_PREFIX}${id}.json`);
 }
 
+function sessionUserFolder(userId = "user_default"): string {
+  const u = normalizeUserId(userId).replace(/[^a-z0-9._-]+/gi, "_");
+  return `${SESSION_DBX_ROOT}/${u}`;
+}
+
+function sessionDbxIndexPath(userId = "user_default"): string {
+  return `${sessionUserFolder(userId)}/index.json`;
+}
+
+function deletedSessionDbxIndexPath(userId = "user_default"): string {
+  return `${sessionUserFolder(userId)}/deleted_index.json`;
+}
+
+function sessionDbxDataPath(id: string, userId = "user_default"): string {
+  return `${sessionUserFolder(userId)}/data/${id}.json`;
+}
+
+function deletedSessionDbxDataPath(id: string, userId = "user_default"): string {
+  return `${sessionUserFolder(userId)}/deleted/${id}.json`;
+}
+
+function prettyJson(value: unknown): string {
+  return `${JSON.stringify(value, null, 2)}\n`;
+}
+
+async function getSharedDropboxToken(env: Env): Promise<string> {
+  return await getPersonaDropboxAccessToken(env, "shared");
+}
+
+async function dropboxReadJson<T>(env: Env, path: string): Promise<T | null> {
+  const token = await getSharedDropboxToken(env);
+  if (!token) return null;
+  const raw = await dropboxReadText(token, path);
+  if (!raw) return null;
+  try { return JSON.parse(raw) as T; } catch { return null; }
+}
+
+async function dropboxWriteJson(env: Env, path: string, value: unknown): Promise<boolean> {
+  const token = await getSharedDropboxToken(env);
+  if (!token) return false;
+  return await dropboxWriteText(token, path, prettyJson(value));
+}
+
+async function dropboxDeleteIfExists(env: Env, path: string): Promise<void> {
+  const token = await getSharedDropboxToken(env);
+  if (!token) return;
+  try { await dropboxDeletePath(token, path); } catch {}
+}
+
 async function sha256Hex(input: string): Promise<string> {
   const data = new TextEncoder().encode(input);
   const digest = await crypto.subtle.digest("SHA-256", data);
@@ -358,6 +408,8 @@ async function r2PutJson(env: Env, key: string, value: unknown): Promise<void> {
 }
 
 async function getSessionIndex(env: Env, userId = "user_default"): Promise<SessionMeta[]> {
+  const fromDropbox = await dropboxReadJson<SessionMeta[]>(env, sessionDbxIndexPath(userId));
+  if (Array.isArray(fromDropbox)) return fromDropbox;
   const fromR2 = await r2Json<SessionMeta[] | null>(env, scopedR2Key(userId, SESSION_INDEX_R2_KEY), null);
   if (Array.isArray(fromR2)) return fromR2;
   const legacy = await env.KV.get(scopedKvKey(userId, SESSION_INDEX_KEY));
@@ -365,7 +417,10 @@ async function getSessionIndex(env: Env, userId = "user_default"): Promise<Sessi
 }
 
 async function putSessionIndex(env: Env, sessions: SessionMeta[], userId = "user_default"): Promise<void> {
-  await r2PutJson(env, scopedR2Key(userId, SESSION_INDEX_R2_KEY), sessions);
+  const ok = await dropboxWriteJson(env, sessionDbxIndexPath(userId), sessions);
+  if (!ok) {
+    await r2PutJson(env, scopedR2Key(userId, SESSION_INDEX_R2_KEY), sessions);
+  }
 }
 
 async function getSessionChangeSeq(env: Env, userId = "user_default"): Promise<number> {
@@ -385,6 +440,8 @@ async function bumpSessionChangeSeq(env: Env, userId = "user_default"): Promise<
 }
 
 async function getDeletedSessionIndex(env: Env, userId = "user_default"): Promise<DeletedSessionMeta[]> {
+  const fromDropbox = await dropboxReadJson<DeletedSessionMeta[]>(env, deletedSessionDbxIndexPath(userId));
+  if (Array.isArray(fromDropbox)) return fromDropbox;
   const fromR2 = await r2Json<DeletedSessionMeta[] | null>(env, scopedR2Key(userId, DELETED_SESSION_INDEX_R2_KEY), null);
   if (Array.isArray(fromR2)) return fromR2;
   const legacy = await env.KV.get(scopedKvKey(userId, DELETED_SESSION_INDEX_KEY));
@@ -392,16 +449,23 @@ async function getDeletedSessionIndex(env: Env, userId = "user_default"): Promis
 }
 
 async function putDeletedSessionIndex(env: Env, sessions: DeletedSessionMeta[], userId = "user_default"): Promise<void> {
-  await r2PutJson(env, scopedR2Key(userId, DELETED_SESSION_INDEX_R2_KEY), sessions);
+  const ok = await dropboxWriteJson(env, deletedSessionDbxIndexPath(userId), sessions);
+  if (!ok) {
+    await r2PutJson(env, scopedR2Key(userId, DELETED_SESSION_INDEX_R2_KEY), sessions);
+  }
 }
 
 async function getSessionPayloadText(env: Env, id: string, userId = "user_default"): Promise<string | null> {
+  const fromDropbox = await dropboxReadJson<unknown>(env, sessionDbxDataPath(id, userId));
+  if (fromDropbox && typeof fromDropbox === "object") return prettyJson(fromDropbox);
   const fromR2 = await r2Text(env, sessionR2Key(id, userId));
   if (fromR2) return fromR2;
   return await env.KV.get(scopedKvKey(userId, `session:${id}`));
 }
 
 async function getDeletedSessionPayloadText(env: Env, id: string, userId = "user_default"): Promise<string | null> {
+  const fromDropbox = await dropboxReadJson<unknown>(env, deletedSessionDbxDataPath(id, userId));
+  if (fromDropbox && typeof fromDropbox === "object") return prettyJson(fromDropbox);
   const fromR2 = await r2Text(env, deletedSessionR2Key(id, userId));
   if (fromR2) return fromR2;
   return await env.KV.get(scopedKvKey(userId, `deleted:session:${id}`));
@@ -666,8 +730,11 @@ async function restoreSessionById(env: Env, sessionId: string, userId = "user_de
   const meta = buildSessionMeta(sanitizedSession);
   const sanitizedRaw = JSON.stringify(sanitizedSession);
 
-  await env.R2.put(sessionR2Key(id, userId), sanitizedRaw, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
-  await env.KV.delete(scopedKvKey(userId, `session:${id}`));
+  const writeOk = await dropboxWriteJson(env, sessionDbxDataPath(id, userId), sanitizedSession);
+  if (!writeOk) {
+    await env.R2.put(sessionR2Key(id, userId), sanitizedRaw, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
+    await env.KV.delete(scopedKvKey(userId, `session:${id}`));
+  }
 
   const index = await getSessionIndex(env, userId);
   const existingIndex = index.findIndex((s) => s.id === id);
@@ -677,6 +744,7 @@ async function restoreSessionById(env: Env, sessionId: string, userId = "user_de
 
   const deletedIndex = await getDeletedSessionIndex(env, userId);
   await putDeletedSessionIndex(env, deletedIndex.filter((s) => s.id !== id), userId);
+  await dropboxDeleteIfExists(env, deletedSessionDbxDataPath(id, userId));
   await env.KV.delete(scopedKvKey(userId, `deleted:session:${id}`));
   await env.R2.delete(deletedSessionR2Key(id, userId));
   for (const base of SESSION_AUDIO_R2_PREFIXES) {
@@ -1836,6 +1904,8 @@ export async function handleApiRoute(
     const sessionId = String(id || "").trim();
     if (!sessionId) return Response.json({ ok: false, error: "id required" }, { status: 400, headers: cors });
 
+    await dropboxDeleteIfExists(env, sessionDbxDataPath(sessionId, userId));
+    await dropboxDeleteIfExists(env, deletedSessionDbxDataPath(sessionId, userId));
     await env.KV.delete(scopedKvKey(userId, `session:${sessionId}`));
     await env.KV.delete(scopedKvKey(userId, `deleted:session:${sessionId}`));
     await env.R2.delete(sessionR2Key(sessionId, userId));
@@ -2018,8 +2088,11 @@ async function handleSessionRoute(
       }
     }
     const payload = JSON.stringify(mergedSession);
-    await env.R2.put(sessionR2Key(id, userId), payload, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
-    await env.KV.delete(scopedKvKey(userId, `session:${id}`));
+    const writeOk = await dropboxWriteJson(env, sessionDbxDataPath(id, userId), mergedSession);
+    if (!writeOk) {
+      await env.R2.put(sessionR2Key(id, userId), payload, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
+      await env.KV.delete(scopedKvKey(userId, `session:${id}`));
+    }
 
     const index = await getSessionIndex(env, userId);
     const meta: SessionMeta = buildSessionMeta(mergedSession);
@@ -2040,8 +2113,11 @@ async function handleSessionRoute(
         const session = JSON.parse(existingRaw) as Record<string, unknown>;
         const meta = buildSessionMeta(session);
         const deletedMeta: DeletedSessionMeta = { ...meta, deletedAt: Date.now() };
-        await env.R2.put(deletedSessionR2Key(id, userId), existingRaw, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
-        await env.KV.delete(scopedKvKey(userId, `deleted:session:${id}`));
+        const deletedWriteOk = await dropboxWriteJson(env, deletedSessionDbxDataPath(id, userId), session);
+        if (!deletedWriteOk) {
+          await env.R2.put(deletedSessionR2Key(id, userId), existingRaw, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
+          await env.KV.delete(scopedKvKey(userId, `deleted:session:${id}`));
+        }
         const deletedIndex = await getDeletedSessionIndex(env, userId);
         const nextDeleted = [deletedMeta, ...deletedIndex.filter((s) => s.id !== id)].slice(0, 200);
         await putDeletedSessionIndex(env, nextDeleted, userId);
@@ -2050,6 +2126,7 @@ async function handleSessionRoute(
       }
     }
 
+    await dropboxDeleteIfExists(env, sessionDbxDataPath(id, userId));
     await env.KV.delete(scopedKvKey(userId, `session:${id}`));
     await env.R2.delete(sessionR2Key(id, userId));
     for (const base of SESSION_AUDIO_R2_PREFIXES) {
