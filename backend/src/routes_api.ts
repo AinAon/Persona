@@ -430,14 +430,18 @@ async function migrateLegacySessionFilesToCanonical(env: Env, userId = "user_def
 
   const mergedIndex = mergeSessionMetaById([canonicalIndex, legacyIndex, olderIndex, sharedUsersIndex]);
   const mergedDeleted = mergeDeletedMetaById([canonicalDeleted, legacyDeleted, olderDeleted, sharedUsersDeleted]);
-  await putSessionIndex(env, mergedIndex, userId);
-  await putDeletedSessionIndex(env, mergedDeleted, userId);
-  await dropboxDeleteIfExists(env, legacySessionDbxIndexPath(userId));
-  await dropboxDeleteIfExists(env, olderLegacySessionDbxIndexPath(userId));
-  await dropboxDeleteIfExists(env, sharedUsersLegacySessionDbxIndexPath(userId));
-  await dropboxDeleteIfExists(env, legacyDeletedSessionDbxIndexPath(userId));
-  await dropboxDeleteIfExists(env, olderLegacyDeletedSessionDbxIndexPath(userId));
-  await dropboxDeleteIfExists(env, sharedUsersLegacyDeletedSessionDbxIndexPath(userId));
+  if (mergedIndex.length > 0) {
+    await putSessionIndex(env, mergedIndex, userId);
+    await dropboxDeleteIfExists(env, legacySessionDbxIndexPath(userId));
+    await dropboxDeleteIfExists(env, olderLegacySessionDbxIndexPath(userId));
+    await dropboxDeleteIfExists(env, sharedUsersLegacySessionDbxIndexPath(userId));
+  }
+  if (mergedDeleted.length > 0) {
+    await putDeletedSessionIndex(env, mergedDeleted, userId);
+    await dropboxDeleteIfExists(env, legacyDeletedSessionDbxIndexPath(userId));
+    await dropboxDeleteIfExists(env, olderLegacyDeletedSessionDbxIndexPath(userId));
+    await dropboxDeleteIfExists(env, sharedUsersLegacyDeletedSessionDbxIndexPath(userId));
+  }
   await dropboxDeleteIfExists(env, SHARED_PREFIX);
 }
 
@@ -571,7 +575,7 @@ async function r2PutJson(env: Env, key: string, value: unknown): Promise<void> {
 
 async function getSessionIndex(env: Env, userId = "user_default"): Promise<SessionMeta[]> {
   const fromDropbox = await dropboxReadJson<SessionMeta[]>(env, sessionDbxIndexPath(userId));
-  if (Array.isArray(fromDropbox)) return fromDropbox;
+  if (Array.isArray(fromDropbox) && fromDropbox.length > 0) return fromDropbox;
   const fromLegacyDropbox = await dropboxReadJson<SessionMeta[]>(env, legacySessionDbxIndexPath(userId));
   if (Array.isArray(fromLegacyDropbox)) {
     const moved = await dropboxWriteJson(env, sessionDbxIndexPath(userId), fromLegacyDropbox).catch(() => false);
@@ -585,9 +589,17 @@ async function getSessionIndex(env: Env, userId = "user_default"): Promise<Sessi
     return fromOlderLegacyDropbox;
   }
   const fromR2 = await r2Json<SessionMeta[] | null>(env, scopedR2Key(userId, SESSION_INDEX_R2_KEY), null);
-  if (Array.isArray(fromR2)) return fromR2;
+  if (Array.isArray(fromR2) && fromR2.length > 0) {
+    await dropboxWriteJson(env, sessionDbxIndexPath(userId), fromR2).catch(() => false);
+    return fromR2;
+  }
   const legacy = await env.KV.get(scopedKvKey(userId, SESSION_INDEX_KEY));
-  return legacy ? JSON.parse(legacy) : [];
+  const fromKv = legacy ? JSON.parse(legacy) : [];
+  if (Array.isArray(fromKv) && fromKv.length > 0) {
+    await dropboxWriteJson(env, sessionDbxIndexPath(userId), fromKv).catch(() => false);
+    return fromKv;
+  }
+  return Array.isArray(fromDropbox) ? fromDropbox : [];
 }
 
 async function putSessionIndex(env: Env, sessions: SessionMeta[], userId = "user_default"): Promise<void> {
@@ -620,7 +632,7 @@ async function bumpSessionChangeSeq(env: Env, userId = "user_default"): Promise<
 
 async function getDeletedSessionIndex(env: Env, userId = "user_default"): Promise<DeletedSessionMeta[]> {
   const fromDropbox = await dropboxReadJson<DeletedSessionMeta[]>(env, deletedSessionDbxIndexPath(userId));
-  if (Array.isArray(fromDropbox)) return fromDropbox;
+  if (Array.isArray(fromDropbox) && fromDropbox.length > 0) return fromDropbox;
   const fromLegacyDropbox = await dropboxReadJson<DeletedSessionMeta[]>(env, legacyDeletedSessionDbxIndexPath(userId));
   if (Array.isArray(fromLegacyDropbox)) {
     const moved = await dropboxWriteJson(env, deletedSessionDbxIndexPath(userId), fromLegacyDropbox).catch(() => false);
@@ -634,9 +646,17 @@ async function getDeletedSessionIndex(env: Env, userId = "user_default"): Promis
     return fromOlderLegacyDropbox;
   }
   const fromR2 = await r2Json<DeletedSessionMeta[] | null>(env, scopedR2Key(userId, DELETED_SESSION_INDEX_R2_KEY), null);
-  if (Array.isArray(fromR2)) return fromR2;
+  if (Array.isArray(fromR2) && fromR2.length > 0) {
+    await dropboxWriteJson(env, deletedSessionDbxIndexPath(userId), fromR2).catch(() => false);
+    return fromR2;
+  }
   const legacy = await env.KV.get(scopedKvKey(userId, DELETED_SESSION_INDEX_KEY));
-  return legacy ? JSON.parse(legacy) : [];
+  const fromKv = legacy ? JSON.parse(legacy) : [];
+  if (Array.isArray(fromKv) && fromKv.length > 0) {
+    await dropboxWriteJson(env, deletedSessionDbxIndexPath(userId), fromKv).catch(() => false);
+    return fromKv;
+  }
+  return Array.isArray(fromDropbox) ? fromDropbox : [];
 }
 
 async function putDeletedSessionIndex(env: Env, sessions: DeletedSessionMeta[], userId = "user_default"): Promise<void> {
