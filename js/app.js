@@ -171,7 +171,7 @@ function sessionIndexSignature(list) {
   try {
     return JSON.stringify((list || []).map((s) => ({
       id: s?.id || '',
-      updatedAt: Number(s?.updatedAt || 0),
+      lastMessageAt: Number(s?.lastMessageAt || 0),
       participantPids: Array.from(new Set(s?.participantPids || [])).sort(),
       roomName: s?.roomName || '',
       lastPreview: s?.lastPreview || ''

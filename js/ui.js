@@ -1392,7 +1392,7 @@ function getSessionLastMessageSortTs(session) {
   if (Array.isArray(session.history) && session.history.length > 0) {
     return session.history.reduce((max, m) => Math.max(max, Number(m?.createdAt || 0)), 0);
   }
-  return Number(session.lastMessageAt || session.updatedAt || 0);
+  return Number(session.lastMessageAt || 0);
 }
 
 async function runGlobalCacheWarmup() {
