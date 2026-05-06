@@ -59,14 +59,17 @@ async function getImageList(pid) {
 function getSuffixesForEmotion(keys, pid, emotion) {
   if (!emotion) return { suffixed: [], hasBase: false };
   const targetEmotion = String(emotion || '').toLowerCase();
-  const variants = (keys || [])
-    .map((k) => parseProfileVariantKey(k, pid))
-    .filter(Boolean);
-  const hits = variants.filter((v) => v.emotion === targetEmotion);
-  const suffixed = hits
-    .map((v) => String(v.letter || '').toLowerCase())
-    .filter(Boolean);
-  const hasBase = hits.some((v) => !v.letter);
+  const escapedPid = String(pid || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`^profile/${escapedPid}/${escapedPid}_${targetEmotion}(?:_([^./]+))?\\.jpg$`, 'i');
+  const suffixed = [];
+  let hasBase = false;
+  for (const key of (keys || [])) {
+    const m = String(key || '').match(re);
+    if (!m) continue;
+    const suffix = String(m[1] || '').trim().toLowerCase();
+    if (suffix) suffixed.push(suffix);
+    else hasBase = true;
+  }
   return { suffixed, hasBase };
 }
 
