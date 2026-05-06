@@ -405,6 +405,14 @@ async function rebuildSessionIndexFromDropboxData(env: Env, userId = "user_defau
   return out;
 }
 
+async function syncSessionIndexFromDropboxData(env: Env, userId = "user_default"): Promise<SessionMeta[]> {
+  const rebuilt = await rebuildSessionIndexFromDropboxData(env, userId);
+  if (rebuilt.length > 0) return rebuilt;
+  const current = await dropboxReadJson<SessionMeta[]>(env, sessionDbxIndexPath(userId));
+  if (Array.isArray(current)) return current;
+  return [];
+}
+
 async function migrateLegacySessionFilesToCanonical(env: Env, userId = "user_default"): Promise<void> {
   const canonicalIndex = (await dropboxReadJson<SessionMeta[]>(env, sessionDbxIndexPath(userId))) || [];
   const canonicalDeleted = (await dropboxReadJson<DeletedSessionMeta[]>(env, deletedSessionDbxIndexPath(userId))) || [];
@@ -2177,7 +2185,7 @@ export async function handleApiRoute(
   if (url.pathname === "/sessions") {
     if (request.method === "GET") {
       await migrateLegacySessionFilesToCanonical(env, userId);
-      const sessions = await getSessionIndex(env, userId);
+      const sessions = await syncSessionIndexFromDropboxData(env, userId);
       return Response.json({ sessions }, { headers: noStoreHeaders });
     }
     if (request.method === "PUT") {
