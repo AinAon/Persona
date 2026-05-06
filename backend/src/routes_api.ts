@@ -51,7 +51,7 @@ const SESSION_R2_PREFIX = "session/data/";
 const DELETED_SESSION_R2_PREFIX = "session/deleted/";
 const SESSION_AUDIO_R2_PREFIXES = ["tts/session/", "audio/session/"];
 const SHARED_PREFIX = "/persona_shared";
-const SESSION_DBX_ROOT = `${SHARED_PREFIX}/session`;
+const SESSION_DBX_ROOT = `${SHARED_PREFIX}`;
 const SESSION_CHANGE_SEQ_KEY = "session_change_seq";
 const LEGACY_MEMORY_API_ENABLED = false;
 const DEFAULT_USER_CHAT_MODEL_KEY = "settings:default_user_chat_model";
@@ -232,7 +232,12 @@ function deletedSessionR2Key(id: string, userId = "user_default"): string {
 
 function sessionUserFolder(userId = "user_default"): string {
   const u = normalizeUserId(userId).replace(/[^a-z0-9._-]+/gi, "_");
-  return `${SESSION_DBX_ROOT}/${u}`;
+  return `${SESSION_DBX_ROOT}/${u}/session`;
+}
+
+function legacySessionUserFolder(userId = "user_default"): string {
+  const u = normalizeUserId(userId).replace(/[^a-z0-9._-]+/gi, "_");
+  return `${SHARED_PREFIX}/session/${u}`;
 }
 
 function sessionDbxIndexPath(userId = "user_default"): string {
@@ -249,6 +254,22 @@ function sessionDbxDataPath(id: string, userId = "user_default"): string {
 
 function deletedSessionDbxDataPath(id: string, userId = "user_default"): string {
   return `${sessionUserFolder(userId)}/deleted/${id}.json`;
+}
+
+function legacySessionDbxIndexPath(userId = "user_default"): string {
+  return `${legacySessionUserFolder(userId)}/index.json`;
+}
+
+function legacyDeletedSessionDbxIndexPath(userId = "user_default"): string {
+  return `${legacySessionUserFolder(userId)}/deleted_index.json`;
+}
+
+function legacySessionDbxDataPath(id: string, userId = "user_default"): string {
+  return `${legacySessionUserFolder(userId)}/data/${id}.json`;
+}
+
+function legacyDeletedSessionDbxDataPath(id: string, userId = "user_default"): string {
+  return `${legacySessionUserFolder(userId)}/deleted/${id}.json`;
 }
 
 function prettyJson(value: unknown): string {
@@ -410,6 +431,8 @@ async function r2PutJson(env: Env, key: string, value: unknown): Promise<void> {
 async function getSessionIndex(env: Env, userId = "user_default"): Promise<SessionMeta[]> {
   const fromDropbox = await dropboxReadJson<SessionMeta[]>(env, sessionDbxIndexPath(userId));
   if (Array.isArray(fromDropbox)) return fromDropbox;
+  const fromLegacyDropbox = await dropboxReadJson<SessionMeta[]>(env, legacySessionDbxIndexPath(userId));
+  if (Array.isArray(fromLegacyDropbox)) return fromLegacyDropbox;
   const fromR2 = await r2Json<SessionMeta[] | null>(env, scopedR2Key(userId, SESSION_INDEX_R2_KEY), null);
   if (Array.isArray(fromR2)) return fromR2;
   const legacy = await env.KV.get(scopedKvKey(userId, SESSION_INDEX_KEY));
@@ -442,6 +465,8 @@ async function bumpSessionChangeSeq(env: Env, userId = "user_default"): Promise<
 async function getDeletedSessionIndex(env: Env, userId = "user_default"): Promise<DeletedSessionMeta[]> {
   const fromDropbox = await dropboxReadJson<DeletedSessionMeta[]>(env, deletedSessionDbxIndexPath(userId));
   if (Array.isArray(fromDropbox)) return fromDropbox;
+  const fromLegacyDropbox = await dropboxReadJson<DeletedSessionMeta[]>(env, legacyDeletedSessionDbxIndexPath(userId));
+  if (Array.isArray(fromLegacyDropbox)) return fromLegacyDropbox;
   const fromR2 = await r2Json<DeletedSessionMeta[] | null>(env, scopedR2Key(userId, DELETED_SESSION_INDEX_R2_KEY), null);
   if (Array.isArray(fromR2)) return fromR2;
   const legacy = await env.KV.get(scopedKvKey(userId, DELETED_SESSION_INDEX_KEY));
@@ -458,6 +483,8 @@ async function putDeletedSessionIndex(env: Env, sessions: DeletedSessionMeta[], 
 async function getSessionPayloadText(env: Env, id: string, userId = "user_default"): Promise<string | null> {
   const fromDropbox = await dropboxReadJson<unknown>(env, sessionDbxDataPath(id, userId));
   if (fromDropbox && typeof fromDropbox === "object") return prettyJson(fromDropbox);
+  const fromLegacyDropbox = await dropboxReadJson<unknown>(env, legacySessionDbxDataPath(id, userId));
+  if (fromLegacyDropbox && typeof fromLegacyDropbox === "object") return prettyJson(fromLegacyDropbox);
   const fromR2 = await r2Text(env, sessionR2Key(id, userId));
   if (fromR2) return fromR2;
   return await env.KV.get(scopedKvKey(userId, `session:${id}`));
@@ -466,6 +493,8 @@ async function getSessionPayloadText(env: Env, id: string, userId = "user_defaul
 async function getDeletedSessionPayloadText(env: Env, id: string, userId = "user_default"): Promise<string | null> {
   const fromDropbox = await dropboxReadJson<unknown>(env, deletedSessionDbxDataPath(id, userId));
   if (fromDropbox && typeof fromDropbox === "object") return prettyJson(fromDropbox);
+  const fromLegacyDropbox = await dropboxReadJson<unknown>(env, legacyDeletedSessionDbxDataPath(id, userId));
+  if (fromLegacyDropbox && typeof fromLegacyDropbox === "object") return prettyJson(fromLegacyDropbox);
   const fromR2 = await r2Text(env, deletedSessionR2Key(id, userId));
   if (fromR2) return fromR2;
   return await env.KV.get(scopedKvKey(userId, `deleted:session:${id}`));
@@ -745,6 +774,7 @@ async function restoreSessionById(env: Env, sessionId: string, userId = "user_de
   const deletedIndex = await getDeletedSessionIndex(env, userId);
   await putDeletedSessionIndex(env, deletedIndex.filter((s) => s.id !== id), userId);
   await dropboxDeleteIfExists(env, deletedSessionDbxDataPath(id, userId));
+  await dropboxDeleteIfExists(env, legacyDeletedSessionDbxDataPath(id, userId));
   await env.KV.delete(scopedKvKey(userId, `deleted:session:${id}`));
   await env.R2.delete(deletedSessionR2Key(id, userId));
   for (const base of SESSION_AUDIO_R2_PREFIXES) {
@@ -1408,13 +1438,21 @@ export async function handleApiRoute(
       }, { status: 500, headers: noStoreHeaders });
     }
     const folder = sessionUserFolder(userId);
+    const legacyFolder = legacySessionUserFolder(userId);
     const indexPath = sessionDbxIndexPath(userId);
     const deletedIndexPath = deletedSessionDbxIndexPath(userId);
+    const legacyIndexPath = legacySessionDbxIndexPath(userId);
+    const legacyDeletedIndexPath = legacyDeletedSessionDbxIndexPath(userId);
     const folderEntries = await dropboxListFolder(token, folder).catch(() => []);
+    const legacyFolderEntries = await dropboxListFolder(token, legacyFolder).catch(() => []);
     const dataEntries = await dropboxListFolder(token, `${folder}/data`).catch(() => []);
     const deletedEntries = await dropboxListFolder(token, `${folder}/deleted`).catch(() => []);
+    const legacyDataEntries = await dropboxListFolder(token, `${legacyFolder}/data`).catch(() => []);
+    const legacyDeletedEntries = await dropboxListFolder(token, `${legacyFolder}/deleted`).catch(() => []);
     const indexText = await dropboxReadText(token, indexPath).catch(() => null);
     const deletedIndexText = await dropboxReadText(token, deletedIndexPath).catch(() => null);
+    const legacyIndexText = await dropboxReadText(token, legacyIndexPath).catch(() => null);
+    const legacyDeletedIndexText = await dropboxReadText(token, legacyDeletedIndexPath).catch(() => null);
     let indexCount = 0;
     let deletedIndexCount = 0;
     try {
@@ -1430,25 +1468,35 @@ export async function handleApiRoute(
       userId,
       paths: {
         folder,
+        legacyFolder,
         index: indexPath,
         deletedIndex: deletedIndexPath,
+        legacyIndex: legacyIndexPath,
+        legacyDeletedIndex: legacyDeletedIndexPath,
         dataFolder: `${folder}/data`,
         deletedFolder: `${folder}/deleted`,
       },
       exists: {
         index: indexText != null,
         deletedIndex: deletedIndexText != null,
+        legacyIndex: legacyIndexText != null,
+        legacyDeletedIndex: legacyDeletedIndexText != null,
       },
       counts: {
         index: indexCount,
         deletedIndex: deletedIndexCount,
         dataFiles: Array.isArray(dataEntries) ? dataEntries.filter((e) => String(e?.[".tag"] || "") === "file").length : 0,
         deletedFiles: Array.isArray(deletedEntries) ? deletedEntries.filter((e) => String(e?.[".tag"] || "") === "file").length : 0,
+        legacyDataFiles: Array.isArray(legacyDataEntries) ? legacyDataEntries.filter((e) => String(e?.[".tag"] || "") === "file").length : 0,
+        legacyDeletedFiles: Array.isArray(legacyDeletedEntries) ? legacyDeletedEntries.filter((e) => String(e?.[".tag"] || "") === "file").length : 0,
       },
       samples: {
         folderEntries: (folderEntries || []).slice(0, 20),
+        legacyFolderEntries: (legacyFolderEntries || []).slice(0, 20),
         dataEntries: (dataEntries || []).slice(0, 20),
         deletedEntries: (deletedEntries || []).slice(0, 20),
+        legacyDataEntries: (legacyDataEntries || []).slice(0, 20),
+        legacyDeletedEntries: (legacyDeletedEntries || []).slice(0, 20),
       },
     }, { headers: noStoreHeaders });
   }
@@ -1965,6 +2013,8 @@ export async function handleApiRoute(
 
     await dropboxDeleteIfExists(env, sessionDbxDataPath(sessionId, userId));
     await dropboxDeleteIfExists(env, deletedSessionDbxDataPath(sessionId, userId));
+    await dropboxDeleteIfExists(env, legacySessionDbxDataPath(sessionId, userId));
+    await dropboxDeleteIfExists(env, legacyDeletedSessionDbxDataPath(sessionId, userId));
     await env.KV.delete(scopedKvKey(userId, `session:${sessionId}`));
     await env.KV.delete(scopedKvKey(userId, `deleted:session:${sessionId}`));
     await env.R2.delete(sessionR2Key(sessionId, userId));
@@ -2186,6 +2236,7 @@ async function handleSessionRoute(
     }
 
     await dropboxDeleteIfExists(env, sessionDbxDataPath(id, userId));
+    await dropboxDeleteIfExists(env, legacySessionDbxDataPath(id, userId));
     await env.KV.delete(scopedKvKey(userId, `session:${id}`));
     await env.R2.delete(sessionR2Key(id, userId));
     for (const base of SESSION_AUDIO_R2_PREFIXES) {
