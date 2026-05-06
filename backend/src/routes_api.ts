@@ -453,9 +453,15 @@ async function getSessionIndex(env: Env, userId = "user_default"): Promise<Sessi
   const fromDropbox = await dropboxReadJson<SessionMeta[]>(env, sessionDbxIndexPath(userId));
   if (Array.isArray(fromDropbox)) return fromDropbox;
   const fromLegacyDropbox = await dropboxReadJson<SessionMeta[]>(env, legacySessionDbxIndexPath(userId));
-  if (Array.isArray(fromLegacyDropbox)) return fromLegacyDropbox;
+  if (Array.isArray(fromLegacyDropbox)) {
+    await dropboxWriteJson(env, sessionDbxIndexPath(userId), fromLegacyDropbox).catch(() => false);
+    return fromLegacyDropbox;
+  }
   const fromOlderLegacyDropbox = await dropboxReadJson<SessionMeta[]>(env, olderLegacySessionDbxIndexPath(userId));
-  if (Array.isArray(fromOlderLegacyDropbox)) return fromOlderLegacyDropbox;
+  if (Array.isArray(fromOlderLegacyDropbox)) {
+    await dropboxWriteJson(env, sessionDbxIndexPath(userId), fromOlderLegacyDropbox).catch(() => false);
+    return fromOlderLegacyDropbox;
+  }
   const fromR2 = await r2Json<SessionMeta[] | null>(env, scopedR2Key(userId, SESSION_INDEX_R2_KEY), null);
   if (Array.isArray(fromR2)) return fromR2;
   const legacy = await env.KV.get(scopedKvKey(userId, SESSION_INDEX_KEY));
@@ -489,9 +495,15 @@ async function getDeletedSessionIndex(env: Env, userId = "user_default"): Promis
   const fromDropbox = await dropboxReadJson<DeletedSessionMeta[]>(env, deletedSessionDbxIndexPath(userId));
   if (Array.isArray(fromDropbox)) return fromDropbox;
   const fromLegacyDropbox = await dropboxReadJson<DeletedSessionMeta[]>(env, legacyDeletedSessionDbxIndexPath(userId));
-  if (Array.isArray(fromLegacyDropbox)) return fromLegacyDropbox;
+  if (Array.isArray(fromLegacyDropbox)) {
+    await dropboxWriteJson(env, deletedSessionDbxIndexPath(userId), fromLegacyDropbox).catch(() => false);
+    return fromLegacyDropbox;
+  }
   const fromOlderLegacyDropbox = await dropboxReadJson<DeletedSessionMeta[]>(env, olderLegacyDeletedSessionDbxIndexPath(userId));
-  if (Array.isArray(fromOlderLegacyDropbox)) return fromOlderLegacyDropbox;
+  if (Array.isArray(fromOlderLegacyDropbox)) {
+    await dropboxWriteJson(env, deletedSessionDbxIndexPath(userId), fromOlderLegacyDropbox).catch(() => false);
+    return fromOlderLegacyDropbox;
+  }
   const fromR2 = await r2Json<DeletedSessionMeta[] | null>(env, scopedR2Key(userId, DELETED_SESSION_INDEX_R2_KEY), null);
   if (Array.isArray(fromR2)) return fromR2;
   const legacy = await env.KV.get(scopedKvKey(userId, DELETED_SESSION_INDEX_KEY));
@@ -509,9 +521,15 @@ async function getSessionPayloadText(env: Env, id: string, userId = "user_defaul
   const fromDropbox = await dropboxReadJson<unknown>(env, sessionDbxDataPath(id, userId));
   if (fromDropbox && typeof fromDropbox === "object") return prettyJson(fromDropbox);
   const fromLegacyDropbox = await dropboxReadJson<unknown>(env, legacySessionDbxDataPath(id, userId));
-  if (fromLegacyDropbox && typeof fromLegacyDropbox === "object") return prettyJson(fromLegacyDropbox);
+  if (fromLegacyDropbox && typeof fromLegacyDropbox === "object") {
+    await dropboxWriteJson(env, sessionDbxDataPath(id, userId), fromLegacyDropbox).catch(() => false);
+    return prettyJson(fromLegacyDropbox);
+  }
   const fromOlderLegacyDropbox = await dropboxReadJson<unknown>(env, olderLegacySessionDbxDataPath(id, userId));
-  if (fromOlderLegacyDropbox && typeof fromOlderLegacyDropbox === "object") return prettyJson(fromOlderLegacyDropbox);
+  if (fromOlderLegacyDropbox && typeof fromOlderLegacyDropbox === "object") {
+    await dropboxWriteJson(env, sessionDbxDataPath(id, userId), fromOlderLegacyDropbox).catch(() => false);
+    return prettyJson(fromOlderLegacyDropbox);
+  }
   const fromR2 = await r2Text(env, sessionR2Key(id, userId));
   if (fromR2) return fromR2;
   return await env.KV.get(scopedKvKey(userId, `session:${id}`));
@@ -521,9 +539,15 @@ async function getDeletedSessionPayloadText(env: Env, id: string, userId = "user
   const fromDropbox = await dropboxReadJson<unknown>(env, deletedSessionDbxDataPath(id, userId));
   if (fromDropbox && typeof fromDropbox === "object") return prettyJson(fromDropbox);
   const fromLegacyDropbox = await dropboxReadJson<unknown>(env, legacyDeletedSessionDbxDataPath(id, userId));
-  if (fromLegacyDropbox && typeof fromLegacyDropbox === "object") return prettyJson(fromLegacyDropbox);
+  if (fromLegacyDropbox && typeof fromLegacyDropbox === "object") {
+    await dropboxWriteJson(env, deletedSessionDbxDataPath(id, userId), fromLegacyDropbox).catch(() => false);
+    return prettyJson(fromLegacyDropbox);
+  }
   const fromOlderLegacyDropbox = await dropboxReadJson<unknown>(env, olderLegacyDeletedSessionDbxDataPath(id, userId));
-  if (fromOlderLegacyDropbox && typeof fromOlderLegacyDropbox === "object") return prettyJson(fromOlderLegacyDropbox);
+  if (fromOlderLegacyDropbox && typeof fromOlderLegacyDropbox === "object") {
+    await dropboxWriteJson(env, deletedSessionDbxDataPath(id, userId), fromOlderLegacyDropbox).catch(() => false);
+    return prettyJson(fromOlderLegacyDropbox);
+  }
   const fromR2 = await r2Text(env, deletedSessionR2Key(id, userId));
   if (fromR2) return fromR2;
   return await env.KV.get(scopedKvKey(userId, `deleted:session:${id}`));
