@@ -23,6 +23,7 @@ const PROFILE_FULL_WIDTH_STEPS = [1200, 1600];
 //  R2 파일 목록 캐시
 // ══════════════════════════════
 const _imageListCache = {}; // { pid: ['profile/p_riley/riley_neutral.jpg', ...] }
+const _emotionInventoryCache = {}; // { pid: { emotion: { suffixed:[], hasBase:boolean, count:number } } }
 const REMOTE_SAVE_DEBOUNCE_MS = 1200;
 let _remoteIndexSaveTimer = null;
 let _remoteIndexPayload = null;
@@ -54,6 +55,25 @@ function getSuffixesForEmotion(keys, pid, emotion) {
   const base = `profile/${pid}/${pid}_${emotion}.jpg`;
   const hasBase = validKeys.includes(base);
   return { suffixed, hasBase };
+}
+
+function buildEmotionInventoryFromKeys(keys, pid) {
+  const out = {};
+  const validKeys = (keys || []).filter(k => /\.jpg$/i.test(String(k || '')));
+  for (const emotion of (typeof EMOTIONS !== 'undefined' ? EMOTIONS : [])) {
+    const info = getSuffixesForEmotion(validKeys, pid, emotion);
+    const uniq = [...new Set((info.suffixed || []).map(x => String(x || '').toLowerCase()).filter(Boolean))];
+    out[emotion] = { suffixed: uniq, hasBase: !!info.hasBase, count: uniq.length + (info.hasBase ? 1 : 0) };
+  }
+  return out;
+}
+
+async function getPersonaEmotionInventory(pid) {
+  if (_emotionInventoryCache[pid]) return _emotionInventoryCache[pid];
+  const keys = await getImageList(pid);
+  const inv = buildEmotionInventoryFromKeys(keys, pid);
+  _emotionInventoryCache[pid] = inv;
+  return inv;
 }
 
 // 브라우저 HTTP 캐시 버스팅 (clearImageCache 후 재로드 시 강제 재요청)
@@ -370,13 +390,16 @@ async function resolveMessageSuffixes(rawText, pList, existingSuffixes = null) {
     if (!p) continue;
     const key = `${p.pid}:${seg.emotion}`;
     if (suffixes[key] !== undefined) continue;
-    // 파일 목록에서 해당 감정의 suffix 목록 추출
-    const keys = await getImageList(p.pid);
-    const { suffixed, hasBase } = getSuffixesForEmotion(keys, p.pid, seg.emotion);
-    if (suffixed.length > 0) {
-      // 랜덤 suffix 선택
-      suffixes[key] = suffixed[Math.floor(Math.random() * suffixed.length)];
-    } else if (hasBase) {
+    const inventory = await getPersonaEmotionInventory(p.pid);
+    const slot = inventory?.[seg.emotion] || { suffixed: [], hasBase: false };
+    const pool = Array.isArray(slot.suffixed) ? slot.suffixed : [];
+    const current = existingSuffixes && typeof existingSuffixes === 'object' ? existingSuffixes[key] : '';
+    if (current && pool.includes(String(current).toLowerCase())) {
+      suffixes[key] = String(current).toLowerCase();
+    } else if (pool.length > 0) {
+      // LLM suffix missing/invalid -> choose random suffix within persona inventory.
+      suffixes[key] = pool[Math.floor(Math.random() * pool.length)];
+    } else if (slot.hasBase) {
       suffixes[key] = ''; // suffix 없는 기본 파일
     } else {
       suffixes[key] = null; // 없음 → neutral fallback
