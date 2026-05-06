@@ -1010,6 +1010,12 @@ function dedupeHistoryMessages(history) {
   return out;
 }
 
+function normalizeSessionHistoryShape(history) {
+  if (Array.isArray(history)) return history;
+  if (history && typeof history === 'object') return [history];
+  return [];
+}
+
 async function saveSession(id) {
   const s = sessions.find(x=>x.id===id); if (!s) return;
   if (s._loaded !== true) {
@@ -1253,7 +1259,7 @@ async function loadSession(id, options = {}) {
       return;
     }
 
-    const remoteHistory = dedupeHistoryMessages(Array.isArray(remoteSession.history) ? remoteSession.history : []);
+    const remoteHistory = dedupeHistoryMessages(normalizeSessionHistoryShape(remoteSession.history));
     const localHistory = dedupeHistoryMessages(Array.isArray(s.history) ? s.history : []);
     const localLastTs = getLastTs(localHistory);
     const remoteLastTs = getLastTs(remoteHistory);
