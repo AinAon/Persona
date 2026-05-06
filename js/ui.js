@@ -427,7 +427,8 @@ function enhanceRenderedMessage(container) {
       btn.className = 'copy-btn user-copy-btn';
       btn.type = 'button';
       btn.title = '복사';
-      btn.dataset.copyText = encodeCopyPayload(getBubbleCopyText(userMsg));
+      const rawUserText = decodeCopyPayload(userMsg.dataset?.rawText || '');
+      btn.dataset.copyText = encodeCopyPayload((rawUserText || getBubbleCopyText(userMsg) || '').trim());
       btn.innerHTML = '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="10" height="11" rx="2"/><path d="M13 5V3.5A1.5 1.5 0 0 0 11.5 2h-7A1.5 1.5 0 0 0 3 3.5v10A1.5 1.5 0 0 0 4.5 15H5"/></svg>';
       btn.onclick = () => copyBubble(btn, btn.dataset.copyText, true);
       userActions.appendChild(btn);
@@ -4769,7 +4770,8 @@ function renderUserMessageHTML(msg) {
     ? msg.content
     : (Array.isArray(msg?.content) ? msg.content.find(c => c?.type === 'text')?.text || '' : '');
   const cleanedText = attachmentsForRender.length ? text.replace(/\n\nAttached files:\n[\s\S]*$/m, '') : text;
-  return `<div class="msg-group"><div class="user-msg">${renderUserBubbleHTMLV3(cleanedText, attachmentsForRender)}</div></div>`;
+  const encodedRaw = encodeCopyPayload(cleanedText || '');
+  return `<div class="msg-group"><div class="user-msg" data-raw-text="${encodedRaw}">${renderUserBubbleHTMLV3(cleanedText, attachmentsForRender)}</div></div>`;
 }
 
 function renderUserBubbleHTMLV3(text, atts) {
@@ -4878,7 +4880,7 @@ async function sendMessage() {
     attachments: persistedAttachments,
     createdAt: nowTs,
     _imageWorkflow: !!isImageReq,
-    _rendered:`<div class="msg-group"><div class="user-msg">${userHTML}</div></div>`
+    _rendered:`<div class="msg-group"><div class="user-msg" data-raw-text="${encodeCopyPayload(text || '')}">${userHTML}</div></div>`
   };
   session.history.push(userMsg);
   session.updatedAt = Date.now();
