@@ -422,15 +422,17 @@ function enhanceRenderedMessage(container) {
   if (group) {
     const userMsg = group.querySelector('.user-msg');
     const userActions = group.querySelector('.msg-meta-right .msg-actions');
-    if (userMsg && userActions && !userActions.querySelector('.user-copy-btn')) {
-      const btn = document.createElement('button');
-      btn.className = 'copy-btn user-copy-btn';
-      btn.type = 'button';
-      btn.title = '복사';
-      btn.dataset.copyText = encodeCopyPayload(userMsg.innerText || '');
-      btn.innerHTML = '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="10" height="11" rx="2"/><path d="M13 5V3.5A1.5 1.5 0 0 0 11.5 2h-7A1.5 1.5 0 0 0 3 3.5v10A1.5 1.5 0 0 0 4.5 15H5"/></svg>';
+    if (userMsg && userActions) {
+      const btn = userActions.querySelector('.user-copy-btn') || document.createElement('button');
+      if (!userActions.querySelector('.user-copy-btn')) {
+        btn.className = 'copy-btn user-copy-btn';
+        btn.type = 'button';
+        btn.title = '복사';
+        btn.innerHTML = '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="10" height="11" rx="2"/><path d="M13 5V3.5A1.5 1.5 0 0 0 11.5 2h-7A1.5 1.5 0 0 0 3 3.5v10A1.5 1.5 0 0 0 4.5 15H5"/></svg>';
+        userActions.appendChild(btn);
+      }
+      btn.dataset.copyText = encodeCopyPayload(extractCopyTextWithListMarkers(userMsg));
       btn.onclick = () => copyBubble(btn, btn.dataset.copyText, true);
-      userActions.appendChild(btn);
     }
 
     const aiActions = group.querySelector('.msg-meta-left .msg-actions');
@@ -440,10 +442,10 @@ function enhanceRenderedMessage(container) {
       const aiEmotion = String(aiMsg?.dataset?.emotion || '').trim();
       const existingTts = aiActions.querySelector('.tts-btn');
       if (!existingTts) {
-        const ttsBtn = createTtsButton(aiBubble.innerText || '', { emotion: aiEmotion });
+        const ttsBtn = createTtsButton(extractCopyTextWithListMarkers(aiBubble), { emotion: aiEmotion });
         aiActions.appendChild(ttsBtn);
       } else {
-        existingTts.dataset.ttsText = encodeCopyPayload(aiBubble.innerText || '');
+        existingTts.dataset.ttsText = encodeCopyPayload(extractCopyTextWithListMarkers(aiBubble));
         existingTts.dataset.ttsEmotion = aiEmotion;
       }
 
@@ -456,7 +458,7 @@ function enhanceRenderedMessage(container) {
       }
       btn.title = '복사';
       btn.onclick = () => copyBubble(btn, btn.dataset.copyText, true);
-      btn.dataset.copyText = encodeCopyPayload(aiBubble.innerText || '');
+      btn.dataset.copyText = encodeCopyPayload(extractCopyTextWithListMarkers(aiBubble));
     }
   }
 
@@ -5740,6 +5742,30 @@ async function rebuildEmotionInventoryKV(pid = '') {
   } catch {
     return false;
   }
+}
+
+function extractCopyTextWithListMarkers(rootEl) {
+  const root = rootEl?.cloneNode ? rootEl.cloneNode(true) : null;
+  if (!root) return String(rootEl?.innerText || '').trim();
+  root.querySelectorAll('ol').forEach((ol) => {
+    const items = [...ol.querySelectorAll(':scope > li')];
+    items.forEach((li, idx) => {
+      const marker = `${idx + 1}. `;
+      if (!String(li.textContent || '').trim().startsWith(marker)) {
+        li.insertAdjacentText('afterbegin', marker);
+      }
+    });
+  });
+  root.querySelectorAll('ul').forEach((ul) => {
+    const items = [...ul.querySelectorAll(':scope > li')];
+    items.forEach((li) => {
+      const marker = '- ';
+      if (!String(li.textContent || '').trim().startsWith(marker)) {
+        li.insertAdjacentText('afterbegin', marker);
+      }
+    });
+  });
+  return String(root.innerText || '').trim();
 }
 
 async function refreshChat() {
