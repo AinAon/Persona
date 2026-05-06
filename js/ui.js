@@ -1849,7 +1849,7 @@ async function getRandomPersonaGridImage(pid) {
     const candidates = [];
 
     for (const key of keys || []) {
-      const m = key.match(new RegExp(`^profile/${pid}/${pid}_([a-z]+)(?:_([a-z0-9_-]+))?\\.jpg$`, 'i'));
+      const m = key.match(new RegExp(`^profile/${pid}/${pid}_([a-z]+)(?:_([a-z]))?\\.jpg$`, 'i'));
       if (!m) continue;
       const emotion = (m[1] || '').toLowerCase();
       const letter = (m[2] || '').toLowerCase();
