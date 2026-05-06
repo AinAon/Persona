@@ -2407,6 +2407,7 @@ async function handleMultiImageUpload(input) {
   }
   if (typeof _imageListCache !== 'undefined') delete _imageListCache[p.pid];
   showToast(`✓ ${ok}개 완료${fail ? ` / ${fail}개 실패` : ''}`);
+  if (ok > 0) rebuildEmotionInventoryKV(String(p?.pid || '')).catch(() => {});
   input.value = '';
 }
 
@@ -2543,6 +2544,7 @@ async function handleMultiImageFiles_legacy(fileList) {
   }
   if (typeof _imageListCache !== 'undefined') delete _imageListCache[p.pid];
   showToast(`총${ok}개 성공${fail ? ` / ${fail}개 실패` : ''}`);
+  if (ok > 0) rebuildEmotionInventoryKV(String(p?.pid || '')).catch(() => {});
 }
 
 function initEditMultiDropzone() {
@@ -2669,6 +2671,7 @@ async function handleMultiImageFiles(fileList) {
   }
   if (typeof _imageListCache !== 'undefined') delete _imageListCache[p.pid];
   showToast(`업로드 완료: ${ok}${fail ? `, 실패 ${fail}개` : ''}`);
+  if (ok > 0) rebuildEmotionInventoryKV(String(p?.pid || '')).catch(() => {});
 }
 
 async function savePersonaEdit() {
@@ -2728,6 +2731,7 @@ async function savePersonaEdit() {
   p.updatedAt = personaUpdatedAt;
   savePersonas(); renderPersonaGrid(); goMain();
   showToast('저장됨 ✓');
+  rebuildEmotionInventoryKV(String(p?.pid || '')).catch(() => {});
 }
 
 // ===============
@@ -5719,6 +5723,24 @@ function showPromptModal() {
   closeDrawer();
 }
 function closePromptModal() { document.getElementById('promptModal').classList.remove('open'); }
+
+async function rebuildEmotionInventoryKV(pid = '') {
+  try {
+    const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+    if (!wUrl) return false;
+    const res = await fetch(wUrl + '/emotion-inventory/rebuild', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(pid ? { pid } : {})
+    });
+    if (pid && typeof _emotionInventoryCache !== 'undefined') {
+      try { delete _emotionInventoryCache[pid]; } catch {}
+    }
+    return !!res.ok;
+  } catch {
+    return false;
+  }
+}
 
 async function refreshChat() {
   const s = getActiveSession(); if (!s) return;

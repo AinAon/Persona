@@ -52,6 +52,7 @@ const SESSION_AUDIO_R2_PREFIXES = ["tts/session/", "audio/session/"];
 const SHARED_PREFIX = "/persona_shared";
 const SESSION_CHANGE_SEQ_KEY = "session_change_seq";
 const LEGACY_MEMORY_API_ENABLED = false;
+const EMOTION_INVENTORY_KV_KEY = "emotion_inventory_v1";
 
 function normalizePid(raw: unknown): string {
   const s = String(raw || "").trim().toLowerCase();
@@ -410,6 +411,54 @@ async function deleteR2ByPrefix(env: Env, prefix: string, batchMax = 5000): Prom
   return keys.length;
 }
 
+function parseEmotionVariantFromKey(key: string, pid: string): { emotion: string; suffix: string } | null {
+  const m = String(key || "").match(new RegExp(`^profile/${pid}/${pid}_([a-z]+)(?:_([a-z]))?\\.jpg$`, "i"));
+  if (!m) return null;
+  return { emotion: String(m[1] || "").toLowerCase(), suffix: String(m[2] || "").toLowerCase() };
+}
+
+async function buildEmotionInventorySnapshot(env: Env): Promise<Record<string, any>> {
+  const personasRaw = await r2Json<any[] | null>(env, PERSONAS_R2_KEY, null);
+  const personas = Array.isArray(personasRaw) ? personasRaw : [];
+  const out: Record<string, any> = { generatedAt: Date.now(), byPid: {} };
+  for (const p of personas) {
+    const pid = String(p?.pid || "").trim();
+    if (!pid) continue;
+    const keys = await listR2ByPrefix(env, `profile/${pid}/`, 5000);
+    const emotions: Record<string, { count: number; hasBase: boolean; suffixes: string[] }> = {};
+    for (const key of keys) {
+      const v = parseEmotionVariantFromKey(key, pid);
+      if (!v) continue;
+      if (!emotions[v.emotion]) emotions[v.emotion] = { count: 0, hasBase: false, suffixes: [] };
+      const slot = emotions[v.emotion];
+      slot.count += 1;
+      if (v.suffix) slot.suffixes.push(v.suffix);
+      else slot.hasBase = true;
+    }
+    for (const e of Object.keys(emotions)) {
+      emotions[e].suffixes = [...new Set(emotions[e].suffixes)].sort();
+    }
+    out.byPid[pid] = emotions;
+  }
+  return out;
+}
+
+async function buildEmotionInventoryForPid(env: Env, pid: string): Promise<Record<string, any>> {
+  const keys = await listR2ByPrefix(env, `profile/${pid}/`, 5000);
+  const emotions: Record<string, { count: number; hasBase: boolean; suffixes: string[] }> = {};
+  for (const key of keys) {
+    const v = parseEmotionVariantFromKey(key, pid);
+    if (!v) continue;
+    if (!emotions[v.emotion]) emotions[v.emotion] = { count: 0, hasBase: false, suffixes: [] };
+    const slot = emotions[v.emotion];
+    slot.count += 1;
+    if (v.suffix) slot.suffixes.push(v.suffix);
+    else slot.hasBase = true;
+  }
+  for (const e of Object.keys(emotions)) emotions[e].suffixes = [...new Set(emotions[e].suffixes)].sort();
+  return emotions;
+}
+
 async function migrateR2PrefixToSharedDropbox(
   env: Env,
   prefix: string,
@@ -647,6 +696,27 @@ export async function handleApiRoute(
   cors: CorsHeaders,
 ): Promise<Response | null> {
   const noStoreHeaders = { ...cors, "Cache-Control": "no-store" };
+  if (url.pathname === "/emotion-inventory/rebuild" && request.method === "POST") {
+    const body = await request.json().catch(() => ({} as any)) as { pid?: string };
+    const pid = String(body?.pid || "").trim();
+    const raw = await env.KV.get(EMOTION_INVENTORY_KV_KEY);
+    let current: Record<string, any> = raw ? JSON.parse(raw) : { generatedAt: 0, byPid: {} };
+    if (!current || typeof current !== "object") current = { generatedAt: 0, byPid: {} };
+    if (!current.byPid || typeof current.byPid !== "object") current.byPid = {};
+    if (pid) {
+      current.byPid[pid] = await buildEmotionInventoryForPid(env, pid);
+      current.generatedAt = Date.now();
+      await env.KV.put(EMOTION_INVENTORY_KV_KEY, JSON.stringify(current));
+      return Response.json({ ok: true, key: EMOTION_INVENTORY_KV_KEY, generatedAt: current.generatedAt, pid }, { headers: noStoreHeaders });
+    }
+    const snap = await buildEmotionInventorySnapshot(env);
+    await env.KV.put(EMOTION_INVENTORY_KV_KEY, JSON.stringify(snap));
+    return Response.json({ ok: true, key: EMOTION_INVENTORY_KV_KEY, generatedAt: snap.generatedAt, scope: "all" }, { headers: noStoreHeaders });
+  }
+  if (url.pathname === "/emotion-inventory" && request.method === "GET") {
+    const raw = await env.KV.get(EMOTION_INVENTORY_KV_KEY);
+    return Response.json({ ok: true, key: EMOTION_INVENTORY_KV_KEY, data: raw ? JSON.parse(raw) : null }, { headers: noStoreHeaders });
+  }
   if (url.pathname === "/oauth/dropbox/start" && request.method === "GET") {
     const personaRaw = String(url.searchParams.get("persona") || "").trim().toLowerCase();
     const persona = personaRaw === "avery" ? "avery" : (personaRaw === "riley" ? "riley" : (personaRaw === "shared" || personaRaw === "persona_shared" ? "shared" : ""));
@@ -1688,7 +1758,24 @@ export async function handleApiRoute(
 
   if (url.pathname === "/sessions") {
     if (request.method === "GET") {
-      const sessions = await getSessionIndex(env);
+      let sessions = await getSessionIndex(env);
+      const indexIds = new Set((sessions || []).map((s) => String(s?.id || "")).filter(Boolean));
+      const dataKeys = await listR2ByPrefix(env, SESSION_R2_PREFIX, 20000);
+      let changed = false;
+      for (const key of dataKeys) {
+        const id = key.replace(SESSION_R2_PREFIX, "").replace(/\.json$/, "");
+        if (!id || indexIds.has(id)) continue;
+        const raw = await r2Text(env, key);
+        if (!raw) continue;
+        try {
+          const parsed = JSON.parse(raw) as Record<string, unknown>;
+          const meta = buildSessionMeta(parsed);
+          sessions.unshift(meta);
+          indexIds.add(id);
+          changed = true;
+        } catch {}
+      }
+      if (changed) await putSessionIndex(env, sessions);
       return Response.json({ sessions }, { headers: noStoreHeaders });
     }
     if (request.method === "PUT") {
