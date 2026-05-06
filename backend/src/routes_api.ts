@@ -51,7 +51,6 @@ const SESSION_R2_PREFIX = "session/data/";
 const DELETED_SESSION_R2_PREFIX = "session/deleted/";
 const SESSION_AUDIO_R2_PREFIXES = ["tts/session/", "audio/session/"];
 const SHARED_PREFIX = "/persona_shared";
-const SESSION_DBX_ROOT = `${SHARED_PREFIX}`;
 const SESSION_CHANGE_SEQ_KEY = "session_change_seq";
 const LEGACY_MEMORY_API_ENABLED = false;
 const DEFAULT_USER_CHAT_MODEL_KEY = "settings:default_user_chat_model";
@@ -232,7 +231,8 @@ function deletedSessionR2Key(id: string, userId = "user_default"): string {
 
 function sessionUserFolder(userId = "user_default"): string {
   const u = normalizeUserId(userId).replace(/[^a-z0-9._-]+/gi, "_");
-  return `${SESSION_DBX_ROOT}/users/${u}/session`;
+  if (u === "user_default") return "/session";
+  return `/users/${u}/session`;
 }
 
 function legacySessionUserFolder(userId = "user_default"): string {
