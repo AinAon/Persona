@@ -335,6 +335,82 @@ async function cleanupObsoleteDefaultSessionFolders(env: Env, userId = "user_def
   }
 }
 
+function mergeSessionMetaById(lists: SessionMeta[][]): SessionMeta[] {
+  const map = new Map<string, SessionMeta>();
+  for (const list of lists) {
+    for (const it of list || []) {
+      const id = String(it?.id || "").trim();
+      if (!id) continue;
+      const prev = map.get(id);
+      if (!prev || Number(it.updatedAt || 0) >= Number(prev.updatedAt || 0)) map.set(id, it);
+    }
+  }
+  return [...map.values()].sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+}
+
+function mergeDeletedMetaById(lists: DeletedSessionMeta[][]): DeletedSessionMeta[] {
+  const map = new Map<string, DeletedSessionMeta>();
+  for (const list of lists) {
+    for (const it of list || []) {
+      const id = String(it?.id || "").trim();
+      if (!id) continue;
+      const prev = map.get(id);
+      if (!prev || Number(it.deletedAt || 0) >= Number(prev.deletedAt || 0)) map.set(id, it);
+    }
+  }
+  return [...map.values()].sort((a, b) => Number(b.deletedAt || 0) - Number(a.deletedAt || 0));
+}
+
+async function migrateLegacySessionFilesToCanonical(env: Env, userId = "user_default"): Promise<void> {
+  const canonicalIndex = (await dropboxReadJson<SessionMeta[]>(env, sessionDbxIndexPath(userId))) || [];
+  const canonicalDeleted = (await dropboxReadJson<DeletedSessionMeta[]>(env, deletedSessionDbxIndexPath(userId))) || [];
+  const legacyIndex = (await dropboxReadJson<SessionMeta[]>(env, legacySessionDbxIndexPath(userId))) || [];
+  const olderIndex = (await dropboxReadJson<SessionMeta[]>(env, olderLegacySessionDbxIndexPath(userId))) || [];
+  const legacyDeleted = (await dropboxReadJson<DeletedSessionMeta[]>(env, legacyDeletedSessionDbxIndexPath(userId))) || [];
+  const olderDeleted = (await dropboxReadJson<DeletedSessionMeta[]>(env, olderLegacyDeletedSessionDbxIndexPath(userId))) || [];
+
+  for (const meta of [...legacyIndex, ...olderIndex]) {
+    const id = String(meta?.id || "").trim();
+    if (!id) continue;
+    const already = await dropboxReadJson<unknown>(env, sessionDbxDataPath(id, userId));
+    if (already && typeof already === "object") continue;
+    const fromLegacy = await dropboxReadJson<unknown>(env, legacySessionDbxDataPath(id, userId));
+    const fromOlder = !fromLegacy ? await dropboxReadJson<unknown>(env, olderLegacySessionDbxDataPath(id, userId)) : null;
+    const src = fromLegacy || fromOlder;
+    if (!src || typeof src !== "object") continue;
+    const ok = await dropboxWriteJson(env, sessionDbxDataPath(id, userId), src);
+    if (ok) {
+      await dropboxDeleteIfExists(env, legacySessionDbxDataPath(id, userId));
+      await dropboxDeleteIfExists(env, olderLegacySessionDbxDataPath(id, userId));
+    }
+  }
+
+  for (const meta of [...legacyDeleted, ...olderDeleted]) {
+    const id = String(meta?.id || "").trim();
+    if (!id) continue;
+    const already = await dropboxReadJson<unknown>(env, deletedSessionDbxDataPath(id, userId));
+    if (already && typeof already === "object") continue;
+    const fromLegacy = await dropboxReadJson<unknown>(env, legacyDeletedSessionDbxDataPath(id, userId));
+    const fromOlder = !fromLegacy ? await dropboxReadJson<unknown>(env, olderLegacyDeletedSessionDbxDataPath(id, userId)) : null;
+    const src = fromLegacy || fromOlder;
+    if (!src || typeof src !== "object") continue;
+    const ok = await dropboxWriteJson(env, deletedSessionDbxDataPath(id, userId), src);
+    if (ok) {
+      await dropboxDeleteIfExists(env, legacyDeletedSessionDbxDataPath(id, userId));
+      await dropboxDeleteIfExists(env, olderLegacyDeletedSessionDbxDataPath(id, userId));
+    }
+  }
+
+  const mergedIndex = mergeSessionMetaById([canonicalIndex, legacyIndex, olderIndex]);
+  const mergedDeleted = mergeDeletedMetaById([canonicalDeleted, legacyDeleted, olderDeleted]);
+  await putSessionIndex(env, mergedIndex, userId);
+  await putDeletedSessionIndex(env, mergedDeleted, userId);
+  await dropboxDeleteIfExists(env, legacySessionDbxIndexPath(userId));
+  await dropboxDeleteIfExists(env, olderLegacySessionDbxIndexPath(userId));
+  await dropboxDeleteIfExists(env, legacyDeletedSessionDbxIndexPath(userId));
+  await dropboxDeleteIfExists(env, olderLegacyDeletedSessionDbxIndexPath(userId));
+}
+
 async function sha256Hex(input: string): Promise<string> {
   const data = new TextEncoder().encode(input);
   const digest = await crypto.subtle.digest("SHA-256", data);
@@ -2066,6 +2142,7 @@ export async function handleApiRoute(
 
   if (url.pathname === "/sessions") {
     if (request.method === "GET") {
+      await migrateLegacySessionFilesToCanonical(env, userId);
       const sessions = await getSessionIndex(env, userId);
       return Response.json({ sessions }, { headers: noStoreHeaders });
     }
