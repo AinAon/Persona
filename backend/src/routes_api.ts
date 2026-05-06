@@ -230,9 +230,7 @@ function deletedSessionR2Key(id: string, userId = "user_default"): string {
 }
 
 function sessionUserFolder(userId = "user_default"): string {
-  const u = normalizeUserId(userId).replace(/[^a-z0-9._-]+/gi, "_");
-  if (u === "user_default") return "/session";
-  return `/users/${u}/session`;
+  return "/session";
 }
 
 function legacySessionUserFolder(userId = "user_default"): string {
@@ -470,12 +468,14 @@ async function getSessionIndex(env: Env, userId = "user_default"): Promise<Sessi
   if (Array.isArray(fromDropbox)) return fromDropbox;
   const fromLegacyDropbox = await dropboxReadJson<SessionMeta[]>(env, legacySessionDbxIndexPath(userId));
   if (Array.isArray(fromLegacyDropbox)) {
-    await dropboxWriteJson(env, sessionDbxIndexPath(userId), fromLegacyDropbox).catch(() => false);
+    const moved = await dropboxWriteJson(env, sessionDbxIndexPath(userId), fromLegacyDropbox).catch(() => false);
+    if (moved) await dropboxDeleteIfExists(env, legacySessionDbxIndexPath(userId));
     return fromLegacyDropbox;
   }
   const fromOlderLegacyDropbox = await dropboxReadJson<SessionMeta[]>(env, olderLegacySessionDbxIndexPath(userId));
   if (Array.isArray(fromOlderLegacyDropbox)) {
-    await dropboxWriteJson(env, sessionDbxIndexPath(userId), fromOlderLegacyDropbox).catch(() => false);
+    const moved = await dropboxWriteJson(env, sessionDbxIndexPath(userId), fromOlderLegacyDropbox).catch(() => false);
+    if (moved) await dropboxDeleteIfExists(env, olderLegacySessionDbxIndexPath(userId));
     return fromOlderLegacyDropbox;
   }
   const fromR2 = await r2Json<SessionMeta[] | null>(env, scopedR2Key(userId, SESSION_INDEX_R2_KEY), null);
@@ -487,6 +487,10 @@ async function getSessionIndex(env: Env, userId = "user_default"): Promise<Sessi
 async function putSessionIndex(env: Env, sessions: SessionMeta[], userId = "user_default"): Promise<void> {
   const ok = await dropboxWriteJson(env, sessionDbxIndexPath(userId), sessions);
   await cleanupObsoleteDefaultSessionFolders(env, userId);
+  if (ok) {
+    await dropboxDeleteIfExists(env, legacySessionDbxIndexPath(userId));
+    await dropboxDeleteIfExists(env, olderLegacySessionDbxIndexPath(userId));
+  }
   if (!ok) {
     await r2PutJson(env, scopedR2Key(userId, SESSION_INDEX_R2_KEY), sessions);
   }
@@ -513,12 +517,14 @@ async function getDeletedSessionIndex(env: Env, userId = "user_default"): Promis
   if (Array.isArray(fromDropbox)) return fromDropbox;
   const fromLegacyDropbox = await dropboxReadJson<DeletedSessionMeta[]>(env, legacyDeletedSessionDbxIndexPath(userId));
   if (Array.isArray(fromLegacyDropbox)) {
-    await dropboxWriteJson(env, deletedSessionDbxIndexPath(userId), fromLegacyDropbox).catch(() => false);
+    const moved = await dropboxWriteJson(env, deletedSessionDbxIndexPath(userId), fromLegacyDropbox).catch(() => false);
+    if (moved) await dropboxDeleteIfExists(env, legacyDeletedSessionDbxIndexPath(userId));
     return fromLegacyDropbox;
   }
   const fromOlderLegacyDropbox = await dropboxReadJson<DeletedSessionMeta[]>(env, olderLegacyDeletedSessionDbxIndexPath(userId));
   if (Array.isArray(fromOlderLegacyDropbox)) {
-    await dropboxWriteJson(env, deletedSessionDbxIndexPath(userId), fromOlderLegacyDropbox).catch(() => false);
+    const moved = await dropboxWriteJson(env, deletedSessionDbxIndexPath(userId), fromOlderLegacyDropbox).catch(() => false);
+    if (moved) await dropboxDeleteIfExists(env, olderLegacyDeletedSessionDbxIndexPath(userId));
     return fromOlderLegacyDropbox;
   }
   const fromR2 = await r2Json<DeletedSessionMeta[] | null>(env, scopedR2Key(userId, DELETED_SESSION_INDEX_R2_KEY), null);
@@ -530,6 +536,10 @@ async function getDeletedSessionIndex(env: Env, userId = "user_default"): Promis
 async function putDeletedSessionIndex(env: Env, sessions: DeletedSessionMeta[], userId = "user_default"): Promise<void> {
   const ok = await dropboxWriteJson(env, deletedSessionDbxIndexPath(userId), sessions);
   await cleanupObsoleteDefaultSessionFolders(env, userId);
+  if (ok) {
+    await dropboxDeleteIfExists(env, legacyDeletedSessionDbxIndexPath(userId));
+    await dropboxDeleteIfExists(env, olderLegacyDeletedSessionDbxIndexPath(userId));
+  }
   if (!ok) {
     await r2PutJson(env, scopedR2Key(userId, DELETED_SESSION_INDEX_R2_KEY), sessions);
   }
@@ -540,12 +550,14 @@ async function getSessionPayloadText(env: Env, id: string, userId = "user_defaul
   if (fromDropbox && typeof fromDropbox === "object") return prettyJson(fromDropbox);
   const fromLegacyDropbox = await dropboxReadJson<unknown>(env, legacySessionDbxDataPath(id, userId));
   if (fromLegacyDropbox && typeof fromLegacyDropbox === "object") {
-    await dropboxWriteJson(env, sessionDbxDataPath(id, userId), fromLegacyDropbox).catch(() => false);
+    const moved = await dropboxWriteJson(env, sessionDbxDataPath(id, userId), fromLegacyDropbox).catch(() => false);
+    if (moved) await dropboxDeleteIfExists(env, legacySessionDbxDataPath(id, userId));
     return prettyJson(fromLegacyDropbox);
   }
   const fromOlderLegacyDropbox = await dropboxReadJson<unknown>(env, olderLegacySessionDbxDataPath(id, userId));
   if (fromOlderLegacyDropbox && typeof fromOlderLegacyDropbox === "object") {
-    await dropboxWriteJson(env, sessionDbxDataPath(id, userId), fromOlderLegacyDropbox).catch(() => false);
+    const moved = await dropboxWriteJson(env, sessionDbxDataPath(id, userId), fromOlderLegacyDropbox).catch(() => false);
+    if (moved) await dropboxDeleteIfExists(env, olderLegacySessionDbxDataPath(id, userId));
     return prettyJson(fromOlderLegacyDropbox);
   }
   const fromR2 = await r2Text(env, sessionR2Key(id, userId));
@@ -558,12 +570,14 @@ async function getDeletedSessionPayloadText(env: Env, id: string, userId = "user
   if (fromDropbox && typeof fromDropbox === "object") return prettyJson(fromDropbox);
   const fromLegacyDropbox = await dropboxReadJson<unknown>(env, legacyDeletedSessionDbxDataPath(id, userId));
   if (fromLegacyDropbox && typeof fromLegacyDropbox === "object") {
-    await dropboxWriteJson(env, deletedSessionDbxDataPath(id, userId), fromLegacyDropbox).catch(() => false);
+    const moved = await dropboxWriteJson(env, deletedSessionDbxDataPath(id, userId), fromLegacyDropbox).catch(() => false);
+    if (moved) await dropboxDeleteIfExists(env, legacyDeletedSessionDbxDataPath(id, userId));
     return prettyJson(fromLegacyDropbox);
   }
   const fromOlderLegacyDropbox = await dropboxReadJson<unknown>(env, olderLegacyDeletedSessionDbxDataPath(id, userId));
   if (fromOlderLegacyDropbox && typeof fromOlderLegacyDropbox === "object") {
-    await dropboxWriteJson(env, deletedSessionDbxDataPath(id, userId), fromOlderLegacyDropbox).catch(() => false);
+    const moved = await dropboxWriteJson(env, deletedSessionDbxDataPath(id, userId), fromOlderLegacyDropbox).catch(() => false);
+    if (moved) await dropboxDeleteIfExists(env, olderLegacyDeletedSessionDbxDataPath(id, userId));
     return prettyJson(fromOlderLegacyDropbox);
   }
   const fromR2 = await r2Text(env, deletedSessionR2Key(id, userId));
