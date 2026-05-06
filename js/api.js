@@ -1160,6 +1160,10 @@ async function loadIndex() {
       if (prev && prev._loaded === true && Array.isArray(prev.history)) {
         return { ...item, history: prev.history, _loaded: true };
       }
+      const inlineHistory = normalizeSessionHistoryShape(item?.history);
+      if (inlineHistory.length > 0) {
+        return { ...item, history: dedupeHistoryMessages(inlineHistory), _loaded: true };
+      }
       return { ...item, history: [], _loaded: false };
     });
     setLocalSessionIndex(index);
