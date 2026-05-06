@@ -101,6 +101,15 @@ After advisor guidance, return implementation to the primary executor.
 - After verification, report only high-probability causes with brief evidence and confidence.
 - If evidence is weak, explicitly label it as tentative and request one targeted follow-up check.
 
+## Structural Fix Priority Rule (Mandatory)
+- Do not stack quick patches to only mask symptoms.
+- If the same or similar issue repeats, stop and propose a structural fix first (data flow, ownership boundary, storage path/schema, rendering pipeline, or state contract).
+- Before adding another patch, explicitly state:
+  - validated root cause,
+  - why the current structure allowed recurrence,
+  - minimal structural change options and recommended one.
+- Use temporary patching only when service restoration is urgent, and include rollback/cleanup plan for follow-up structural change.
+
 ## Cache Change Safety Rule
 - Do not introduce force cache-busting/no-store logic as a default fix unless there is evidence that stale cache is the root cause.
 - In image-loading paths, treat cache behavior as a stability-sensitive area; prefer preserving existing cache contract first.
