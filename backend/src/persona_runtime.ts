@@ -147,9 +147,25 @@ async function recordVaultMutation(
   let indexOk = true;
   if (action !== "read_file") {
     const index = await loadVaultIndex(token, cfg);
-    const rebuilt = await rebuildIndexFromEvidenceFiles(token, cfg, index);
-    rebuilt.updated_at = now;
-    indexOk = await dropboxWriteText(token, buildPersonaVaultPath(cfg.pid, "_index.json"), `${JSON.stringify(rebuilt, null, 2)}\n`);
+    const key = path.toLowerCase();
+    const active = new Map<string, { path: string; kind: string; reason: string; updated_at?: string }>();
+    const inactive = new Map<string, { path: string; bucket: string; reason: string; updated_at?: string }>();
+    for (const item of index.active_files || []) if (item?.path) active.set(item.path.toLowerCase(), item);
+    for (const item of index.inactive_candidates || []) if (item?.path) inactive.set(item.path.toLowerCase(), item);
+    active.delete(key);
+    inactive.delete(key);
+    if (action === "delete_path") {
+      inactive.set(key, { path, bucket: "deleted_by_vault_action", reason: evidenceId, updated_at: now });
+    } else {
+      active.set(key, { path, kind: action === "create_folder" ? "folder" : "file", reason: evidenceId, updated_at: now });
+    }
+    const updatedIndex: VaultIndexFile = {
+      ...index,
+      updated_at: now,
+      active_files: [...active.values()].sort((a, b) => a.path.localeCompare(b.path)),
+      inactive_candidates: [...inactive.values()].sort((a, b) => a.path.localeCompare(b.path)),
+    };
+    indexOk = await dropboxWriteText(token, buildPersonaVaultPath(cfg.pid, "_index.json"), `${JSON.stringify(updatedIndex, null, 2)}\n`);
   }
   const evidenceLogOk = await dropboxWriteText(token, evidencePath, `${previousEvidence || ""}${previousEvidence && !previousEvidence.endsWith("\n") ? "\n" : ""}${evidenceJson}\n`);
   return { ok: indexOk && evidenceLogOk, evidenceId };
@@ -290,16 +306,21 @@ function inferUpdatePath(raw: string): string | null {
 function inferFilePath(raw: string, cfg: PersonaRuntimeConfig): string | null {
   const explicit =
     raw.match(/(?:파일생성|파일 만들어|create file)\s+([^\n:]+)(?:::{1,3}([\s\S]*))?/i)?.[1]
-    || raw.match(/["'`]([a-zA-Z0-9_./-]+\.(?:csv|md|txt|json))["'`]/i)?.[1]
-    || raw.match(/([a-zA-Z0-9_./-]+\.(?:csv|md|txt|json))/i)?.[1];
+    || raw.match(/["'`]([a-zA-Z0-9_./-]+\.(?:csv|md|txt|json|jsonl))["'`]/i)?.[1]
+    || raw.match(/([a-zA-Z0-9_./-]+\.(?:csv|md|txt|json|jsonl))/i)?.[1];
   if (explicit) return normalizeVaultRelPath(explicit);
 
-  const wantsFile = /(?:파일|file|csv|md|txt|json).*(?:생성|만들|작성|저장|create|write)|(?:create|write).*(?:file)|\.(?:csv|md|txt|json)\b/i.test(raw);
+  const rileyDefaultFileIntent = cfg.pid === "p_riley"
+    && /\b(?:csv|md|txt|json|jsonl)\b/i.test(raw)
+    && !/(읽|열|확인|보여|수정|변경|삭제|제거|지워|read|open|show|view|check|update|edit|delete|remove)/i.test(raw);
+  const wantsFile = rileyDefaultFileIntent
+    || /(?:파일|file|csv|md|txt|json|jsonl).*(?:생성|만들|작성|저장|create|write)|(?:create|write).*(?:file)|\.(?:csv|md|txt|json|jsonl)\b/i.test(raw);
   if (!wantsFile) return null;
 
-  const ext = /\bcsv\b|csv/i.test(raw) ? "csv"
+  const ext = /\bjsonl\b/i.test(raw) ? "jsonl"
+    : (/\bcsv\b|csv/i.test(raw) ? "csv"
     : (/\bmd\b|markdown/i.test(raw) ? "md"
-      : (/\bjson\b/i.test(raw) ? "json" : "txt"));
+      : (/\bjson\b/i.test(raw) ? "json" : "txt")));
   const stamp = ymdStampUnderscore();
 
   const hints = cfg.namingHints || {};

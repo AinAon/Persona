@@ -235,6 +235,7 @@ function defaultDirective(persona: VaultV2Persona): string {
     "- Use the vault index before claiming file knowledge.",
     "- Do not claim file creation, edits, deletion, or reads without operation evidence.",
     "- Keep finance records structured and source-aware.",
+    "- When the user asks Riley to create/save a finance file without a path, choose a safe default path yourself: master_wealth_ledger.csv for ledger CSV, logs/wealth_events.jsonl for event logs, or note_YYYY_MM_DD.txt for notes.",
   ].join("\n");
 }
 
@@ -375,6 +376,9 @@ export async function buildPersonaVaultV2SystemPrompt(env: Env, persona: VaultV2
     `inactive_candidate_count=${inactiveCount}`,
     "Vault rule: only treat indexed active files as active working context.",
     "Vault rule: do not claim a file operation succeeded unless a tool/action result or evidence id exists.",
+    ...(persona === "riley"
+      ? ["Riley agent rule: if a create/save finance-file request has no filename, choose a safe default path yourself instead of asking for one."]
+      : []),
   ].join("\n");
 }
 

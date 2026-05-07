@@ -45,6 +45,11 @@ export interface Env {
   QWEN_KEY?: string;
   DASHSCOPE_BASE_URL?: string;
   DASHSCOPE_WS_URL?: string;
+  RILEY_SHEETS_SPREADSHEET_ID?: string;
+  RILEY_SHEETS_TAB?: string;
+  GOOGLE_SERVICE_ACCOUNT_EMAIL?: string;
+  GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?: string;
+  GOOGLE_SERVICE_ACCOUNT_JSON?: string;
 }
 
 const CORS: CorsHeaders = {

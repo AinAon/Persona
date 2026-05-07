@@ -13,12 +13,13 @@ import {
   upsertMemory,
 } from "./memory";
 import { getAveryWorklogSnapshot, reconcileAveryWorklog, resetAveryWorklogRuntime } from "./avery_worklog";
-import { getRileyWealthSnapshot, reconcileRileyWealth, resetRileyWealthRuntime } from "./riley_wealth";
+import { getRileyWealthSnapshot, mergeRileyWealthEventsFromSheet, reconcileRileyWealth, resetRileyWealthRuntime } from "./riley_wealth";
 import { getPersonaPolicy } from "./persona_policy";
 import { getPromotionCandidates } from "./persona_promotion";
 import { buildPersonaVaultV2MigrationPlan, getPersonaVaultV2Inventory, getPersonaVaultV2Status, seedPersonaVaultV2, type VaultV2Persona } from "./persona_vault_v2";
 import { buildPersonaVaultPath, dropboxDeletePath, dropboxListFolder, dropboxMovePath, dropboxPathExists, dropboxReadBytes, dropboxReadText, dropboxWriteBytes, dropboxWriteBytesWithDetail, dropboxWriteText, dropboxWriteTextWithDetail, getPersonaDropboxAccessToken } from "./dropbox_vault";
 import { loadPersonaUserProfile, normalizeUserId, savePersonaUserProfile } from "./persona_memory_profile";
+import { getRileySheetsStatus, loadRileySheetsContext, syncRileyWealthEventsToSheet } from "./google_sheets";
 
 type SessionMeta = {
   id: string;
@@ -1590,6 +1591,22 @@ export async function handleApiRoute(
       state: snapshot.state,
       events: snapshot.events,
     }, { headers: { ...cors, "Cache-Control": "no-store" } });
+  }
+
+  if (url.pathname === "/riley/sheets/status" && request.method === "GET") {
+    const status = await getRileySheetsStatus(env);
+    return Response.json(status, { headers: noStoreHeaders });
+  }
+
+  if (url.pathname === "/riley/sheets/context" && request.method === "GET") {
+    const context = await loadRileySheetsContext(env);
+    return Response.json(context, { status: context.ok ? 200 : 500, headers: noStoreHeaders });
+  }
+
+  if (url.pathname === "/riley/sheets/sync" && request.method === "POST") {
+    const snapshot = await getRileyWealthSnapshot(env, 5000);
+    const result = await syncRileyWealthEventsToSheet(env, snapshot.events, (events) => mergeRileyWealthEventsFromSheet(env, events));
+    return Response.json(result, { status: result.ok ? 200 : 500, headers: noStoreHeaders });
   }
 
   if (url.pathname === "/debug/dropbox/riley" && request.method === "GET") {

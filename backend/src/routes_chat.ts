@@ -14,13 +14,7 @@ import {
   shouldPersistAveryWorklogText,
 } from "./avery_worklog";
 import {
-  appendRileyWealthEvent,
-  buildRileySystemPrompt,
-  ensureRileyStateSnapshot,
   extractLatestUserText,
-  getRileyWealthSnapshot,
-  isWealthIntentText,
-  isWealthMutationText,
   isRileyParticipant,
   loadRileyDirective,
   recordRileyVaultMutation,
@@ -38,6 +32,7 @@ import {
   saveCandidateFromReply,
 } from "./persona_promotion";
 import { buildPersonaVaultV2SystemPrompt } from "./persona_vault_v2";
+import { buildRileySheetsContextPrompt, loadRileySheetsContext, writeRileySheetFromText } from "./google_sheets";
 import {
   inferAttitudeBFromUserText,
   loadPersonaUserProfile,
@@ -143,18 +138,24 @@ function detectVaultCreateIntent(text: string): boolean {
   return /(?:파일|file|폴더|folder|디렉터리|directory|csv|md|txt|json|jsonl).*(?:생성|만들|작성|저장|삭제|제거|지워|읽|열|확인|보여|수정|변경|업데이트|create|write|delete|remove|read|open|show|view|check|update|edit|overwrite)|(?:create|write|delete|remove|read|open|show|view|check|update|edit|overwrite).*(?:file|folder|directory)/i.test(t);
 }
 
+function isDefaultableRileyVaultIntent(text: string): boolean {
+  const t = String(text || "");
+  return /(?:파일|file|폴더|folder|디렉터리|directory|csv|md|txt|json|jsonl|문서).*(?:생성|만들|작성|저장|기록|create|write|save)|(?:create|write|save).*(?:file|folder|directory|ledger|csv|md|txt|json|jsonl)|(?:자산|부채|wealth|ledger).*(?:기록|저장|작성)/i.test(t);
+}
+
 function hasExplicitVaultTarget(text: string): boolean {
   const t = String(text || "");
-  if (/([a-zA-Z0-9_./-]+\.(?:csv|md|txt|json))\b/i.test(t)) return true;
+  if (/([a-zA-Z0-9_./-]+\.(?:csv|md|txt|json|jsonl))\b/i.test(t)) return true;
   if (/(?:파일생성|파일 만들어|create file)\s+([^\n:]{1,140})/i.test(t)) return true;
   if (/(?:폴더생성|폴더 만들어|create folder)\s+([^\n]{1,140})/i.test(t)) return true;
   if (/["'`]([a-zA-Z0-9_./-]+)["'`]\s*(?:파일|file|폴더|folder)/i.test(t)) return true;
   return false;
 }
 
-function routeVaultRequestMode(text: string): "command" | "dialog" | "none" {
+function routeVaultRequestMode(text: string, persona: "riley" | "avery" | null): "command" | "dialog" | "none" {
   if (!detectVaultCreateIntent(text)) return "none";
   if (hasExplicitVaultTarget(text)) return "command";
+  if (persona === "riley" && isDefaultableRileyVaultIntent(text)) return "command";
   return "dialog";
 }
 
@@ -264,13 +265,13 @@ function guardPersonaReply(reply: string, hasExecutionEvidence: boolean, inPerso
   }
 
   // If no evidence exists, block fake completion claims.
-  if (!hasExecutionEvidence && /(생성했|생성했습니다|만들었|적용했|저장했|완료했|읽었|확인했|수정했|변경했|고쳤)/i.test(out)) {
+  if (!hasExecutionEvidence && /(생성했|생성했습니다|만들었|적용했|저장했|완료했|읽었|확인했|수정했|변경했|고쳤|created|made|saved|completed|done|read|updated|edited|deleted|removed)/i.test(out)) {
     return "실행 전에 먼저 확인이 필요합니다. 파일명/경로를 지정해주시면 바로 처리하고 결과를 정확히 보고드릴게요.";
   }
   return out;
 }
 
-async function executeVaultProposal(env: Env, proposal: VaultProposal): Promise<{ ok: boolean; message: string }> {
+async function executeVaultProposal(env: Env, proposal: VaultProposal): Promise<{ ok: boolean; message: string; evidenceIds?: string[] }> {
   const token = await getPersonaDropboxAccessToken(env, proposal.persona);
   if (!token) return { ok: false, message: `${proposal.persona} dropbox token missing` };
   const pid = proposal.persona === "riley" ? "p_riley" : "p_avery";
@@ -316,7 +317,7 @@ async function executeVaultProposal(env: Env, proposal: VaultProposal): Promise<
     }
   }
   if (failed.length) return { ok: false, message: `failed: ${failed.slice(0, 3).join(", ")}` };
-  return { ok: true, message: `applied proposal: ${okCount} action(s); evidence_id: ${evidenceIds.join(",")}` };
+  return { ok: true, message: `applied proposal: ${okCount} action(s); evidence_id: ${evidenceIds.join(",")}`, evidenceIds };
 }
 
 function stripVaultProposalBlock(reply: string): string {
@@ -444,14 +445,31 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
   const inRileyChat = isRileyParticipant(participant_pids || []);
   const inAveryChat = isAveryParticipant(participant_pids || []);
   const latestUserText = extractLatestUserText(messages);
-  const shouldWriteRileyEvent = inRileyChat && (isWealthMutationText(latestUserText) || isWealthIntentText(latestUserText));
   const shouldWriteAveryEvent = inAveryChat && shouldPersistAveryWorklogText(latestUserText);
   const policyTargetPid = resolvePolicyTargetPid(participant_pids || []);
   const profilePersonaPid = resolvePrimaryPersonaPid(participant_pids || []);
-  const vaultRouteMode = !isImageReq && (inRileyChat || inAveryChat) ? routeVaultRequestMode(latestUserText) : "none";
+  const proposalPersona: "riley" | "avery" | null = inRileyChat ? "riley" : (inAveryChat ? "avery" : null);
+  const vaultRouteMode = !isImageReq && proposalPersona ? routeVaultRequestMode(latestUserText, proposalPersona) : "none";
 
   try {
-    const proposalPersona: "riley" | "avery" | null = inRileyChat ? "riley" : (inAveryChat ? "avery" : null);
+    if (!isImageReq && inRileyChat) {
+      const sheetWrite = await writeRileySheetFromText(env, latestUserText);
+      if (sheetWrite) {
+        if (!sheetWrite.ok) {
+          const evidence = await writeVaultEvidence(env, "riley", "sheets_write", false, sheetWrite.error, latestUserText);
+          return Response.json({ result: "error", error: sheetWrite.error, evidence_id: evidence.id }, { status: 400, headers: cors });
+        }
+        const message = `wrote sheet row: ${sheetWrite.tab}; range=${sheetWrite.updatedRange || ""}`;
+        const evidence = await writeVaultEvidence(env, "riley", "sheets_write", true, message, latestUserText);
+        return Response.json({
+          result: "success",
+          reply: `시트에 작성했습니다: ${sheetWrite.tab}${sheetWrite.updatedRange ? ` (${sheetWrite.updatedRange})` : ""}`,
+          evidence_id: evidence.id,
+          sheet_write: { tab: sheetWrite.tab, updatedRange: sheetWrite.updatedRange },
+        }, { headers: cors });
+      }
+    }
+
     if (!isImageReq && proposalPersona && isApprovalText(latestUserText)) {
       const pending = await loadPendingVaultProposal(env, proposalPersona);
       if (pending) {
@@ -463,8 +481,11 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       }
     }
 
-    if (!isImageReq && inRileyChat && vaultRouteMode === "command") {
-      const vaultAction = await runRileyVaultActionFromText(env, latestUserText);
+    if (!isImageReq && inRileyChat) {
+      let vaultAction = await runRileyVaultActionFromText(env, latestUserText);
+      if (!vaultAction && /\bcsv\b/i.test(latestUserText)) {
+        vaultAction = await runRileyVaultActionFromText(env, `create csv file\n${latestUserText}`);
+      }
       if (vaultAction) {
         if (!vaultAction.ok) {
           if (/^path_missing:/i.test(String(vaultAction.error || ""))) {
@@ -502,7 +523,6 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       ? "User intent suggests creating a file/folder but target path/name is ambiguous. Do not execute now. Ask one concise follow-up question in persona voice to confirm filename/path or offer 2-3 concrete options."
       : "";
 
-    let rileyWriteResult: { ok: boolean; error?: string; eventId?: string } | null = null;
     let averyWriteResult: { ok: boolean; error?: string; eventId?: string } | null = null;
     let promotionApplyMessage = "";
     if (!isImageReq && policyTargetPid) {
@@ -514,20 +534,10 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       const applied = await applyPendingPolicyIfApproved(env, policyTargetPid, latestUserText);
       if (applied.applied && applied.message) policyApplyMessage = applied.message;
     }
-    if (shouldWriteRileyEvent) {
-      const wr = await appendRileyWealthEvent(env, latestUserText);
-      rileyWriteResult = wr.ok ? { ok: true, eventId: wr.eventId } : { ok: false, error: wr.error };
-    }
     if (shouldWriteAveryEvent) {
       const wr = await appendAveryWorklogEvent(env, latestUserText);
       averyWriteResult = wr.ok ? { ok: true, eventId: wr.eventId } : { ok: false, error: wr.error };
     }
-    const rileySnapshot = (!isImageReq && inRileyChat)
-      ? await (async () => {
-          await ensureRileyStateSnapshot(env);
-          return await getRileyWealthSnapshot(env, 10);
-        })()
-      : null;
     const averySnapshot = (!isImageReq && inAveryChat)
       ? await getAveryWorklogSnapshot(env, 20)
       : null;
@@ -549,6 +559,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     }
     const rileyVaultV2Prompt = (!isImageReq && inRileyChat) ? await buildPersonaVaultV2SystemPrompt(env, "riley") : "";
     const averyVaultV2Prompt = (!isImageReq && inAveryChat) ? await buildPersonaVaultV2SystemPrompt(env, "avery") : "";
+    const rileySheetsPrompt = (!isImageReq && inRileyChat) ? buildRileySheetsContextPrompt(await loadRileySheetsContext(env)) : "";
     const personaProfile = (!isImageReq && profilePersonaPid)
       ? await loadPersonaUserProfile(env, profilePersonaPid, userIdNorm)
       : null;
@@ -604,15 +615,14 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
           sections: profileSections,
           extraSystemBlocks: [
             RESPONSE_VARIANCE_PROMPT,
-            ...(rileySnapshot ? [buildRileySystemPrompt(rileySnapshot.state)] : []),
             ...(averySnapshot ? [buildAverySystemPrompt(averySnapshot.state)] : []),
             ...(rileyVaultV2Prompt ? [rileyVaultV2Prompt] : []),
             ...(averyVaultV2Prompt ? [averyVaultV2Prompt] : []),
+            ...(rileySheetsPrompt ? [rileySheetsPrompt] : []),
             ...(personaPolicyPrompt ? [personaPolicyPrompt] : []),
             ...(promotionPrompt ? [promotionPrompt] : []),
             ...(vaultRoutingPrompt ? [vaultRoutingPrompt] : []),
             ...(memPrompt ? [memPrompt] : []),
-            ...(rileyWriteResult ? [`Riley mutation status: already_applied=${rileyWriteResult.ok}; event_id=${rileyWriteResult.eventId || ""}; error=${rileyWriteResult.error || ""}. Do not output VAULT_PROPOSAL for this already-applied mutation.`] : []),
             ...(averyWriteResult ? [`Avery mutation status: already_applied=${averyWriteResult.ok}; event_id=${averyWriteResult.eventId || ""}; error=${averyWriteResult.error || ""}. Do not output VAULT_PROPOSAL for this already-applied mutation.`] : []),
             ...(policyApplyMessage ? [`Policy apply status: ${policyApplyMessage}`] : []),
             ...(promotionApplyMessage ? [`Promotion apply status: ${promotionApplyMessage}`] : []),
@@ -702,10 +712,6 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
                 onDelta: (delta) => send({ type: "delta", text: delta }),
               });
             }
-            if (shouldWriteRileyEvent) {
-              const wr = await appendRileyWealthEvent(env, latestUserText);
-              rileyWriteResult = wr.ok ? { ok: true, eventId: wr.eventId } : { ok: false, error: wr.error };
-            }
             if (shouldWriteAveryEvent) {
               await appendAveryWorklogEvent(env, latestUserText);
             }
@@ -775,11 +781,13 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       await saveCandidateFromReply(env, policyTargetPid, reply);
     }
     let proposalExecuted = false;
+    let proposalEvidenceId = "";
     if (proposalPersona) {
       const proposal = parseVaultProposalFromReply(reply);
       if (proposal && proposal.persona === proposalPersona) {
         const exec = await executeVaultProposal(env, proposal);
-        await writeVaultEvidence(env, proposalPersona, "proposal_apply", exec.ok, exec.message, latestUserText);
+        const evidence = await writeVaultEvidence(env, proposalPersona, "proposal_apply", exec.ok, exec.message, latestUserText);
+        proposalEvidenceId = exec.evidenceIds?.join(",") || evidence.id;
         const natural = await renderVaultResultMessage(exec.message, model, apiKeys, latestUserText);
         reply = stripVaultProposalBlock(reply).trim();
         if (natural) {
@@ -792,9 +800,9 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     reply = guardPersonaReply(reply, proposalExecuted, !!proposalPersona);
 
     if (imageUrlOut) {
-      return Response.json({ result: "success", reply, image_url: imageUrlOut, riley_write: rileyWriteResult, avery_write: averyWriteResult }, { headers: cors });
+      return Response.json({ result: "success", reply, image_url: imageUrlOut, evidence_id: proposalEvidenceId || undefined, avery_write: averyWriteResult }, { headers: cors });
     }
-    return Response.json({ result: "success", reply, riley_write: rileyWriteResult, avery_write: averyWriteResult }, { headers: cors });
+    return Response.json({ result: "success", reply, evidence_id: proposalEvidenceId || undefined, avery_write: averyWriteResult }, { headers: cors });
   } catch (e: any) {
     return Response.json({ result: "error", error: e?.message || "unknown error" }, { status: 500, headers: cors });
   }

@@ -13,5 +13,10 @@
       "binding": "R2",
       "bucket_name": "persona-images"
     }
-  ]
+  ],
+  "vars": {
+    "RILEY_SHEETS_SPREADSHEET_ID": "1_rVV5bQP-qCknw7tMlzNz1TOWVQDa6nTmhOj9GsOOqU",
+    "RILEY_SHEETS_TAB": "wealth_events",
+    "GOOGLE_SERVICE_ACCOUNT_EMAIL": "riley-141@gen-lang-client-0977633039.iam.gserviceaccount.com"
+  }
 }

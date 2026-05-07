@@ -28,6 +28,7 @@ const RILEY_RUNTIME_CONFIG: PersonaRuntimeConfig = {
     "3) Keep assets and liabilities clearly separated.",
     "4) Sort by latest update date first.",
     "5) Maintain weekly/monthly report-ready fields.",
+    "6) When the user asks to create/save a Riley finance file without a path, choose a safe default path yourself instead of asking: master_wealth_ledger.csv for ledger CSV, logs/wealth_events.jsonl for event logs, or note_YYYY_MM_DD.txt for notes.",
     "",
     "CSV schema:",
     "date,category,type,label,amount_krw,status,source,note",
@@ -52,7 +53,7 @@ type WealthEntry = {
   updated_at: string;
 };
 
-type RileyState = {
+export type RileyState = {
   version: string;
   as_of_date: string;
   currency: "KRW";
@@ -75,7 +76,7 @@ type RileyState = {
   };
 };
 
-type WealthEvent = {
+export type WealthEvent = {
   event_id: string;
   timestamp: string;
   mode: "wealth_action";
@@ -91,7 +92,7 @@ type WealthEvent = {
     currency: "KRW";
     amount: number | null;
     effective_date: string;
-    source: "chat_text";
+    source: "chat_text" | "google_sheet";
     text: string;
     note?: string;
   };
@@ -401,6 +402,20 @@ async function appendLogLine(env: Env, event: WealthEvent): Promise<void> {
   await dropboxWriteText(token, RILEY_VAULT_LOG_PATH, next);
 }
 
+async function replaceAllRileyEvents(env: Env, events: WealthEvent[]): Promise<void> {
+  const clean = events.filter(isValidWealthEvent);
+  const body = clean.map((event) => JSON.stringify(event)).join("\n");
+  const token = await getPersonaDropboxAccessToken(env, "riley");
+  if (token) await dropboxWriteText(token, RILEY_VAULT_LOG_PATH, body ? `${body}\n` : "");
+
+  let rebuilt = defaultState();
+  for (const event of clean) rebuilt = applyEventToState(rebuilt, event);
+  rebuilt.meta.last_event_id = clean.length ? clean[clean.length - 1].event_id : "";
+  rebuilt.meta.last_updated_at = clean.length ? clean[clean.length - 1].timestamp : nowIso();
+  rebuilt.meta.source_log = RILEY_LOG_KEY;
+  await dropboxPutJson(env, RILEY_STATE_KEY, rebuilt);
+}
+
 export async function loadRileyState(env: Env): Promise<RileyState> {
   return await dropboxJson<RileyState>(env, RILEY_STATE_KEY, defaultState());
 }
@@ -445,6 +460,25 @@ export async function getRileyWealthSnapshot(env: Env, tail = 30): Promise<{ sta
   const state = await loadRileyState(env);
   const allEvents = await loadAllRileyEvents(env);
   return { state, events: allEvents.slice(-Math.max(1, tail)) };
+}
+
+export async function mergeRileyWealthEventsFromSheet(env: Env, sheetEvents: WealthEvent[]): Promise<{ imported: number; updated: number; events: WealthEvent[] }> {
+  const current = await loadAllRileyEvents(env);
+  const merged = new Map<string, WealthEvent>();
+  for (const event of current) merged.set(event.event_id, event);
+
+  let imported = 0;
+  let updated = 0;
+  for (const event of sheetEvents) {
+    if (!isValidWealthEvent(event)) continue;
+    if (merged.has(event.event_id)) updated++;
+    else imported++;
+    merged.set(event.event_id, event);
+  }
+
+  const events = [...merged.values()].sort((a, b) => String(a.timestamp || "").localeCompare(String(b.timestamp || "")));
+  await replaceAllRileyEvents(env, events);
+  return { imported, updated, events };
 }
 
 export async function loadRileyDirective(env: Env): Promise<string> {
