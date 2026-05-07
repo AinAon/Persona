@@ -1659,6 +1659,24 @@ function renderSettingsPane() {
   if (typingEl) typingEl.value = getBubbleTypingSpeedPreset();
   setSettingsSegmentValue('settingsTypingSpeed', getBubbleTypingSpeedPreset(), 'settingsTypingSpeedSeg');
   // Public/private memory UI disabled by policy.
+  renderVaultV2Status(false);
+}
+
+async function renderVaultV2Status(force = false) {
+  const el = document.getElementById('vaultV2StatusBody');
+  if (!el) return;
+  if (force) el.textContent = '불러오는 중';
+  const personas = ['avery', 'riley'];
+  const rows = [];
+  for (const persona of personas) {
+    const data = await getVaultV2StatusApi(persona, 1);
+    if (!data?.ok) {
+      rows.push(`<div><b>${persona}</b>: unavailable</div>`);
+      continue;
+    }
+    rows.push(`<div><b>${persona}</b>: active ${Number(data.activeFiles?.length || 0)} · inactive ${Number(data.inactiveCount || 0)}</div>`);
+  }
+  el.innerHTML = rows.join('');
 }
 
 function previewFontSize(val) {
@@ -2317,7 +2335,7 @@ function renderEditBody(p, hdImage = null) {
       if (!isCustom) custom.value = '';
     };
   }
-  // Persona memory panel is hidden; memory is managed by vault markdown files.
+  // Persona memory panel is hidden; persona context is managed by Vault v2.
 }
 
 function selectEditHue(h, el) {

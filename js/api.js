@@ -1693,6 +1693,18 @@ async function getMemoryMetaApi(sessionId = '') {
   }
 }
 
+async function getVaultV2StatusApi(persona = 'avery', tail = 5) {
+  const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+  if (!wUrl) return { ok: false, error: 'WORKER_URL missing' };
+  const p = String(persona || 'avery').toLowerCase() === 'riley' ? 'riley' : 'avery';
+  try {
+    const res = await fetch(`${wUrl}/vault/v2/status?persona=${encodeURIComponent(p)}&tail=${encodeURIComponent(String(tail || 5))}`, { cache: 'no-store' });
+    return await res.json();
+  } catch (e) {
+    return { ok: false, error: e?.message || 'vault_status_failed' };
+  }
+}
+
 async function deleteSessionRemote(id) {
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl || !id) return { ok: false };

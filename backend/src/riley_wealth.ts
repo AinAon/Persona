@@ -2,27 +2,23 @@ import type { Env } from "./index";
 import { buildPersonaVaultPath, dropboxReadText, dropboxWriteText, getPersonaDropboxAccessToken } from "./dropbox_vault";
 import {
   loadPersonaDirective,
-  loadPersonaMemoryMarkdown,
+  recordPersonaVaultMutation,
   runPersonaVaultActionFromText,
   type PersonaRuntimeConfig,
   type PersonaVaultActionResult,
 } from "./persona_runtime";
 
-const RILEY_LOG_KEY = "_memory/p_riley_memory.log.jsonl";
-const RILEY_STATE_KEY = "_memory/p_riley_state.json";
+const RILEY_LOG_KEY = "logs/wealth_events.jsonl";
+const RILEY_STATE_KEY = "_state.json";
 const RILEY_PID = "p_riley";
-const RILEY_VAULT_LOG_PATH = buildPersonaVaultPath(RILEY_PID, "_memory/p_riley_memory.log.jsonl");
-const RILEY_VAULT_STATE_PATH = buildPersonaVaultPath(RILEY_PID, "_memory/p_riley_state.json");
-const RILEY_VAULT_LEGACY_LOG_PATH = buildPersonaVaultPath(RILEY_PID, "_memory/riley_memory.log.jsonl");
-const RILEY_VAULT_LEGACY_STATE_PATH = buildPersonaVaultPath(RILEY_PID, "_memory/riley_state.json");
+const RILEY_VAULT_LOG_PATH = buildPersonaVaultPath(RILEY_PID, RILEY_LOG_KEY);
+const RILEY_VAULT_STATE_PATH = buildPersonaVaultPath(RILEY_PID, RILEY_STATE_KEY);
 const RILEY_IDS = new Set(["p_riley", "riley"]);
 const RILEY_RUNTIME_CONFIG: PersonaRuntimeConfig = {
   pid: RILEY_PID,
   tokenPersona: "riley",
   role: "wealth_manager",
   directiveFile: "p_riley_directive.md",
-  memoryMarkdownFile: "p_riley_memory.md",
-  legacyMemoryMarkdownFiles: ["riley_memory.md"],
   defaultDirectiveLines: [
     "# Riley Directive (Priority 1)",
     "",
@@ -132,13 +128,9 @@ async function dropboxText(env: Env, key: string): Promise<string | null> {
   const token = await getPersonaDropboxAccessToken(env, "riley");
   if (!token) return null;
   if (key === RILEY_LOG_KEY) {
-    const next = await dropboxReadText(token, RILEY_VAULT_LOG_PATH);
-    if (next != null && String(next).trim()) return next;
-    return await dropboxReadText(token, RILEY_VAULT_LEGACY_LOG_PATH);
+    return await dropboxReadText(token, RILEY_VAULT_LOG_PATH);
   }
-  const next = await dropboxReadText(token, RILEY_VAULT_STATE_PATH);
-  if (next != null && String(next).trim()) return next;
-  return await dropboxReadText(token, RILEY_VAULT_LEGACY_STATE_PATH);
+  return await dropboxReadText(token, RILEY_VAULT_STATE_PATH);
 }
 
 async function dropboxJson<T>(env: Env, key: string, fallback: T): Promise<T> {
@@ -172,7 +164,7 @@ function defaultState(): RileyState {
     meta: {
       last_event_id: "",
       last_updated_at: iso,
-      source_log: "p_riley_memory.log.jsonl",
+      source_log: RILEY_LOG_KEY,
     },
   };
 }
@@ -459,12 +451,17 @@ export async function loadRileyDirective(env: Env): Promise<string> {
   return await loadPersonaDirective(env, RILEY_RUNTIME_CONFIG);
 }
 
-export async function loadRileyVaultMemoryMarkdown(env: Env): Promise<string> {
-  return await loadPersonaMemoryMarkdown(env, RILEY_RUNTIME_CONFIG);
-}
-
 export async function runRileyVaultActionFromText(env: Env, text: string): Promise<PersonaVaultActionResult | null> {
   return await runPersonaVaultActionFromText(env, RILEY_RUNTIME_CONFIG, text);
+}
+
+export async function recordRileyVaultMutation(
+  env: Env,
+  action: "create_file" | "create_folder" | "delete_path" | "read_file" | "update_file",
+  path: string,
+  userText: string,
+): Promise<{ ok: boolean; evidenceId: string; error?: string }> {
+  return await recordPersonaVaultMutation(env, RILEY_RUNTIME_CONFIG, action, path, userText);
 }
 
 async function loadAllRileyEvents(env: Env): Promise<WealthEvent[]> {
@@ -499,7 +496,7 @@ export async function reconcileRileyWealth(env: Env): Promise<{
   for (const e of events) rebuilt = applyEventToState(rebuilt, e);
   rebuilt.meta.last_event_id = events.length ? events[events.length - 1].event_id : "";
   rebuilt.meta.last_updated_at = events.length ? events[events.length - 1].timestamp : nowIso();
-  rebuilt.meta.source_log = "p_riley_memory.log.jsonl";
+  rebuilt.meta.source_log = RILEY_LOG_KEY;
   const changed = JSON.stringify(oldState.totals) !== JSON.stringify(rebuilt.totals)
     || JSON.stringify(oldState.fixed_cashflow) !== JSON.stringify(rebuilt.fixed_cashflow)
     || oldState.assets.length !== rebuilt.assets.length
@@ -517,4 +514,12 @@ export async function reconcileRileyWealth(env: Env): Promise<{
       newTotals: rebuilt.totals,
     },
   };
+}
+
+export async function resetRileyWealthRuntime(env: Env): Promise<{ ok: boolean; statePath: string; logPath: string }> {
+  const token = await getPersonaDropboxAccessToken(env, "riley");
+  if (!token) return { ok: false, statePath: RILEY_VAULT_STATE_PATH, logPath: RILEY_VAULT_LOG_PATH };
+  const stateOk = await dropboxWriteText(token, RILEY_VAULT_STATE_PATH, `${JSON.stringify(defaultState(), null, 2)}\n`);
+  const logOk = await dropboxWriteText(token, RILEY_VAULT_LOG_PATH, "");
+  return { ok: stateOk && logOk, statePath: RILEY_VAULT_STATE_PATH, logPath: RILEY_VAULT_LOG_PATH };
 }

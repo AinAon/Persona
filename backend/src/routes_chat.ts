@@ -9,7 +9,7 @@ import {
   getAveryWorklogSnapshot,
   isAveryParticipant,
   loadAveryDirective,
-  loadAveryVaultMemoryMarkdown,
+  recordAveryVaultMutation,
   runAveryVaultActionFromText,
   shouldPersistAveryWorklogText,
 } from "./avery_worklog";
@@ -23,7 +23,7 @@ import {
   isWealthMutationText,
   isRileyParticipant,
   loadRileyDirective,
-  loadRileyVaultMemoryMarkdown,
+  recordRileyVaultMutation,
   runRileyVaultActionFromText,
 } from "./riley_wealth";
 import {
@@ -37,6 +37,7 @@ import {
   buildPromotionSystemPrompt,
   saveCandidateFromReply,
 } from "./persona_promotion";
+import { buildPersonaVaultV2SystemPrompt } from "./persona_vault_v2";
 import {
   inferAttitudeBFromUserText,
   loadPersonaUserProfile,
@@ -139,7 +140,7 @@ function isApprovalText(text: string): boolean {
 
 function detectVaultCreateIntent(text: string): boolean {
   const t = String(text || "");
-  return /(?:파일|file|폴더|folder|디렉터리|directory|csv|md|txt|json).*(?:생성|만들|작성|저장|create|write)|(?:create|write).*(?:file|folder|directory)/i.test(t);
+  return /(?:파일|file|폴더|folder|디렉터리|directory|csv|md|txt|json|jsonl).*(?:생성|만들|작성|저장|삭제|제거|지워|읽|열|확인|보여|수정|변경|업데이트|create|write|delete|remove|read|open|show|view|check|update|edit|overwrite)|(?:create|write|delete|remove|read|open|show|view|check|update|edit|overwrite).*(?:file|folder|directory)/i.test(t);
 }
 
 function hasExplicitVaultTarget(text: string): boolean {
@@ -213,6 +214,10 @@ function parseVaultOutputs(message: string): Array<{ type: "file" | "folder" | "
   const out: Array<{ type: "file" | "folder" | "count"; value: string }> = [];
   const file = msg.match(/created file:\s*(\/\S+)/i);
   if (file) out.push({ type: "file", value: file[1] });
+  const read = msg.match(/read file:\s*(\/\S+)/i);
+  if (read) out.push({ type: "file", value: read[1] });
+  const updated = msg.match(/updated file:\s*(\/\S+)/i);
+  if (updated) out.push({ type: "file", value: updated[1] });
   const folder = msg.match(/created folder:\s*(\/\S+)/i);
   if (folder) out.push({ type: "folder", value: folder[1] });
   const count = msg.match(/applied proposal:\s*(\d+)\s*action/i);
@@ -259,7 +264,7 @@ function guardPersonaReply(reply: string, hasExecutionEvidence: boolean, inPerso
   }
 
   // If no evidence exists, block fake completion claims.
-  if (!hasExecutionEvidence && /(생성했|생성했습니다|만들었|적용했|저장했|완료했)/i.test(out)) {
+  if (!hasExecutionEvidence && /(생성했|생성했습니다|만들었|적용했|저장했|완료했|읽었|확인했|수정했|변경했|고쳤)/i.test(out)) {
     return "실행 전에 먼저 확인이 필요합니다. 파일명/경로를 지정해주시면 바로 처리하고 결과를 정확히 보고드릴게요.";
   }
   return out;
@@ -271,6 +276,7 @@ async function executeVaultProposal(env: Env, proposal: VaultProposal): Promise<
   const pid = proposal.persona === "riley" ? "p_riley" : "p_avery";
   let okCount = 0;
   const failed: string[] = [];
+  const evidenceIds: string[] = [];
   for (const a of proposal.actions) {
     const rawPath = String(a.path || "").trim().replace(/\\/g, "/");
     const path = rawPath.startsWith("/_vault/") || rawPath.startsWith("_vault/")
@@ -279,18 +285,38 @@ async function executeVaultProposal(env: Env, proposal: VaultProposal): Promise<
     if (!path || path === "/") continue;
     if (a.type === "create_folder") {
       const ok = await dropboxWriteText(token, `${path.replace(/\/+$/, "")}/.keep`, "");
-      if (ok) okCount++; else failed.push(path);
+      if (ok) {
+        const rec = proposal.persona === "riley"
+          ? await recordRileyVaultMutation(env, "create_folder", path.replace(/\/+$/, ""), "proposal_apply")
+          : await recordAveryVaultMutation(env, "create_folder", path.replace(/\/+$/, ""), "proposal_apply");
+        if (rec.ok) {
+          okCount++;
+          evidenceIds.push(rec.evidenceId);
+        } else {
+          failed.push(`${path}: ${rec.error || "index/evidence failed"}`);
+        }
+      } else failed.push(path);
     } else {
       const rawContent = String(a.content || "");
       const payload = /\.csv$/i.test(path)
         ? (rawContent.startsWith("\uFEFF") ? rawContent : `\uFEFF${rawContent}`)
         : rawContent;
       const ok = await dropboxWriteText(token, path, payload);
-      if (ok) okCount++; else failed.push(path);
+      if (ok) {
+        const rec = proposal.persona === "riley"
+          ? await recordRileyVaultMutation(env, "create_file", path, "proposal_apply")
+          : await recordAveryVaultMutation(env, "create_file", path, "proposal_apply");
+        if (rec.ok) {
+          okCount++;
+          evidenceIds.push(rec.evidenceId);
+        } else {
+          failed.push(`${path}: ${rec.error || "index/evidence failed"}`);
+        }
+      } else failed.push(path);
     }
   }
   if (failed.length) return { ok: false, message: `failed: ${failed.slice(0, 3).join(", ")}` };
-  return { ok: true, message: `applied proposal: ${okCount} action(s)` };
+  return { ok: true, message: `applied proposal: ${okCount} action(s); evidence_id: ${evidenceIds.join(",")}` };
 }
 
 function stripVaultProposalBlock(reply: string): string {
@@ -450,7 +476,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
         } else {
           const evidence = await writeVaultEvidence(env, "riley", "direct", true, vaultAction.message, latestUserText);
           const natural = await renderVaultResultMessage(vaultAction.message, model, apiKeys, latestUserText);
-          return Response.json({ result: "success", reply: natural, evidence_id: evidence.id }, { headers: cors });
+          return Response.json({ result: "success", reply: natural, evidence_id: evidence.id, vault_evidence_id: vaultAction.evidenceId }, { headers: cors });
         }
       }
     }
@@ -467,7 +493,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
         } else {
           const evidence = await writeVaultEvidence(env, "avery", "direct", true, vaultAction.message, latestUserText);
           const natural = await renderVaultResultMessage(vaultAction.message, model, apiKeys, latestUserText);
-          return Response.json({ result: "success", reply: natural, evidence_id: evidence.id }, { headers: cors });
+          return Response.json({ result: "success", reply: natural, evidence_id: evidence.id, vault_evidence_id: vaultAction.evidenceId }, { headers: cors });
         }
       }
     }
@@ -477,6 +503,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       : "";
 
     let rileyWriteResult: { ok: boolean; error?: string; eventId?: string } | null = null;
+    let averyWriteResult: { ok: boolean; error?: string; eventId?: string } | null = null;
     let promotionApplyMessage = "";
     if (!isImageReq && policyTargetPid) {
       const promoted = await approveLatestPendingCandidate(env, policyTargetPid, latestUserText);
@@ -486,6 +513,14 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     if (!isImageReq && policyTargetPid) {
       const applied = await applyPendingPolicyIfApproved(env, policyTargetPid, latestUserText);
       if (applied.applied && applied.message) policyApplyMessage = applied.message;
+    }
+    if (shouldWriteRileyEvent) {
+      const wr = await appendRileyWealthEvent(env, latestUserText);
+      rileyWriteResult = wr.ok ? { ok: true, eventId: wr.eventId } : { ok: false, error: wr.error };
+    }
+    if (shouldWriteAveryEvent) {
+      const wr = await appendAveryWorklogEvent(env, latestUserText);
+      averyWriteResult = wr.ok ? { ok: true, eventId: wr.eventId } : { ok: false, error: wr.error };
     }
     const rileySnapshot = (!isImageReq && inRileyChat)
       ? await (async () => {
@@ -512,8 +547,8 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
           : `Attitude A candidate observed (${res.reason}).`;
       }
     }
-    const rileyMemoryMd = (!isImageReq && inRileyChat) ? await loadRileyVaultMemoryMarkdown(env) : "";
-    const averyMemoryMd = (!isImageReq && inAveryChat) ? await loadAveryVaultMemoryMarkdown(env) : "";
+    const rileyVaultV2Prompt = (!isImageReq && inRileyChat) ? await buildPersonaVaultV2SystemPrompt(env, "riley") : "";
+    const averyVaultV2Prompt = (!isImageReq && inAveryChat) ? await buildPersonaVaultV2SystemPrompt(env, "avery") : "";
     const personaProfile = (!isImageReq && profilePersonaPid)
       ? await loadPersonaUserProfile(env, profilePersonaPid, userIdNorm)
       : null;
@@ -547,12 +582,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
           "Memory policy:",
           "- Public/private memory feature is disabled.",
           "- Do not create, update, or reference generic memory store entries.",
-          ...(rileyMemoryMd
-            ? ["Riley vault memory markdown (/_vault/p_riley/_memory/p_riley_memory.md):", rileyMemoryMd]
-            : []),
-          ...(averyMemoryMd
-            ? ["Avery vault memory markdown (/_vault/p_avery/_memory/p_avery_memory.md):", averyMemoryMd]
-            : []),
+          "- Persona vault context comes from Vault v2 index/state/evidence, not legacy _memory markdown files.",
           ...(crossSessionContext ? [crossSessionContext] : []),
         ].join("\n");
     const personaPolicyPrompt = (!isImageReq && policyTargetPid)
@@ -576,10 +606,14 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
             RESPONSE_VARIANCE_PROMPT,
             ...(rileySnapshot ? [buildRileySystemPrompt(rileySnapshot.state)] : []),
             ...(averySnapshot ? [buildAverySystemPrompt(averySnapshot.state)] : []),
+            ...(rileyVaultV2Prompt ? [rileyVaultV2Prompt] : []),
+            ...(averyVaultV2Prompt ? [averyVaultV2Prompt] : []),
             ...(personaPolicyPrompt ? [personaPolicyPrompt] : []),
             ...(promotionPrompt ? [promotionPrompt] : []),
             ...(vaultRoutingPrompt ? [vaultRoutingPrompt] : []),
             ...(memPrompt ? [memPrompt] : []),
+            ...(rileyWriteResult ? [`Riley mutation status: already_applied=${rileyWriteResult.ok}; event_id=${rileyWriteResult.eventId || ""}; error=${rileyWriteResult.error || ""}. Do not output VAULT_PROPOSAL for this already-applied mutation.`] : []),
+            ...(averyWriteResult ? [`Avery mutation status: already_applied=${averyWriteResult.ok}; event_id=${averyWriteResult.eventId || ""}; error=${averyWriteResult.error || ""}. Do not output VAULT_PROPOSAL for this already-applied mutation.`] : []),
             ...(policyApplyMessage ? [`Policy apply status: ${policyApplyMessage}`] : []),
             ...(promotionApplyMessage ? [`Promotion apply status: ${promotionApplyMessage}`] : []),
             ...(attitudeAUpdateStatus ? [attitudeAUpdateStatus] : []),
@@ -736,13 +770,6 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       });
     }
 
-    if (shouldWriteRileyEvent) {
-      const wr = await appendRileyWealthEvent(env, latestUserText);
-      rileyWriteResult = wr.ok ? { ok: true, eventId: wr.eventId } : { ok: false, error: wr.error };
-    }
-    if (shouldWriteAveryEvent) {
-      await appendAveryWorklogEvent(env, latestUserText);
-    }
     if (policyTargetPid) {
       await savePendingPolicyPatchFromReply(env, policyTargetPid, reply);
       await saveCandidateFromReply(env, policyTargetPid, reply);
@@ -761,12 +788,13 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
         proposalExecuted = exec.ok;
       }
     }
+    reply = stripVaultProposalBlock(reply).trim() || reply;
     reply = guardPersonaReply(reply, proposalExecuted, !!proposalPersona);
 
     if (imageUrlOut) {
-      return Response.json({ result: "success", reply, image_url: imageUrlOut, riley_write: rileyWriteResult }, { headers: cors });
+      return Response.json({ result: "success", reply, image_url: imageUrlOut, riley_write: rileyWriteResult, avery_write: averyWriteResult }, { headers: cors });
     }
-    return Response.json({ result: "success", reply, riley_write: rileyWriteResult }, { headers: cors });
+    return Response.json({ result: "success", reply, riley_write: rileyWriteResult, avery_write: averyWriteResult }, { headers: cors });
   } catch (e: any) {
     return Response.json({ result: "error", error: e?.message || "unknown error" }, { status: 500, headers: cors });
   }

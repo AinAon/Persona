@@ -2,29 +2,23 @@ import type { Env } from "./index";
 import { buildPersonaVaultPath, dropboxReadText, dropboxWriteText, getPersonaDropboxAccessToken } from "./dropbox_vault";
 import {
   loadPersonaDirective,
-  loadPersonaMemoryMarkdown,
+  recordPersonaVaultMutation,
   runPersonaVaultActionFromText,
   type PersonaRuntimeConfig,
   type PersonaVaultActionResult,
 } from "./persona_runtime";
 
-const AVERY_LOG_KEY = "_memory/p_avery_worklog.log.jsonl";
-const AVERY_STATE_KEY = "_memory/p_avery_worklog_state.json";
-const AVERY_LEGACY_LOG_KEY = "_memory/avery_worklog.log.jsonl";
-const AVERY_LEGACY_STATE_KEY = "_memory/avery_worklog_state.json";
+const AVERY_LOG_KEY = "logs/worklog_events.jsonl";
+const AVERY_STATE_KEY = "_state.json";
 const AVERY_PID = "p_avery";
-const AVERY_VAULT_LOG_PATH = buildPersonaVaultPath(AVERY_PID, "_memory/p_avery_worklog.log.jsonl");
-const AVERY_VAULT_STATE_PATH = buildPersonaVaultPath(AVERY_PID, "_memory/p_avery_worklog_state.json");
-const AVERY_VAULT_LEGACY_LOG_PATH = buildPersonaVaultPath(AVERY_PID, "_memory/avery_worklog.log.jsonl");
-const AVERY_VAULT_LEGACY_STATE_PATH = buildPersonaVaultPath(AVERY_PID, "_memory/avery_worklog_state.json");
+const AVERY_VAULT_LOG_PATH = buildPersonaVaultPath(AVERY_PID, AVERY_LOG_KEY);
+const AVERY_VAULT_STATE_PATH = buildPersonaVaultPath(AVERY_PID, AVERY_STATE_KEY);
 const AVERY_IDS = new Set(["p_avery", "avery"]);
 const AVERY_RUNTIME_CONFIG: PersonaRuntimeConfig = {
   pid: AVERY_PID,
   tokenPersona: "avery",
   role: "worklog_manager",
   directiveFile: "p_avery_directive.md",
-  memoryMarkdownFile: "p_avery_memory.md",
-  legacyMemoryMarkdownFiles: ["avery_memory.md"],
   defaultDirectiveLines: [
     "# Avery Directive (Priority 1)",
     "",
@@ -153,15 +147,9 @@ async function dropboxText(env: Env, key: string): Promise<string | null> {
   const token = await getPersonaDropboxAccessToken(env, "avery");
   if (token) {
     if (key === AVERY_LOG_KEY) {
-      const next = await dropboxReadText(token, AVERY_VAULT_LOG_PATH);
-      if (next != null && String(next).trim()) return next;
-      const legacy = await dropboxReadText(token, AVERY_VAULT_LEGACY_LOG_PATH);
-      if (legacy != null && String(legacy).trim()) return legacy;
+      return await dropboxReadText(token, AVERY_VAULT_LOG_PATH);
     } else {
-      const next = await dropboxReadText(token, AVERY_VAULT_STATE_PATH);
-      if (next != null && String(next).trim()) return next;
-      const legacy = await dropboxReadText(token, AVERY_VAULT_LEGACY_STATE_PATH);
-      if (legacy != null && String(legacy).trim()) return legacy;
+      return await dropboxReadText(token, AVERY_VAULT_STATE_PATH);
     }
   }
   return null;
@@ -295,7 +283,7 @@ function defaultState(): AveryState {
     meta: {
       last_event_id: "",
       last_updated_at: iso,
-      source_log: "p_avery_worklog.log.jsonl",
+      source_log: AVERY_LOG_KEY,
     },
   };
 }
@@ -607,12 +595,17 @@ export async function loadAveryDirective(env: Env): Promise<string> {
   return await loadPersonaDirective(env, AVERY_RUNTIME_CONFIG);
 }
 
-export async function loadAveryVaultMemoryMarkdown(env: Env): Promise<string> {
-  return await loadPersonaMemoryMarkdown(env, AVERY_RUNTIME_CONFIG);
-}
-
 export async function runAveryVaultActionFromText(env: Env, text: string): Promise<PersonaVaultActionResult | null> {
   return await runPersonaVaultActionFromText(env, AVERY_RUNTIME_CONFIG, text);
+}
+
+export async function recordAveryVaultMutation(
+  env: Env,
+  action: "create_file" | "create_folder" | "delete_path" | "read_file" | "update_file",
+  path: string,
+  userText: string,
+): Promise<{ ok: boolean; evidenceId: string; error?: string }> {
+  return await recordPersonaVaultMutation(env, AVERY_RUNTIME_CONFIG, action, path, userText);
 }
 
 export async function reconcileAveryWorklog(env: Env): Promise<{
@@ -630,7 +623,7 @@ export async function reconcileAveryWorklog(env: Env): Promise<{
   for (const e of events) rebuilt = applyEventToState(rebuilt, e);
   rebuilt.meta.last_event_id = events.length ? events[events.length - 1].event_id : "";
   rebuilt.meta.last_updated_at = events.length ? events[events.length - 1].timestamp : nowIso();
-  rebuilt.meta.source_log = "p_avery_worklog.log.jsonl";
+  rebuilt.meta.source_log = AVERY_LOG_KEY;
 
   const changed = JSON.stringify(oldState.stats) !== JSON.stringify(rebuilt.stats)
     || oldState.items.length !== rebuilt.items.length;
@@ -646,4 +639,12 @@ export async function reconcileAveryWorklog(env: Env): Promise<{
       newStats: rebuilt.stats,
     },
   };
+}
+
+export async function resetAveryWorklogRuntime(env: Env): Promise<{ ok: boolean; statePath: string; logPath: string }> {
+  const token = await getPersonaDropboxAccessToken(env, "avery");
+  if (!token) return { ok: false, statePath: AVERY_VAULT_STATE_PATH, logPath: AVERY_VAULT_LOG_PATH };
+  const stateOk = await dropboxWriteText(token, AVERY_VAULT_STATE_PATH, `${JSON.stringify(defaultState(), null, 2)}\n`);
+  const logOk = await dropboxWriteText(token, AVERY_VAULT_LOG_PATH, "");
+  return { ok: stateOk && logOk, statePath: AVERY_VAULT_STATE_PATH, logPath: AVERY_VAULT_LOG_PATH };
 }

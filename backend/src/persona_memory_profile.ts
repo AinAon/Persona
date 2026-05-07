@@ -103,11 +103,11 @@ export function resolvePrimaryPersonaPid(participantPids: string[] = []): string
 }
 
 function profilePath(pid: string, userId: string): string {
-  return buildPersonaVaultPath(pid, `_memory/profile/${userId}.json`);
+  return buildPersonaVaultPath(pid, `profile/${userId}.json`);
 }
 
 function candidatePath(pid: string, userId: string): string {
-  return buildPersonaVaultPath(pid, `_memory/profile/${userId}.attitude_candidates.json`);
+  return buildPersonaVaultPath(pid, `profile/${userId}.attitude_candidates.json`);
 }
 
 function sessionStateKey(pid: string, userId: string, sessionId: string): string {

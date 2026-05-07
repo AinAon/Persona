@@ -12,10 +12,11 @@ import {
   setMemoryText,
   upsertMemory,
 } from "./memory";
-import { getAveryWorklogSnapshot, reconcileAveryWorklog } from "./avery_worklog";
-import { getRileyWealthSnapshot, reconcileRileyWealth } from "./riley_wealth";
+import { getAveryWorklogSnapshot, reconcileAveryWorklog, resetAveryWorklogRuntime } from "./avery_worklog";
+import { getRileyWealthSnapshot, reconcileRileyWealth, resetRileyWealthRuntime } from "./riley_wealth";
 import { getPersonaPolicy } from "./persona_policy";
 import { getPromotionCandidates } from "./persona_promotion";
+import { buildPersonaVaultV2MigrationPlan, getPersonaVaultV2Inventory, getPersonaVaultV2Status, seedPersonaVaultV2, type VaultV2Persona } from "./persona_vault_v2";
 import { buildPersonaVaultPath, dropboxDeletePath, dropboxListFolder, dropboxMovePath, dropboxPathExists, dropboxReadBytes, dropboxReadText, dropboxWriteBytes, dropboxWriteBytesWithDetail, dropboxWriteText, dropboxWriteTextWithDetail, getPersonaDropboxAccessToken } from "./dropbox_vault";
 import { loadPersonaUserProfile, normalizeUserId, savePersonaUserProfile } from "./persona_memory_profile";
 
@@ -47,6 +48,17 @@ const SESSION_AUDIO_R2_PREFIXES = ["tts/session/", "audio/session/"];
 const SESSION_CHANGE_SEQ_KEY = "session_change_seq";
 const LEGACY_MEMORY_API_ENABLED = false;
 const EMOTION_INVENTORY_KV_KEY = "emotion_inventory_v1";
+const DISABLED_LEGACY_MUTATION_ROUTES = new Set([
+  "/vault/directives/sync",
+  "/vault/layout/migrate",
+  "/migrate/shared/run",
+  "/migrate/shared/page",
+  "/migrate/shared/kv",
+  "/migrate/shared/kv-page",
+  "/migrate/shared/copy-key",
+  "/migrate/shared/prune-unused",
+  "/debug/session/migrate-r2-to-dropbox",
+]);
 
 function normalizePid(raw: unknown): string {
   const s = String(raw || "").trim().toLowerCase();
@@ -975,6 +987,15 @@ export async function handleApiRoute(
   cors: CorsHeaders,
 ): Promise<Response | null> {
   const noStoreHeaders = { ...cors, "Cache-Control": "no-store" };
+
+  if (request.method !== "GET" && DISABLED_LEGACY_MUTATION_ROUTES.has(url.pathname)) {
+    return Response.json({
+      ok: false,
+      error: "legacy_route_disabled",
+      message: "This legacy mutation route is disabled after Persona Vault v2 cutover.",
+      replacement: "/vault/v2/*",
+    }, { status: 410, headers: noStoreHeaders });
+  }
   if (url.pathname === "/emotion-inventory/rebuild" && request.method === "POST") {
     const body = await request.json().catch(() => ({} as any)) as { pid?: string };
     const pid = String(body?.pid || "").trim();
@@ -2045,6 +2066,46 @@ export async function handleApiRoute(
   if (url.pathname === "/avery/worklog/reconcile" && request.method === "POST") {
     const result = await reconcileAveryWorklog(env);
     return Response.json(result, { headers: { ...cors, "Cache-Control": "no-store" } });
+  }
+
+  if (url.pathname === "/vault/v2/inventory" && request.method === "GET") {
+    const rawPersona = String(url.searchParams.get("persona") || "avery").trim().toLowerCase();
+    const persona: VaultV2Persona = rawPersona === "riley" ? "riley" : "avery";
+    const inventory = await getPersonaVaultV2Inventory(env, persona);
+    return Response.json(inventory, { headers: noStoreHeaders });
+  }
+
+  if (url.pathname === "/vault/v2/seed" && request.method === "POST") {
+    const body = await request.json().catch(() => ({} as { persona?: string }));
+    const rawPersona = String(body.persona || url.searchParams.get("persona") || "avery").trim().toLowerCase();
+    const persona: VaultV2Persona = rawPersona === "riley" ? "riley" : "avery";
+    const result = await seedPersonaVaultV2(env, persona);
+    return Response.json(result, { headers: noStoreHeaders });
+  }
+
+  if (url.pathname === "/vault/v2/reset-runtime" && request.method === "POST") {
+    const body = await request.json().catch(() => ({} as { persona?: string }));
+    const rawPersona = String(body.persona || url.searchParams.get("persona") || "avery").trim().toLowerCase();
+    const persona: VaultV2Persona = rawPersona === "riley" ? "riley" : "avery";
+    const result = persona === "riley"
+      ? await resetRileyWealthRuntime(env)
+      : await resetAveryWorklogRuntime(env);
+    return Response.json({ ok: result.ok, persona, ...result }, { headers: noStoreHeaders });
+  }
+
+  if (url.pathname === "/vault/v2/status" && request.method === "GET") {
+    const rawPersona = String(url.searchParams.get("persona") || "avery").trim().toLowerCase();
+    const persona: VaultV2Persona = rawPersona === "riley" ? "riley" : "avery";
+    const tail = Math.max(1, Math.min(100, Number(url.searchParams.get("tail") || 20)));
+    const result = await getPersonaVaultV2Status(env, persona, tail);
+    return Response.json(result, { headers: noStoreHeaders });
+  }
+
+  if (url.pathname === "/vault/v2/migration-plan" && request.method === "GET") {
+    const rawPersona = String(url.searchParams.get("persona") || "avery").trim().toLowerCase();
+    const persona: VaultV2Persona = rawPersona === "riley" ? "riley" : "avery";
+    const result = await buildPersonaVaultV2MigrationPlan(env, persona);
+    return Response.json(result, { headers: noStoreHeaders });
   }
 
   if (url.pathname === "/persona-policy/get" && request.method === "GET") {
