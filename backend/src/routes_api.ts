@@ -326,21 +326,15 @@ async function r2PutJson(env: Env, key: string, value: unknown): Promise<void> {
 
 async function getSessionIndex(env: Env): Promise<SessionMeta[]> {
   const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
-  if (sharedToken) {
-    const fromDropbox = await dropboxReadText(sharedToken, SESSION_INDEX_DROPBOX_PATH);
-    if (fromDropbox) {
-      try {
-        const parsed = JSON.parse(fromDropbox);
-        if (Array.isArray(parsed)) return parsed as SessionMeta[];
-      } catch {
-        // fall through to legacy stores
-      }
-    }
+  if (!sharedToken) return [];
+  const fromDropbox = await dropboxReadText(sharedToken, SESSION_INDEX_DROPBOX_PATH);
+  if (!fromDropbox) return [];
+  try {
+    const parsed = JSON.parse(fromDropbox);
+    return Array.isArray(parsed) ? (parsed as SessionMeta[]) : [];
+  } catch {
+    return [];
   }
-  const fromR2 = await r2Json<SessionMeta[] | null>(env, SESSION_INDEX_R2_KEY, null);
-  if (Array.isArray(fromR2)) return fromR2;
-  const legacy = await env.KV.get(SESSION_INDEX_KEY);
-  return legacy ? JSON.parse(legacy) : [];
 }
 
 function stringifyJsonPretty(value: unknown): string {
@@ -372,21 +366,15 @@ async function bumpSessionChangeSeq(env: Env): Promise<number> {
 
 async function getDeletedSessionIndex(env: Env): Promise<DeletedSessionMeta[]> {
   const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
-  if (sharedToken) {
-    const fromDropbox = await dropboxReadText(sharedToken, DELETED_SESSION_INDEX_DROPBOX_PATH);
-    if (fromDropbox) {
-      try {
-        const parsed = JSON.parse(fromDropbox);
-        if (Array.isArray(parsed)) return parsed as DeletedSessionMeta[];
-      } catch {
-        // fall through to legacy stores
-      }
-    }
+  if (!sharedToken) return [];
+  const fromDropbox = await dropboxReadText(sharedToken, DELETED_SESSION_INDEX_DROPBOX_PATH);
+  if (!fromDropbox) return [];
+  try {
+    const parsed = JSON.parse(fromDropbox);
+    return Array.isArray(parsed) ? (parsed as DeletedSessionMeta[]) : [];
+  } catch {
+    return [];
   }
-  const fromR2 = await r2Json<DeletedSessionMeta[] | null>(env, DELETED_SESSION_INDEX_R2_KEY, null);
-  if (Array.isArray(fromR2)) return fromR2;
-  const legacy = await env.KV.get(DELETED_SESSION_INDEX_KEY);
-  return legacy ? JSON.parse(legacy) : [];
 }
 
 async function putDeletedSessionIndex(env: Env, sessions: DeletedSessionMeta[]): Promise<void> {
@@ -398,22 +386,12 @@ async function putDeletedSessionIndex(env: Env, sessions: DeletedSessionMeta[]):
 
 async function getPersonasPayload(env: Env): Promise<unknown[]> {
   const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
-  if (sharedToken) {
-    const fromDropbox = await dropboxReadText(sharedToken, PERSONAS_DROPBOX_PATH);
-    if (fromDropbox) {
-      try {
-        const parsed = JSON.parse(fromDropbox);
-        if (Array.isArray(parsed)) return parsed;
-      } catch {
-        // fall through to legacy stores
-      }
-    }
-  }
-  const fromR2 = await r2Json<unknown[] | null>(env, PERSONAS_R2_KEY, null);
-  if (Array.isArray(fromR2)) return fromR2;
-  const data = await env.KV.get(PERSONAS_KEY);
+  if (!sharedToken) return [];
+  const fromDropbox = await dropboxReadText(sharedToken, PERSONAS_DROPBOX_PATH);
+  if (!fromDropbox) return [];
   try {
-    return data ? JSON.parse(data) : [];
+    const parsed = JSON.parse(fromDropbox);
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }
@@ -421,24 +399,14 @@ async function getPersonasPayload(env: Env): Promise<unknown[]> {
 
 async function getSessionPayloadText(env: Env, id: string): Promise<string | null> {
   const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
-  if (sharedToken) {
-    const fromDropbox = await dropboxReadText(sharedToken, sessionDropboxPath(id));
-    if (fromDropbox) return fromDropbox;
-  }
-  const fromR2 = await r2Text(env, sessionR2Key(id));
-  if (fromR2) return fromR2;
-  return await env.KV.get(`session:${id}`);
+  if (!sharedToken) return null;
+  return await dropboxReadText(sharedToken, sessionDropboxPath(id));
 }
 
 async function getDeletedSessionPayloadText(env: Env, id: string): Promise<string | null> {
   const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
-  if (sharedToken) {
-    const fromDropbox = await dropboxReadText(sharedToken, deletedSessionDropboxPath(id));
-    if (fromDropbox) return fromDropbox;
-  }
-  const fromR2 = await r2Text(env, deletedSessionR2Key(id));
-  if (fromR2) return fromR2;
-  return await env.KV.get(`deleted:session:${id}`);
+  if (!sharedToken) return null;
+  return await dropboxReadText(sharedToken, deletedSessionDropboxPath(id));
 }
 
 async function listKvByPrefix(env: Env, prefix: string, max = 500): Promise<string[]> {
@@ -1766,12 +1734,9 @@ export async function handleApiRoute(
       return Response.json({ ok: false, error: "id required" }, { status: 400, headers: noStoreHeaders });
     }
 
-    const fromDropbox = await dropboxReadText(sharedToken, sessionDropboxPath(id));
-    const fromR2 = await r2Text(env, sessionR2Key(id));
-    const fromKv = await env.KV.get(`session:${id}`);
-    const raw = fromDropbox || fromR2 || fromKv;
+    const raw = await dropboxReadText(sharedToken, sessionDropboxPath(id));
     if (!raw) {
-      return Response.json({ ok: false, error: "session not found in dropbox/r2/kv", id }, { status: 404, headers: noStoreHeaders });
+      return Response.json({ ok: false, error: "session not found in dropbox", id }, { status: 404, headers: noStoreHeaders });
     }
 
     let parsed: Record<string, unknown>;
@@ -1793,7 +1758,7 @@ export async function handleApiRoute(
       ok: true,
       id,
       wrote: sessionDropboxPath(id),
-      sourceUsed: fromDropbox ? "dropbox" : (fromR2 ? "r2" : "kv"),
+      sourceUsed: "dropbox",
     }, { headers: noStoreHeaders });
   }
 
@@ -1880,15 +1845,8 @@ export async function handleApiRoute(
 
       let pids = Array.isArray(body?.pids) ? body!.pids.map((x) => normalizePid(x)).filter(Boolean) : [];
       if (!pids.length) {
-        const fromR2 = await r2Json<unknown[] | null>(env, PERSONAS_R2_KEY, null);
-        if (Array.isArray(fromR2)) {
-          pids = [...new Set(fromR2.map(extractPid).filter(Boolean))];
-        } else {
-          const kvRaw = await env.KV.get(PERSONAS_KEY);
-          let parsedKv: unknown[] = [];
-          try { parsedKv = kvRaw ? JSON.parse(kvRaw) : []; } catch { parsedKv = []; }
-          pids = [...new Set(parsedKv.map(extractPid).filter(Boolean))];
-        }
+        const personaPayload = await getPersonasPayload(env);
+        pids = [...new Set(personaPayload.map(extractPid).filter(Boolean))];
       }
       if (!pids.length) return Response.json({ ok: false, error: "no persona pids found" }, { status: 400, headers: cors });
 
