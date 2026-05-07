@@ -194,6 +194,7 @@ function deletedSessionDropboxPath(id: string): string {
 
 const SESSION_INDEX_DROPBOX_PATH = "/session/index.json";
 const DELETED_SESSION_INDEX_DROPBOX_PATH = "/session/deleted_index.json";
+const PERSONAS_DROPBOX_PATH = "/personas/personas.json";
 
 async function sha256Hex(input: string): Promise<string> {
   const data = new TextEncoder().encode(input);
@@ -1661,10 +1662,12 @@ export async function handleApiRoute(
 
     const entries = await dropboxListFolder(sharedToken, "/session/data");
     const r2Keys = await listR2ByPrefix(env, SESSION_R2_PREFIX, 20000);
+    const personasFromR2 = await r2Json<unknown[] | null>(env, PERSONAS_R2_KEY, null);
     let scanned = 0;
     let updated = 0;
     let added = 0;
     let mirroredFromR2 = 0;
+    let personasMirrored = false;
 
     for (const entry of entries) {
       const path = String(entry.path_display || entry.path_lower || "").trim();
@@ -1675,18 +1678,6 @@ export async function handleApiRoute(
       const raw = await dropboxReadText(sharedToken, path);
       const meta = parseSessionLike(raw);
       if (!meta) continue;
-      if (raw) {
-        try {
-          const full = JSON.parse(raw) as Record<string, unknown>;
-          const pretty = stringifyJsonPretty(full);
-          if (raw !== pretty) {
-            await dropboxWriteText(sharedToken, path, pretty);
-            normalized++;
-          }
-        } catch {
-          // skip rewrite on malformed payload
-        }
-      }
       const prev = byId.get(id);
       if (!prev) {
         byId.set(id, { ...meta, id });
@@ -1728,6 +1719,10 @@ export async function handleApiRoute(
 
     const next = [...byId.values()].sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
     await putSessionIndex(env, next);
+    if (Array.isArray(personasFromR2)) {
+      await dropboxWriteText(sharedToken, PERSONAS_DROPBOX_PATH, stringifyJsonPretty(personasFromR2));
+      personasMirrored = true;
+    }
     return Response.json({
       ok: true,
       scannedDataFiles: scanned,
@@ -1735,6 +1730,8 @@ export async function handleApiRoute(
       added,
       updated,
       mirroredFromR2,
+      personasMirrored,
+      personasPath: PERSONAS_DROPBOX_PATH,
       indexPath: SESSION_INDEX_DROPBOX_PATH,
       dataPath: "/session/data/",
     }, { headers: noStoreHeaders });
@@ -1783,6 +1780,10 @@ export async function handleApiRoute(
       const { personas } = (await request.json()) as { personas: unknown[] };
       const payload = Array.isArray(personas) ? personas : [];
       await r2PutJson(env, PERSONAS_R2_KEY, payload);
+      const sharedTokenForPersonas = await getPersonaDropboxAccessToken(env, "shared");
+      if (sharedTokenForPersonas) {
+        await dropboxWriteText(sharedTokenForPersonas, PERSONAS_DROPBOX_PATH, stringifyJsonPretty(payload));
+      }
       try {
         await env.KV.put(PERSONAS_KEY, JSON.stringify(payload));
       } catch {
