@@ -57,14 +57,7 @@ async function load(env: Env, pid: string): Promise<CandidateDoc> {
       }
     }
   }
-  const obj = await env.R2.get(k);
-  if (!obj) return { version: 1, items: [] };
-  try {
-    const parsed = JSON.parse(await obj.text()) as CandidateDoc;
-    return parsed?.version === 1 && Array.isArray(parsed.items) ? parsed : { version: 1, items: [] };
-  } catch {
-    return { version: 1, items: [] };
-  }
+  return { version: 1, items: [] };
 }
 
 async function save(env: Env, pid: string, doc: CandidateDoc): Promise<void> {
@@ -75,7 +68,7 @@ async function save(env: Env, pid: string, doc: CandidateDoc): Promise<void> {
     const ok = await dropboxWriteText(token, vaultPathFromR2Key(pid, k), payload);
     if (ok) return;
   }
-  await env.R2.put(k, payload, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
+  throw new Error(`dropbox write failed: ${vaultPathFromR2Key(pid, k)}`);
 }
 
 export function isPromotionApprovalText(text: string): boolean {

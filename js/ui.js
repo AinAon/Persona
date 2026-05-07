@@ -2835,8 +2835,7 @@ async function renderChatList(options = {}) {
     activeChatId: activeChatId || '',
     sessions: (sessions || []).map(s => ({
       id: s?.id || '',
-      updatedAt: Number(s?.updatedAt || 0),
-      lastMessageAt: Number(s?.lastMessageAt || 0),
+      lastMessageAt: getSessionLastMessageSortTs(s),
       roomName: s?.roomName || '',
       lastPreview: s?.lastPreview || '',
       hidden: !!s?.hidden,
@@ -2934,7 +2933,7 @@ async function renderChatList(options = {}) {
         <div class="chat-list-preview" style="${isSinglePersonaChat ? `color:hsl(${accentHue},32%,72%);` : ''}">${esc(previewText)}</div>
       </div>
       <div class="chat-list-meta">
-        <span class="chat-list-time" style="${isSinglePersonaChat ? `color:hsl(${accentHue},24%,62%);` : ''}">${timeLabel(lastMsgTs || s.updatedAt)}</span>
+        <span class="chat-list-time" style="${isSinglePersonaChat ? `color:hsl(${accentHue},24%,62%);` : ''}">${timeLabel(lastMsgTs)}</span>
       </div>`;
     item.style.cssText += itemBgStyle;
 

@@ -2,7 +2,7 @@ import type { CorsHeaders, Env } from "./index";
 import { generateGeminiImage, generateGeminiText, generateImagenImage, streamGeminiText } from "./model_gemini";
 import { generateOpenAIImage, generateOpenAIText, streamOpenAIText } from "./model_openai";
 import { generateGrokImage, generateGrokText, streamGrokText } from "./model_grok";
-import { buildPersonaVaultPath, dropboxWriteText, getPersonaDropboxAccessToken } from "./dropbox_vault";
+import { buildPersonaVaultPath, dropboxReadText, dropboxWriteText, getPersonaDropboxAccessToken } from "./dropbox_vault";
 import {
   appendAveryWorklogEvent,
   buildAverySystemPrompt,
@@ -109,9 +109,7 @@ const VAULT_AUTONOMY_GUARD = [
   "- When you propose, keep it short and practical.",
 ].join("\n");
 
-const SESSION_INDEX_R2_KEY = "session/index.json";
-const SESSION_INDEX_KV_KEY = "session_index";
-const SESSION_R2_PREFIX = "session/data/";
+const SESSION_INDEX_DROPBOX_PATH = "/session/index.json";
 
 type VaultProposalAction = { type: "create_file" | "create_folder"; path: string; content?: string };
 type VaultProposal = { persona: "riley" | "avery"; actions: VaultProposalAction[]; createdAt: number };
@@ -848,34 +846,16 @@ type SessionIndexLite = {
   participantPids?: string[];
 };
 
-async function r2ReadText(env: Env, key: string): Promise<string | null> {
-  try {
-    const obj = await env.R2.get(key);
-    if (!obj || typeof obj.text !== "function") return null;
-    return await obj.text();
-  } catch {
-    return null;
-  }
-}
-
 async function loadSessionIndexLite(env: Env): Promise<SessionIndexLite[]> {
-  const fromR2 = await r2ReadText(env, SESSION_INDEX_R2_KEY);
-  if (fromR2) {
-    try {
-      const parsed = JSON.parse(fromR2);
-      if (Array.isArray(parsed)) return parsed as SessionIndexLite[];
-    } catch {
-      // ignore
-    }
-  }
-  const fromKv = await env.KV.get(SESSION_INDEX_KV_KEY);
-  if (fromKv) {
-    try {
-      const parsed = JSON.parse(fromKv);
-      if (Array.isArray(parsed)) return parsed as SessionIndexLite[];
-    } catch {
-      // ignore
-    }
+  const token = await getPersonaDropboxAccessToken(env, "shared");
+  if (!token) return [];
+  const fromDropbox = await dropboxReadText(token, SESSION_INDEX_DROPBOX_PATH);
+  if (!fromDropbox) return [];
+  try {
+    const parsed = JSON.parse(fromDropbox);
+    if (Array.isArray(parsed)) return parsed as SessionIndexLite[];
+  } catch {
+    // ignore
   }
   return [];
 }
@@ -902,9 +882,9 @@ function summarizeSessionHistory(history: unknown[]): string {
 async function loadSessionPayloadText(env: Env, id: string): Promise<string | null> {
   const sid = String(id || "").trim();
   if (!sid) return null;
-  const fromR2 = await r2ReadText(env, `${SESSION_R2_PREFIX}${sid}.json`);
-  if (fromR2) return fromR2;
-  return await env.KV.get(`session:${sid}`);
+  const token = await getPersonaDropboxAccessToken(env, "shared");
+  if (!token) return null;
+  return await dropboxReadText(token, `/session/data/${sid}.json`);
 }
 
 async function buildPersonaCrossSessionContextBlock(env: Env, personaPid: string, currentSessionId = ""): Promise<string> {

@@ -164,22 +164,7 @@ async function r2Text(env: Env, key: string): Promise<string | null> {
       if (legacy != null && String(legacy).trim()) return legacy;
     }
   }
-  try {
-    const obj = await env.R2.get(key);
-    if (!obj && key === AVERY_LOG_KEY) {
-      const legacy = await env.R2.get(AVERY_LEGACY_LOG_KEY);
-      if (legacy && typeof legacy.text === "function") return await legacy.text();
-    }
-    if (!obj && key === AVERY_STATE_KEY) {
-      const legacy = await env.R2.get(AVERY_LEGACY_STATE_KEY);
-      if (legacy && typeof legacy.text === "function") return await legacy.text();
-    }
-    if (!obj) return null;
-    if (typeof obj.text === "function") return await obj.text();
-    return null;
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 async function r2Json<T>(env: Env, key: string, fallback: T): Promise<T> {
@@ -523,11 +508,7 @@ async function appendLogLine(env: Env, event: AveryEvent): Promise<void> {
     const ok = await dropboxWriteText(token, AVERY_VAULT_LOG_PATH, next);
     if (ok) return;
   }
-  await env.R2.put(
-    AVERY_LOG_KEY,
-    next,
-    { httpMetadata: { contentType: "application/json; charset=utf-8" } },
-  );
+  throw new Error("avery dropbox write failed");
 }
 
 async function loadAllAveryEvents(env: Env): Promise<AveryEvent[]> {

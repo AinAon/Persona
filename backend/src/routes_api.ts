@@ -22,6 +22,7 @@ import { loadPersonaUserProfile, normalizeUserId, savePersonaUserProfile } from 
 type SessionMeta = {
   id: string;
   updatedAt: number;
+  lastMessageAt: number;
   lastPreview: string;
   participantPids: string[];
   roomName: string;
@@ -37,7 +38,7 @@ type DeletedSessionMeta = SessionMeta & {
 };
 
 type RecoverableSessionMeta = DeletedSessionMeta & {
-  source: "deleted_index" | "deleted_kv" | "orphan_session_kv";
+  source: "deleted_index" | "deleted_dropbox" | "orphan_session_dropbox";
 };
 
 const SESSION_INDEX_KEY = "session_index";
@@ -569,7 +570,9 @@ async function migrateR2PrefixToSharedDropboxPaged(
 ): Promise<{
   scanned: number;
   copied: number;
+  deleted: number;
   skipped: number;
+  conflicts: number;
   failed: number;
   sampleErrors: string[];
   nextCursor: string;
@@ -578,7 +581,9 @@ async function migrateR2PrefixToSharedDropboxPaged(
   const page = await env.R2.list({ prefix, limit: Math.max(1, Math.min(500, limit || 200)), cursor });
   const objects = page.objects || [];
   let copied = 0;
+  let deleted = 0;
   let skipped = 0;
+  let conflicts = 0;
   let failed = 0;
   const sampleErrors: string[] = [];
   for (const o of objects) {
@@ -586,18 +591,28 @@ async function migrateR2PrefixToSharedDropboxPaged(
     if (!key) continue;
     const dbxPath = `/${key}`;
     const existing = await dropboxReadBytes(sharedToken, dbxPath);
-    if (existing) {
-      skipped++;
-      continue;
-    }
     const obj = await env.R2.get(key);
     if (!obj || typeof obj.arrayBuffer !== "function") {
       skipped++;
       continue;
     }
     const bytes = await obj.arrayBuffer();
+    if (existing) {
+      if (sameBytes(existing.bytes, bytes)) {
+        await env.R2.delete(key);
+        deleted++;
+      } else {
+        conflicts++;
+      }
+      skipped++;
+      continue;
+    }
     const ok = await dropboxWriteBytes(sharedToken, dbxPath, bytes);
-    if (ok) copied++;
+    if (ok) {
+      copied++;
+      await env.R2.delete(key);
+      deleted++;
+    }
     else {
       failed++;
       if (sampleErrors.length < 5) sampleErrors.push(`write_failed:${key}`);
@@ -605,7 +620,7 @@ async function migrateR2PrefixToSharedDropboxPaged(
   }
   const nextCursor = String((page as any).cursor || "");
   const done = !!((page as any).list_complete) || !nextCursor;
-  return { scanned: objects.length, copied, skipped, failed, sampleErrors, nextCursor, done };
+  return { scanned: objects.length, copied, deleted, skipped, conflicts, failed, sampleErrors, nextCursor, done };
 }
 
 function sameBytes(a: ArrayBuffer | Uint8Array, b: ArrayBuffer | Uint8Array): boolean {
@@ -652,6 +667,44 @@ async function migrateKvPrefixToSharedDropbox(
     const status = await migrateKvTextToSharedDropbox(env, key, makePath(key), sharedToken);
     report[status] = (report[status] || 0) + 1;
   }
+  return report;
+}
+
+function kvSessionDropboxPathFromKey(key: string): string {
+  return sessionDropboxPath(String(key || "").replace(/^session:/, ""));
+}
+
+function kvDeletedSessionDropboxPathFromKey(key: string): string {
+  return deletedSessionDropboxPath(String(key || "").replace(/^deleted:session:/, ""));
+}
+
+function knownKvDropboxPath(key: string): string {
+  if (key === "user_profile") return USER_PROFILE_DROPBOX_PATH;
+  if (key === SESSION_INDEX_KEY) return SESSION_INDEX_DROPBOX_PATH;
+  if (key === DELETED_SESSION_INDEX_KEY) return DELETED_SESSION_INDEX_DROPBOX_PATH;
+  if (key.startsWith("session:")) return kvSessionDropboxPathFromKey(key);
+  if (key.startsWith("deleted:session:")) return kvDeletedSessionDropboxPathFromKey(key);
+  return "";
+}
+
+async function migrateKvPrefixPageToSharedDropbox(
+  env: Env,
+  kvPrefix: string,
+  limit: number,
+  cursor: string | undefined,
+  makePath: (key: string) => string,
+  sharedToken: string,
+): Promise<Record<string, unknown>> {
+  if (!env.KV.list) return { scanned: 0, moved: 0, deleted_duplicate: 0, missing: 0, conflict: 0, write_failed: 0, done: true, nextCursor: "" };
+  const page = await env.KV.list({ prefix: kvPrefix, cursor, limit: Math.max(1, Math.min(50, limit || 25)) });
+  const keys = (page.keys || []).map((k) => String(k?.name || "")).filter(Boolean);
+  const report: Record<string, unknown> = { scanned: keys.length, moved: 0, deleted_duplicate: 0, missing: 0, conflict: 0, write_failed: 0 };
+  for (const key of keys) {
+    const status = await migrateKvTextToSharedDropbox(env, key, makePath(key), sharedToken);
+    report[status] = Number(report[status] || 0) + 1;
+  }
+  report.nextCursor = String(page.cursor || "");
+  report.done = !!page.list_complete || !page.cursor;
   return report;
 }
 
@@ -717,55 +770,12 @@ async function listMemoriesForBackup(
 }
 
 async function getRecoverableSessions(env: Env): Promise<RecoverableSessionMeta[]> {
-  const activeIndex = await getSessionIndex(env);
-  const activeIds = new Set(activeIndex.map((s) => String(s.id || "")));
-
   const deletedIndex = await getDeletedSessionIndex(env);
   const map = new Map<string, RecoverableSessionMeta>();
 
   for (const d of deletedIndex) {
     if (!d?.id) continue;
     map.set(d.id, { ...d, source: "deleted_index" });
-  }
-
-  const deletedKeys = await listKvByPrefix(env, "deleted:session:");
-  for (const key of deletedKeys) {
-    const id = key.replace(/^deleted:session:/, "");
-    if (!id || map.has(id)) continue;
-    const raw = await env.KV.get(key);
-    const meta = parseSessionLike(raw);
-    if (!meta) continue;
-    map.set(id, toRecoverable(meta, "deleted_kv", Date.now()));
-  }
-
-  const deletedR2Keys = await listR2ByPrefix(env, DELETED_SESSION_R2_PREFIX);
-  for (const key of deletedR2Keys) {
-    const id = key.replace(DELETED_SESSION_R2_PREFIX, "").replace(/\.json$/, "");
-    if (!id || map.has(id)) continue;
-    const raw = await r2Text(env, key);
-    const meta = parseSessionLike(raw);
-    if (!meta) continue;
-    map.set(id, toRecoverable(meta, "deleted_kv", Date.now()));
-  }
-
-  const sessionKeys = await listKvByPrefix(env, "session:");
-  for (const key of sessionKeys) {
-    const id = key.replace(/^session:/, "");
-    if (!id || activeIds.has(id) || map.has(id)) continue;
-    const raw = await env.KV.get(key);
-    const meta = parseSessionLike(raw);
-    if (!meta) continue;
-    map.set(id, toRecoverable(meta, "orphan_session_kv", Date.now()));
-  }
-
-  const sessionR2Keys = await listR2ByPrefix(env, SESSION_R2_PREFIX);
-  for (const key of sessionR2Keys) {
-    const id = key.replace(SESSION_R2_PREFIX, "").replace(/\.json$/, "");
-    if (!id || activeIds.has(id) || map.has(id)) continue;
-    const raw = await r2Text(env, key);
-    const meta = parseSessionLike(raw);
-    if (!meta) continue;
-    map.set(id, toRecoverable(meta, "orphan_session_kv", Date.now()));
   }
 
   return [...map.values()].sort((a, b) => (b.deletedAt || b.updatedAt || 0) - (a.deletedAt || a.updatedAt || 0));
@@ -1671,6 +1681,55 @@ export async function handleApiRoute(
     return Response.json({ ok: true, prefix, ...result }, { headers: noStoreHeaders });
   }
 
+  if (url.pathname === "/migrate/shared/kv" && request.method === "POST") {
+    const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
+    if (!sharedToken) {
+      return Response.json({ ok: false, error: "shared dropbox token missing" }, { status: 500, headers: noStoreHeaders });
+    }
+    const report: Record<string, unknown> = {};
+    report["kv:user_profile"] = await migrateKvTextToSharedDropbox(env, "user_profile", USER_PROFILE_DROPBOX_PATH, sharedToken);
+    report["kv:session_index"] = await migrateKvTextToSharedDropbox(env, SESSION_INDEX_KEY, SESSION_INDEX_DROPBOX_PATH, sharedToken);
+    report["kv:deleted_session_index"] = await migrateKvTextToSharedDropbox(env, DELETED_SESSION_INDEX_KEY, DELETED_SESSION_INDEX_DROPBOX_PATH, sharedToken);
+    report["kv:session:*"] = await migrateKvPrefixToSharedDropbox(
+      env,
+      "session:",
+      (key) => sessionDropboxPath(key.replace(/^session:/, "")),
+      sharedToken,
+    );
+    report["kv:deleted:session:*"] = await migrateKvPrefixToSharedDropbox(
+      env,
+      "deleted:session:",
+      (key) => deletedSessionDropboxPath(key.replace(/^deleted:session:/, "")),
+      sharedToken,
+    );
+    return Response.json({ ok: true, sharedPrefix: "/", report }, { headers: noStoreHeaders });
+  }
+
+  if (url.pathname === "/migrate/shared/kv-page" && request.method === "POST") {
+    const body = await request.json().catch(() => ({} as any)) as { key?: string; prefix?: string; limit?: number; cursor?: string };
+    const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
+    if (!sharedToken) {
+      return Response.json({ ok: false, error: "shared dropbox token missing" }, { status: 500, headers: noStoreHeaders });
+    }
+    const key = String(body.key || "").trim();
+    if (key) {
+      const path = knownKvDropboxPath(key);
+      if (!path) return Response.json({ ok: false, error: "unsupported key", key }, { status: 400, headers: noStoreHeaders });
+      const status = await migrateKvTextToSharedDropbox(env, key, path, sharedToken);
+      return Response.json({ ok: true, key, target: path, status }, { headers: noStoreHeaders });
+    }
+    const prefix = String(body.prefix || "").trim();
+    if (prefix === "session:") {
+      const result = await migrateKvPrefixPageToSharedDropbox(env, prefix, Number(body.limit || 25), String(body.cursor || "") || undefined, kvSessionDropboxPathFromKey, sharedToken);
+      return Response.json({ ok: true, prefix, ...result }, { headers: noStoreHeaders });
+    }
+    if (prefix === "deleted:session:") {
+      const result = await migrateKvPrefixPageToSharedDropbox(env, prefix, Number(body.limit || 25), String(body.cursor || "") || undefined, kvDeletedSessionDropboxPathFromKey, sharedToken);
+      return Response.json({ ok: true, prefix, ...result }, { headers: noStoreHeaders });
+    }
+    return Response.json({ ok: false, error: "key or supported prefix required" }, { status: 400, headers: noStoreHeaders });
+  }
+
   if (url.pathname === "/migrate/shared/copy-key" && request.method === "POST") {
     const body = await request.json().catch(() => ({} as any)) as { key?: string };
     const key = String(body.key || "").trim().replace(/^\/+/, "");
@@ -1756,7 +1815,7 @@ export async function handleApiRoute(
         added++;
         continue;
       }
-      if (Number(meta.updatedAt || 0) > Number(prev.updatedAt || 0) || Number(meta.messageCount || 0) !== Number(prev.messageCount || 0)) {
+      if (Number(meta.lastMessageAt || 0) > Number(prev.lastMessageAt || 0) || Number(meta.messageCount || 0) !== Number(prev.messageCount || 0)) {
         byId.set(id, { ...meta, id });
         updated++;
       }

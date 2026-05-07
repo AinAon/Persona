@@ -66,9 +66,7 @@ async function readPolicyText(env: Env, pid: string, key: string): Promise<strin
     const txt = await dropboxReadText(token, vaultPathFromR2Key(pid, key));
     if (txt != null) return txt;
   }
-  const obj = await env.R2.get(key);
-  if (!obj) return null;
-  return await obj.text();
+  return null;
 }
 
 async function writePolicyText(env: Env, pid: string, key: string, text: string, contentType: string): Promise<void> {
@@ -77,7 +75,7 @@ async function writePolicyText(env: Env, pid: string, key: string, text: string,
     const ok = await dropboxWriteText(token, vaultPathFromR2Key(pid, key), text);
     if (ok) return;
   }
-  await env.R2.put(key, text, { httpMetadata: { contentType } });
+  throw new Error(`dropbox write failed: ${vaultPathFromR2Key(pid, key)}`);
 }
 
 async function deletePolicyText(env: Env, pid: string, key: string): Promise<void> {
@@ -86,7 +84,7 @@ async function deletePolicyText(env: Env, pid: string, key: string): Promise<voi
     const ok = await dropboxDeletePath(token, vaultPathFromR2Key(pid, key));
     if (ok) return;
   }
-  await env.R2.delete(key);
+  throw new Error(`dropbox delete failed: ${vaultPathFromR2Key(pid, key)}`);
 }
 
 export function resolvePolicyTargetPid(participantPids: string[] = []): string | null {
