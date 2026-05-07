@@ -400,7 +400,8 @@ async function resolveMessageSuffixes(rawText, pList, existingSuffixes = null) {
       // LLM suffix missing/invalid -> choose random suffix within persona inventory.
       suffixes[key] = pool[Math.floor(Math.random() * pool.length)];
     } else if (slot.hasBase) {
-      suffixes[key] = ''; // suffix 없는 기본 파일
+      // Non-neutral emotion never stores empty suffix; keep null to trigger neutral fallback.
+      suffixes[key] = (String(seg.emotion || '').toLowerCase() === 'neutral') ? '' : null;
     } else {
       suffixes[key] = null; // 없음 → neutral fallback
     }

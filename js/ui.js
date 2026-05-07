@@ -3661,8 +3661,8 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
       }
     }
     if (!dataUrl) {
-      suffix = '';
-      suffixes[suffixKey] = '';
+      suffix = String(seg.emotion || '').toLowerCase() === 'neutral' ? '' : null;
+      suffixes[suffixKey] = suffix;
       suffixPatched = true;
       dataUrl = await getEmotionImage(p.pid, 'neutral', rectDisplayPx);
     }
@@ -3676,7 +3676,7 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
     
     const safePid = p.pid.replace(/'/g, "\\'");
     const safeEmotion = (seg.emotion||'neutral').replace(/'/g, "\\'");
-    const safeSuffix = suffix.replace(/'/g, "\\'");
+    const safeSuffix = String(suffix || '').replace(/'/g, "\\'");
     const safeThumb = thumbSrc.replace(/'/g, "\\'");
     const celebStroke = '';
     
@@ -3804,7 +3804,7 @@ async function resolveFallbackSuffixForMissingEmotion(pid, emotion, requestedSuf
     const req = String(requestedSuffix || '').toLowerCase();
     if (req && Array.isArray(info?.suffixed) && info.suffixed.includes(req)) return req;
     if (Array.isArray(info?.suffixed) && info.suffixed.length > 0) return info.suffixed[0];
-    if (info?.hasBase) return '';
+    if (info?.hasBase) return String(emotion || '').toLowerCase() === 'neutral' ? '' : null;
   } catch {}
   return null;
 }
