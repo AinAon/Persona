@@ -1762,6 +1762,63 @@ export async function handleApiRoute(
     }, { headers: noStoreHeaders });
   }
 
+  if (url.pathname === "/debug/session/migrate-r2-to-dropbox" && request.method === "POST") {
+    const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
+    if (!sharedToken) {
+      return Response.json({ ok: false, error: "shared dropbox token missing" }, { status: 500, headers: noStoreHeaders });
+    }
+
+    const dataKeys = await listR2ByPrefix(env, SESSION_R2_PREFIX, 50000);
+    let copiedData = 0;
+    let skippedData = 0;
+    const failedData: string[] = [];
+
+    for (const key of dataKeys) {
+      const id = key.replace(SESSION_R2_PREFIX, "").replace(/\.json$/i, "").trim();
+      if (!id) { skippedData++; continue; }
+      const raw = await r2Text(env, key);
+      if (!raw) { skippedData++; continue; }
+      let payload = raw;
+      try {
+        payload = stringifyJsonPretty(JSON.parse(raw));
+      } catch {
+        // keep original raw text if parse fails
+      }
+      const ok = await dropboxWriteText(sharedToken, sessionDropboxPath(id), payload);
+      if (ok) copiedData++;
+      else failedData.push(id);
+    }
+
+    const r2IndexRaw = await r2Text(env, SESSION_INDEX_R2_KEY);
+    let copiedIndex = false;
+    if (r2IndexRaw) {
+      let indexPayload = r2IndexRaw;
+      try {
+        indexPayload = stringifyJsonPretty(JSON.parse(r2IndexRaw));
+      } catch {
+        // keep original raw text if parse fails
+      }
+      copiedIndex = await dropboxWriteText(sharedToken, SESSION_INDEX_DROPBOX_PATH, indexPayload);
+    }
+
+    return Response.json({
+      ok: failedData.length === 0,
+      copiedData,
+      skippedData,
+      copiedIndex,
+      failedCount: failedData.length,
+      failedIds: failedData.slice(0, 50),
+      source: {
+        dataPrefix: SESSION_R2_PREFIX,
+        indexKey: SESSION_INDEX_R2_KEY,
+      },
+      target: {
+        dataPrefix: "/session/data/",
+        indexPath: SESSION_INDEX_DROPBOX_PATH,
+      },
+    }, { headers: noStoreHeaders });
+  }
+
   if (url.pathname === "/riley/wealth/reconcile" && request.method === "POST") {
     const result = await reconcileRileyWealth(env);
     return Response.json(result, { headers: { ...cors, "Cache-Control": "no-store" } });
