@@ -528,7 +528,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     }
 
     if (!isImageReq && inRileyChat) {
-      const sheetResult = await runRileySheetRequestWithGemini(env, latestUserText, apiKeys.gemini);
+      const sheetResult = await runRileySheetRequestWithGemini(env, latestUserText, apiKeys.gemini, model);
       if (sheetResult) {
         const evidence = await writeVaultEvidence(env, "riley", "sheets_write", sheetResult.ok, sheetResult.ok ? sheetResult.message : sheetResult.error, latestUserText);
         const natural = await renderVaultResultMessage([

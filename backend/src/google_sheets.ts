@@ -217,18 +217,21 @@ type RileySheetRunLog = {
   at: string;
   userText: string;
   spreadsheetId: string;
+  plannerModel: string;
   steps: Array<{ at: string; stage: string; ok: boolean; data?: unknown; error?: string }>;
   final?: RileySheetAiResult;
 };
 
 const RILEY_SHEET_RUN_INDEX_KEY = "riley:sheets:runlog:index";
+const RILEY_SHEET_RUN_LOG_TTL_SECONDS = 60 * 60 * 24 * 14;
 
-function createRunLog(userText: string, spreadsheetId: string): RileySheetRunLog {
+function createRunLog(userText: string, spreadsheetId: string, plannerModel: string): RileySheetRunLog {
   return {
     runId: `riley_sheet_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     at: new Date().toISOString(),
     userText: String(userText || ""),
     spreadsheetId,
+    plannerModel,
     steps: [],
   };
 }
@@ -238,11 +241,11 @@ function addRunStep(log: RileySheetRunLog, stage: string, ok: boolean, data?: un
 }
 
 async function saveRunLog(env: Env, log: RileySheetRunLog): Promise<void> {
-  await env.KV.put(`riley:sheets:runlog:${log.runId}`, JSON.stringify(log));
+  await env.KV.put(`riley:sheets:runlog:${log.runId}`, JSON.stringify(log), { expirationTtl: RILEY_SHEET_RUN_LOG_TTL_SECONDS });
   const raw = await env.KV.get(RILEY_SHEET_RUN_INDEX_KEY);
   const ids = raw ? JSON.parse(raw) as string[] : [];
   const next = [log.runId, ...ids.filter((id) => id !== log.runId)].slice(0, 50);
-  await env.KV.put(RILEY_SHEET_RUN_INDEX_KEY, JSON.stringify(next));
+  await env.KV.put(RILEY_SHEET_RUN_INDEX_KEY, JSON.stringify(next), { expirationTtl: RILEY_SHEET_RUN_LOG_TTL_SECONDS });
 }
 
 async function loadRunLogs(env: Env, limit = 10): Promise<RileySheetRunLog[]> {
@@ -295,8 +298,11 @@ function compactSheetContext(ctx: RileySheetContext): string {
   }).slice(0, 14000);
 }
 
-async function planRileySheetActionWithGemini(env: Env, text: string, apiKey: string): Promise<RileySheetAiAction | null> {
+async function planRileySheetActionWithGemini(env: Env, text: string, apiKey: string, model: string): Promise<RileySheetAiAction | null> {
   if (!apiKey) return null;
+  if (!String(model || "").startsWith("gemini")) {
+    throw new Error(`riley_sheet_planner_requires_gemini_model:${model || "missing"}`);
+  }
   const ctx = await loadRileySheetsContext(env);
   if (!ctx.ok) return { action: "none", reason: ctx.error || "sheets_context_failed" };
   const messages = [
@@ -329,7 +335,7 @@ async function planRileySheetActionWithGemini(env: Env, text: string, apiKey: st
       }),
     },
   ];
-  const out = await generateGeminiText({ model: "gemini-2.5-flash", messages, apiKey });
+  const out = await generateGeminiText({ model, messages, apiKey });
   const parsed = extractJsonObject(out);
   if (!parsed || typeof parsed !== "object") return null;
   const action = String(parsed.action || "none");
@@ -663,14 +669,15 @@ async function executeRileySheetAiAction(env: Env, action: RileySheetAiAction): 
   }
 }
 
-export async function runRileySheetRequestWithGemini(env: Env, text: string, apiKey: string): Promise<RileySheetAiResult | null> {
+export async function runRileySheetRequestWithGemini(env: Env, text: string, apiKey: string, model: string): Promise<RileySheetAiResult | null> {
   const spreadsheetId = String(env.RILEY_SHEETS_SPREADSHEET_ID || "").trim();
-  const log = createRunLog(text, spreadsheetId);
+  const plannerModel = String(model || "");
+  const log = createRunLog(text, spreadsheetId, plannerModel);
   try {
-    addRunStep(log, "request_received", true, { text: String(text || "") });
-    addRunStep(log, "gemini_plan_start", true);
-    const action = await planRileySheetActionWithGemini(env, text, apiKey);
-    addRunStep(log, "gemini_plan_result", !!action, { action });
+    addRunStep(log, "request_received", true, { text: String(text || ""), plannerModel });
+    addRunStep(log, "riley_gemini_plan_start", true, { model: plannerModel });
+    const action = await planRileySheetActionWithGemini(env, text, apiKey, plannerModel);
+    addRunStep(log, "riley_gemini_plan_result", !!action, { model: plannerModel, action });
     if (!action || action.action === "none") {
       log.final = { ok: true, action: "none", spreadsheetId, message: action?.reason || "no_sheet_action", runId: log.runId };
       await saveRunLog(env, log);
