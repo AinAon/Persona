@@ -392,6 +392,44 @@ function stripVaultProposalBlock(reply: string): string {
 
 type TextApiKeys = { gemini: string; grok: string; openai: string; anthropic: string };
 
+function compactOperationPayload(value: unknown, depth = 0): unknown {
+  if (value === null || value === undefined) return value;
+  if (typeof value === "string") return value.length > 1000 ? `${value.slice(0, 1000)}...` : value;
+  if (typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.slice(0, 20).map((item) => compactOperationPayload(item, depth + 1));
+  const src = value as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(src)) {
+    if (key === "values" && Array.isArray(val)) {
+      const rows = val as unknown[][];
+      out[key] = {
+        rowCount: rows.length,
+        preview: rows.slice(0, 5).map((row) => Array.isArray(row) ? row.slice(0, 8) : row),
+      };
+    } else if (key === "logs" && Array.isArray(val)) {
+      out[key] = val.slice(0, 10).map((log: any) => ({
+        runId: log?.runId,
+        at: log?.at,
+        userText: typeof log?.userText === "string" ? log.userText.slice(0, 300) : log?.userText,
+        plannerModel: log?.plannerModel,
+        final: compactOperationPayload(log?.final, depth + 1),
+        steps: Array.isArray(log?.steps) ? log.steps.map((step: any) => ({
+          at: step?.at,
+          stage: step?.stage,
+          ok: step?.ok,
+          error: step?.error,
+          data: compactOperationPayload(step?.data, depth + 2),
+        })) : undefined,
+      }));
+    } else if (depth >= 4) {
+      out[key] = "[compact]";
+    } else {
+      out[key] = compactOperationPayload(val, depth + 1);
+    }
+  }
+  return out;
+}
+
 async function renderVaultResultMessage(raw: string, model: string, apiKeys: TextApiKeys, contextText = ""): Promise<string> {
   const msg = String(raw || "").trim();
   if (!msg) return "";
@@ -455,7 +493,11 @@ async function renderVaultResultMessage(raw: string, model: string, apiKeys: Tex
   if (failed) {
     return `적용 중 일부 경로에서 실패했습니다: ${String(failed[1] || "").trim()}`;
   }
-  return `처리 결과: ${msg}`;
+  if (msg.includes("tool_result=")) {
+    return "작업 결과를 확인했지만 응답 요약 생성에 실패했습니다. 실행 로그에서 결과와 오류를 다시 확인할 수 있습니다.";
+  }
+  const short = msg.length > 800 ? `${msg.slice(0, 800)}...` : msg;
+  return `처리 결과: ${short}`;
 }
 
 type ChatBody = {
@@ -535,7 +577,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
           "Riley received a Google Sheets tool result.",
           "Riley must inspect it and decide the final user-facing reply.",
           "If ok=false, Riley should explain the concrete problem and the next fix without pretending it succeeded.",
-          `tool_result=${JSON.stringify(sheetResult)}`,
+          `tool_result=${JSON.stringify(compactOperationPayload(sheetResult))}`,
           `run_id=${sheetResult.runId || ""}`,
           `evidence_id=${evidence.id}`,
         ].join("\n"), model, apiKeys, latestUserText);

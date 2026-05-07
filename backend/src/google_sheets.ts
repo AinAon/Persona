@@ -112,15 +112,20 @@ async function loadSheetTitles(env: Env, spreadsheetId: string): Promise<string[
   return (meta.sheets || []).map((s) => String(s.properties?.title || "").trim()).filter(Boolean);
 }
 
-async function loadSheetProperties(env: Env, spreadsheetId: string): Promise<Array<{ title: string; sheetId: number }>> {
-  const metaRes = await sheetsFetch(env, `${spreadsheetId}?fields=sheets.properties(sheetId,title)`);
+async function loadSheetProperties(env: Env, spreadsheetId: string): Promise<Array<{ title: string; sheetId: number; rowCount?: number; columnCount?: number }>> {
+  const metaRes = await sheetsFetch(env, `${spreadsheetId}?fields=sheets.properties(sheetId,title,gridProperties(rowCount,columnCount))`);
   const meta = await metaRes.json().catch(() => ({})) as {
-    sheets?: Array<{ properties?: { sheetId?: number; title?: string } }>;
+    sheets?: Array<{ properties?: { sheetId?: number; title?: string; gridProperties?: { rowCount?: number; columnCount?: number } } }>;
     error?: { message?: string };
   };
   if (!metaRes.ok) throw new Error(meta.error?.message || `sheet_meta_failed_${metaRes.status}`);
   return (meta.sheets || [])
-    .map((s) => ({ title: String(s.properties?.title || "").trim(), sheetId: Number(s.properties?.sheetId) }))
+    .map((s) => ({
+      title: String(s.properties?.title || "").trim(),
+      sheetId: Number(s.properties?.sheetId),
+      rowCount: Number(s.properties?.gridProperties?.rowCount),
+      columnCount: Number(s.properties?.gridProperties?.columnCount),
+    }))
     .filter((s) => s.title && Number.isFinite(s.sheetId));
 }
 
@@ -205,6 +210,7 @@ type RileySheetAiAction =
   | { action: "read_range"; sheet: string; range: string }
   | { action: "write_cell"; sheet: string; cell: string; value: string }
   | { action: "append_row"; sheet: string; values: string[] }
+  | { action: "insert_rows"; sheet: string; start_row: number; count?: number }
   | { action: "create_sheet"; title: string }
   | { action: "rename_sheet"; old_title: string; new_title: string };
 
@@ -237,7 +243,45 @@ function createRunLog(userText: string, spreadsheetId: string, plannerModel: str
 }
 
 function addRunStep(log: RileySheetRunLog, stage: string, ok: boolean, data?: unknown, error?: string): void {
-  log.steps.push({ at: new Date().toISOString(), stage, ok, ...(data === undefined ? {} : { data }), ...(error ? { error } : {}) });
+  log.steps.push({ at: new Date().toISOString(), stage, ok, ...(data === undefined ? {} : { data: compactForLog(data) }), ...(error ? { error } : {}) });
+}
+
+function summarizeSheetValues(values: unknown): unknown {
+  if (!Array.isArray(values)) return values;
+  const rows = values as unknown[][];
+  const colCount = rows.reduce((max, row) => Array.isArray(row) ? Math.max(max, row.length) : max, 0);
+  return {
+    rowCount: rows.length,
+    columnCount: colCount,
+    preview: rows.slice(0, 5).map((row) => Array.isArray(row) ? row.slice(0, 8).map((v) => String(v ?? "").slice(0, 120)) : row),
+  };
+}
+
+function compactForLog(value: unknown, depth = 0): unknown {
+  if (value === null || value === undefined) return value;
+  if (typeof value === "string") return value.length > 1000 ? `${value.slice(0, 1000)}...` : value;
+  if (typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.slice(0, 20).map((item) => compactForLog(item, depth + 1));
+  const src = value as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(src)) {
+    if (key === "values") out[key] = summarizeSheetValues(val);
+    else if (depth >= 4) out[key] = "[compact]";
+    else out[key] = compactForLog(val, depth + 1);
+  }
+  return out;
+}
+
+function compactRunLogForRiley(log: RileySheetRunLog): RileySheetRunLog {
+  return {
+    ...log,
+    userText: log.userText.length > 500 ? `${log.userText.slice(0, 500)}...` : log.userText,
+    steps: log.steps.map((step) => ({
+      ...step,
+      data: step.data === undefined ? undefined : compactForLog(step.data),
+    })),
+    final: log.final ? compactForLog(log.final) as RileySheetAiResult : undefined,
+  };
 }
 
 async function saveRunLog(env: Env, log: RileySheetRunLog): Promise<void> {
@@ -257,7 +301,7 @@ async function loadRunLogs(env: Env, limit = 10): Promise<RileySheetRunLog[]> {
     const item = await env.KV.get(`riley:sheets:runlog:${id}`);
     if (!item) continue;
     try {
-      logs.push(JSON.parse(item) as RileySheetRunLog);
+      logs.push(compactRunLogForRiley(JSON.parse(item) as RileySheetRunLog));
     } catch {
       // skip malformed log
     }
@@ -321,8 +365,12 @@ async function planRileySheetActionWithGemini(env: Env, text: string, apiKey: st
         "{\"action\":\"read_range\",\"sheet\":\"tab title\",\"range\":\"A1 or A1:C3 or 1:40\"}",
         "{\"action\":\"write_cell\",\"sheet\":\"tab title\",\"cell\":\"C2\",\"value\":\"text\"}",
         "{\"action\":\"append_row\",\"sheet\":\"tab title\",\"values\":[\"a\",\"b\"]}",
+        "{\"action\":\"insert_rows\",\"sheet\":\"tab title\",\"start_row\":1,\"count\":1}",
         "{\"action\":\"create_sheet\",\"title\":\"new tab title\"}",
         "{\"action\":\"rename_sheet\",\"old_title\":\"old tab title\",\"new_title\":\"new tab title\"}",
+        "For requests to add/insert a row at the top, first row, before row N, or at row N, use insert_rows, not append_row.",
+        "insert_rows.start_row is 1-based. start_row=1 inserts before the current first row.",
+        "Use insert_rows for blank row insertion. Use append_row only when the user provides non-empty row values to append.",
         "Use get_run_logs when the user asks Riley to inspect, monitor, debug, or review recent sheet tool runs/logs/errors.",
         "Use action none when the request is not about Google Sheets or sheet tool logs.",
       ].join("\n"),
@@ -339,7 +387,7 @@ async function planRileySheetActionWithGemini(env: Env, text: string, apiKey: st
   const parsed = extractJsonObject(out);
   if (!parsed || typeof parsed !== "object") return null;
   const action = String(parsed.action || "none");
-  if (!["none", "get_run_logs", "get_spreadsheet_title", "list_tabs", "read_range", "write_cell", "append_row", "create_sheet", "rename_sheet"].includes(action)) {
+  if (!["none", "get_run_logs", "get_spreadsheet_title", "list_tabs", "read_range", "write_cell", "append_row", "insert_rows", "create_sheet", "rename_sheet"].includes(action)) {
     return { action: "none", reason: "unsupported_action" };
   }
   return parsed as RileySheetAiAction;
@@ -655,6 +703,7 @@ async function executeRileySheetAiAction(env: Env, action: RileySheetAiAction): 
       const sheet = String(action.sheet || "").trim();
       const values = Array.isArray(action.values) ? action.values.map((v) => String(v || "")) : [];
       if (!sheet || !values.length) return { ok: false, action: action.action, error: "append_row_values_missing", stage: "validate" };
+      if (!values.some((v) => v.trim())) return { ok: false, action: action.action, error: "append_row_values_empty_use_insert_rows", stage: "validate" };
       const res = await sheetsFetch(env, `${spreadsheetId}/values/${encodeURIComponent(sheet)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, {
         method: "POST",
         body: JSON.stringify({ values: [values] }),
@@ -662,6 +711,47 @@ async function executeRileySheetAiAction(env: Env, action: RileySheetAiAction): 
       const data = await res.json().catch(() => ({})) as { updates?: { updatedRange?: string }; error?: { message?: string } };
       if (!res.ok) return { ok: false, action: action.action, error: data.error?.message || `sheet_append_failed_${res.status}`, stage: "append" };
       return { ok: true, action: action.action, spreadsheetId, message: `appended_row: ${data.updates?.updatedRange || sheet}`, data: { updatedRange: data.updates?.updatedRange, values } };
+    }
+    if (action.action === "insert_rows") {
+      const sheet = String(action.sheet || "").trim();
+      const startRow = Math.max(1, Math.floor(Number(action.start_row || 1)));
+      const count = Math.max(1, Math.min(100, Math.floor(Number(action.count || 1))));
+      if (!sheet) return { ok: false, action: action.action, error: "insert_rows_sheet_missing", stage: "validate" };
+      const propsBefore = await loadSheetProperties(env, spreadsheetId);
+      const target = propsBefore.find((s) => s.title === sheet);
+      if (!target) return { ok: false, action: action.action, error: `sheet_not_found:${sheet}`, stage: "insert_rows" };
+      const startIndex = startRow - 1;
+      const res = await sheetsFetch(env, `${spreadsheetId}:batchUpdate`, {
+        method: "POST",
+        body: JSON.stringify({
+          requests: [{
+            insertDimension: {
+              range: {
+                sheetId: target.sheetId,
+                dimension: "ROWS",
+                startIndex,
+                endIndex: startIndex + count,
+              },
+              inheritFromBefore: startIndex > 0,
+            },
+          }],
+        }),
+      });
+      const data = await res.json().catch(() => ({})) as { error?: { message?: string } };
+      if (!res.ok) return { ok: false, action: action.action, error: data.error?.message || `sheet_insert_rows_failed_${res.status}`, stage: "insert_rows" };
+      const propsAfter = await loadSheetProperties(env, spreadsheetId);
+      const after = propsAfter.find((s) => s.title === sheet);
+      const verified = Number.isFinite(target.rowCount) && Number.isFinite(after?.rowCount)
+        ? Number(after?.rowCount) >= Number(target.rowCount) + count
+        : true;
+      if (!verified) return { ok: false, action: action.action, error: "insert_rows_verification_failed", stage: "verify" };
+      return {
+        ok: true,
+        action: action.action,
+        spreadsheetId,
+        message: `inserted_rows: ${sheet}!${startRow}:${startRow + count - 1}`,
+        data: { sheet, startRow, count, rowCountBefore: target.rowCount, rowCountAfter: after?.rowCount, verified },
+      };
     }
     return { ok: false, action: "unknown", error: "unsupported_action", stage: "validate" };
   } catch (e: any) {
