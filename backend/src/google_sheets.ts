@@ -162,7 +162,7 @@ export async function getRileySheetsStatus(env: Env): Promise<{ ok: boolean; spr
 
 function isSpreadsheetTitleQuestion(text: string): boolean {
   const raw = String(text || "");
-  const mentionsDoc = /(스프레드시트|spreadsheet|문서|파일|document|file)/i.test(raw);
+  const mentionsDoc = /(스프레드\s*시트|spreadsheet|문서|파일|document|file)/i.test(raw);
   const asksTitle = /(이름|제목|타이틀|title|name)/i.test(raw);
   return mentionsDoc && asksTitle && !/(탭|tab|셀|cell|[A-Z]{1,3}\d+)/i.test(raw);
 }

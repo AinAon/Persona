@@ -143,7 +143,7 @@ function isTimeQuestion(text: string): boolean {
 function isRileySheetsCapabilityQuestion(text: string): boolean {
   const raw = String(text || "");
   const mentionsRileyOrSheet = /(라일리|riley|시트|스프레드시트|sheet|spreadsheet)/i.test(raw);
-  const asksCapability = /(권한|가능|불가능|못\s*쓰|안\s*써|쓰기|write|permission|capability|access|readonly|read-only|읽기\s*전용)/i.test(raw);
+  const asksCapability = /(권한|접근\s*권한|쓰기\s*권한|읽기\s*권한|permission|capability|access|readonly|read-only|읽기\s*전용)/i.test(raw);
   return mentionsRileyOrSheet && asksCapability;
 }
 
@@ -533,27 +533,6 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       }, { headers: cors });
     }
 
-    if (!isImageReq && inRileyChat && isRileySheetsCapabilityQuestion(latestUserText)) {
-      const status = await getRileySheetsStatus(env);
-      const reply = status.ok
-        ? [
-            "Riley 시트 권한은 활성 상태입니다.",
-            `spreadsheet_id: ${status.spreadsheetId}`,
-            "가능: 현재 탭 읽기, 셀/행 쓰기, 탭 생성",
-            "쓰기 요청은 서버가 실행한 뒤 같은 범위를 다시 읽어 검증해야만 성공으로 보고합니다.",
-          ].join("\n")
-        : [
-            "Riley 시트 권한이 활성 상태가 아닙니다.",
-            `error: ${status.error || "unknown"}`,
-            status.spreadsheetId ? `spreadsheet_id: ${status.spreadsheetId}` : "",
-          ].filter(Boolean).join("\n");
-      return Response.json({
-        result: status.ok ? "success" : "error",
-        reply,
-        riley_sheets_capability: status,
-      }, { status: status.ok ? 200 : 400, headers: cors });
-    }
-
     if (!isImageReq && inRileyChat) {
       const spreadsheetTitle = await readRileySpreadsheetTitleFromText(env, latestUserText);
       if (spreadsheetTitle) {
@@ -566,6 +545,27 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
           reply: `스프레드시트 문서 이름: ${spreadsheetTitle.title || "(제목 없음)"}`,
           spreadsheet_title: { spreadsheetId: spreadsheetTitle.spreadsheetId, title: spreadsheetTitle.title },
         }, { headers: cors });
+      }
+
+      if (isRileySheetsCapabilityQuestion(latestUserText)) {
+        const status = await getRileySheetsStatus(env);
+        const reply = status.ok
+          ? [
+              "Riley 시트 권한은 활성 상태입니다.",
+              `spreadsheet_id: ${status.spreadsheetId}`,
+              "가능: 현재 탭 읽기, 셀/행 쓰기, 탭 생성",
+              "쓰기 요청은 서버가 실행한 뒤 같은 범위를 다시 읽어 검증해야만 성공으로 보고합니다.",
+            ].join("\n")
+          : [
+              "Riley 시트 권한이 활성 상태가 아닙니다.",
+              `error: ${status.error || "unknown"}`,
+              status.spreadsheetId ? `spreadsheet_id: ${status.spreadsheetId}` : "",
+            ].filter(Boolean).join("\n");
+        return Response.json({
+          result: status.ok ? "success" : "error",
+          reply,
+          riley_sheets_capability: status,
+        }, { status: status.ok ? 200 : 400, headers: cors });
       }
 
       const sheetCreate = await createRileySheetFromText(env, latestUserText);
