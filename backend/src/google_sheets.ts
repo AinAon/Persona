@@ -123,6 +123,13 @@ async function loadSheetProperties(env: Env, spreadsheetId: string): Promise<Arr
     .filter((s) => s.title && Number.isFinite(s.sheetId));
 }
 
+async function loadSpreadsheetTitle(env: Env, spreadsheetId: string): Promise<string> {
+  const metaRes = await sheetsFetch(env, `${spreadsheetId}?fields=properties.title`);
+  const meta = await metaRes.json().catch(() => ({})) as { properties?: { title?: string }; error?: { message?: string } };
+  if (!metaRes.ok) throw new Error(meta.error?.message || `spreadsheet_title_failed_${metaRes.status}`);
+  return String(meta.properties?.title || "").trim();
+}
+
 async function ensureSheetTab(env: Env, spreadsheetId: string, tab: string): Promise<void> {
   const metaRes = await sheetsFetch(env, `${spreadsheetId}?fields=sheets.properties.title`);
   const meta = await metaRes.json().catch(() => ({})) as { sheets?: Array<{ properties?: { title?: string } }>; error?: { message?: string } };
@@ -144,12 +151,36 @@ function isRileySheetCreateIntent(text: string): boolean {
   return /(?:시트|탭|sheet|tab).*(?:만들|생성|추가|create|add)/i.test(String(text || ""));
 }
 
-export async function getRileySheetsStatus(env: Env): Promise<{ ok: boolean; spreadsheetId: string; tab: string; configured: boolean; error?: string }> {
+export async function getRileySheetsStatus(env: Env): Promise<{ ok: boolean; spreadsheetId: string; title?: string; tab: string; configured: boolean; error?: string }> {
   const spreadsheetId = String(env.RILEY_SHEETS_SPREADSHEET_ID || "").trim();
   const configured = !!spreadsheetId && !!parseServiceAccount(env);
   if (!configured) return { ok: false, spreadsheetId, tab: "", configured, error: "sheets_not_configured" };
   const titles = await loadSheetTitles(env, spreadsheetId).catch(() => []);
-  return { ok: true, spreadsheetId, tab: String(titles[0] || "").trim(), configured };
+  const title = await loadSpreadsheetTitle(env, spreadsheetId).catch(() => "");
+  return { ok: true, spreadsheetId, title, tab: String(titles[0] || "").trim(), configured };
+}
+
+function isSpreadsheetTitleQuestion(text: string): boolean {
+  const raw = String(text || "");
+  const mentionsDoc = /(스프레드시트|spreadsheet|문서|파일|document|file)/i.test(raw);
+  const asksTitle = /(이름|제목|타이틀|title|name)/i.test(raw);
+  return mentionsDoc && asksTitle && !/(탭|tab|셀|cell|[A-Z]{1,3}\d+)/i.test(raw);
+}
+
+export async function readRileySpreadsheetTitleFromText(env: Env, text: string): Promise<
+  | { ok: true; spreadsheetId: string; title: string }
+  | { ok: false; error: string; stage?: string }
+  | null
+> {
+  if (!isSpreadsheetTitleQuestion(text)) return null;
+  const spreadsheetId = String(env.RILEY_SHEETS_SPREADSHEET_ID || "").trim();
+  if (!spreadsheetId) return { ok: false, error: "riley_sheets_spreadsheet_id_missing", stage: "config" };
+  try {
+    const title = await loadSpreadsheetTitle(env, spreadsheetId);
+    return { ok: true, spreadsheetId, title };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || "spreadsheet_title_failed", stage: "read" };
+  }
 }
 
 export type RileySheetContext = {

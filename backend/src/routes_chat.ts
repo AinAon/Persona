@@ -32,7 +32,7 @@ import {
   saveCandidateFromReply,
 } from "./persona_promotion";
 import { buildPersonaVaultV2SystemPrompt } from "./persona_vault_v2";
-import { buildRileySheetsContextPrompt, createRileySheetFromText, executeRileySheetProposalActions, getRileySheetsStatus, loadRileySheetsContext, readRileySheetFromText, writeRileySheetFromText, type RileySheetProposalAction } from "./google_sheets";
+import { buildRileySheetsContextPrompt, createRileySheetFromText, executeRileySheetProposalActions, getRileySheetsStatus, loadRileySheetsContext, readRileySheetFromText, readRileySpreadsheetTitleFromText, writeRileySheetFromText, type RileySheetProposalAction } from "./google_sheets";
 import {
   inferAttitudeBFromUserText,
   loadPersonaUserProfile,
@@ -555,6 +555,19 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     }
 
     if (!isImageReq && inRileyChat) {
+      const spreadsheetTitle = await readRileySpreadsheetTitleFromText(env, latestUserText);
+      if (spreadsheetTitle) {
+        if (!spreadsheetTitle.ok) {
+          const evidence = await writeVaultEvidence(env, "riley", "sheets_read", false, spreadsheetTitle.error, latestUserText);
+          return Response.json({ result: "error", error: spreadsheetTitle.error, evidence_id: evidence.id }, { status: 400, headers: cors });
+        }
+        return Response.json({
+          result: "success",
+          reply: `스프레드시트 문서 이름: ${spreadsheetTitle.title || "(제목 없음)"}`,
+          spreadsheet_title: { spreadsheetId: spreadsheetTitle.spreadsheetId, title: spreadsheetTitle.title },
+        }, { headers: cors });
+      }
+
       const sheetCreate = await createRileySheetFromText(env, latestUserText);
       if (sheetCreate) {
         if (!sheetCreate.ok) {
