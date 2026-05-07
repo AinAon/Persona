@@ -32,7 +32,7 @@ import {
   saveCandidateFromReply,
 } from "./persona_promotion";
 import { buildPersonaVaultV2SystemPrompt } from "./persona_vault_v2";
-import { buildRileySheetsContextPrompt, loadRileySheetsContext, readRileySheetFromText, writeRileySheetFromText } from "./google_sheets";
+import { buildRileySheetsContextPrompt, createRileySheetFromText, loadRileySheetsContext, readRileySheetFromText, writeRileySheetFromText } from "./google_sheets";
 import {
   inferAttitudeBFromUserText,
   loadPersonaUserProfile,
@@ -485,6 +485,19 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     }
 
     if (!isImageReq && inRileyChat) {
+      const sheetCreate = await createRileySheetFromText(env, latestUserText);
+      if (sheetCreate) {
+        if (!sheetCreate.ok) {
+          const evidence = await writeVaultEvidence(env, "riley", "sheets_create", false, sheetCreate.error, latestUserText);
+          return Response.json({ result: "error", error: sheetCreate.error, evidence_id: evidence.id }, { status: 400, headers: cors });
+        }
+        return Response.json({
+          result: "success",
+          reply: sheetCreate.created ? `시트를 생성했습니다: ${sheetCreate.tab}` : `이미 존재하는 시트입니다: ${sheetCreate.tab}`,
+          sheet_create: { tab: sheetCreate.tab, created: sheetCreate.created },
+        }, { headers: cors });
+      }
+
       const sheetRead = await readRileySheetFromText(env, latestUserText);
       if (sheetRead) {
         if (!sheetRead.ok) {

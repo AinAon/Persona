@@ -128,6 +128,10 @@ async function ensureSheetTab(env: Env, spreadsheetId: string, tab: string): Pro
   }
 }
 
+function isRileySheetCreateIntent(text: string): boolean {
+  return /(?:시트|탭|sheet|tab).*(?:만들|생성|추가|create|add)/i.test(String(text || ""));
+}
+
 export async function getRileySheetsStatus(env: Env): Promise<{ ok: boolean; spreadsheetId: string; tab: string; configured: boolean; error?: string }> {
   const spreadsheetId = String(env.RILEY_SHEETS_SPREADSHEET_ID || "").trim();
   const configured = !!spreadsheetId && !!parseServiceAccount(env);
@@ -224,6 +228,8 @@ function inferTargetTab(text: string, existingTabs: string[]): string {
 
 function inferSheetWriteContent(text: string): string {
   const raw = String(text || "").trim();
+  const quoted = raw.match(/["'“”‘’]([^"'“”‘’]{1,500})["'“”‘’]/)?.[1];
+  if (quoted?.trim()) return quoted.trim();
   const marked = raw.match(/:{3}([\s\S]*)$/);
   if (marked?.[1]?.trim()) return marked[1].trim();
   const after = raw.match(/(?:써줘|써|작성해|작성|추가해|추가|기록해|기록|write|append|add)\s*[:：]?\s*([\s\S]+)$/i)?.[1];
@@ -234,8 +240,13 @@ function inferSheetWriteContent(text: string): string {
 function isRileySheetReadIntent(text: string): boolean {
   const raw = String(text || "");
   const mentionsSheet = /(시트|탭|sheet|tab|spreadsheet|스프레드시트|셀|cell|행|row|열|column|[A-Z]{1,3}\d+)/i.test(raw);
-  const wantsRead = /(읽|조회|확인|보여|알려|뭐|무엇|내용|값|read|show|check|view|what|list)/i.test(raw);
+  const wantsRead = /(찾|읽|조회|확인|보여|알려|뭐|무엇|내용|값|비어|read|show|check|view|what|list)/i.test(raw);
   return mentionsSheet && wantsRead;
+}
+
+function isSheetTabListIntent(text: string): boolean {
+  const raw = String(text || "");
+  return /(시트|탭|sheet|tab)/i.test(raw) && /(몇\s*개|개수|이름|목록|list|names?|count)/i.test(raw);
 }
 
 function isRileySheetWriteIntent(text: string): boolean {
@@ -255,6 +266,11 @@ function inferA1Range(text: string): string {
   if (cell) return cell;
   if (/(첫\s*행|첫번째\s*행|first\s*row)/i.test(text)) return "1:1";
   return "1:40";
+}
+
+function inferWriteCell(text: string): string {
+  const raw = String(text || "").toUpperCase();
+  return raw.match(/\b([A-Z]{1,3}\d+)\b/)?.[1] || "";
 }
 
 function formatSheetValues(values: string[][]): string {
@@ -278,6 +294,16 @@ export async function readRileySheetFromText(env: Env, text: string): Promise<
 
   try {
     const tabs = await loadSheetTitles(env, spreadsheetId);
+    if (isSheetTabListIntent(text)) {
+      return {
+        ok: true,
+        spreadsheetId,
+        tab: tabs[0] || "",
+        range: "tabs",
+        values: tabs.map((title) => [title]),
+        summary: `시트 ${tabs.length}개: ${tabs.join(", ") || "(없음)"}`,
+      };
+    }
     const tab = inferTargetTab(text, tabs);
     if (!tab) return { ok: false, error: "sheet_tab_missing", stage: "config" };
     const range = inferA1Range(text);
@@ -295,6 +321,27 @@ export async function readRileySheetFromText(env: Env, text: string): Promise<
   }
 }
 
+export async function createRileySheetFromText(env: Env, text: string): Promise<
+  | { ok: true; spreadsheetId: string; tab: string; created: boolean }
+  | { ok: false; error: string; stage?: string }
+  | null
+> {
+  if (!isRileySheetCreateIntent(text)) return null;
+  const spreadsheetId = String(env.RILEY_SHEETS_SPREADSHEET_ID || "").trim();
+  if (!spreadsheetId) return { ok: false, error: "riley_sheets_spreadsheet_id_missing", stage: "config" };
+
+  try {
+    const tabs = await loadSheetTitles(env, spreadsheetId);
+    const tab = inferTargetTab(text, tabs) || String(text.match(/["'“”‘’]?([^"'“”‘’\s,.;:，。]{1,80})["'“”‘’]?\s*(?:를|을)?\s*(?:만들|생성|추가)/)?.[1] || "").trim();
+    if (!tab) return { ok: false, error: "sheet_tab_missing", stage: "config" };
+    if (tabs.includes(tab)) return { ok: true, spreadsheetId, tab, created: false };
+    await ensureSheetTab(env, spreadsheetId, tab);
+    return { ok: true, spreadsheetId, tab, created: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || "sheet_create_failed", stage: "create" };
+  }
+}
+
 export async function writeRileySheetFromText(env: Env, text: string): Promise<
   | { ok: true; spreadsheetId: string; tab: string; updatedRange?: string; values: string[][] }
   | { ok: false; error: string; stage?: string }
@@ -307,17 +354,20 @@ export async function writeRileySheetFromText(env: Env, text: string): Promise<
   const tab = inferTargetTab(text, tabs);
   if (!tab) return { ok: false, error: "sheet_tab_missing", stage: "config" };
   const content = inferSheetWriteContent(text);
-  const values = [[new Date().toISOString(), "riley_chat", content]];
+  const cell = inferWriteCell(text);
 
   try {
-    const range = encodeURIComponent(tab);
-    const res = await sheetsFetch(env, `${spreadsheetId}/values/${range}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, {
-      method: "POST",
+    const values = cell ? [[content]] : [[new Date().toISOString(), "riley_chat", content]];
+    const range = cell ? `${tab}!${cell}` : tab;
+    const method = cell ? "PUT" : "POST";
+    const suffix = cell ? "?valueInputOption=RAW" : ":append?valueInputOption=RAW&insertDataOption=INSERT_ROWS";
+    const res = await sheetsFetch(env, `${spreadsheetId}/values/${encodeURIComponent(range)}${suffix}`, {
+      method,
       body: JSON.stringify({ values }),
     });
-    const data = await res.json().catch(() => ({})) as { updates?: { updatedRange?: string }; error?: { message?: string } };
+    const data = await res.json().catch(() => ({})) as { updatedRange?: string; updates?: { updatedRange?: string }; error?: { message?: string } };
     if (!res.ok) throw new Error(data.error?.message || `sheet_append_failed_${res.status}`);
-    return { ok: true, spreadsheetId, tab, updatedRange: data.updates?.updatedRange, values };
+    return { ok: true, spreadsheetId, tab, updatedRange: data.updatedRange || data.updates?.updatedRange, values };
   } catch (e: any) {
     return { ok: false, error: e?.message || "sheet_write_failed", stage: "write" };
   }
