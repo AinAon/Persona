@@ -32,7 +32,7 @@ import {
   saveCandidateFromReply,
 } from "./persona_promotion";
 import { buildPersonaVaultV2SystemPrompt } from "./persona_vault_v2";
-import { buildRileySheetsContextPrompt, createRileySheetFromText, executeRileySheetProposalActions, getRileySheetsStatus, loadRileySheetsContext, readRileySheetFromText, readRileySpreadsheetTitleFromText, writeRileySheetFromText, type RileySheetProposalAction } from "./google_sheets";
+import { buildRileySheetsContextPrompt, executeRileySheetProposalActions, loadRileySheetsContext, runRileySheetRequestWithGemini, type RileySheetProposalAction } from "./google_sheets";
 import {
   inferAttitudeBFromUserText,
   loadPersonaUserProfile,
@@ -138,13 +138,6 @@ function formatKstNow(): string {
 function isTimeQuestion(text: string): boolean {
   const raw = String(text || "");
   return /(현재\s*시간|지금\s*몇\s*시|오늘\s*날짜|오늘\s*몇\s*일|current\s*time|what\s*time|today'?s?\s*date)/i.test(raw);
-}
-
-function isRileySheetsCapabilityQuestion(text: string): boolean {
-  const raw = String(text || "");
-  const mentionsRileyOrSheet = /(라일리|riley|시트|스프레드시트|sheet|spreadsheet)/i.test(raw);
-  const asksCapability = /(권한|접근\s*권한|쓰기\s*권한|읽기\s*권한|permission|capability|access|readonly|read-only|읽기\s*전용)/i.test(raw);
-  return mentionsRileyOrSheet && asksCapability;
 }
 
 const SESSION_INDEX_DROPBOX_PATH = "/session/index.json";
@@ -534,79 +527,18 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     }
 
     if (!isImageReq && inRileyChat) {
-      const spreadsheetTitle = await readRileySpreadsheetTitleFromText(env, latestUserText);
-      if (spreadsheetTitle) {
-        if (!spreadsheetTitle.ok) {
-          const evidence = await writeVaultEvidence(env, "riley", "sheets_read", false, spreadsheetTitle.error, latestUserText);
-          return Response.json({ result: "error", error: spreadsheetTitle.error, evidence_id: evidence.id }, { status: 400, headers: cors });
+      const sheetResult = await runRileySheetRequestWithGemini(env, latestUserText, apiKeys.gemini);
+      if (sheetResult) {
+        const evidence = await writeVaultEvidence(env, "riley", "sheets_write", sheetResult.ok, sheetResult.ok ? sheetResult.message : sheetResult.error, latestUserText);
+        if (!sheetResult.ok) {
+          return Response.json({ result: "error", error: sheetResult.error, evidence_id: evidence.id, sheet_action: sheetResult }, { status: 400, headers: cors });
         }
+        const natural = await renderVaultResultMessage(`Riley sheet action result: ${sheetResult.message}\n${JSON.stringify(sheetResult.data || {})}`, model, apiKeys, latestUserText);
         return Response.json({
           result: "success",
-          reply: `스프레드시트 문서 이름: ${spreadsheetTitle.title || "(제목 없음)"}`,
-          spreadsheet_title: { spreadsheetId: spreadsheetTitle.spreadsheetId, title: spreadsheetTitle.title },
-        }, { headers: cors });
-      }
-
-      if (isRileySheetsCapabilityQuestion(latestUserText)) {
-        const status = await getRileySheetsStatus(env);
-        const reply = status.ok
-          ? [
-              "Riley 시트 권한은 활성 상태입니다.",
-              `spreadsheet_id: ${status.spreadsheetId}`,
-              "가능: 현재 탭 읽기, 셀/행 쓰기, 탭 생성",
-              "쓰기 요청은 서버가 실행한 뒤 같은 범위를 다시 읽어 검증해야만 성공으로 보고합니다.",
-            ].join("\n")
-          : [
-              "Riley 시트 권한이 활성 상태가 아닙니다.",
-              `error: ${status.error || "unknown"}`,
-              status.spreadsheetId ? `spreadsheet_id: ${status.spreadsheetId}` : "",
-            ].filter(Boolean).join("\n");
-        return Response.json({
-          result: status.ok ? "success" : "error",
-          reply,
-          riley_sheets_capability: status,
-        }, { status: status.ok ? 200 : 400, headers: cors });
-      }
-
-      const sheetCreate = await createRileySheetFromText(env, latestUserText);
-      if (sheetCreate) {
-        if (!sheetCreate.ok) {
-          const evidence = await writeVaultEvidence(env, "riley", "sheets_create", false, sheetCreate.error, latestUserText);
-          return Response.json({ result: "error", error: sheetCreate.error, evidence_id: evidence.id }, { status: 400, headers: cors });
-        }
-        return Response.json({
-          result: "success",
-          reply: sheetCreate.created ? `시트를 생성했습니다: ${sheetCreate.tab}` : `이미 존재하는 시트입니다: ${sheetCreate.tab}`,
-          sheet_create: { tab: sheetCreate.tab, created: sheetCreate.created },
-        }, { headers: cors });
-      }
-
-      const sheetRead = await readRileySheetFromText(env, latestUserText);
-      if (sheetRead) {
-        if (!sheetRead.ok) {
-          const evidence = await writeVaultEvidence(env, "riley", "sheets_read", false, sheetRead.error, latestUserText);
-          return Response.json({ result: "error", error: sheetRead.error, evidence_id: evidence.id }, { status: 400, headers: cors });
-        }
-        return Response.json({
-          result: "success",
-          reply: [`탭: ${sheetRead.tab}`, `범위: ${sheetRead.range}`, sheetRead.summary].join("\n"),
-          sheet_read: { tab: sheetRead.tab, range: sheetRead.range, values: sheetRead.values },
-        }, { headers: cors });
-      }
-
-      const sheetWrite = await writeRileySheetFromText(env, latestUserText);
-      if (sheetWrite) {
-        if (!sheetWrite.ok) {
-          const evidence = await writeVaultEvidence(env, "riley", "sheets_write", false, sheetWrite.error, latestUserText);
-          return Response.json({ result: "error", error: sheetWrite.error, evidence_id: evidence.id }, { status: 400, headers: cors });
-        }
-        const message = `wrote sheet row: ${sheetWrite.tab}; range=${sheetWrite.updatedRange || ""}`;
-        const evidence = await writeVaultEvidence(env, "riley", "sheets_write", true, message, latestUserText);
-        return Response.json({
-          result: "success",
-          reply: `시트에 작성했고 다시 읽어서 확인했습니다: ${sheetWrite.tab}${sheetWrite.updatedRange ? ` (${sheetWrite.updatedRange})` : ""}`,
+          reply: natural || sheetResult.message,
           evidence_id: evidence.id,
-          sheet_write: { tab: sheetWrite.tab, updatedRange: sheetWrite.updatedRange, verified: sheetWrite.verified },
+          sheet_action: sheetResult,
         }, { headers: cors });
       }
     }

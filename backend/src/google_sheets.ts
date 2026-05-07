@@ -1,4 +1,5 @@
 import type { Env } from "./index";
+import { generateGeminiText } from "./model_gemini";
 type ServiceAccountConfig = {
   clientEmail: string;
   privateKey: string;
@@ -195,6 +196,95 @@ export type RileySheetContext = {
   }>;
   error?: string;
 };
+
+type RileySheetAiAction =
+  | { action: "none"; reason?: string }
+  | { action: "get_spreadsheet_title" }
+  | { action: "list_tabs" }
+  | { action: "read_range"; sheet: string; range: string }
+  | { action: "write_cell"; sheet: string; cell: string; value: string }
+  | { action: "append_row"; sheet: string; values: string[] }
+  | { action: "create_sheet"; title: string }
+  | { action: "rename_sheet"; old_title: string; new_title: string };
+
+type RileySheetAiResult =
+  | { ok: true; action: string; spreadsheetId: string; message: string; data?: unknown }
+  | { ok: false; action?: string; error: string; stage?: string };
+
+function extractJsonObject(text: string): any | null {
+  const raw = String(text || "").trim();
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
+  const candidate = (fenced || raw).trim();
+  try {
+    return JSON.parse(candidate);
+  } catch {
+    const start = candidate.indexOf("{");
+    const end = candidate.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      try {
+        return JSON.parse(candidate.slice(start, end + 1));
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
+function compactSheetContext(ctx: RileySheetContext): string {
+  return JSON.stringify({
+    spreadsheetId: ctx.spreadsheetId,
+    updatedAt: ctx.updatedAt,
+    tabs: ctx.tabs.map((tab) => ({
+      title: tab.title,
+      rowCount: tab.rowCount,
+      columnCount: tab.columnCount,
+      sampleValues: tab.values.slice(0, 12),
+    })),
+  }).slice(0, 14000);
+}
+
+async function planRileySheetActionWithGemini(env: Env, text: string, apiKey: string): Promise<RileySheetAiAction | null> {
+  if (!apiKey) return null;
+  const ctx = await loadRileySheetsContext(env);
+  if (!ctx.ok) return { action: "none", reason: ctx.error || "sheets_context_failed" };
+  const messages = [
+    {
+      role: "system",
+      content: [
+        "You convert Riley user requests into one Google Sheets action JSON.",
+        "Return JSON only. No markdown. No prose.",
+        "Do not ask for approval. Do not output proposals.",
+        "Use current spreadsheet context. Sheet names can be any language and may change.",
+        "Allowed schema:",
+        "{\"action\":\"none\",\"reason\":\"...\"}",
+        "{\"action\":\"get_spreadsheet_title\"}",
+        "{\"action\":\"list_tabs\"}",
+        "{\"action\":\"read_range\",\"sheet\":\"tab title\",\"range\":\"A1 or A1:C3 or 1:40\"}",
+        "{\"action\":\"write_cell\",\"sheet\":\"tab title\",\"cell\":\"C2\",\"value\":\"text\"}",
+        "{\"action\":\"append_row\",\"sheet\":\"tab title\",\"values\":[\"a\",\"b\"]}",
+        "{\"action\":\"create_sheet\",\"title\":\"new tab title\"}",
+        "{\"action\":\"rename_sheet\",\"old_title\":\"old tab title\",\"new_title\":\"new tab title\"}",
+        "Use action none when the request is not about Google Sheets.",
+      ].join("\n"),
+    },
+    {
+      role: "user",
+      content: JSON.stringify({
+        user_request: String(text || ""),
+        spreadsheet_context: JSON.parse(compactSheetContext(ctx)),
+      }),
+    },
+  ];
+  const out = await generateGeminiText({ model: "gemini-2.5-flash", messages, apiKey });
+  const parsed = extractJsonObject(out);
+  if (!parsed || typeof parsed !== "object") return null;
+  const action = String(parsed.action || "none");
+  if (!["none", "get_spreadsheet_title", "list_tabs", "read_range", "write_cell", "append_row", "create_sheet", "rename_sheet"].includes(action)) {
+    return { action: "none", reason: "unsupported_action" };
+  }
+  return parsed as RileySheetAiAction;
+}
 
 export async function loadRileySheetsContext(env: Env): Promise<RileySheetContext> {
   const spreadsheetId = String(env.RILEY_SHEETS_SPREADSHEET_ID || "").trim();
@@ -452,6 +542,74 @@ export async function executeRileySheetProposalActions(env: Env, actions: RileyS
   } catch (e: any) {
     return { ok: false, error: e?.message || "sheet_proposal_failed", stage: "execute" };
   }
+}
+
+async function executeRileySheetAiAction(env: Env, action: RileySheetAiAction): Promise<RileySheetAiResult> {
+  const spreadsheetId = String(env.RILEY_SHEETS_SPREADSHEET_ID || "").trim();
+  if (!spreadsheetId) return { ok: false, action: action.action, error: "riley_sheets_spreadsheet_id_missing", stage: "config" };
+  try {
+    if (action.action === "none") return { ok: true, action: "none", spreadsheetId, message: action.reason || "no_sheet_action" };
+    if (action.action === "get_spreadsheet_title") {
+      const title = await loadSpreadsheetTitle(env, spreadsheetId);
+      return { ok: true, action: action.action, spreadsheetId, message: `spreadsheet_title: ${title}`, data: { title } };
+    }
+    if (action.action === "list_tabs") {
+      const tabs = await loadSheetTitles(env, spreadsheetId);
+      return { ok: true, action: action.action, spreadsheetId, message: `tabs: ${tabs.join(", ")}`, data: { tabs } };
+    }
+    if (action.action === "create_sheet") {
+      const title = String(action.title || "").trim();
+      if (!title) return { ok: false, action: action.action, error: "sheet_title_missing", stage: "validate" };
+      const before = await loadSheetTitles(env, spreadsheetId);
+      await ensureSheetTab(env, spreadsheetId, title);
+      const after = await loadSheetTitles(env, spreadsheetId);
+      return { ok: true, action: action.action, spreadsheetId, message: before.includes(title) ? `sheet_exists: ${title}` : `sheet_created: ${title}`, data: { title, created: !before.includes(title), tabs: after } };
+    }
+    if (action.action === "rename_sheet") {
+      const res = await executeRileySheetProposalActions(env, [{ type: "rename_sheet", old_title: action.old_title, new_title: action.new_title }]);
+      if (!res.ok) return { ok: false, action: action.action, error: res.error, stage: res.stage };
+      return { ok: true, action: action.action, spreadsheetId, message: res.message };
+    }
+    if (action.action === "read_range") {
+      const sheet = String(action.sheet || "").trim();
+      const range = String(action.range || "1:40").trim();
+      if (!sheet || !range) return { ok: false, action: action.action, error: "sheet_range_missing", stage: "validate" };
+      const fullRange = `${sheet}!${range}`;
+      const res = await sheetsFetch(env, `${spreadsheetId}/values/${encodeURIComponent(fullRange)}`);
+      const data = await res.json().catch(() => ({})) as { values?: string[][]; error?: { message?: string } };
+      if (!res.ok) return { ok: false, action: action.action, error: data.error?.message || `sheet_read_failed_${res.status}`, stage: "read" };
+      return { ok: true, action: action.action, spreadsheetId, message: `read_range: ${fullRange}`, data: { range: fullRange, values: data.values || [] } };
+    }
+    if (action.action === "write_cell") {
+      const sheet = String(action.sheet || "").trim();
+      const cell = String(action.cell || "").trim().toUpperCase();
+      const value = String(action.value || "");
+      const res = await executeRileySheetProposalActions(env, [{ type: "update_cell", sheet, cell, value }]);
+      if (!res.ok) return { ok: false, action: action.action, error: res.error, stage: res.stage };
+      return { ok: true, action: action.action, spreadsheetId, message: res.message, data: { sheet, cell, value, verified: true } };
+    }
+    if (action.action === "append_row") {
+      const sheet = String(action.sheet || "").trim();
+      const values = Array.isArray(action.values) ? action.values.map((v) => String(v || "")) : [];
+      if (!sheet || !values.length) return { ok: false, action: action.action, error: "append_row_values_missing", stage: "validate" };
+      const res = await sheetsFetch(env, `${spreadsheetId}/values/${encodeURIComponent(sheet)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, {
+        method: "POST",
+        body: JSON.stringify({ values: [values] }),
+      });
+      const data = await res.json().catch(() => ({})) as { updates?: { updatedRange?: string }; error?: { message?: string } };
+      if (!res.ok) return { ok: false, action: action.action, error: data.error?.message || `sheet_append_failed_${res.status}`, stage: "append" };
+      return { ok: true, action: action.action, spreadsheetId, message: `appended_row: ${data.updates?.updatedRange || sheet}`, data: { updatedRange: data.updates?.updatedRange, values } };
+    }
+    return { ok: false, action: "unknown", error: "unsupported_action", stage: "validate" };
+  } catch (e: any) {
+    return { ok: false, action: action.action, error: e?.message || "sheet_action_failed", stage: "execute" };
+  }
+}
+
+export async function runRileySheetRequestWithGemini(env: Env, text: string, apiKey: string): Promise<RileySheetAiResult | null> {
+  const action = await planRileySheetActionWithGemini(env, text, apiKey);
+  if (!action || action.action === "none") return null;
+  return await executeRileySheetAiAction(env, action);
 }
 
 export async function writeRileySheetFromText(env: Env, text: string): Promise<
