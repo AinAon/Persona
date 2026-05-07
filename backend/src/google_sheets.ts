@@ -111,6 +111,18 @@ async function loadSheetTitles(env: Env, spreadsheetId: string): Promise<string[
   return (meta.sheets || []).map((s) => String(s.properties?.title || "").trim()).filter(Boolean);
 }
 
+async function loadSheetProperties(env: Env, spreadsheetId: string): Promise<Array<{ title: string; sheetId: number }>> {
+  const metaRes = await sheetsFetch(env, `${spreadsheetId}?fields=sheets.properties(sheetId,title)`);
+  const meta = await metaRes.json().catch(() => ({})) as {
+    sheets?: Array<{ properties?: { sheetId?: number; title?: string } }>;
+    error?: { message?: string };
+  };
+  if (!metaRes.ok) throw new Error(meta.error?.message || `sheet_meta_failed_${metaRes.status}`);
+  return (meta.sheets || [])
+    .map((s) => ({ title: String(s.properties?.title || "").trim(), sheetId: Number(s.properties?.sheetId) }))
+    .filter((s) => s.title && Number.isFinite(s.sheetId));
+}
+
 async function ensureSheetTab(env: Env, spreadsheetId: string, tab: string): Promise<void> {
   const metaRes = await sheetsFetch(env, `${spreadsheetId}?fields=sheets.properties.title`);
   const meta = await metaRes.json().catch(() => ({})) as { sheets?: Array<{ properties?: { title?: string } }>; error?: { message?: string } };
@@ -241,7 +253,8 @@ function isRileySheetReadIntent(text: string): boolean {
   const raw = String(text || "");
   const mentionsSheet = /(시트|탭|sheet|tab|spreadsheet|스프레드시트|셀|cell|행|row|열|column|[A-Z]{1,3}\d+)/i.test(raw);
   const wantsRead = /(찾|읽|조회|확인|보여|알려|뭐|무엇|내용|값|비어|read|show|check|view|what|list)/i.test(raw);
-  return mentionsSheet && wantsRead;
+  const wantsMutation = /(바꾸|변경|수정|고쳐|rename|update|edit|write|append|add|insert|입력|작성|써)/i.test(raw);
+  return mentionsSheet && wantsRead && !wantsMutation;
 }
 
 function isSheetTabListIntent(text: string): boolean {
@@ -339,6 +352,74 @@ export async function createRileySheetFromText(env: Env, text: string): Promise<
     return { ok: true, spreadsheetId, tab, created: true };
   } catch (e: any) {
     return { ok: false, error: e?.message || "sheet_create_failed", stage: "create" };
+  }
+}
+
+export type RileySheetProposalAction =
+  | { type: "rename_sheet"; old_title: string; new_title: string }
+  | { type: "update_cell"; sheet: string; cell: string; value: string };
+
+export async function executeRileySheetProposalActions(env: Env, actions: RileySheetProposalAction[]): Promise<
+  { ok: true; message: string; applied: number }
+  | { ok: false; error: string; stage?: string }
+> {
+  const spreadsheetId = String(env.RILEY_SHEETS_SPREADSHEET_ID || "").trim();
+  if (!spreadsheetId) return { ok: false, error: "riley_sheets_spreadsheet_id_missing", stage: "config" };
+  let applied = 0;
+  const notes: string[] = [];
+
+  try {
+    for (const action of actions) {
+      if (action.type === "rename_sheet") {
+        const oldTitle = String(action.old_title || "").trim();
+        const newTitle = String(action.new_title || "").trim();
+        if (!oldTitle || !newTitle) return { ok: false, error: "sheet_rename_title_missing", stage: "validate" };
+        const props = await loadSheetProperties(env, spreadsheetId);
+        const target = props.find((s) => s.title === oldTitle);
+        if (!target) return { ok: false, error: `sheet_not_found:${oldTitle}`, stage: "rename" };
+        if (props.some((s) => s.title === newTitle)) return { ok: false, error: `sheet_already_exists:${newTitle}`, stage: "rename" };
+        const res = await sheetsFetch(env, `${spreadsheetId}:batchUpdate`, {
+          method: "POST",
+          body: JSON.stringify({
+            requests: [{
+              updateSheetProperties: {
+                properties: { sheetId: target.sheetId, title: newTitle },
+                fields: "title",
+              },
+            }],
+          }),
+        });
+        const data = await res.json().catch(() => ({})) as { error?: { message?: string } };
+        if (!res.ok) return { ok: false, error: data.error?.message || `sheet_rename_failed_${res.status}`, stage: "rename" };
+        const titlesAfter = await loadSheetTitles(env, spreadsheetId);
+        if (!titlesAfter.includes(newTitle)) return { ok: false, error: `sheet_rename_verify_failed:${newTitle}`, stage: "verify" };
+        applied++;
+        notes.push(`renamed ${oldTitle} -> ${newTitle}`);
+      }
+
+      if (action.type === "update_cell") {
+        const sheet = String(action.sheet || "").trim();
+        const cell = String(action.cell || "").trim().toUpperCase();
+        const value = String(action.value || "");
+        if (!sheet || !/^[A-Z]{1,3}\d+$/.test(cell)) return { ok: false, error: "sheet_cell_target_missing", stage: "validate" };
+        const range = `${sheet}!${cell}`;
+        const res = await sheetsFetch(env, `${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`, {
+          method: "PUT",
+          body: JSON.stringify({ values: [[value]] }),
+        });
+        const data = await res.json().catch(() => ({})) as { error?: { message?: string } };
+        if (!res.ok) return { ok: false, error: data.error?.message || `sheet_update_cell_failed_${res.status}`, stage: "update_cell" };
+        const verifyRes = await sheetsFetch(env, `${spreadsheetId}/values/${encodeURIComponent(range)}`);
+        const verifyData = await verifyRes.json().catch(() => ({})) as { values?: string[][]; error?: { message?: string } };
+        if (!verifyRes.ok) return { ok: false, error: verifyData.error?.message || `sheet_update_cell_verify_read_failed_${verifyRes.status}`, stage: "verify" };
+        if (String(verifyData.values?.[0]?.[0] || "") !== value) return { ok: false, error: `sheet_update_cell_verify_failed:${range}`, stage: "verify" };
+        applied++;
+        notes.push(`updated ${range}`);
+      }
+    }
+    return { ok: true, applied, message: `applied sheet proposal: ${applied} action(s); ${notes.join("; ")}` };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || "sheet_proposal_failed", stage: "execute" };
   }
 }
 

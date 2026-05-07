@@ -32,7 +32,7 @@ import {
   saveCandidateFromReply,
 } from "./persona_promotion";
 import { buildPersonaVaultV2SystemPrompt } from "./persona_vault_v2";
-import { buildRileySheetsContextPrompt, createRileySheetFromText, getRileySheetsStatus, loadRileySheetsContext, readRileySheetFromText, writeRileySheetFromText } from "./google_sheets";
+import { buildRileySheetsContextPrompt, createRileySheetFromText, executeRileySheetProposalActions, getRileySheetsStatus, loadRileySheetsContext, readRileySheetFromText, writeRileySheetFromText, type RileySheetProposalAction } from "./google_sheets";
 import {
   inferAttitudeBFromUserText,
   loadPersonaUserProfile,
@@ -108,6 +108,7 @@ const VAULT_AUTONOMY_GUARD = [
   "[VAULT_PROPOSAL]",
   "{\"persona\":\"riley|avery\",\"actions\":[{\"type\":\"create_folder\",\"path\":\"...\"},{\"type\":\"create_file\",\"path\":\"...\",\"content\":\"...\"}]}",
   "[/VAULT_PROPOSAL]",
+  "- For Riley sheet proposals, allowed action types are rename_sheet {old_title,new_title} and update_cell {sheet,cell,value}.",
   "- Proposal approval is optional. If action is safe and clear, auto-apply.",
   "- Do not claim false platform limits (e.g., 'cannot access file system') when vault action is available.",
   "- When you propose, keep it short and practical.",
@@ -146,7 +147,7 @@ function isRileySheetsCapabilityQuestion(text: string): boolean {
 
 const SESSION_INDEX_DROPBOX_PATH = "/session/index.json";
 
-type VaultProposalAction = { type: "create_file" | "create_folder"; path: string; content?: string };
+type VaultProposalAction = { type: "create_file" | "create_folder"; path: string; content?: string } | RileySheetProposalAction;
 type VaultProposal = { persona: "riley" | "avery"; actions: VaultProposalAction[]; createdAt: number };
 type VaultActionMode = "direct" | "proposal_apply";
 type VaultActionEvidence = {
@@ -220,6 +221,18 @@ function parseVaultProposalFromReply(reply: string): VaultProposal | null {
   const actions: VaultProposalAction[] = [];
   for (const a of actionsRaw) {
     const type = String(a?.type || "");
+    if (type === "rename_sheet") {
+      const oldTitle = String(a?.old_title || a?.oldTitle || "").trim();
+      const newTitle = String(a?.new_title || a?.newTitle || "").trim();
+      if (persona === "riley" && oldTitle && newTitle) actions.push({ type: "rename_sheet", old_title: oldTitle, new_title: newTitle });
+      continue;
+    }
+    if (type === "update_cell") {
+      const sheet = String(a?.sheet || a?.tab || "").trim();
+      const cell = String(a?.cell || "").trim().toUpperCase();
+      if (persona === "riley" && sheet && cell) actions.push({ type: "update_cell", sheet, cell, value: String(a?.value || "") });
+      continue;
+    }
     const path = String(a?.path || "").trim().replace(/^\/+/, "");
     if (!path) continue;
     if (type === "create_folder") actions.push({ type: "create_folder", path });
@@ -227,6 +240,16 @@ function parseVaultProposalFromReply(reply: string): VaultProposal | null {
   }
   if (!actions.length) return null;
   return { persona: persona as "riley" | "avery", actions: actions.slice(0, 20), createdAt: Date.now() };
+}
+
+function parseLatestVaultProposalFromMessages(messages: any[]): VaultProposal | null {
+  for (let i = (messages || []).length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (String(msg?.role || "") !== "assistant") continue;
+    const parsed = parseVaultProposalFromReply(extractText(msg?.content));
+    if (parsed) return parsed;
+  }
+  return null;
 }
 
 async function savePendingVaultProposal(env: Env, proposal: VaultProposal): Promise<void> {
@@ -311,6 +334,14 @@ function guardPersonaReply(reply: string, hasExecutionEvidence: boolean, inPerso
 }
 
 async function executeVaultProposal(env: Env, proposal: VaultProposal): Promise<{ ok: boolean; message: string; evidenceIds?: string[] }> {
+  const sheetActions = proposal.actions.filter((a): a is RileySheetProposalAction => a.type === "rename_sheet" || a.type === "update_cell");
+  if (sheetActions.length) {
+    if (proposal.persona !== "riley") return { ok: false, message: "sheet proposal is only supported for riley" };
+    const res = await executeRileySheetProposalActions(env, sheetActions);
+    if (!res.ok) return { ok: false, message: `failed: ${res.error}` };
+    return { ok: true, message: res.message };
+  }
+
   const token = await getPersonaDropboxAccessToken(env, proposal.persona);
   if (!token) return { ok: false, message: `${proposal.persona} dropbox token missing` };
   const pid = proposal.persona === "riley" ? "p_riley" : "p_avery";
@@ -318,6 +349,7 @@ async function executeVaultProposal(env: Env, proposal: VaultProposal): Promise<
   const failed: string[] = [];
   const evidenceIds: string[] = [];
   for (const a of proposal.actions) {
+    if (a.type !== "create_file" && a.type !== "create_folder") continue;
     const rawPath = String(a.path || "").trim().replace(/\\/g, "/");
     const path = rawPath.startsWith("/_vault/") || rawPath.startsWith("_vault/")
       ? `/${rawPath.replace(/^\/+/, "")}`
@@ -565,7 +597,8 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     }
 
     if (!isImageReq && proposalPersona && isApprovalText(latestUserText)) {
-      const pending = await loadPendingVaultProposal(env, proposalPersona);
+      const pending = await loadPendingVaultProposal(env, proposalPersona)
+        || parseLatestVaultProposalFromMessages(messages);
       if (pending) {
         const exec = await executeVaultProposal(env, pending);
         if (exec.ok) await clearPendingVaultProposal(env, proposalPersona);
