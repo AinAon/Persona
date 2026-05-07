@@ -536,6 +536,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
           "Riley must inspect it and decide the final user-facing reply.",
           "If ok=false, Riley should explain the concrete problem and the next fix without pretending it succeeded.",
           `tool_result=${JSON.stringify(sheetResult)}`,
+          `run_id=${sheetResult.runId || ""}`,
           `evidence_id=${evidence.id}`,
         ].join("\n"), model, apiKeys, latestUserText);
         return Response.json({

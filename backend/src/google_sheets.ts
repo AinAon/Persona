@@ -199,6 +199,7 @@ export type RileySheetContext = {
 
 type RileySheetAiAction =
   | { action: "none"; reason?: string }
+  | { action: "get_run_logs"; limit?: number }
   | { action: "get_spreadsheet_title" }
   | { action: "list_tabs" }
   | { action: "read_range"; sheet: string; range: string }
@@ -208,8 +209,58 @@ type RileySheetAiAction =
   | { action: "rename_sheet"; old_title: string; new_title: string };
 
 type RileySheetAiResult =
-  | { ok: true; action: string; spreadsheetId: string; message: string; data?: unknown }
-  | { ok: false; action?: string; error: string; stage?: string };
+  | { ok: true; action: string; spreadsheetId: string; message: string; data?: unknown; runId?: string }
+  | { ok: false; action?: string; error: string; stage?: string; runId?: string };
+
+type RileySheetRunLog = {
+  runId: string;
+  at: string;
+  userText: string;
+  spreadsheetId: string;
+  steps: Array<{ at: string; stage: string; ok: boolean; data?: unknown; error?: string }>;
+  final?: RileySheetAiResult;
+};
+
+const RILEY_SHEET_RUN_INDEX_KEY = "riley:sheets:runlog:index";
+
+function createRunLog(userText: string, spreadsheetId: string): RileySheetRunLog {
+  return {
+    runId: `riley_sheet_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    at: new Date().toISOString(),
+    userText: String(userText || ""),
+    spreadsheetId,
+    steps: [],
+  };
+}
+
+function addRunStep(log: RileySheetRunLog, stage: string, ok: boolean, data?: unknown, error?: string): void {
+  log.steps.push({ at: new Date().toISOString(), stage, ok, ...(data === undefined ? {} : { data }), ...(error ? { error } : {}) });
+}
+
+async function saveRunLog(env: Env, log: RileySheetRunLog): Promise<void> {
+  await env.KV.put(`riley:sheets:runlog:${log.runId}`, JSON.stringify(log));
+  const raw = await env.KV.get(RILEY_SHEET_RUN_INDEX_KEY);
+  const ids = raw ? JSON.parse(raw) as string[] : [];
+  const next = [log.runId, ...ids.filter((id) => id !== log.runId)].slice(0, 50);
+  await env.KV.put(RILEY_SHEET_RUN_INDEX_KEY, JSON.stringify(next));
+}
+
+async function loadRunLogs(env: Env, limit = 10): Promise<RileySheetRunLog[]> {
+  const raw = await env.KV.get(RILEY_SHEET_RUN_INDEX_KEY);
+  const ids = raw ? JSON.parse(raw) as string[] : [];
+  const selected = ids.slice(0, Math.max(1, Math.min(20, Number(limit || 10))));
+  const logs: RileySheetRunLog[] = [];
+  for (const id of selected) {
+    const item = await env.KV.get(`riley:sheets:runlog:${id}`);
+    if (!item) continue;
+    try {
+      logs.push(JSON.parse(item) as RileySheetRunLog);
+    } catch {
+      // skip malformed log
+    }
+  }
+  return logs;
+}
 
 function extractJsonObject(text: string): any | null {
   const raw = String(text || "").trim();
@@ -258,6 +309,7 @@ async function planRileySheetActionWithGemini(env: Env, text: string, apiKey: st
         "Use current spreadsheet context. Sheet names can be any language and may change.",
         "Allowed schema:",
         "{\"action\":\"none\",\"reason\":\"...\"}",
+        "{\"action\":\"get_run_logs\",\"limit\":10}",
         "{\"action\":\"get_spreadsheet_title\"}",
         "{\"action\":\"list_tabs\"}",
         "{\"action\":\"read_range\",\"sheet\":\"tab title\",\"range\":\"A1 or A1:C3 or 1:40\"}",
@@ -265,7 +317,8 @@ async function planRileySheetActionWithGemini(env: Env, text: string, apiKey: st
         "{\"action\":\"append_row\",\"sheet\":\"tab title\",\"values\":[\"a\",\"b\"]}",
         "{\"action\":\"create_sheet\",\"title\":\"new tab title\"}",
         "{\"action\":\"rename_sheet\",\"old_title\":\"old tab title\",\"new_title\":\"new tab title\"}",
-        "Use action none when the request is not about Google Sheets.",
+        "Use get_run_logs when the user asks Riley to inspect, monitor, debug, or review recent sheet tool runs/logs/errors.",
+        "Use action none when the request is not about Google Sheets or sheet tool logs.",
       ].join("\n"),
     },
     {
@@ -280,7 +333,7 @@ async function planRileySheetActionWithGemini(env: Env, text: string, apiKey: st
   const parsed = extractJsonObject(out);
   if (!parsed || typeof parsed !== "object") return null;
   const action = String(parsed.action || "none");
-  if (!["none", "get_spreadsheet_title", "list_tabs", "read_range", "write_cell", "append_row", "create_sheet", "rename_sheet"].includes(action)) {
+  if (!["none", "get_run_logs", "get_spreadsheet_title", "list_tabs", "read_range", "write_cell", "append_row", "create_sheet", "rename_sheet"].includes(action)) {
     return { action: "none", reason: "unsupported_action" };
   }
   return parsed as RileySheetAiAction;
@@ -549,6 +602,10 @@ async function executeRileySheetAiAction(env: Env, action: RileySheetAiAction): 
   if (!spreadsheetId) return { ok: false, action: action.action, error: "riley_sheets_spreadsheet_id_missing", stage: "config" };
   try {
     if (action.action === "none") return { ok: true, action: "none", spreadsheetId, message: action.reason || "no_sheet_action" };
+    if (action.action === "get_run_logs") {
+      const logs = await loadRunLogs(env, action.limit || 10);
+      return { ok: true, action: action.action, spreadsheetId, message: `loaded_sheet_run_logs: ${logs.length}`, data: { logs } };
+    }
     if (action.action === "get_spreadsheet_title") {
       const title = await loadSpreadsheetTitle(env, spreadsheetId);
       return { ok: true, action: action.action, spreadsheetId, message: `spreadsheet_title: ${title}`, data: { title } };
@@ -607,12 +664,31 @@ async function executeRileySheetAiAction(env: Env, action: RileySheetAiAction): 
 }
 
 export async function runRileySheetRequestWithGemini(env: Env, text: string, apiKey: string): Promise<RileySheetAiResult | null> {
+  const spreadsheetId = String(env.RILEY_SHEETS_SPREADSHEET_ID || "").trim();
+  const log = createRunLog(text, spreadsheetId);
   try {
+    addRunStep(log, "request_received", true, { text: String(text || "") });
+    addRunStep(log, "gemini_plan_start", true);
     const action = await planRileySheetActionWithGemini(env, text, apiKey);
-    if (!action || action.action === "none") return null;
-    return await executeRileySheetAiAction(env, action);
+    addRunStep(log, "gemini_plan_result", !!action, { action });
+    if (!action || action.action === "none") {
+      log.final = { ok: true, action: "none", spreadsheetId, message: action?.reason || "no_sheet_action", runId: log.runId };
+      await saveRunLog(env, log);
+      return null;
+    }
+    addRunStep(log, "execute_start", true, { action });
+    const result = await executeRileySheetAiAction(env, action);
+    const final = { ...result, runId: log.runId } as RileySheetAiResult;
+    addRunStep(log, "execute_result", result.ok, { result }, result.ok ? undefined : result.error);
+    log.final = final;
+    await saveRunLog(env, log);
+    return final;
   } catch (e: any) {
-    return { ok: false, error: e?.message || "riley_sheet_planner_failed", stage: "plan" };
+    const final: RileySheetAiResult = { ok: false, error: e?.message || "riley_sheet_planner_failed", stage: "plan", runId: log.runId };
+    addRunStep(log, "run_error", false, undefined, final.error);
+    log.final = final;
+    await saveRunLog(env, log).catch(() => {});
+    return final;
   }
 }
 
