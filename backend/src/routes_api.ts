@@ -352,7 +352,6 @@ async function putSessionIndex(env: Env, sessions: SessionMeta[]): Promise<void>
   if (sharedToken) {
     await dropboxWriteText(sharedToken, SESSION_INDEX_DROPBOX_PATH, stringifyJsonPretty(sessions));
   }
-  await r2PutJson(env, SESSION_INDEX_R2_KEY, sessions);
 }
 
 async function getSessionChangeSeq(env: Env): Promise<number> {
@@ -395,7 +394,29 @@ async function putDeletedSessionIndex(env: Env, sessions: DeletedSessionMeta[]):
   if (sharedToken) {
     await dropboxWriteText(sharedToken, DELETED_SESSION_INDEX_DROPBOX_PATH, stringifyJsonPretty(sessions));
   }
-  await r2PutJson(env, DELETED_SESSION_INDEX_R2_KEY, sessions);
+}
+
+async function getPersonasPayload(env: Env): Promise<unknown[]> {
+  const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
+  if (sharedToken) {
+    const fromDropbox = await dropboxReadText(sharedToken, PERSONAS_DROPBOX_PATH);
+    if (fromDropbox) {
+      try {
+        const parsed = JSON.parse(fromDropbox);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {
+        // fall through to legacy stores
+      }
+    }
+  }
+  const fromR2 = await r2Json<unknown[] | null>(env, PERSONAS_R2_KEY, null);
+  if (Array.isArray(fromR2)) return fromR2;
+  const data = await env.KV.get(PERSONAS_KEY);
+  try {
+    return data ? JSON.parse(data) : [];
+  } catch {
+    return [];
+  }
 }
 
 async function getSessionPayloadText(env: Env, id: string): Promise<string | null> {
@@ -725,15 +746,12 @@ async function restoreSessionById(env: Env, sessionId: string): Promise<{ ok: bo
   }
   const sanitizedSession = sanitizeSessionForRestorePayload(parsedSession);
   const meta = buildSessionMeta(sanitizedSession);
-  const sanitizedRaw = JSON.stringify(sanitizedSession);
   const sanitizedPretty = stringifyJsonPretty(sanitizedSession);
 
   const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
   if (sharedToken) {
     await dropboxWriteText(sharedToken, sessionDropboxPath(id), sanitizedPretty);
   }
-  await env.R2.put(sessionR2Key(id), sanitizedRaw, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
-  await env.KV.delete(`session:${id}`);
 
   const index = await getSessionIndex(env);
   const existingIndex = index.findIndex((s) => s.id === id);
@@ -1662,7 +1680,7 @@ export async function handleApiRoute(
 
     const entries = await dropboxListFolder(sharedToken, "/session/data");
     const r2Keys = await listR2ByPrefix(env, SESSION_R2_PREFIX, 20000);
-    const personasFromR2 = await r2Json<unknown[] | null>(env, PERSONAS_R2_KEY, null);
+    const personasPayload = await getPersonasPayload(env);
     let scanned = 0;
     let updated = 0;
     let added = 0;
@@ -1719,8 +1737,8 @@ export async function handleApiRoute(
 
     const next = [...byId.values()].sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
     await putSessionIndex(env, next);
-    if (Array.isArray(personasFromR2)) {
-      await dropboxWriteText(sharedToken, PERSONAS_DROPBOX_PATH, stringifyJsonPretty(personasFromR2));
+    if (Array.isArray(personasPayload)) {
+      await dropboxWriteText(sharedToken, PERSONAS_DROPBOX_PATH, stringifyJsonPretty(personasPayload));
       personasMirrored = true;
     }
     return Response.json({
@@ -1734,6 +1752,48 @@ export async function handleApiRoute(
       personasPath: PERSONAS_DROPBOX_PATH,
       indexPath: SESSION_INDEX_DROPBOX_PATH,
       dataPath: "/session/data/",
+    }, { headers: noStoreHeaders });
+  }
+
+  if (url.pathname === "/debug/session/sync-one" && request.method === "POST") {
+    const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
+    if (!sharedToken) {
+      return Response.json({ ok: false, error: "shared dropbox token missing" }, { status: 500, headers: noStoreHeaders });
+    }
+    const body = await request.json().catch(() => ({} as { id?: string }));
+    const id = String(body?.id || "").trim();
+    if (!id) {
+      return Response.json({ ok: false, error: "id required" }, { status: 400, headers: noStoreHeaders });
+    }
+
+    const fromDropbox = await dropboxReadText(sharedToken, sessionDropboxPath(id));
+    const fromR2 = await r2Text(env, sessionR2Key(id));
+    const fromKv = await env.KV.get(`session:${id}`);
+    const raw = fromDropbox || fromR2 || fromKv;
+    if (!raw) {
+      return Response.json({ ok: false, error: "session not found in dropbox/r2/kv", id }, { status: 404, headers: noStoreHeaders });
+    }
+
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      return Response.json({ ok: false, error: "invalid session payload", id }, { status: 400, headers: noStoreHeaders });
+    }
+    await dropboxWriteText(sharedToken, sessionDropboxPath(id), stringifyJsonPretty(parsed));
+
+    const meta = buildSessionMeta(parsed);
+    const index = await getSessionIndex(env);
+    const pos = index.findIndex((s) => s.id === id);
+    if (pos >= 0) index[pos] = meta;
+    else index.unshift(meta);
+    await putSessionIndex(env, index);
+
+    return Response.json({
+      ok: true,
+      id,
+      wrote: sessionDropboxPath(id),
+      sourceUsed: fromDropbox ? "dropbox" : (fromR2 ? "r2" : "kv"),
     }, { headers: noStoreHeaders });
   }
 
@@ -1771,23 +1831,15 @@ export async function handleApiRoute(
 
   if (url.pathname === "/personas") {
     if (request.method === "GET") {
-      const fromR2 = await r2Json<unknown[] | null>(env, PERSONAS_R2_KEY, null);
-      if (Array.isArray(fromR2)) return Response.json({ personas: fromR2 }, { headers: cors });
-      const data = await env.KV.get(PERSONAS_KEY);
-      return Response.json({ personas: data ? JSON.parse(data) : [] }, { headers: cors });
+      const payload = await getPersonasPayload(env);
+      return Response.json({ personas: payload }, { headers: cors });
     }
     if (request.method === "PUT") {
       const { personas } = (await request.json()) as { personas: unknown[] };
       const payload = Array.isArray(personas) ? personas : [];
-      await r2PutJson(env, PERSONAS_R2_KEY, payload);
       const sharedTokenForPersonas = await getPersonaDropboxAccessToken(env, "shared");
       if (sharedTokenForPersonas) {
         await dropboxWriteText(sharedTokenForPersonas, PERSONAS_DROPBOX_PATH, stringifyJsonPretty(payload));
-      }
-      try {
-        await env.KV.put(PERSONAS_KEY, JSON.stringify(payload));
-      } catch {
-        // KV daily write limit may be exceeded; R2 remains source of truth.
       }
       const uniquePids = [...new Set(payload.map(extractPid).filter(Boolean))];
       const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
@@ -2165,8 +2217,6 @@ async function handleSessionRoute(
     if (sharedToken) {
       await dropboxWriteText(sharedToken, sessionDropboxPath(id), payloadPretty);
     }
-    await env.R2.put(sessionR2Key(id), payload, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
-    await env.KV.delete(`session:${id}`);
 
     const index = await getSessionIndex(env);
     const meta: SessionMeta = buildSessionMeta(mergedSession);
@@ -2191,8 +2241,6 @@ async function handleSessionRoute(
         if (sharedToken) {
           await dropboxWriteText(sharedToken, deletedSessionDropboxPath(id), existingRaw);
         }
-        await env.R2.put(deletedSessionR2Key(id), existingRaw, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
-        await env.KV.delete(`deleted:session:${id}`);
         const deletedIndex = await getDeletedSessionIndex(env);
         const nextDeleted = [deletedMeta, ...deletedIndex.filter((s) => s.id !== id)].slice(0, 200);
         await putDeletedSessionIndex(env, nextDeleted);
@@ -2201,10 +2249,10 @@ async function handleSessionRoute(
       }
     }
 
-    await env.KV.delete(`session:${id}`);
     if (sharedToken) {
       await dropboxDeletePath(sharedToken, sessionDropboxPath(id));
     }
+    await env.KV.delete(`session:${id}`);
     await env.R2.delete(sessionR2Key(id));
     for (const base of SESSION_AUDIO_R2_PREFIXES) {
       await deleteR2ByPrefix(env, `${base}${id}/`);
