@@ -285,12 +285,12 @@ function guardPersonaReply(reply: string, hasExecutionEvidence: boolean, inPerso
 
   // Block false capability disclaimers when vault execution path exists.
   if (/(직접\s*외부\s*파일\s*시스템.*제한|파일\s*시스템.*접근.*불가능|제안.*승인.*VAULT_PROPOSAL.*유효)/i.test(out)) {
-    return "바로 실행 가능한 요청이면 지금 처리하겠습니다. 경로나 파일명만 명확히 알려주세요.";
+    return "요청을 직접 실행할 수 있는 경로로 다시 처리하겠습니다.";
   }
 
   // If no evidence exists, block fake completion claims.
   if (!hasExecutionEvidence && /(생성했|생성했습니다|만들었|적용했|저장했|완료했|수정했|변경했|고쳤|created|made|saved|completed|done|updated|edited|deleted|removed)/i.test(out)) {
-    return "실행 전에 먼저 확인이 필요합니다. 파일명/경로를 지정해주시면 바로 처리하고 결과를 정확히 보고드릴게요.";
+    return "실행 증거가 없어 완료로 보고하지 않았습니다.";
   }
   return out;
 }
