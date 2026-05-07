@@ -733,7 +733,6 @@ async function restoreSessionById(env: Env, sessionId: string): Promise<{ ok: bo
   if (sharedToken) {
     await dropboxDeletePath(sharedToken, deletedSessionDropboxPath(id));
   }
-  await env.R2.delete(deletedSessionR2Key(id));
   for (const base of SESSION_AUDIO_R2_PREFIXES) {
     await deleteR2ByPrefix(env, `${base}${id}/`);
   }
@@ -1647,12 +1646,10 @@ export async function handleApiRoute(
     );
 
     const entries = await dropboxListFolder(sharedToken, "/session/data");
-    const r2Keys = await listR2ByPrefix(env, SESSION_R2_PREFIX, 20000);
     const personasPayload = await getPersonasPayload(env);
     let scanned = 0;
     let updated = 0;
     let added = 0;
-    let mirroredFromR2 = 0;
     let personasMirrored = false;
 
     for (const entry of entries) {
@@ -1676,33 +1673,6 @@ export async function handleApiRoute(
       }
     }
 
-    // R2를 기준 원본으로 Dropbox session/data를 최신화.
-    for (const key of r2Keys) {
-      const id = key.replace(SESSION_R2_PREFIX, "").replace(/\.json$/i, "").trim();
-      if (!id) continue;
-      const raw = await r2Text(env, key);
-      const meta = parseSessionLike(raw);
-      if (!raw || !meta) continue;
-      const dbxPath = sessionDropboxPath(id);
-      const pretty = (() => {
-        try {
-          return stringifyJsonPretty(JSON.parse(raw));
-        } catch {
-          return raw;
-        }
-      })();
-      await dropboxWriteText(sharedToken, dbxPath, pretty);
-      mirroredFromR2++;
-      const prev = byId.get(id);
-      if (!prev) {
-        byId.set(id, { ...meta, id });
-        added++;
-      } else if (Number(meta.updatedAt || 0) > Number(prev.updatedAt || 0) || Number(meta.messageCount || 0) !== Number(prev.messageCount || 0)) {
-        byId.set(id, { ...meta, id });
-        updated++;
-      }
-    }
-
     const next = [...byId.values()].sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
     await putSessionIndex(env, next);
     if (Array.isArray(personasPayload)) {
@@ -1715,7 +1685,6 @@ export async function handleApiRoute(
       indexEntries: next.length,
       added,
       updated,
-      mirroredFromR2,
       personasMirrored,
       personasPath: PERSONAS_DROPBOX_PATH,
       indexPath: SESSION_INDEX_DROPBOX_PATH,
@@ -1763,60 +1732,7 @@ export async function handleApiRoute(
   }
 
   if (url.pathname === "/debug/session/migrate-r2-to-dropbox" && request.method === "POST") {
-    const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
-    if (!sharedToken) {
-      return Response.json({ ok: false, error: "shared dropbox token missing" }, { status: 500, headers: noStoreHeaders });
-    }
-
-    const dataKeys = await listR2ByPrefix(env, SESSION_R2_PREFIX, 50000);
-    let copiedData = 0;
-    let skippedData = 0;
-    const failedData: string[] = [];
-
-    for (const key of dataKeys) {
-      const id = key.replace(SESSION_R2_PREFIX, "").replace(/\.json$/i, "").trim();
-      if (!id) { skippedData++; continue; }
-      const raw = await r2Text(env, key);
-      if (!raw) { skippedData++; continue; }
-      let payload = raw;
-      try {
-        payload = stringifyJsonPretty(JSON.parse(raw));
-      } catch {
-        // keep original raw text if parse fails
-      }
-      const ok = await dropboxWriteText(sharedToken, sessionDropboxPath(id), payload);
-      if (ok) copiedData++;
-      else failedData.push(id);
-    }
-
-    const r2IndexRaw = await r2Text(env, SESSION_INDEX_R2_KEY);
-    let copiedIndex = false;
-    if (r2IndexRaw) {
-      let indexPayload = r2IndexRaw;
-      try {
-        indexPayload = stringifyJsonPretty(JSON.parse(r2IndexRaw));
-      } catch {
-        // keep original raw text if parse fails
-      }
-      copiedIndex = await dropboxWriteText(sharedToken, SESSION_INDEX_DROPBOX_PATH, indexPayload);
-    }
-
-    return Response.json({
-      ok: failedData.length === 0,
-      copiedData,
-      skippedData,
-      copiedIndex,
-      failedCount: failedData.length,
-      failedIds: failedData.slice(0, 50),
-      source: {
-        dataPrefix: SESSION_R2_PREFIX,
-        indexKey: SESSION_INDEX_R2_KEY,
-      },
-      target: {
-        dataPrefix: "/session/data/",
-        indexPath: SESSION_INDEX_DROPBOX_PATH,
-      },
-    }, { headers: noStoreHeaders });
+    return Response.json({ ok: false, error: "r2_session_disabled" }, { status: 410, headers: noStoreHeaders });
   }
 
   if (url.pathname === "/riley/wealth/reconcile" && request.method === "POST") {
@@ -1985,24 +1901,7 @@ export async function handleApiRoute(
 
   if (url.pathname === "/sessions") {
     if (request.method === "GET") {
-      let sessions = await getSessionIndex(env);
-      const indexIds = new Set((sessions || []).map((s) => String(s?.id || "")).filter(Boolean));
-      const dataKeys = await listR2ByPrefix(env, SESSION_R2_PREFIX, 20000);
-      let changed = false;
-      for (const key of dataKeys) {
-        const id = key.replace(SESSION_R2_PREFIX, "").replace(/\.json$/, "");
-        if (!id || indexIds.has(id)) continue;
-        const raw = await r2Text(env, key);
-        if (!raw) continue;
-        try {
-          const parsed = JSON.parse(raw) as Record<string, unknown>;
-          const meta = buildSessionMeta(parsed);
-          sessions.unshift(meta);
-          indexIds.add(id);
-          changed = true;
-        } catch {}
-      }
-      if (changed) await putSessionIndex(env, sessions);
+      const sessions = await getSessionIndex(env);
       return Response.json({ sessions }, { headers: noStoreHeaders });
     }
     if (request.method === "PUT") {
@@ -2053,8 +1952,6 @@ export async function handleApiRoute(
 
     await env.KV.delete(`session:${sessionId}`);
     await env.KV.delete(`deleted:session:${sessionId}`);
-    await env.R2.delete(sessionR2Key(sessionId));
-    await env.R2.delete(deletedSessionR2Key(sessionId));
     for (const base of SESSION_AUDIO_R2_PREFIXES) {
       await deleteR2ByPrefix(env, `${base}${sessionId}/`);
     }
@@ -2268,7 +2165,6 @@ async function handleSessionRoute(
       await dropboxDeletePath(sharedToken, sessionDropboxPath(id));
     }
     await env.KV.delete(`session:${id}`);
-    await env.R2.delete(sessionR2Key(id));
     for (const base of SESSION_AUDIO_R2_PREFIXES) {
       await deleteR2ByPrefix(env, `${base}${id}/`);
     }
