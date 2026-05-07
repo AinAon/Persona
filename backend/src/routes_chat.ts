@@ -403,6 +403,7 @@ async function renderVaultResultMessage(raw: string, model: string, apiKeys: Tex
     "- Be concise and polite.",
     "- 1 to 3 short sentences.",
     "- No markdown list/code block.",
+    "- Do not ask a follow-up question unless the operation failed or the user must choose something.",
     "- Reflect the conversation tone lightly and naturally.",
     "- Avoid canned business phrases like '성공적으로 승인/적용했습니다' or repetitive templates.",
   ].join("\n");
@@ -530,13 +531,16 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       const sheetResult = await runRileySheetRequestWithGemini(env, latestUserText, apiKeys.gemini);
       if (sheetResult) {
         const evidence = await writeVaultEvidence(env, "riley", "sheets_write", sheetResult.ok, sheetResult.ok ? sheetResult.message : sheetResult.error, latestUserText);
-        if (!sheetResult.ok) {
-          return Response.json({ result: "error", error: sheetResult.error, evidence_id: evidence.id, sheet_action: sheetResult }, { status: 400, headers: cors });
-        }
-        const natural = await renderVaultResultMessage(`Riley sheet action result: ${sheetResult.message}\n${JSON.stringify(sheetResult.data || {})}`, model, apiKeys, latestUserText);
+        const natural = await renderVaultResultMessage([
+          "Riley received a Google Sheets tool result.",
+          "Riley must inspect it and decide the final user-facing reply.",
+          "If ok=false, Riley should explain the concrete problem and the next fix without pretending it succeeded.",
+          `tool_result=${JSON.stringify(sheetResult)}`,
+          `evidence_id=${evidence.id}`,
+        ].join("\n"), model, apiKeys, latestUserText);
         return Response.json({
           result: "success",
-          reply: natural || sheetResult.message,
+          reply: natural || (sheetResult.ok ? sheetResult.message : sheetResult.error),
           evidence_id: evidence.id,
           sheet_action: sheetResult,
         }, { headers: cors });

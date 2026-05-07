@@ -607,9 +607,13 @@ async function executeRileySheetAiAction(env: Env, action: RileySheetAiAction): 
 }
 
 export async function runRileySheetRequestWithGemini(env: Env, text: string, apiKey: string): Promise<RileySheetAiResult | null> {
-  const action = await planRileySheetActionWithGemini(env, text, apiKey);
-  if (!action || action.action === "none") return null;
-  return await executeRileySheetAiAction(env, action);
+  try {
+    const action = await planRileySheetActionWithGemini(env, text, apiKey);
+    if (!action || action.action === "none") return null;
+    return await executeRileySheetAiAction(env, action);
+  } catch (e: any) {
+    return { ok: false, error: e?.message || "riley_sheet_planner_failed", stage: "plan" };
+  }
 }
 
 export async function writeRileySheetFromText(env: Env, text: string): Promise<
