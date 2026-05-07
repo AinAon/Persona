@@ -24,6 +24,7 @@ const PROFILE_FULL_WIDTH_STEPS = [1200, 1600];
 // ══════════════════════════════
 const _imageListCache = {}; // { pid: ['profile/p_riley/riley_neutral.jpg', ...] }
 const _emotionInventoryCache = {}; // { pid: { emotion: { suffixed:[], hasBase:boolean, count:number } } }
+let _emotionInventorySnapshotPromise = null;
 const REMOTE_SAVE_DEBOUNCE_MS = 1200;
 let _remoteIndexSaveTimer = null;
 let _remoteIndexPayload = null;
@@ -68,8 +69,52 @@ function buildEmotionInventoryFromKeys(keys, pid) {
   return out;
 }
 
+function normalizeEmotionInventorySlot(slot) {
+  const suffixes = Array.isArray(slot?.suffixed)
+    ? slot.suffixed
+    : (Array.isArray(slot?.suffixes) ? slot.suffixes : []);
+  const suffixed = [...new Set(suffixes.map(x => String(x || '').toLowerCase()).filter(Boolean))].sort();
+  return {
+    suffixed,
+    hasBase: !!slot?.hasBase,
+    count: Number(slot?.count || 0) || (suffixed.length + (slot?.hasBase ? 1 : 0))
+  };
+}
+
+function normalizeEmotionInventoryDoc(raw) {
+  const out = {};
+  const src = raw && typeof raw === 'object' ? raw : {};
+  for (const emotion of Object.keys(src)) {
+    out[emotion] = normalizeEmotionInventorySlot(src[emotion]);
+  }
+  return out;
+}
+
+async function getEmotionInventorySnapshot() {
+  if (_emotionInventorySnapshotPromise) return _emotionInventorySnapshotPromise;
+  _emotionInventorySnapshotPromise = (async () => {
+    try {
+      const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
+      if (!wUrl) return null;
+      const resp = await fetch(`${wUrl}/emotion-inventory`, { cache: 'no-store' });
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      return data?.data?.byPid && typeof data.data.byPid === 'object' ? data.data.byPid : null;
+    } catch(e) {
+      return null;
+    }
+  })();
+  return _emotionInventorySnapshotPromise;
+}
+
 async function getPersonaEmotionInventory(pid) {
   if (_emotionInventoryCache[pid]) return _emotionInventoryCache[pid];
+  const snapshot = await getEmotionInventorySnapshot();
+  if (snapshot?.[pid]) {
+    const inv = normalizeEmotionInventoryDoc(snapshot[pid]);
+    _emotionInventoryCache[pid] = inv;
+    return inv;
+  }
   const keys = await getImageList(pid);
   const inv = buildEmotionInventoryFromKeys(keys, pid);
   _emotionInventoryCache[pid] = inv;
@@ -382,18 +427,16 @@ async function getEmotionImageSuffixed(pid, emotion, letter, displayPx = 200) {
 
 // 메시지 렌더링 전 suffix 결정 (파일 목록 기반 랜덤 선택)
 async function resolveMessageSuffixes(rawText, pList, existingSuffixes = null) {
-  if (existingSuffixes) return existingSuffixes;
   const segments = parseResponse(rawText, pList);
-  const suffixes = {};
+  const suffixes = (existingSuffixes && typeof existingSuffixes === 'object') ? { ...existingSuffixes } : {};
   for (const seg of segments) {
     const p = pList[seg.idx];
     if (!p) continue;
     const key = `${p.pid}:${seg.emotion}`;
-    if (suffixes[key] !== undefined) continue;
     const inventory = await getPersonaEmotionInventory(p.pid);
     const slot = inventory?.[seg.emotion] || { suffixed: [], hasBase: false };
     const pool = Array.isArray(slot.suffixed) ? slot.suffixed : [];
-    const current = existingSuffixes && typeof existingSuffixes === 'object' ? existingSuffixes[key] : '';
+    const current = suffixes[key];
     if (current && pool.includes(String(current).toLowerCase())) {
       suffixes[key] = String(current).toLowerCase();
     } else if (pool.length > 0) {
@@ -965,13 +1008,24 @@ function dedupeMessageKey(msg) {
 
 function dedupeHistoryMessages(history) {
   const arr = Array.isArray(history) ? history : [];
-  const seen = new Set();
+  const byKey = new Map();
   const out = [];
   for (const msg of arr) {
     const key = dedupeMessageKey(canonicalMessageForDedup(msg));
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(msg);
+    if (!byKey.has(key)) {
+      byKey.set(key, msg);
+      out.push(msg);
+      continue;
+    }
+    const existing = byKey.get(key);
+    const prevSuffixes = (existing && typeof existing === 'object' && existing._suffixes && typeof existing._suffixes === 'object') ? existing._suffixes : {};
+    const nextSuffixes = (msg && typeof msg === 'object' && msg._suffixes && typeof msg._suffixes === 'object') ? msg._suffixes : {};
+    const suffixes = { ...prevSuffixes };
+    for (const [suffixKey, value] of Object.entries(nextSuffixes)) {
+      if (value !== undefined && value !== null && String(value) !== '') suffixes[suffixKey] = value;
+      else if (suffixes[suffixKey] === undefined) suffixes[suffixKey] = value;
+    }
+    if (existing && typeof existing === 'object' && Object.keys(suffixes).length > 0) existing._suffixes = suffixes;
   }
   return out;
 }

@@ -253,30 +253,72 @@ function sanitizeSessionForRestorePayload(session: Record<string, unknown>): Rec
   return next;
 }
 
+function extractTextForStableMessageKey(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .filter((item) => item && typeof item === "object" && String((item as Record<string, unknown>).type || "") === "text")
+      .map((item) => String((item as Record<string, unknown>).text || ""))
+      .join(" ");
+  }
+  try {
+    return JSON.stringify(content ?? "");
+  } catch {
+    return String(content || "");
+  }
+}
+
+function normalizeTextForStableMessageKey(raw: unknown): string {
+  return String(raw || "")
+    .replace(/\[[a-zA-Z0-9_:-]+\]/g, "")
+    .replace(/\[\/[a-zA-Z0-9_:-]+\]/g, "")
+    .replace(/\[emotion:[^\]]*\]/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function stableMessageKey(msg: unknown): string {
   try {
     if (!msg || typeof msg !== "object") return String(msg || "");
     const m = msg as Record<string, unknown>;
     const role = String(m.role || "");
     const createdAt = Number(m.createdAt || 0);
-    const content = JSON.stringify(m.content ?? null);
+    const content = normalizeTextForStableMessageKey(extractTextForStableMessageKey(m.content));
     return `${role}|${createdAt}|${content}`;
   } catch {
     return String(msg || "");
   }
 }
 
+function mergeMessageRecord(existing: unknown, incoming: unknown): unknown {
+  if (!existing || typeof existing !== "object" || !incoming || typeof incoming !== "object") return incoming || existing;
+  const prev = existing as Record<string, unknown>;
+  const next = incoming as Record<string, unknown>;
+  const merged: Record<string, unknown> = { ...prev, ...next };
+  const prevSuffixes = prev._suffixes && typeof prev._suffixes === "object" ? prev._suffixes as Record<string, unknown> : {};
+  const nextSuffixes = next._suffixes && typeof next._suffixes === "object" ? next._suffixes as Record<string, unknown> : {};
+  const suffixes: Record<string, unknown> = { ...prevSuffixes };
+  for (const [key, value] of Object.entries(nextSuffixes)) {
+    const current = suffixes[key];
+    if (value !== undefined && value !== null && String(value) !== "") {
+      suffixes[key] = value;
+    } else if (current === undefined) {
+      suffixes[key] = value;
+    }
+  }
+  if (Object.keys(suffixes).length > 0) merged._suffixes = suffixes;
+  return merged;
+}
+
 function mergeSessionHistory(existingHistory: unknown, incomingHistory: unknown): unknown[] {
   const a = Array.isArray(existingHistory) ? existingHistory : [];
   const b = Array.isArray(incomingHistory) ? incomingHistory : [];
-  const out: unknown[] = [];
-  const seen = new Set<string>();
+  const byKey = new Map<string, unknown>();
   for (const msg of [...a, ...b]) {
     const key = stableMessageKey(msg);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(msg);
+    byKey.set(key, byKey.has(key) ? mergeMessageRecord(byKey.get(key), msg) : msg);
   }
+  const out = [...byKey.values()];
   out.sort((x, y) => {
     const tx = Number((x as any)?.createdAt || 0);
     const ty = Number((y as any)?.createdAt || 0);

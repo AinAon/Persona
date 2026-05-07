@@ -1449,6 +1449,7 @@ async function runActiveChatWarmup(sessionId) {
     const renderPersonas = msg.personaSnapshot
       ? msg.personaSnapshot.map((snap) => getPersona(snap.pid) || { pid: snap.pid, name: snap.name, image: null, hue: 0, _ghost: true })
       : pList;
+    msg._suffixes = await resolveMessageSuffixes(msg.content, renderPersonas, msg._suffixes || {});
     const segments = parseResponse(msg.content, renderPersonas);
     for (const seg of segments) {
       if (token !== _activeChatWarmupToken || activeChatId !== sessionId) return;
@@ -3425,7 +3426,6 @@ function startNewChat() {
 async function openChat(id) {
   _isDemoMode = false;
   activeChatId = id;
-  runActiveChatWarmup(id).catch(() => {});
   const openToken = ++_chatOpenToken;
   const s = getActiveSession(); if (!s) return;
   if (!s._loaded) {
@@ -3448,8 +3448,10 @@ async function openChat(id) {
   if (empty) empty.style.display = 'flex';
 
   const avatarsEl = document.getElementById('chatHeaderAvatars');
-  avatarsEl.innerHTML = pList.map(p => {
-    const headSrc = p.neutral_thumb || '';
+  const headerThumbs = await Promise.all(pList.map(p => getNeutralImageThumb(p.pid, 42).catch(() => null)));
+  if (openToken !== _chatOpenToken || activeChatId !== id) return;
+  avatarsEl.innerHTML = pList.map((p, i) => {
+    const headSrc = headerThumbs[i] || p.neutral_thumb || '';
     const img = headSrc ? `<img src="${headSrc}" width="42" height="42" decoding="async" style="width:100%;height:100%;object-fit:cover;object-position:top;">` : defaultAvatar(p.hue);
     return `<div class="chat-header-av" style="background:hsl(${p.hue},22%,14%);border-color:hsl(${p.hue},30%,26%);width:42px;height:42px;border-radius:50%;overflow:hidden;flex-shrink:0;">${img}</div>`;
   }).join('');
@@ -3491,18 +3493,21 @@ async function openChat(id) {
     if (effectiveModel) modelEl.value = effectiveModel;
   }
 
-  renderChatArea();
+  await renderChatArea();
+  runActiveChatWarmup(id).catch(() => {});
   if (s._demo) return;
   if (!s._loaded) {
     await loadSession(id);
     if (openToken !== _chatOpenToken || activeChatId !== id) return;
-    renderChatArea();
+    await renderChatArea();
+    runActiveChatWarmup(id).catch(() => {});
   }
   if (typeof refreshCurrentChatIfStale === 'function') {
     refreshCurrentChatIfStale(id).then((changed) => {
       if (!changed) return;
       if (openToken !== _chatOpenToken || activeChatId !== id) return;
       renderChatArea();
+      runActiveChatWarmup(id).catch(() => {});
     }).catch(() => {});
   }
 }
@@ -3552,7 +3557,9 @@ async function renderChatArea() {
       const renderPersonas = msg.personaSnapshot
         ? msg.personaSnapshot.map(snap => getPersona(snap.pid) || { pid:snap.pid, name:snap.name, image:null, hue:0, _ghost:true })
         : pList;
-      if (!msg._suffixes || typeof msg._suffixes !== 'object') msg._suffixes = {};
+      const beforeSuffixes = JSON.stringify(msg._suffixes || {});
+      msg._suffixes = await resolveMessageSuffixes(msg.content, renderPersonas, msg._suffixes || {});
+      if (JSON.stringify(msg._suffixes || {}) !== beforeSuffixes) shouldSavePatchedSuffix = true;
       el.innerHTML = await renderAIResponseHTML(msg.content, renderPersonas, msg._suffixes);
       if (renderAIResponseHTML._lastSuffixPatched) shouldSavePatchedSuffix = true;
     }
@@ -5738,6 +5745,12 @@ async function rebuildEmotionInventoryKV(pid = '') {
     });
     if (pid && typeof _emotionInventoryCache !== 'undefined') {
       try { delete _emotionInventoryCache[pid]; } catch {}
+    }
+    if (!pid && typeof _emotionInventoryCache !== 'undefined') {
+      try { Object.keys(_emotionInventoryCache).forEach(k => delete _emotionInventoryCache[k]); } catch {}
+    }
+    if (typeof _emotionInventorySnapshotPromise !== 'undefined') {
+      try { _emotionInventorySnapshotPromise = null; } catch {}
     }
     return !!res.ok;
   } catch {
