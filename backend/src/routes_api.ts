@@ -49,7 +49,6 @@ const DELETED_SESSION_INDEX_R2_KEY = "session/deleted_index.json";
 const SESSION_R2_PREFIX = "session/data/";
 const DELETED_SESSION_R2_PREFIX = "session/deleted/";
 const SESSION_AUDIO_R2_PREFIXES = ["tts/session/", "audio/session/"];
-const SHARED_PREFIX = "/persona_shared";
 const SESSION_CHANGE_SEQ_KEY = "session_change_seq";
 const LEGACY_MEMORY_API_ENABLED = false;
 const EMOTION_INVENTORY_KV_KEY = "emotion_inventory_v1";
@@ -141,9 +140,12 @@ function toIntInRange(raw: string | null, min: number, max: number): number | nu
 }
 
 function buildSessionMeta(session: Record<string, unknown>): SessionMeta {
+  const history = Array.isArray(session.history) ? session.history as Array<Record<string, unknown>> : [];
+  const lastMessageAt = history.reduce((max, m) => Math.max(max, Number(m?.createdAt || 0)), 0);
   return {
     id: String(session.id),
     updatedAt: Number(session.updatedAt || Date.now()),
+    lastMessageAt,
     lastPreview: String(session.lastPreview || ""),
     participantPids: Array.isArray(session.participantPids) ? (session.participantPids as string[]) : [],
     roomName: String(session.roomName || ""),
@@ -195,6 +197,7 @@ function deletedSessionDropboxPath(id: string): string {
 const SESSION_INDEX_DROPBOX_PATH = "/session/index.json";
 const DELETED_SESSION_INDEX_DROPBOX_PATH = "/session/deleted_index.json";
 const PERSONAS_DROPBOX_PATH = "/personas/personas.json";
+const USER_PROFILE_DROPBOX_PATH = "/profile/user_profile.json";
 
 async function sha256Hex(input: string): Promise<string> {
   const data = new TextEncoder().encode(input);
@@ -403,6 +406,18 @@ async function getSessionPayloadText(env: Env, id: string): Promise<string | nul
   return await dropboxReadText(sharedToken, sessionDropboxPath(id));
 }
 
+async function getUserProfilePayload(env: Env): Promise<string> {
+  const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
+  if (!sharedToken) return "";
+  return (await dropboxReadText(sharedToken, USER_PROFILE_DROPBOX_PATH)) || "";
+}
+
+async function putUserProfilePayload(env: Env, profile: string): Promise<void> {
+  const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
+  if (!sharedToken) throw new Error("shared dropbox token missing");
+  await dropboxWriteText(sharedToken, USER_PROFILE_DROPBOX_PATH, profile);
+}
+
 async function getDeletedSessionPayloadText(env: Env, id: string): Promise<string | null> {
   const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
   if (!sharedToken) return null;
@@ -510,27 +525,39 @@ async function migrateR2PrefixToSharedDropbox(
   env: Env,
   prefix: string,
   sharedToken: string,
-): Promise<{ scanned: number; copied: number; skipped: number }> {
+): Promise<{ scanned: number; copied: number; deleted: number; skipped: number; conflicts: number }> {
   const keys = await listR2ByPrefix(env, prefix, 20000);
   let copied = 0;
+  let deleted = 0;
   let skipped = 0;
+  let conflicts = 0;
   for (const key of keys) {
-    const dbxPath = `${SHARED_PREFIX}/${key}`;
+    const dbxPath = `/${key}`;
     const existing = await dropboxReadBytes(sharedToken, dbxPath);
-    if (existing) {
-      skipped++;
-      continue;
-    }
     const obj = await env.R2.get(key);
     if (!obj || typeof obj.arrayBuffer !== "function") {
       skipped++;
       continue;
     }
     const bytes = await obj.arrayBuffer();
+    if (existing) {
+      if (sameBytes(existing.bytes, bytes)) {
+        await env.R2.delete(key);
+        deleted++;
+      } else {
+        conflicts++;
+      }
+      skipped++;
+      continue;
+    }
     const ok = await dropboxWriteBytes(sharedToken, dbxPath, bytes);
-    if (ok) copied++;
+    if (ok) {
+      copied++;
+      await env.R2.delete(key);
+      deleted++;
+    }
   }
-  return { scanned: keys.length, copied, skipped };
+  return { scanned: keys.length, copied, deleted, skipped, conflicts };
 }
 
 async function migrateR2PrefixToSharedDropboxPaged(
@@ -557,7 +584,7 @@ async function migrateR2PrefixToSharedDropboxPaged(
   for (const o of objects) {
     const key = String(o?.key || "");
     if (!key) continue;
-    const dbxPath = `${SHARED_PREFIX}/${key}`;
+    const dbxPath = `/${key}`;
     const existing = await dropboxReadBytes(sharedToken, dbxPath);
     if (existing) {
       skipped++;
@@ -579,6 +606,53 @@ async function migrateR2PrefixToSharedDropboxPaged(
   const nextCursor = String((page as any).cursor || "");
   const done = !!((page as any).list_complete) || !nextCursor;
   return { scanned: objects.length, copied, skipped, failed, sampleErrors, nextCursor, done };
+}
+
+function sameBytes(a: ArrayBuffer | Uint8Array, b: ArrayBuffer | Uint8Array): boolean {
+  const aa = a instanceof Uint8Array ? a : new Uint8Array(a);
+  const bb = b instanceof Uint8Array ? b : new Uint8Array(b);
+  if (aa.length !== bb.length) return false;
+  for (let i = 0; i < aa.length; i++) {
+    if (aa[i] !== bb[i]) return false;
+  }
+  return true;
+}
+
+async function migrateKvTextToSharedDropbox(
+  env: Env,
+  kvKey: string,
+  dbxPath: string,
+  sharedToken: string,
+): Promise<"moved" | "deleted_duplicate" | "missing" | "conflict" | "write_failed"> {
+  const raw = await env.KV.get(kvKey);
+  if (raw == null) return "missing";
+  const existing = await dropboxReadText(sharedToken, dbxPath);
+  if (existing != null) {
+    if (existing === raw) {
+      await env.KV.delete(kvKey);
+      return "deleted_duplicate";
+    }
+    return "conflict";
+  }
+  const ok = await dropboxWriteText(sharedToken, dbxPath, raw);
+  if (!ok) return "write_failed";
+  await env.KV.delete(kvKey);
+  return "moved";
+}
+
+async function migrateKvPrefixToSharedDropbox(
+  env: Env,
+  kvPrefix: string,
+  makePath: (key: string) => string,
+  sharedToken: string,
+): Promise<Record<string, number>> {
+  const keys = await listKvByPrefix(env, kvPrefix, 5000);
+  const report: Record<string, number> = { scanned: keys.length, moved: 0, deleted_duplicate: 0, missing: 0, conflict: 0, write_failed: 0 };
+  for (const key of keys) {
+    const status = await migrateKvTextToSharedDropbox(env, key, makePath(key), sharedToken);
+    report[status] = (report[status] || 0) + 1;
+  }
+  return report;
 }
 
 function buildMemoryBackupKey(tag: string): string {
@@ -1549,17 +1623,32 @@ export async function handleApiRoute(
       return Response.json({ ok: false, error: "shared dropbox token missing" }, { status: 500, headers: noStoreHeaders });
     }
     const targets = [
-      "image/",
       "session/data/",
       "session/deleted/",
       "session/index.json",
       "session/deleted_index.json",
+      "personas/personas.json",
     ];
-    const report: Record<string, { scanned: number; copied: number; skipped: number }> = {};
+    const report: Record<string, unknown> = {};
     for (const t of targets) {
       report[t] = await migrateR2PrefixToSharedDropbox(env, t, sharedToken);
     }
-    return Response.json({ ok: true, sharedPrefix: SHARED_PREFIX, report }, { headers: noStoreHeaders });
+    report["kv:user_profile"] = await migrateKvTextToSharedDropbox(env, "user_profile", USER_PROFILE_DROPBOX_PATH, sharedToken);
+    report["kv:session_index"] = await migrateKvTextToSharedDropbox(env, SESSION_INDEX_KEY, SESSION_INDEX_DROPBOX_PATH, sharedToken);
+    report["kv:deleted_session_index"] = await migrateKvTextToSharedDropbox(env, DELETED_SESSION_INDEX_KEY, DELETED_SESSION_INDEX_DROPBOX_PATH, sharedToken);
+    report["kv:session:*"] = await migrateKvPrefixToSharedDropbox(
+      env,
+      "session:",
+      (key) => sessionDropboxPath(key.replace(/^session:/, "")),
+      sharedToken,
+    );
+    report["kv:deleted:session:*"] = await migrateKvPrefixToSharedDropbox(
+      env,
+      "deleted:session:",
+      (key) => deletedSessionDropboxPath(key.replace(/^deleted:session:/, "")),
+      sharedToken,
+    );
+    return Response.json({ ok: true, sharedPrefix: "/", report }, { headers: noStoreHeaders });
   }
 
   if (url.pathname === "/migrate/shared/page" && request.method === "POST") {
@@ -1673,7 +1762,7 @@ export async function handleApiRoute(
       }
     }
 
-    const next = [...byId.values()].sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+    const next = [...byId.values()].sort((a, b) => Number((b.lastMessageAt || 0)) - Number((a.lastMessageAt || 0)));
     await putSessionIndex(env, next);
     if (Array.isArray(personasPayload)) {
       await dropboxWriteText(sharedToken, PERSONAS_DROPBOX_PATH, stringifyJsonPretty(personasPayload));
@@ -1842,12 +1931,12 @@ export async function handleApiRoute(
 
   if (url.pathname === "/profile") {
     if (request.method === "GET") {
-      const data = await env.KV.get("user_profile");
+      const data = await getUserProfilePayload(env);
       return Response.json({ profile: data || "" }, { headers: cors });
     }
     if (request.method === "PUT") {
       const { profile } = (await request.json()) as { profile: string };
-      await env.KV.put("user_profile", profile);
+      await putUserProfilePayload(env, profile);
       return Response.json({ ok: true }, { headers: cors });
     }
     return null;
