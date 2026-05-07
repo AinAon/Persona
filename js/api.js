@@ -151,7 +151,15 @@ async function fetchImageFromWorker(key, variantOptions = {}, timeoutMs = 4500) 
   const wUrl = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
   if (!wUrl || !key) return null;
   const safeKey = String(key).replace(/^\/+/, '');
-  const variantUrl = buildImageVariantUrl(safeKey, variantOptions);
+  const isCrossOrigin = (() => {
+    try {
+      if (typeof window === 'undefined' || !window.location?.origin) return false;
+      return new URL(wUrl).origin !== window.location.origin;
+    } catch {
+      return false;
+    }
+  })();
+  const variantUrl = isCrossOrigin ? '' : buildImageVariantUrl(safeKey, variantOptions);
   if (variantUrl) {
     try {
       const resized = await fetchWithTimeout(cacheBustUrl(variantUrl), {}, timeoutMs);
