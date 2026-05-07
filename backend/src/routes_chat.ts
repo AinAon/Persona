@@ -32,7 +32,7 @@ import {
   saveCandidateFromReply,
 } from "./persona_promotion";
 import { buildPersonaVaultV2SystemPrompt } from "./persona_vault_v2";
-import { buildRileySheetsContextPrompt, loadRileySheetsContext, writeRileySheetFromText } from "./google_sheets";
+import { buildRileySheetsContextPrompt, loadRileySheetsContext, readRileySheetFromText, writeRileySheetFromText } from "./google_sheets";
 import {
   inferAttitudeBFromUserText,
   loadPersonaUserProfile,
@@ -104,6 +104,30 @@ const VAULT_AUTONOMY_GUARD = [
   "- Do not claim false platform limits (e.g., 'cannot access file system') when vault action is available.",
   "- When you propose, keep it short and practical.",
 ].join("\n");
+
+function formatKstNow(): string {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(now).reduce<Record<string, string>>((acc, part) => {
+    if (part.type !== "literal") acc[part.type] = part.value;
+    return acc;
+  }, {});
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second} KST (${parts.weekday})`;
+}
+
+function isTimeQuestion(text: string): boolean {
+  const raw = String(text || "");
+  return /(현재\s*시간|지금\s*몇\s*시|오늘\s*날짜|오늘\s*몇\s*일|current\s*time|what\s*time|today'?s?\s*date)/i.test(raw);
+}
 
 const SESSION_INDEX_DROPBOX_PATH = "/session/index.json";
 
@@ -452,7 +476,28 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
   const vaultRouteMode = !isImageReq && proposalPersona ? routeVaultRequestMode(latestUserText, proposalPersona) : "none";
 
   try {
+    if (!isImageReq && inRileyChat && isTimeQuestion(latestUserText)) {
+      return Response.json({
+        result: "success",
+        reply: `현재 시간은 ${formatKstNow()}입니다.`,
+        time_source: "server_runtime_intl_asia_seoul",
+      }, { headers: cors });
+    }
+
     if (!isImageReq && inRileyChat) {
+      const sheetRead = await readRileySheetFromText(env, latestUserText);
+      if (sheetRead) {
+        if (!sheetRead.ok) {
+          const evidence = await writeVaultEvidence(env, "riley", "sheets_read", false, sheetRead.error, latestUserText);
+          return Response.json({ result: "error", error: sheetRead.error, evidence_id: evidence.id }, { status: 400, headers: cors });
+        }
+        return Response.json({
+          result: "success",
+          reply: [`탭: ${sheetRead.tab}`, `범위: ${sheetRead.range}`, sheetRead.summary].join("\n"),
+          sheet_read: { tab: sheetRead.tab, range: sheetRead.range, values: sheetRead.values },
+        }, { headers: cors });
+      }
+
       const sheetWrite = await writeRileySheetFromText(env, latestUserText);
       if (sheetWrite) {
         if (!sheetWrite.ok) {

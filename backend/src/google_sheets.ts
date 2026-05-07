@@ -194,6 +194,8 @@ export function buildRileySheetsContextPrompt(ctx: RileySheetContext): string {
     "Rules:",
     "- Treat every sheet tab as user-editable persistent Riley workspace context.",
     "- Do not assume any fixed tab or header names; use the current spreadsheet tabs and visible row contents.",
+    "- This context is loaded from Google Sheets during the current request; do not call it a stale memory snapshot or ask the user to resync.",
+    "- For explicit sheet reads or writes, the server executes the Sheets API before Riley replies. Report the returned result, not a future action.",
     "- If Sheet content conflicts with older vault memory, prefer the latest Sheet context unless the user says otherwise.",
   ];
   for (const tab of ctx.tabs) {
@@ -229,6 +231,13 @@ function inferSheetWriteContent(text: string): string {
   return raw;
 }
 
+function isRileySheetReadIntent(text: string): boolean {
+  const raw = String(text || "");
+  const mentionsSheet = /(시트|탭|sheet|tab|spreadsheet|스프레드시트|셀|cell|행|row|열|column|[A-Z]{1,3}\d+)/i.test(raw);
+  const wantsRead = /(읽|조회|확인|보여|알려|뭐|무엇|내용|값|read|show|check|view|what|list)/i.test(raw);
+  return mentionsSheet && wantsRead;
+}
+
 function isRileySheetWriteIntent(text: string): boolean {
   const raw = String(text || "");
   const mentionsSheet = /(시트|탭|sheet|tab|spreadsheet|스프레드시트)/i.test(raw);
@@ -236,6 +245,54 @@ function isRileySheetWriteIntent(text: string): boolean {
   const financeWrite = /(자산|부채|대출|연금|퇴직|etf|주식|채권|부동산|포트폴리오|지출|수입|가계|투자|상환|매수|매도|현금흐름|asset|liabilit|loan|debt|portfolio|expense|income|invest)/i.test(raw)
     && /(추가|등록|기록|저장|수정|변경|업데이트|갱신|삭제|제거|해지|매도|write|append|add|set|change|edit|remove|delete|sell)/i.test(raw);
   return (mentionsSheet && wantsWrite) || financeWrite;
+}
+
+function inferA1Range(text: string): string {
+  const raw = String(text || "").toUpperCase();
+  const range = raw.match(/\b([A-Z]{1,3}\d+\s*:\s*[A-Z]{1,3}\d+)\b/)?.[1];
+  if (range) return range.replace(/\s+/g, "");
+  const cell = raw.match(/\b([A-Z]{1,3}\d+)\b/)?.[1];
+  if (cell) return cell;
+  if (/(첫\s*행|첫번째\s*행|first\s*row)/i.test(text)) return "1:1";
+  return "1:40";
+}
+
+function formatSheetValues(values: string[][]): string {
+  return values
+    .map((row, i) => {
+      const text = row.map((cell) => String(cell || "").replace(/\s+/g, " ").trim()).join(" | ").trim();
+      return text ? `${i + 1}. ${text}` : "";
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
+export async function readRileySheetFromText(env: Env, text: string): Promise<
+  | { ok: true; spreadsheetId: string; tab: string; range: string; values: string[][]; summary: string }
+  | { ok: false; error: string; stage?: string }
+  | null
+> {
+  if (!isRileySheetReadIntent(text)) return null;
+  const spreadsheetId = String(env.RILEY_SHEETS_SPREADSHEET_ID || "").trim();
+  if (!spreadsheetId) return { ok: false, error: "riley_sheets_spreadsheet_id_missing", stage: "config" };
+
+  try {
+    const tabs = await loadSheetTitles(env, spreadsheetId);
+    const tab = inferTargetTab(text, tabs);
+    if (!tab) return { ok: false, error: "sheet_tab_missing", stage: "config" };
+    const range = inferA1Range(text);
+    const fullRange = `${tab}!${range}`;
+    const res = await sheetsFetch(env, `${spreadsheetId}/values/${encodeURIComponent(fullRange)}`);
+    const data = await res.json().catch(() => ({})) as { values?: string[][]; error?: { message?: string } };
+    if (!res.ok) throw new Error(data.error?.message || `sheet_read_failed_${res.status}`);
+    const values = data.values || [];
+    const summary = values.length
+      ? formatSheetValues(values)
+      : "(빈 범위)";
+    return { ok: true, spreadsheetId, tab, range: fullRange, values, summary };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || "sheet_read_failed", stage: "read" };
+  }
 }
 
 export async function writeRileySheetFromText(env: Env, text: string): Promise<
