@@ -610,7 +610,7 @@ function sanitizeUserInputValue(value) {
 function sanitizeTextForUnicodeSafety(value) {
   let s = String(value || '');
   // Control chars except common whitespace
-  s = s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
+  s = s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u0080-\u009F]/g, '');
   // Zero-width / bidi / invisible formatting controls
   s = s.replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF\uFFFC]/g, '');
   // Interlinear annotation controls
@@ -1435,6 +1435,7 @@ async function runActiveChatWarmup(sessionId) {
     await Promise.all([
       getNeutralImageThumb(p.pid, 42).catch(() => null),
       getNeutralImageThumb(p.pid, 80).catch(() => null),
+      getEmotionCircleThumb(p.pid, 'neutral', '', 80).catch(() => null),
     ]);
   }
   scheduleChatListRefresh(80);
@@ -3493,13 +3494,13 @@ async function openChat(id) {
     if (effectiveModel) modelEl.value = effectiveModel;
   }
 
-  await renderChatArea();
+  await renderChatArea({ forceBottom: true, preserveScroll: false });
   runActiveChatWarmup(id).catch(() => {});
   if (s._demo) return;
   if (!s._loaded) {
     await loadSession(id);
     if (openToken !== _chatOpenToken || activeChatId !== id) return;
-    await renderChatArea();
+    await renderChatArea({ forceBottom: true, preserveScroll: false });
     runActiveChatWarmup(id).catch(() => {});
   }
   if (typeof refreshCurrentChatIfStale === 'function') {
@@ -3521,14 +3522,19 @@ function goMain() {
   renderChatList();
 }
 
-async function renderChatArea() {
+async function renderChatArea(options = {}) {
   const session = getActiveSession(); if (!session) return;
   const renderSessionId = session.id;
   if (session._markdownDemo) return; // 데모는 직접 관리
   const area = document.getElementById('chatArea');
   const empty = document.getElementById('chatEmpty2');
+  const preserveScroll = options?.preserveScroll !== false;
+  const forceBottom = options?.forceBottom === true;
+  const wasNearBottom = isChatNearBottom(area);
+  const prevTop = area ? area.scrollTop : 0;
+  const prevHeight = area ? area.scrollHeight : 0;
   bindChatAutoStick(area);
-  area.dataset.autoStick = '1';
+  if (!area.dataset.autoStick) area.dataset.autoStick = '1';
 
   if (!session.history || !session.history.length) {
     area.classList.remove('has-messages');
@@ -3540,7 +3546,8 @@ async function renderChatArea() {
   }
   area.classList.add('has-messages');
   empty.style.display = 'none';
-  area.dataset.imageLoadStick = '1';
+  const shouldStick = forceBottom || area.dataset.autoStick === '1' || wasNearBottom;
+  area.dataset.imageLoadStick = shouldStick ? '1' : '0';
   setTimeout(() => {
     if (document.getElementById('chatArea') === area) area.dataset.imageLoadStick = '0';
   }, 2600);
@@ -3578,7 +3585,21 @@ async function renderChatArea() {
   area.querySelectorAll('.msg-group').forEach(enhanceRenderedMessage);
   bindImageLoadBottomStick(area);
   layoutHorizontalMasonryRows(area);
-  requestAnimationFrame(() => { stickChatToBottom(area, { force: true }); });
+  requestAnimationFrame(() => {
+    if (forceBottom) {
+      stickChatToBottom(area, { force: true });
+      return;
+    }
+    if (shouldStick) {
+      stickChatToBottom(area);
+      return;
+    }
+    if (preserveScroll) {
+      const nextHeight = area.scrollHeight;
+      const delta = Math.max(0, nextHeight - prevHeight);
+      area.scrollTop = Math.max(0, prevTop + delta);
+    }
+  });
   if (_pendingArchiveFocus) setTimeout(() => focusPendingArchiveMessage(), 40);
   if (shouldSavePatchedSuffix && !session._demo) {
     session.updatedAt = Date.now();

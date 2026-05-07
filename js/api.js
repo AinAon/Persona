@@ -995,6 +995,8 @@ function normalizeTextForDedup(raw) {
     .replace(/\[[a-zA-Z0-9_:-]+\]/g, '')
     .replace(/\[\/[a-zA-Z0-9_:-]+\]/g, '')
     .replace(/\[emotion:[^\]]*\]/gi, '')
+    .replace(/[\u0080-\u009F]/g, '')
+    .replace(/\uFFFD+/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 }

@@ -144,7 +144,10 @@ export async function dropboxReadText(token: string, path: string): Promise<stri
     },
   });
   if (!res.ok) return null;
-  return await res.text();
+  const bytes = await res.arrayBuffer();
+  let text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+  return text;
 }
 
 export async function dropboxReadBytes(token: string, path: string): Promise<{ bytes: ArrayBuffer; contentType: string } | null> {

@@ -273,8 +273,34 @@ function normalizeTextForStableMessageKey(raw: unknown): string {
     .replace(/\[[a-zA-Z0-9_:-]+\]/g, "")
     .replace(/\[\/[a-zA-Z0-9_:-]+\]/g, "")
     .replace(/\[emotion:[^\]]*\]/gi, "")
+    .replace(/[\u0080-\u009F]/g, "")
+    .replace(/\uFFFD+/g, "")
+    .replace(/[^\S\r\n]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function sanitizeUnicodeText(raw: unknown): string {
+  return String(raw || "")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u0080-\u009F]/g, "")
+    .replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF\uFFFC]/g, "")
+    .replace(/[\uFFF9-\uFFFB]/g, "")
+    .replace(/(^|[\s\[\(\{'"`])հիմա(?=$|[\s\]\)\}'"`.,!?;:])/gi, "$1")
+    .replace(/\uFFFD{2,}/g, "")
+    .trim();
+}
+
+function sanitizeMessageContent(content: unknown): unknown {
+  if (typeof content === "string") return sanitizeUnicodeText(content);
+  if (!Array.isArray(content)) return content;
+  return content.map((item) => {
+    if (!item || typeof item !== "object") return item;
+    const next = { ...(item as Record<string, unknown>) };
+    if (next.type === "text" && typeof next.text === "string") {
+      next.text = sanitizeUnicodeText(next.text);
+    }
+    return next;
+  });
 }
 
 function stableMessageKey(msg: unknown): string {
@@ -533,6 +559,93 @@ async function buildEmotionInventorySnapshot(env: Env): Promise<Record<string, a
       emotions[e].suffixes = [...new Set(emotions[e].suffixes)].sort();
     }
     out.byPid[pid] = emotions;
+  }
+  return out;
+}
+
+type EmotionInventoryByPid = Record<string, Record<string, { hasBase?: boolean; suffixes?: string[] }>>;
+
+async function getEmotionInventoryByPid(env: Env): Promise<EmotionInventoryByPid> {
+  const raw = await env.KV.get(EMOTION_INVENTORY_KV_KEY);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as { byPid?: EmotionInventoryByPid };
+    return parsed?.byPid && typeof parsed.byPid === "object" ? parsed.byPid : {};
+  } catch {
+    return {};
+  }
+}
+
+function collectEmotionRefs(text: string): Array<{ pid: string; emotion: string }> {
+  const out: Array<{ pid: string; emotion: string }> = [];
+  const re = /\[([a-zA-Z0-9_:-]+)\]\s*(?:\[emotion:\s*([a-zA-Z]+)\s*\])?/g;
+  let m: RegExpExecArray | null = null;
+  while ((m = re.exec(String(text || "")))) {
+    out.push({ pid: String(m[1] || "").trim(), emotion: String(m[2] || "neutral").trim().toLowerCase() });
+  }
+  return out;
+}
+
+function pickRandomSuffix(pool: string[]): string {
+  return pool[Math.floor(Math.random() * pool.length)] || pool[0] || "";
+}
+
+function hydrateMessageSuffixes(msg: Record<string, unknown>, byPid: EmotionInventoryByPid): void {
+  if (msg.role !== "assistant") return;
+  const content = msg.content;
+  const text = typeof content === "string"
+    ? content
+    : (Array.isArray(content)
+      ? content.filter((x) => x && typeof x === "object" && (x as Record<string, unknown>).type === "text").map((x) => String((x as Record<string, unknown>).text || "")).join(" ")
+      : "");
+  if (!text) return;
+  const suffixes: Record<string, unknown> =
+    msg._suffixes && typeof msg._suffixes === "object" ? { ...(msg._suffixes as Record<string, unknown>) } : {};
+  let changed = false;
+  for (const ref of collectEmotionRefs(text)) {
+    const slot = byPid?.[ref.pid]?.[ref.emotion];
+    if (!slot) continue;
+    const key = `${ref.pid}:${ref.emotion}`;
+    const pool = Array.isArray(slot.suffixes)
+      ? [...new Set(slot.suffixes.map((x) => String(x || "").toLowerCase()).filter(Boolean))]
+      : [];
+    const current = String(suffixes[key] ?? "").toLowerCase();
+    if (pool.length > 0) {
+      if (!current || !pool.includes(current)) {
+        suffixes[key] = pickRandomSuffix(pool);
+        changed = true;
+      } else if (suffixes[key] !== current) {
+        suffixes[key] = current;
+        changed = true;
+      }
+      continue;
+    }
+    if (slot.hasBase && ref.emotion === "neutral") {
+      if (suffixes[key] !== "") {
+        suffixes[key] = "";
+        changed = true;
+      }
+    } else if (suffixes[key] !== null) {
+      suffixes[key] = null;
+      changed = true;
+    }
+  }
+  if (changed || Object.keys(suffixes).length > 0) msg._suffixes = suffixes;
+}
+
+async function sanitizeAndHydrateSessionHistory(env: Env, history: unknown): Promise<unknown[]> {
+  const arr = Array.isArray(history) ? history : [];
+  const byPid = await getEmotionInventoryByPid(env);
+  const out: unknown[] = [];
+  for (const entry of arr) {
+    if (!entry || typeof entry !== "object") {
+      out.push(entry);
+      continue;
+    }
+    const msg = { ...(entry as Record<string, unknown>) };
+    msg.content = sanitizeMessageContent(msg.content);
+    hydrateMessageSuffixes(msg, byPid);
+    out.push(msg);
   }
   return out;
 }
@@ -2285,12 +2398,13 @@ async function handleSessionRoute(
   if (request.method === "PUT") {
     const { session } = (await request.json()) as { session: Record<string, unknown> };
     const incomingUpdatedAt = Number((session as any)?.updatedAt || 0);
+    const incomingHistoryHydrated = await sanitizeAndHydrateSessionHistory(env, session?.history);
     const existingRaw = await getSessionPayloadText(env, id);
     let mergedSession: Record<string, unknown> = { ...(session || {}) };
     if (existingRaw) {
       try {
         const existing = JSON.parse(existingRaw) as Record<string, unknown>;
-        const mergedHistory = mergeSessionHistory(existing?.history, session?.history);
+        const mergedHistory = mergeSessionHistory(existing?.history, incomingHistoryHydrated);
         const existingUpdatedAt = Number(existing?.updatedAt || 0);
         mergedSession = {
           ...existing,
@@ -2301,6 +2415,8 @@ async function handleSessionRoute(
       } catch {
         // ignore parse failure and proceed with incoming payload
       }
+    } else {
+      mergedSession.history = incomingHistoryHydrated;
     }
     const payload = JSON.stringify(mergedSession);
     const payloadPretty = stringifyJsonPretty(mergedSession);
