@@ -265,7 +265,7 @@ function guardPersonaReply(reply: string, hasExecutionEvidence: boolean, inPerso
   }
 
   // If no evidence exists, block fake completion claims.
-  if (!hasExecutionEvidence && /(생성했|생성했습니다|만들었|적용했|저장했|완료했|읽었|확인했|수정했|변경했|고쳤|created|made|saved|completed|done|read|updated|edited|deleted|removed)/i.test(out)) {
+  if (!hasExecutionEvidence && /(생성했|생성했습니다|만들었|적용했|저장했|완료했|수정했|변경했|고쳤|created|made|saved|completed|done|updated|edited|deleted|removed)/i.test(out)) {
     return "실행 전에 먼저 확인이 필요합니다. 파일명/경로를 지정해주시면 바로 처리하고 결과를 정확히 보고드릴게요.";
   }
   return out;
