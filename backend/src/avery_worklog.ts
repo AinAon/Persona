@@ -149,7 +149,7 @@ function toItemId(kind: WorkKind, title: string): string {
   return `${kind}:${key || "unnamed"}`;
 }
 
-async function r2Text(env: Env, key: string): Promise<string | null> {
+async function dropboxText(env: Env, key: string): Promise<string | null> {
   const token = await getPersonaDropboxAccessToken(env, "avery");
   if (token) {
     if (key === AVERY_LOG_KEY) {
@@ -167,8 +167,8 @@ async function r2Text(env: Env, key: string): Promise<string | null> {
   return null;
 }
 
-async function r2Json<T>(env: Env, key: string, fallback: T): Promise<T> {
-  const text = await r2Text(env, key);
+async function dropboxJson<T>(env: Env, key: string, fallback: T): Promise<T> {
+  const text = await dropboxText(env, key);
   if (!text) return fallback;
   try {
     return JSON.parse(text) as T;
@@ -177,7 +177,7 @@ async function r2Json<T>(env: Env, key: string, fallback: T): Promise<T> {
   }
 }
 
-async function r2PutJson(env: Env, key: string, value: unknown): Promise<void> {
+async function dropboxPutJson(env: Env, key: string, value: unknown): Promise<void> {
   const token = await getPersonaDropboxAccessToken(env, "avery");
   if (!token) return;
   const path = key === AVERY_LOG_KEY ? AVERY_VAULT_LOG_PATH : AVERY_VAULT_STATE_PATH;
@@ -500,7 +500,7 @@ function parseStructuredFromText(text: string): AveryEvent | null {
 }
 
 async function appendLogLine(env: Env, event: AveryEvent): Promise<void> {
-  const existing = await r2Text(env, AVERY_LOG_KEY);
+  const existing = await dropboxText(env, AVERY_LOG_KEY);
   const line = JSON.stringify(event);
   const next = existing && existing.trim() ? `${existing.trim()}\n${line}` : line;
   const token = await getPersonaDropboxAccessToken(env, "avery");
@@ -512,7 +512,7 @@ async function appendLogLine(env: Env, event: AveryEvent): Promise<void> {
 }
 
 async function loadAllAveryEvents(env: Env): Promise<AveryEvent[]> {
-  const raw = await r2Text(env, AVERY_LOG_KEY);
+  const raw = await dropboxText(env, AVERY_LOG_KEY);
   const lines = raw
     ? raw.split(/\r?\n/).map((x) => x.trim()).filter(Boolean)
     : [];
@@ -529,7 +529,7 @@ async function loadAllAveryEvents(env: Env): Promise<AveryEvent[]> {
 }
 
 export async function loadAveryState(env: Env): Promise<AveryState> {
-  const loaded = await r2Json<AveryState>(env, AVERY_STATE_KEY, defaultState());
+  const loaded = await dropboxJson<AveryState>(env, AVERY_STATE_KEY, defaultState());
   const normalizedItems = (Array.isArray(loaded.items) ? loaded.items : []).map((x) => ({
     ...x,
     topic_key: x.topic_key || "general",
@@ -555,7 +555,7 @@ export async function appendAveryWorklogEvent(env: Env, text: string): Promise<{
   const prev = await loadAveryState(env);
   const next = applyEventToState(prev, event);
   await appendLogLine(env, event);
-  await r2PutJson(env, AVERY_STATE_KEY, next);
+  await dropboxPutJson(env, AVERY_STATE_KEY, next);
   return { ok: true, eventId: event.event_id };
 }
 
@@ -635,7 +635,7 @@ export async function reconcileAveryWorklog(env: Env): Promise<{
   const changed = JSON.stringify(oldState.stats) !== JSON.stringify(rebuilt.stats)
     || oldState.items.length !== rebuilt.items.length;
   if (changed) {
-    await r2PutJson(env, AVERY_STATE_KEY, rebuilt);
+    await dropboxPutJson(env, AVERY_STATE_KEY, rebuilt);
   }
   return {
     ok: true,

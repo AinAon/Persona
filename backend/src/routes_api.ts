@@ -43,12 +43,6 @@ type RecoverableSessionMeta = DeletedSessionMeta & {
 
 const SESSION_INDEX_KEY = "session_index";
 const DELETED_SESSION_INDEX_KEY = "deleted_session_index";
-const PERSONAS_KEY = "personas";
-const PERSONAS_R2_KEY = "personas/personas.json";
-const SESSION_INDEX_R2_KEY = "session/index.json";
-const DELETED_SESSION_INDEX_R2_KEY = "session/deleted_index.json";
-const SESSION_R2_PREFIX = "session/data/";
-const DELETED_SESSION_R2_PREFIX = "session/deleted/";
 const SESSION_AUDIO_R2_PREFIXES = ["tts/session/", "audio/session/"];
 const SESSION_CHANGE_SEQ_KEY = "session_change_seq";
 const LEGACY_MEMORY_API_ENABLED = false;
@@ -179,14 +173,6 @@ function parseSessionLike(raw: string | null): SessionMeta | null {
   }
 }
 
-function sessionR2Key(id: string): string {
-  return `${SESSION_R2_PREFIX}${id}.json`;
-}
-
-function deletedSessionR2Key(id: string): string {
-  return `${DELETED_SESSION_R2_PREFIX}${id}.json`;
-}
-
 function sessionDropboxPath(id: string): string {
   return `/session/data/${id}.json`;
 }
@@ -297,35 +283,6 @@ function mergeSessionHistory(existingHistory: unknown, incomingHistory: unknown)
     return tx - ty;
   });
   return out;
-}
-
-async function r2Text(env: Env, key: string): Promise<string | null> {
-  try {
-    const obj = await env.R2.get(key);
-    if (!obj) return null;
-    if (typeof obj.text === "function") return await obj.text();
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-async function r2Json<T>(env: Env, key: string, fallback: T): Promise<T> {
-  const text = await r2Text(env, key);
-  if (!text) return fallback;
-  try {
-    return JSON.parse(text) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-async function r2PutJson(env: Env, key: string, value: unknown): Promise<void> {
-  await env.R2.put(
-    key,
-    JSON.stringify(value),
-    { httpMetadata: { contentType: "application/json; charset=utf-8" } },
-  );
 }
 
 async function getSessionIndex(env: Env): Promise<SessionMeta[]> {
@@ -481,8 +438,7 @@ function parseEmotionVariantFromKey(key: string, pid: string): { emotion: string
 }
 
 async function buildEmotionInventorySnapshot(env: Env): Promise<Record<string, any>> {
-  const personasRaw = await r2Json<any[] | null>(env, PERSONAS_R2_KEY, null);
-  const personas = Array.isArray(personasRaw) ? personasRaw : [];
+  const personas = await getPersonasPayload(env);
   const out: Record<string, any> = { generatedAt: Date.now(), byPid: {} };
   for (const p of personas) {
     const pid = String(p?.pid || "").trim();
