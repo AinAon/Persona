@@ -309,6 +309,39 @@ async function putSessionIndex(env: Env, sessions: SessionMeta[]): Promise<void>
   }
 }
 
+async function ensureSessionIndexLastMessageTimes(env: Env, sessions: SessionMeta[]): Promise<SessionMeta[]> {
+  const needsBackfill = (sessions || []).some((s) => s?.id && Number(s.lastMessageAt || 0) <= 0);
+  if (!needsBackfill) {
+    return [...sessions].sort((a, b) => Number(b.lastMessageAt || 0) - Number(a.lastMessageAt || 0));
+  }
+  const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
+  if (!sharedToken) return sessions;
+
+  const byId = new Map<string, SessionMeta>(
+    (sessions || [])
+      .filter((s) => s && typeof s.id === "string")
+      .map((s) => [String(s.id), s]),
+  );
+  let changed = false;
+  const entries = await dropboxListFolder(sharedToken, "/session/data");
+  for (const entry of entries) {
+    const path = String(entry.path_display || entry.path_lower || "").trim();
+    const m = path.match(/\/session\/data\/([^/]+)\.json$/i);
+    if (!m) continue;
+    const id = String(m[1] || "").trim();
+    if (!id) continue;
+    const prev = byId.get(id);
+    if (!prev || Number(prev.lastMessageAt || 0) > 0) continue;
+    const meta = parseSessionLike(await dropboxReadText(sharedToken, path));
+    if (!meta) continue;
+    byId.set(id, { ...prev, lastMessageAt: meta.lastMessageAt, lastPreview: prev.lastPreview || meta.lastPreview, updatedAt: prev.updatedAt || meta.updatedAt });
+    changed = true;
+  }
+  const next = [...byId.values()].sort((a, b) => Number(b.lastMessageAt || 0) - Number(a.lastMessageAt || 0));
+  if (changed) await putSessionIndex(env, next);
+  return next;
+}
+
 async function getSessionChangeSeq(env: Env): Promise<number> {
   const raw = await env.KV.get(SESSION_CHANGE_SEQ_KEY);
   const n = Number(raw || 0);
@@ -2005,7 +2038,7 @@ export async function handleApiRoute(
 
   if (url.pathname === "/sessions") {
     if (request.method === "GET") {
-      const sessions = await getSessionIndex(env);
+      const sessions = await ensureSessionIndexLastMessageTimes(env, await getSessionIndex(env));
       return Response.json({ sessions }, { headers: noStoreHeaders });
     }
     if (request.method === "PUT") {

@@ -1477,7 +1477,9 @@ function show(id) {
   document.getElementById(id).classList.add('active');
 }
 function timeLabel(ts) {
+  if (!Number.isFinite(Number(ts)) || Number(ts) <= 0) return '';
   const diff = Date.now() - ts;
+  if (!Number.isFinite(diff)) return '';
   if (diff < 60000) return '방금';
   if (diff < 3600000) return `${Math.floor(diff/60000)}분 전`;
   if (diff < 86400000) return `${Math.floor(diff/3600000)}시간 전`;
