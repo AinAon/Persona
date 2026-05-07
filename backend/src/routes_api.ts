@@ -342,10 +342,14 @@ async function getSessionIndex(env: Env): Promise<SessionMeta[]> {
   return legacy ? JSON.parse(legacy) : [];
 }
 
+function stringifyJsonPretty(value: unknown): string {
+  return `${JSON.stringify(value, null, 2)}\n`;
+}
+
 async function putSessionIndex(env: Env, sessions: SessionMeta[]): Promise<void> {
   const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
   if (sharedToken) {
-    await dropboxWriteText(sharedToken, SESSION_INDEX_DROPBOX_PATH, JSON.stringify(sessions));
+    await dropboxWriteText(sharedToken, SESSION_INDEX_DROPBOX_PATH, stringifyJsonPretty(sessions));
   }
   await r2PutJson(env, SESSION_INDEX_R2_KEY, sessions);
 }
@@ -388,7 +392,7 @@ async function getDeletedSessionIndex(env: Env): Promise<DeletedSessionMeta[]> {
 async function putDeletedSessionIndex(env: Env, sessions: DeletedSessionMeta[]): Promise<void> {
   const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
   if (sharedToken) {
-    await dropboxWriteText(sharedToken, DELETED_SESSION_INDEX_DROPBOX_PATH, JSON.stringify(sessions));
+    await dropboxWriteText(sharedToken, DELETED_SESSION_INDEX_DROPBOX_PATH, stringifyJsonPretty(sessions));
   }
   await r2PutJson(env, DELETED_SESSION_INDEX_R2_KEY, sessions);
 }
@@ -721,10 +725,11 @@ async function restoreSessionById(env: Env, sessionId: string): Promise<{ ok: bo
   const sanitizedSession = sanitizeSessionForRestorePayload(parsedSession);
   const meta = buildSessionMeta(sanitizedSession);
   const sanitizedRaw = JSON.stringify(sanitizedSession);
+  const sanitizedPretty = stringifyJsonPretty(sanitizedSession);
 
   const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
   if (sharedToken) {
-    await dropboxWriteText(sharedToken, sessionDropboxPath(id), sanitizedRaw);
+    await dropboxWriteText(sharedToken, sessionDropboxPath(id), sanitizedPretty);
   }
   await env.R2.put(sessionR2Key(id), sanitizedRaw, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
   await env.KV.delete(`session:${id}`);
@@ -1655,9 +1660,11 @@ export async function handleApiRoute(
     );
 
     const entries = await dropboxListFolder(sharedToken, "/session/data");
+    const r2Keys = await listR2ByPrefix(env, SESSION_R2_PREFIX, 20000);
     let scanned = 0;
     let updated = 0;
     let added = 0;
+    let mirroredFromR2 = 0;
 
     for (const entry of entries) {
       const path = String(entry.path_display || entry.path_lower || "").trim();
@@ -1668,6 +1675,18 @@ export async function handleApiRoute(
       const raw = await dropboxReadText(sharedToken, path);
       const meta = parseSessionLike(raw);
       if (!meta) continue;
+      if (raw) {
+        try {
+          const full = JSON.parse(raw) as Record<string, unknown>;
+          const pretty = stringifyJsonPretty(full);
+          if (raw !== pretty) {
+            await dropboxWriteText(sharedToken, path, pretty);
+            normalized++;
+          }
+        } catch {
+          // skip rewrite on malformed payload
+        }
+      }
       const prev = byId.get(id);
       if (!prev) {
         byId.set(id, { ...meta, id });
@@ -1675,6 +1694,33 @@ export async function handleApiRoute(
         continue;
       }
       if (Number(meta.updatedAt || 0) > Number(prev.updatedAt || 0) || Number(meta.messageCount || 0) !== Number(prev.messageCount || 0)) {
+        byId.set(id, { ...meta, id });
+        updated++;
+      }
+    }
+
+    // R2를 기준 원본으로 Dropbox session/data를 최신화.
+    for (const key of r2Keys) {
+      const id = key.replace(SESSION_R2_PREFIX, "").replace(/\.json$/i, "").trim();
+      if (!id) continue;
+      const raw = await r2Text(env, key);
+      const meta = parseSessionLike(raw);
+      if (!raw || !meta) continue;
+      const dbxPath = sessionDropboxPath(id);
+      const pretty = (() => {
+        try {
+          return stringifyJsonPretty(JSON.parse(raw));
+        } catch {
+          return raw;
+        }
+      })();
+      await dropboxWriteText(sharedToken, dbxPath, pretty);
+      mirroredFromR2++;
+      const prev = byId.get(id);
+      if (!prev) {
+        byId.set(id, { ...meta, id });
+        added++;
+      } else if (Number(meta.updatedAt || 0) > Number(prev.updatedAt || 0) || Number(meta.messageCount || 0) !== Number(prev.messageCount || 0)) {
         byId.set(id, { ...meta, id });
         updated++;
       }
@@ -1688,6 +1734,7 @@ export async function handleApiRoute(
       indexEntries: next.length,
       added,
       updated,
+      mirroredFromR2,
       indexPath: SESSION_INDEX_DROPBOX_PATH,
       dataPath: "/session/data/",
     }, { headers: noStoreHeaders });
@@ -2112,9 +2159,10 @@ async function handleSessionRoute(
       }
     }
     const payload = JSON.stringify(mergedSession);
+    const payloadPretty = stringifyJsonPretty(mergedSession);
     const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
     if (sharedToken) {
-      await dropboxWriteText(sharedToken, sessionDropboxPath(id), payload);
+      await dropboxWriteText(sharedToken, sessionDropboxPath(id), payloadPretty);
     }
     await env.R2.put(sessionR2Key(id), payload, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
     await env.KV.delete(`session:${id}`);
