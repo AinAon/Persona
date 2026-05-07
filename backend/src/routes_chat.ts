@@ -521,9 +521,9 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
         const evidence = await writeVaultEvidence(env, "riley", "sheets_write", true, message, latestUserText);
         return Response.json({
           result: "success",
-          reply: `시트에 작성했습니다: ${sheetWrite.tab}${sheetWrite.updatedRange ? ` (${sheetWrite.updatedRange})` : ""}`,
+          reply: `시트에 작성했고 다시 읽어서 확인했습니다: ${sheetWrite.tab}${sheetWrite.updatedRange ? ` (${sheetWrite.updatedRange})` : ""}`,
           evidence_id: evidence.id,
-          sheet_write: { tab: sheetWrite.tab, updatedRange: sheetWrite.updatedRange },
+          sheet_write: { tab: sheetWrite.tab, updatedRange: sheetWrite.updatedRange, verified: sheetWrite.verified },
         }, { headers: cors });
       }
     }

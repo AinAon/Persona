@@ -343,7 +343,7 @@ export async function createRileySheetFromText(env: Env, text: string): Promise<
 }
 
 export async function writeRileySheetFromText(env: Env, text: string): Promise<
-  | { ok: true; spreadsheetId: string; tab: string; updatedRange?: string; values: string[][] }
+  | { ok: true; spreadsheetId: string; tab: string; updatedRange?: string; values: string[][]; verified: boolean }
   | { ok: false; error: string; stage?: string }
   | null
 > {
@@ -367,7 +367,15 @@ export async function writeRileySheetFromText(env: Env, text: string): Promise<
     });
     const data = await res.json().catch(() => ({})) as { updatedRange?: string; updates?: { updatedRange?: string }; error?: { message?: string } };
     if (!res.ok) throw new Error(data.error?.message || `sheet_append_failed_${res.status}`);
-    return { ok: true, spreadsheetId, tab, updatedRange: data.updatedRange || data.updates?.updatedRange, values };
+    const updatedRange = data.updatedRange || data.updates?.updatedRange;
+    const verifyRange = updatedRange || range;
+    const verifyRes = await sheetsFetch(env, `${spreadsheetId}/values/${encodeURIComponent(verifyRange)}`);
+    const verifyData = await verifyRes.json().catch(() => ({})) as { values?: string[][]; error?: { message?: string } };
+    if (!verifyRes.ok) throw new Error(verifyData.error?.message || `sheet_write_verify_read_failed_${verifyRes.status}`);
+    const flat = (verifyData.values || []).flat().map((value) => String(value || ""));
+    const verified = cell ? String(verifyData.values?.[0]?.[0] || "") === content : flat.includes(content);
+    if (!verified) return { ok: false, error: `sheet_write_verify_failed:${verifyRange}`, stage: "verify" };
+    return { ok: true, spreadsheetId, tab, updatedRange, values, verified };
   } catch (e: any) {
     return { ok: false, error: e?.message || "sheet_write_failed", stage: "write" };
   }
