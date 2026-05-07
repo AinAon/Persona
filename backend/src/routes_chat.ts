@@ -32,7 +32,7 @@ import {
   saveCandidateFromReply,
 } from "./persona_promotion";
 import { buildPersonaVaultV2SystemPrompt } from "./persona_vault_v2";
-import { buildRileySheetsContextPrompt, createRileySheetFromText, loadRileySheetsContext, readRileySheetFromText, writeRileySheetFromText } from "./google_sheets";
+import { buildRileySheetsContextPrompt, createRileySheetFromText, getRileySheetsStatus, loadRileySheetsContext, readRileySheetFromText, writeRileySheetFromText } from "./google_sheets";
 import {
   inferAttitudeBFromUserText,
   loadPersonaUserProfile,
@@ -79,6 +79,14 @@ const RILEY_NUMERIC_PRIORITY_GUARD = [
   "- Use private/public memory only as qualitative context, not numeric source of truth.",
   "- If memory numbers conflict with state numbers, explicitly follow state numbers.",
 ].join(" ");
+
+const RILEY_SHEETS_CAPABILITY_GUARD = [
+  "Riley Google Sheets capability policy:",
+  "- Riley has delegated server-side capability to read, write, and create tabs in the configured Google Spreadsheet.",
+  "- Do not claim Riley only has stale snapshots, read-only access, missing API permission, or that the user must resync.",
+  "- For explicit sheet reads/writes/creates, the server executes the operation before Riley replies and returns the API result.",
+  "- Riley may say a sheet write failed only when the server returns a concrete write or read-back verification error.",
+].join("\n");
 
 const AVERY_WORKLOG_GUARD = [
   "Avery worklog policy:",
@@ -127,6 +135,13 @@ function formatKstNow(): string {
 function isTimeQuestion(text: string): boolean {
   const raw = String(text || "");
   return /(현재\s*시간|지금\s*몇\s*시|오늘\s*날짜|오늘\s*몇\s*일|current\s*time|what\s*time|today'?s?\s*date)/i.test(raw);
+}
+
+function isRileySheetsCapabilityQuestion(text: string): boolean {
+  const raw = String(text || "");
+  const mentionsRileyOrSheet = /(라일리|riley|시트|스프레드시트|sheet|spreadsheet)/i.test(raw);
+  const asksCapability = /(권한|가능|불가능|못\s*쓰|안\s*써|쓰기|write|permission|capability|access|readonly|read-only|읽기\s*전용)/i.test(raw);
+  return mentionsRileyOrSheet && asksCapability;
 }
 
 const SESSION_INDEX_DROPBOX_PATH = "/session/index.json";
@@ -484,6 +499,27 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       }, { headers: cors });
     }
 
+    if (!isImageReq && inRileyChat && isRileySheetsCapabilityQuestion(latestUserText)) {
+      const status = await getRileySheetsStatus(env);
+      const reply = status.ok
+        ? [
+            "Riley 시트 권한은 활성 상태입니다.",
+            `spreadsheet_id: ${status.spreadsheetId}`,
+            "가능: 현재 탭 읽기, 셀/행 쓰기, 탭 생성",
+            "쓰기 요청은 서버가 실행한 뒤 같은 범위를 다시 읽어 검증해야만 성공으로 보고합니다.",
+          ].join("\n")
+        : [
+            "Riley 시트 권한이 활성 상태가 아닙니다.",
+            `error: ${status.error || "unknown"}`,
+            status.spreadsheetId ? `spreadsheet_id: ${status.spreadsheetId}` : "",
+          ].filter(Boolean).join("\n");
+      return Response.json({
+        result: status.ok ? "success" : "error",
+        reply,
+        riley_sheets_capability: status,
+      }, { status: status.ok ? 200 : 400, headers: cors });
+    }
+
     if (!isImageReq && inRileyChat) {
       const sheetCreate = await createRileySheetFromText(env, latestUserText);
       if (sheetCreate) {
@@ -667,6 +703,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
             ...(rileyDirective ? [`Priority 1 Directive (Riley):\n${rileyDirective}`] : []),
             ...(averyDirective ? [`Priority 1 Directive (Avery):\n${averyDirective}`] : []),
             ...(inRileyChat ? [RILEY_NUMERIC_PRIORITY_GUARD] : []),
+            ...(inRileyChat ? [RILEY_SHEETS_CAPABILITY_GUARD] : []),
             ...(inAveryChat ? [AVERY_WORKLOG_GUARD] : []),
             ...((inRileyChat || inAveryChat) ? [VAULT_AUTONOMY_GUARD] : []),
           ],
