@@ -1,14 +1,8 @@
 import type { Env } from "./index";
-import type { WealthEvent } from "./riley_wealth";
-
 type ServiceAccountConfig = {
   clientEmail: string;
   privateKey: string;
 };
-
-type SheetsSyncResult =
-  | { ok: true; spreadsheetId: string; tab: string; rows: number; imported: number; updated: number; updatedRange?: string }
-  | { ok: false; error: string; stage?: string };
 
 const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -110,104 +104,11 @@ async function sheetsFetch(env: Env, path: string, init: RequestInit = {}): Prom
   });
 }
 
-function rowsFromEvents(events: WealthEvent[]): string[][] {
-  const header = [
-    "event_id",
-    "timestamp",
-    "action",
-    "bucket",
-    "asset_id",
-    "label",
-    "currency",
-    "amount",
-    "effective_date",
-    "source",
-    "note",
-    "source_text",
-  ];
-  const rows = events.map((event) => {
-    const payload = event.payload || {};
-    return [
-      event.event_id || "",
-      event.timestamp || "",
-      String(payload.action || ""),
-      String(payload.bucket || ""),
-      String(payload.asset_id || ""),
-      String(payload.label || ""),
-      String(payload.currency || ""),
-      payload.amount == null ? "" : String(payload.amount),
-      String(payload.effective_date || ""),
-      String(payload.source || ""),
-      String(payload.note || ""),
-      event.source_text || "",
-    ];
-  });
-  return [header, ...rows];
-}
-
-function normalizeAction(raw: string): "add" | "update" | "remove" {
-  const s = String(raw || "").trim().toLowerCase();
-  if (s === "remove" || s === "delete" || s === "closed") return "remove";
-  if (s === "update" || s === "edit") return "update";
-  return "add";
-}
-
-function normalizeBucket(raw: string): "assets" | "liabilities" | "retirement" | "fixed_cashflow" {
-  const s = String(raw || "").trim().toLowerCase();
-  if (s === "liability" || s === "liabilities" || s === "debt") return "liabilities";
-  if (s === "retirement" || s === "pension") return "retirement";
-  if (s === "fixed_cashflow" || s === "cashflow" || s === "income" || s === "expense") return "fixed_cashflow";
-  return "assets";
-}
-
-function makeSheetEventId(): string {
-  return `sheet-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function eventFromRow(row: string[], rowIndex: number): WealthEvent | null {
-  const eventId = String(row[0] || "").trim() || makeSheetEventId();
-  const timestamp = String(row[1] || "").trim() || new Date().toISOString();
-  const action = normalizeAction(String(row[2] || ""));
-  const bucket = normalizeBucket(String(row[3] || ""));
-  const label = String(row[5] || row[4] || `sheet_row_${rowIndex}`).trim();
-  const assetId = String(row[4] || `${bucket}:${label.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "_").replace(/^_+|_+$/g, "") || "unnamed"}`).trim();
-  const amountRaw = String(row[7] || "").replace(/,/g, "").trim();
-  const amount = amountRaw === "" ? null : Number(amountRaw);
-  const effectiveDate = String(row[8] || "").trim() || timestamp.slice(0, 10);
-  if (!label || (amount !== null && !Number.isFinite(amount))) return null;
-  const sourceText = String(row[11] || "").trim() || `sheet row ${rowIndex}`;
-
-  return {
-    event_id: eventId,
-    timestamp,
-    mode: "wealth_action",
-    event_type: `${bucket}_${action}`,
-    actor: "riley",
-    active: action !== "remove",
-    payload: {
-      schema_version: "1.1.0",
-      action,
-      bucket,
-      asset_id: assetId,
-      label,
-      currency: "KRW",
-      amount,
-      effective_date: effectiveDate,
-      source: "google_sheet",
-      text: sourceText,
-      note: String(row[10] || "").trim() || undefined,
-    },
-    source_text: sourceText,
-  };
-}
-
-async function readEventsFromSheet(env: Env, spreadsheetId: string, tab: string): Promise<WealthEvent[]> {
-  const res = await sheetsFetch(env, `${spreadsheetId}/values/${encodeURIComponent(`${tab}!A2:L`)}`);
-  const data = await res.json().catch(() => ({})) as { values?: string[][]; error?: { message?: string } };
-  if (!res.ok) throw new Error(data.error?.message || `sheet_read_failed_${res.status}`);
-  return (data.values || [])
-    .map((row, index) => eventFromRow(row, index + 2))
-    .filter((event): event is WealthEvent => !!event);
+async function loadSheetTitles(env: Env, spreadsheetId: string): Promise<string[]> {
+  const metaRes = await sheetsFetch(env, `${spreadsheetId}?fields=sheets.properties.title`);
+  const meta = await metaRes.json().catch(() => ({})) as { sheets?: Array<{ properties?: { title?: string } }>; error?: { message?: string } };
+  if (!metaRes.ok) throw new Error(meta.error?.message || `sheet_meta_failed_${metaRes.status}`);
+  return (meta.sheets || []).map((s) => String(s.properties?.title || "").trim()).filter(Boolean);
 }
 
 async function ensureSheetTab(env: Env, spreadsheetId: string, tab: string): Promise<void> {
@@ -227,48 +128,12 @@ async function ensureSheetTab(env: Env, spreadsheetId: string, tab: string): Pro
   }
 }
 
-export async function syncRileyWealthEventsToSheet(
-  env: Env,
-  events: WealthEvent[],
-  mergeSheetEvents: (events: WealthEvent[]) => Promise<{ imported: number; updated: number; events: WealthEvent[] }>,
-): Promise<SheetsSyncResult> {
-  const spreadsheetId = String(env.RILEY_SHEETS_SPREADSHEET_ID || "").trim();
-  const tab = String(env.RILEY_SHEETS_TAB || "wealth_events").trim() || "wealth_events";
-  if (!spreadsheetId) return { ok: false, error: "riley_sheets_spreadsheet_id_missing", stage: "config" };
-
-  try {
-    await ensureSheetTab(env, spreadsheetId, tab);
-    const sheetEvents = await readEventsFromSheet(env, spreadsheetId, tab);
-    const merge = await mergeSheetEvents(sheetEvents);
-    const mergedEvents = merge.events.length ? merge.events : events;
-    const range = encodeURIComponent(`${tab}!A1:L${Math.max(1, mergedEvents.length + 1)}`);
-    const clearRes = await sheetsFetch(env, `${spreadsheetId}/values/${encodeURIComponent(`${tab}!A:L`)}:clear`, {
-      method: "POST",
-      body: "{}",
-    });
-    if (!clearRes.ok) {
-      const data = await clearRes.json().catch(() => ({})) as { error?: { message?: string } };
-      throw new Error(data.error?.message || `sheet_clear_failed_${clearRes.status}`);
-    }
-
-    const updateRes = await sheetsFetch(env, `${spreadsheetId}/values/${range}?valueInputOption=RAW`, {
-      method: "PUT",
-      body: JSON.stringify({ values: rowsFromEvents(mergedEvents) }),
-    });
-    const data = await updateRes.json().catch(() => ({})) as { updatedRange?: string; error?: { message?: string } };
-    if (!updateRes.ok) throw new Error(data.error?.message || `sheet_update_failed_${updateRes.status}`);
-    return { ok: true, spreadsheetId, tab, rows: mergedEvents.length + 1, imported: merge.imported, updated: merge.updated, updatedRange: data.updatedRange };
-  } catch (e: any) {
-    return { ok: false, error: e?.message || "sheets_sync_failed", stage: "sync" };
-  }
-}
-
 export async function getRileySheetsStatus(env: Env): Promise<{ ok: boolean; spreadsheetId: string; tab: string; configured: boolean; error?: string }> {
   const spreadsheetId = String(env.RILEY_SHEETS_SPREADSHEET_ID || "").trim();
-  const tab = String(env.RILEY_SHEETS_TAB || "wealth_events").trim() || "wealth_events";
   const configured = !!spreadsheetId && !!parseServiceAccount(env);
-  if (!configured) return { ok: false, spreadsheetId, tab, configured, error: "sheets_not_configured" };
-  return { ok: true, spreadsheetId, tab, configured };
+  if (!configured) return { ok: false, spreadsheetId, tab: "", configured, error: "sheets_not_configured" };
+  const titles = await loadSheetTitles(env, spreadsheetId).catch(() => []);
+  return { ok: true, spreadsheetId, tab: String(titles[0] || "").trim(), configured };
 }
 
 export type RileySheetContext = {
@@ -304,7 +169,7 @@ export async function loadRileySheetsContext(env: Env): Promise<RileySheetContex
       if (!title) continue;
       const rowCount = Number(sheet.properties?.gridProperties?.rowCount || 0);
       const columnCount = Number(sheet.properties?.gridProperties?.columnCount || 0);
-      const range = `${title}!A1:L${MAX_CONTEXT_ROWS_PER_TAB}`;
+      const range = `${title}!1:${MAX_CONTEXT_ROWS_PER_TAB}`;
       const res = await sheetsFetch(env, `${spreadsheetId}/values/${encodeURIComponent(range)}`);
       const data = await res.json().catch(() => ({})) as { values?: string[][]; error?: { message?: string } };
       if (!res.ok) continue;
@@ -328,7 +193,7 @@ export function buildRileySheetsContextPrompt(ctx: RileySheetContext): string {
     `synced_at=${ctx.updatedAt}`,
     "Rules:",
     "- Treat every sheet tab as user-editable persistent Riley workspace context.",
-    "- Do not assume only wealth_events matters; respect tab names the user mentions, such as 시트1 or 시트2.",
+    "- Do not assume any fixed tab or header names; use the current spreadsheet tabs and visible row contents.",
     "- If Sheet content conflicts with older vault memory, prefer the latest Sheet context unless the user says otherwise.",
   ];
   for (const tab of ctx.tabs) {
@@ -341,16 +206,18 @@ export function buildRileySheetsContextPrompt(ctx: RileySheetContext): string {
   return lines.join("\n").slice(0, 12000);
 }
 
-function inferTargetTab(text: string, fallback = "시트1"): string {
+function inferTargetTab(text: string, existingTabs: string[]): string {
   const raw = String(text || "");
+  const normalizedRaw = raw.toLowerCase().replace(/\s+/g, "");
+  const direct = existingTabs
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length)
+    .find((tab) => normalizedRaw.includes(tab.toLowerCase().replace(/\s+/g, "")));
+  if (direct) return direct;
   const quoted = raw.match(/["'`]([^"'`]{1,80})["'`]\s*(?:탭|시트|sheet|tab)/i)?.[1]
     || raw.match(/(?:탭|시트|sheet|tab)\s*["'`]([^"'`]{1,80})["'`]/i)?.[1];
   if (quoted) return quoted.trim();
-  const korean = raw.match(/(시트\s*\d+|시트[^\s,.;:，。]{1,30})\s*(?:에|으로|에다가|탭에)?/i)?.[1];
-  if (korean) return korean.replace(/\s+/g, "").trim();
-  const named = raw.match(/\b(?:sheet|tab)\s*([A-Za-z0-9_-]{1,40})\b/i)?.[1];
-  if (named) return /^sheet/i.test(named) ? named : `Sheet${named}`;
-  return fallback;
+  return existingTabs[0] || "";
 }
 
 function inferSheetWriteContent(text: string): string {
@@ -379,13 +246,14 @@ export async function writeRileySheetFromText(env: Env, text: string): Promise<
   if (!isRileySheetWriteIntent(text)) return null;
   const spreadsheetId = String(env.RILEY_SHEETS_SPREADSHEET_ID || "").trim();
   if (!spreadsheetId) return { ok: false, error: "riley_sheets_spreadsheet_id_missing", stage: "config" };
-  const tab = inferTargetTab(text, "시트1");
+  const tabs = await loadSheetTitles(env, spreadsheetId);
+  const tab = inferTargetTab(text, tabs);
+  if (!tab) return { ok: false, error: "sheet_tab_missing", stage: "config" };
   const content = inferSheetWriteContent(text);
   const values = [[new Date().toISOString(), "riley_chat", content]];
 
   try {
-    await ensureSheetTab(env, spreadsheetId, tab);
-    const range = encodeURIComponent(`${tab}!A:C`);
+    const range = encodeURIComponent(tab);
     const res = await sheetsFetch(env, `${spreadsheetId}/values/${range}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, {
       method: "POST",
       body: JSON.stringify({ values }),
