@@ -141,6 +141,23 @@ function isTimeQuestion(text: string): boolean {
   return /(현재\s*시간|지금\s*몇\s*시|오늘\s*날짜|오늘\s*몇\s*일|current\s*time|what\s*time|today'?s?\s*date)/i.test(raw);
 }
 
+function isSimpleRileySummon(text: string): boolean {
+  return /^(라일리|riley)[?.!。…\s]*$/i.test(String(text || "").trim());
+}
+
+function isRileySheetTurnIntent(text: string, conversationContext = ""): boolean {
+  const raw = String(text || "").trim();
+  if (!raw) return false;
+  if (/^(라일리|riley|야|저기|음|응|네|ㅇㅇ|어|휴|미치겠네)[?.!。…\s]*$/i.test(raw)) return false;
+  if (/(시트|스프레드시트|구글\s*시트|sheet|spreadsheet|탭|셀|범위|행|열|청구\s*내역|카드\s*내역|결제\s*업체|청구액|교통비|카드번호|모바일티머니|지하철|버스)/i.test(raw)) return true;
+  if (/\b[A-Z]{1,3}\s*\d{1,5}\b/i.test(raw)) return true;
+  if (/[A-Z]\s*열|\d+\s*행|첫\s*행|맨\s*위|맨\s*아래|세\s*번째|두\s*번째|첫\s*번째/i.test(raw)) return true;
+  if (/^(그래|좋아|진행해|해봐|다시|계속|찾아봐|계산해|합산해|더해줘|읽어봐|확인해봐)[?.!。\s]*$/i.test(raw)) {
+    return /(시트|스프레드시트|sheet|셀|범위|행|열|청구\s*내역|카드\s*내역|교통비|결제\s*업체)/i.test(String(conversationContext || ""));
+  }
+  return false;
+}
+
 const SESSION_INDEX_DROPBOX_PATH = "/session/index.json";
 
 type VaultProposalAction = { type: "create_file" | "create_folder"; path: string; content?: string } | RileySheetProposalAction;
@@ -669,6 +686,8 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
   const inRileyChat = isRileyParticipant(participant_pids || []);
   const inAveryChat = isAveryParticipant(participant_pids || []);
   const latestUserText = extractLatestUserText(messages);
+  const recentContext = recentConversationText(messages);
+  const rileySheetTurnIntent = !isImageReq && inRileyChat && isRileySheetTurnIntent(latestUserText, recentContext);
   const shouldWriteAveryEvent = inAveryChat && shouldPersistAveryWorklogText(latestUserText);
   const policyTargetPid = resolvePolicyTargetPid(participant_pids || []);
   const profilePersonaPid = resolvePrimaryPersonaPid(participant_pids || []);
@@ -684,8 +703,15 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       }, { headers: cors });
     }
 
-    if (!isImageReq && inRileyChat) {
-      const sheetResult = await runRileySheetRequestWithGemini(env, latestUserText, apiKeys.gemini, model, recentConversationText(messages));
+    if (!isImageReq && inRileyChat && isSimpleRileySummon(latestUserText)) {
+      return Response.json({
+        result: "success",
+        reply: "[p_riley][emotion:neutral]응, 불렀어?[/p_riley]",
+      }, { headers: cors });
+    }
+
+    if (rileySheetTurnIntent) {
+      const sheetResult = await runRileySheetRequestWithGemini(env, latestUserText, apiKeys.gemini, model, recentContext);
       if (sheetResult) {
         const evidence = await writeVaultEvidence(env, "riley", "sheets_write", sheetResult.ok, sheetResult.ok ? sheetResult.message : sheetResult.error, latestUserText);
         const natural = await renderRileySheetResultMessage(messages, {
@@ -791,7 +817,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     }
     const rileyVaultV2Prompt = (!isImageReq && inRileyChat) ? await buildPersonaVaultV2SystemPrompt(env, "riley") : "";
     const averyVaultV2Prompt = (!isImageReq && inAveryChat) ? await buildPersonaVaultV2SystemPrompt(env, "avery") : "";
-    const rileySheetsPrompt = (!isImageReq && inRileyChat) ? buildRileySheetsContextPrompt(await loadRileySheetsContext(env)) : "";
+    const rileySheetsPrompt = rileySheetTurnIntent ? buildRileySheetsContextPrompt(await loadRileySheetsContext(env)) : "";
     const personaProfile = (!isImageReq && profilePersonaPid)
       ? await loadPersonaUserProfile(env, profilePersonaPid, userIdNorm)
       : null;
