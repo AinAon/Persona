@@ -160,6 +160,35 @@ function pendingVaultProposalKey(persona: "riley" | "avery"): string {
   return `vault:proposal:${persona}`;
 }
 
+function pendingVaultProposalR2Key(persona: "riley" | "avery"): string {
+  return `runtime/vault/proposal/${persona}.json`;
+}
+
+function evidenceR2Key(id: string): string {
+  return `runtime/${id.replace(/:/g, "/")}.json`;
+}
+
+function lastEvidenceR2Key(persona: "riley" | "avery"): string {
+  return `runtime/vault/evidence/last/${persona}.txt`;
+}
+
+async function r2ReadText(env: Env, key: string): Promise<string | null> {
+  const obj = await env.R2.get(key);
+  return obj ? await obj.text() : null;
+}
+
+async function r2WriteText(env: Env, key: string, value: string, contentType = "text/plain; charset=utf-8"): Promise<void> {
+  await env.R2.put(key, value, { httpMetadata: { contentType } });
+}
+
+async function bestEffort<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await fn();
+  } catch {
+    return fallback;
+  }
+}
+
 function isApprovalText(text: string): boolean {
   const t = String(text || "").trim().toLowerCase();
   if (!t || t.length > 40) return false;
@@ -248,11 +277,16 @@ function parseLatestVaultProposalFromMessages(messages: any[]): VaultProposal | 
 }
 
 async function savePendingVaultProposal(env: Env, proposal: VaultProposal): Promise<void> {
-  await env.KV.put(pendingVaultProposalKey(proposal.persona), JSON.stringify(proposal));
+  try {
+    await r2WriteText(env, pendingVaultProposalR2Key(proposal.persona), JSON.stringify(proposal), "application/json; charset=utf-8");
+  } catch {
+    // Pending proposals are recoverable from the visible chat transcript.
+  }
 }
 
 async function loadPendingVaultProposal(env: Env, persona: "riley" | "avery"): Promise<VaultProposal | null> {
-  const raw = await env.KV.get(pendingVaultProposalKey(persona));
+  const raw = await bestEffort(() => r2ReadText(env, pendingVaultProposalR2Key(persona)), null)
+    || await bestEffort(() => env.KV.get(pendingVaultProposalKey(persona)), null);
   if (!raw) return null;
   try {
     const p = JSON.parse(raw) as VaultProposal;
@@ -264,7 +298,7 @@ async function loadPendingVaultProposal(env: Env, persona: "riley" | "avery"): P
 }
 
 async function clearPendingVaultProposal(env: Env, persona: "riley" | "avery"): Promise<void> {
-  await env.KV.delete(pendingVaultProposalKey(persona));
+  await bestEffort(() => env.R2.delete(pendingVaultProposalR2Key(persona)), undefined);
 }
 
 function parseVaultOutputs(message: string): Array<{ type: "file" | "folder" | "count"; value: string }> {
@@ -306,8 +340,12 @@ async function writeVaultEvidence(
     userText: String(userText || ""),
     outputs: parseVaultOutputs(message),
   };
-  await env.KV.put(id, JSON.stringify(ev));
-  await env.KV.put(`vault:evidence:last:${persona}`, id);
+  try {
+    await r2WriteText(env, evidenceR2Key(id), JSON.stringify(ev), "application/json; charset=utf-8");
+    await r2WriteText(env, lastEvidenceR2Key(persona), id);
+  } catch {
+    // Evidence storage is best-effort. Execution result must still reach the user when KV quota is exhausted.
+  }
   return ev;
 }
 
@@ -647,16 +685,16 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     let averyWriteResult: { ok: boolean; error?: string; eventId?: string } | null = null;
     let promotionApplyMessage = "";
     if (!isImageReq && policyTargetPid) {
-      const promoted = await approveLatestPendingCandidate(env, policyTargetPid, latestUserText);
+      const promoted = await bestEffort(() => approveLatestPendingCandidate(env, policyTargetPid, latestUserText), { applied: false, message: "" } as any);
       if (promoted.applied && promoted.message) promotionApplyMessage = promoted.message;
     }
     let policyApplyMessage = "";
     if (!isImageReq && policyTargetPid) {
-      const applied = await applyPendingPolicyIfApproved(env, policyTargetPid, latestUserText);
+      const applied = await bestEffort(() => applyPendingPolicyIfApproved(env, policyTargetPid, latestUserText), { applied: false, message: "" } as any);
       if (applied.applied && applied.message) policyApplyMessage = applied.message;
     }
     if (shouldWriteAveryEvent) {
-      const wr = await appendAveryWorklogEvent(env, latestUserText);
+      const wr = await bestEffort(() => appendAveryWorklogEvent(env, latestUserText), { ok: false, error: "worklog_storage_failed" });
       averyWriteResult = wr.ok ? { ok: true, eventId: wr.eventId } : { ok: false, error: wr.error };
     }
     const averySnapshot = (!isImageReq && inAveryChat)
@@ -671,7 +709,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
         : "general_assistant");
     let attitudeAUpdateStatus = "";
     if (!isImageReq && profilePersonaPid) {
-      const res = await processAttitudeACandidateUpdate(env, profilePersonaPid, userIdNorm, latestUserText);
+      const res = await bestEffort(() => processAttitudeACandidateUpdate(env, profilePersonaPid, userIdNorm, latestUserText), { observed: false, applied: false, reason: "" } as any);
       if (res.observed) {
         attitudeAUpdateStatus = res.applied
           ? `Attitude A updated (${res.reason}).`
@@ -699,7 +737,7 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
           attitudeB: merged,
           updatedAt: new Date().toISOString(),
         };
-        await saveSessionAttitudeState(env, sessionAttitude);
+        await bestEffort(() => saveSessionAttitudeState(env, sessionAttitude!), undefined);
       }
     }
     const profileSections = personaProfile
@@ -835,11 +873,11 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
               });
             }
             if (shouldWriteAveryEvent) {
-              await appendAveryWorklogEvent(env, latestUserText);
+              await bestEffort(() => appendAveryWorklogEvent(env, latestUserText), { ok: false });
             }
             if (policyTargetPid) {
-              await savePendingPolicyPatchFromReply(env, policyTargetPid, reply);
-              await saveCandidateFromReply(env, policyTargetPid, reply);
+              await bestEffort(() => savePendingPolicyPatchFromReply(env, policyTargetPid, reply), undefined);
+              await bestEffort(() => saveCandidateFromReply(env, policyTargetPid, reply), undefined);
             }
             let proposalExecuted = false;
             if (proposalPersona) {
@@ -899,8 +937,8 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     }
 
     if (policyTargetPid) {
-      await savePendingPolicyPatchFromReply(env, policyTargetPid, reply);
-      await saveCandidateFromReply(env, policyTargetPid, reply);
+      await bestEffort(() => savePendingPolicyPatchFromReply(env, policyTargetPid, reply), undefined);
+      await bestEffort(() => saveCandidateFromReply(env, policyTargetPid, reply), undefined);
     }
     let proposalExecuted = false;
     let proposalEvidenceId = "";

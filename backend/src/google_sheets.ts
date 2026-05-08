@@ -230,6 +230,8 @@ type RileySheetRunLog = {
 
 const RILEY_SHEET_RUN_INDEX_KEY = "riley:sheets:runlog:index";
 const RILEY_SHEET_RUN_LOG_TTL_SECONDS = 60 * 60 * 24 * 14;
+const RILEY_SHEET_RUN_R2_PREFIX = "runtime/riley/sheets/runlog";
+const RILEY_SHEET_RUN_R2_INDEX_KEY = `${RILEY_SHEET_RUN_R2_PREFIX}/index.json`;
 
 function createRunLog(userText: string, spreadsheetId: string, plannerModel: string): RileySheetRunLog {
   return {
@@ -285,20 +287,32 @@ function compactRunLogForRiley(log: RileySheetRunLog): RileySheetRunLog {
 }
 
 async function saveRunLog(env: Env, log: RileySheetRunLog): Promise<void> {
-  await env.KV.put(`riley:sheets:runlog:${log.runId}`, JSON.stringify(log), { expirationTtl: RILEY_SHEET_RUN_LOG_TTL_SECONDS });
-  const raw = await env.KV.get(RILEY_SHEET_RUN_INDEX_KEY);
-  const ids = raw ? JSON.parse(raw) as string[] : [];
-  const next = [log.runId, ...ids.filter((id) => id !== log.runId)].slice(0, 50);
-  await env.KV.put(RILEY_SHEET_RUN_INDEX_KEY, JSON.stringify(next), { expirationTtl: RILEY_SHEET_RUN_LOG_TTL_SECONDS });
+  try {
+    await env.R2.put(`${RILEY_SHEET_RUN_R2_PREFIX}/${log.runId}.json`, JSON.stringify(log), {
+      httpMetadata: { contentType: "application/json; charset=utf-8" },
+    });
+    const indexObj = await env.R2.get(RILEY_SHEET_RUN_R2_INDEX_KEY);
+    const raw = indexObj ? await indexObj.text() : null;
+    const ids = raw ? JSON.parse(raw) as string[] : [];
+    const next = [log.runId, ...ids.filter((id) => id !== log.runId)].slice(0, 50);
+    await env.R2.put(RILEY_SHEET_RUN_R2_INDEX_KEY, JSON.stringify(next), {
+      httpMetadata: { contentType: "application/json; charset=utf-8" },
+    });
+    await Promise.all(ids.slice(50).map((id) => env.R2.delete(`${RILEY_SHEET_RUN_R2_PREFIX}/${id}.json`).catch(() => {})));
+  } catch {
+    // Run logs are diagnostic only. Storage errors must not break sheet execution.
+  }
 }
 
 async function loadRunLogs(env: Env, limit = 10): Promise<RileySheetRunLog[]> {
-  const raw = await env.KV.get(RILEY_SHEET_RUN_INDEX_KEY);
+  const indexObj = await env.R2.get(RILEY_SHEET_RUN_R2_INDEX_KEY);
+  const raw = indexObj ? await indexObj.text() : await env.KV.get(RILEY_SHEET_RUN_INDEX_KEY);
   const ids = raw ? JSON.parse(raw) as string[] : [];
   const selected = ids.slice(0, Math.max(1, Math.min(20, Number(limit || 10))));
   const logs: RileySheetRunLog[] = [];
   for (const id of selected) {
-    const item = await env.KV.get(`riley:sheets:runlog:${id}`);
+    const obj = await env.R2.get(`${RILEY_SHEET_RUN_R2_PREFIX}/${id}.json`);
+    const item = obj ? await obj.text() : await env.KV.get(`riley:sheets:runlog:${id}`);
     if (!item) continue;
     try {
       logs.push(compactRunLogForRiley(JSON.parse(item) as RileySheetRunLog));
