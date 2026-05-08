@@ -305,17 +305,15 @@ function inferUpdatePath(raw: string): string | null {
 }
 
 function inferFilePath(raw: string, cfg: PersonaRuntimeConfig): string | null {
+  const hasCreateIntent = /(?:생성|만들|작성|저장|기록|create|write|save)/i.test(raw);
+  if (!hasCreateIntent) return null;
   const explicit =
     raw.match(/(?:파일생성|파일 만들어|create file)\s+([^\n:]+)(?:::{1,3}([\s\S]*))?/i)?.[1]
     || raw.match(/["'`]([a-zA-Z0-9_./-]+\.(?:csv|md|txt|json|jsonl))["'`]/i)?.[1]
     || raw.match(/([a-zA-Z0-9_./-]+\.(?:csv|md|txt|json|jsonl))/i)?.[1];
   if (explicit) return normalizeVaultRelPath(explicit);
 
-  const rileyDefaultFileIntent = cfg.pid === "p_riley"
-    && /\b(?:csv|md|txt|json|jsonl)\b/i.test(raw)
-    && !/(읽|열|확인|보여|수정|변경|삭제|제거|지워|read|open|show|view|check|update|edit|delete|remove)/i.test(raw);
-  const wantsFile = rileyDefaultFileIntent
-    || /(?:파일|file|csv|md|txt|json|jsonl).*(?:생성|만들|작성|저장|create|write)|(?:create|write).*(?:file)|\.(?:csv|md|txt|json|jsonl)\b/i.test(raw);
+  const wantsFile = /(?:파일|file|csv|md|txt|json|jsonl|문서).*(?:생성|만들|작성|저장|기록|create|write|save)|(?:create|write|save).*(?:file|ledger|csv|md|txt|json|jsonl)|(?:자산|부채|wealth|ledger).*(?:기록|저장|작성)/i.test(raw);
   if (!wantsFile) return null;
 
   const ext = /\bjsonl\b/i.test(raw) ? "jsonl"

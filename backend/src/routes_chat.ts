@@ -771,9 +771,6 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       if (!vaultAction && isVaultReadFollowup(latestUserText)) {
         vaultAction = await runRileyVaultActionFromText(env, `${recentContext}\nlatest_user: ${latestUserText}`);
       }
-      if (!vaultAction && /\bcsv\b/i.test(latestUserText)) {
-        vaultAction = await runRileyVaultActionFromText(env, `create csv file\n${latestUserText}`);
-      }
       if (vaultAction) {
         if (!vaultAction.ok) {
           if (/^path_missing:/i.test(String(vaultAction.error || ""))) {
