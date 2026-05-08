@@ -3681,7 +3681,7 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
         ? await getEmotionImageSuffixed(p.pid, seg.emotion, suffix, rectDisplayPx)
         : await getEmotionImage(p.pid, seg.emotion, rectDisplayPx))
       : null;
-    if (!dataUrl) {
+    if (!dataUrl && avStyle !== 'circle') {
       const fallbackSuffix = await resolveFallbackSuffixForMissingEmotion(p.pid, seg.emotion, suffix);
       if (fallbackSuffix !== null && fallbackSuffix !== suffix) {
         suffix = fallbackSuffix;
@@ -3694,7 +3694,7 @@ async function renderAIResponseHTML(rawText, pList, suffixes = {}, createdAt = n
           : null;
       }
     }
-    if (!dataUrl) {
+    if (!dataUrl && avStyle !== 'circle') {
       suffix = String(seg.emotion || '').toLowerCase() === 'neutral' ? '' : null;
       suffixes[suffixKey] = suffix;
       suffixPatched = true;
