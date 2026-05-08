@@ -3486,19 +3486,6 @@ async function openChat(id) {
   updateChatHeaderActionButtons();
   updateChatHeaderAvatarVisibility();
 
-  pList.forEach(async (p, i) => {
-    if (openToken !== _chatOpenToken || activeChatId !== id) return;
-    const img = await getNeutralImageThumb(p.pid, 42);
-    if (openToken !== _chatOpenToken || activeChatId !== id) return;
-    if (img) {
-      const avEl = avatarsEl.children[i];
-      if (avEl) {
-        const cur = avEl.querySelector('img')?.getAttribute('src') || '';
-        if (cur !== img) avEl.innerHTML = `<img src="${img}" width="42" height="42" decoding="async" style="width:100%;height:100%;object-fit:cover;object-position:top;">`;
-      }
-    }
-  });
-
   show('chatScreen');
   switchInputTab('chat');
   setChatBusy(hasActiveGeneration(id));
