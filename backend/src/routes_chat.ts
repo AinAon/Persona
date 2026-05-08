@@ -71,6 +71,8 @@ const ANTI_HALLUCINATION_GUARD = [
   "- Do not fabricate facts.",
   "- If uncertain, explicitly say you are not sure and label assumptions.",
   "- Do not state specific numbers/dates/names as certain without confidence.",
+  "- Do not promise to check something later, report back later, or continue after this reply unless a real scheduled automation/tool has been created.",
+  "- There is no second autonomous chat reply in the current request. If more data is needed, say what is missing now.",
 ].join(" ");
 
 const RILEY_NUMERIC_PRIORITY_GUARD = [
@@ -375,6 +377,10 @@ function guardPersonaReply(reply: string, hasExecutionEvidence: boolean, inPerso
   // Block false capability disclaimers when vault execution path exists.
   if (/(직접\s*외부\s*파일\s*시스템.*제한|파일\s*시스템.*접근.*불가능|제안.*승인.*VAULT_PROPOSAL.*유효)/i.test(out)) {
     return "요청을 직접 실행할 수 있는 경로로 다시 처리하겠습니다.";
+  }
+
+  if (/(확인(?:되는|한)\s*대로\s*(?:바로\s*)?(?:보고|말씀|알려)|잠시만(?:요)?[,.\s]*(?:지금\s*)?(?:확인|조회|대조)|(?:다시|바로)\s*(?:보고|알려)\s*드리겠|결과(?:가)?\s*(?:나오|반환되)는\s*대로|I'll\s+(?:check|get back|report)|I\s+will\s+(?:check|get back|report))/i.test(out)) {
+    return "이 요청 안에서 바로 확인된 결과만 말해야 합니다. 아직 확인된 실행 결과가 없어서 완료나 추후 보고로 말하지 않겠습니다.";
   }
 
   // If no evidence exists, block fake completion claims.
