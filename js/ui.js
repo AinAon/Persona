@@ -1450,7 +1450,7 @@ async function runActiveChatWarmup(sessionId) {
     const renderPersonas = msg.personaSnapshot
       ? msg.personaSnapshot.map((snap) => getPersona(snap.pid) || { pid: snap.pid, name: snap.name, image: null, hue: 0, _ghost: true })
       : pList;
-    msg._suffixes = await resolveMessageSuffixes(msg.content, renderPersonas, msg._suffixes || {});
+    msg._suffixes = await resolveMessageSuffixes(msg.content, renderPersonas, msg._suffixes || {}, `${sessionId}|${msg.createdAt || i}`);
     const segments = parseResponse(msg.content, renderPersonas);
     for (const seg of segments) {
       if (token !== _activeChatWarmupToken || activeChatId !== sessionId) return;
@@ -3570,7 +3570,7 @@ async function renderChatArea(options = {}) {
         ? msg.personaSnapshot.map(snap => getPersona(snap.pid) || { pid:snap.pid, name:snap.name, image:null, hue:0, _ghost:true })
         : pList;
       const beforeSuffixes = JSON.stringify(msg._suffixes || {});
-      msg._suffixes = await resolveMessageSuffixes(msg.content, renderPersonas, msg._suffixes || {});
+      msg._suffixes = await resolveMessageSuffixes(msg.content, renderPersonas, msg._suffixes || {}, `${renderSessionId}|${msg.createdAt || ''}`);
       if (JSON.stringify(msg._suffixes || {}) !== beforeSuffixes) shouldSavePatchedSuffix = true;
       el.innerHTML = await renderAIResponseHTML(msg.content, renderPersonas, msg._suffixes);
       if (renderAIResponseHTML._lastSuffixPatched) shouldSavePatchedSuffix = true;
@@ -5295,7 +5295,7 @@ async function sendMessage() {
 
     const pList = pListAll;
     const personaSnapshot = pList.map(p=>({pid:p.pid, name:p.name}));
-    const suffixes = await resolveMessageSuffixes(reply, pList);
+    const suffixes = await resolveMessageSuffixes(reply, pList, null, `${currentSession.id}|${assistantCreatedAt}`);
 
     const assistantCreatedAt = Date.now();
     const lastHist = currentSession.history?.[currentSession.history.length - 1];

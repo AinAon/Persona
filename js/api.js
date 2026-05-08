@@ -433,8 +433,23 @@ async function getEmotionImageSuffixed(pid, emotion, letter, displayPx = 200) {
   }
 }
 
-// 메시지 렌더링 전 suffix 결정 (파일 목록 기반 랜덤 선택)
-async function resolveMessageSuffixes(rawText, pList, existingSuffixes = null) {
+function pickStableSuffix(pool, seedText = '') {
+  const list = Array.isArray(pool)
+    ? [...new Set(pool.map(x => String(x || '').toLowerCase()).filter(Boolean))].sort()
+    : [];
+  if (!list.length) return null;
+  const seed = String(seedText || '');
+  let hash = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  const idx = Math.abs(hash >>> 0) % list.length;
+  return list[idx];
+}
+
+// 메시지 렌더링 전 suffix 결정 (결정론; 같은 메시지는 같은 suffix)
+async function resolveMessageSuffixes(rawText, pList, existingSuffixes = null, stableSeed = '') {
   const segments = parseResponse(rawText, pList);
   const suffixes = (existingSuffixes && typeof existingSuffixes === 'object') ? { ...existingSuffixes } : {};
   for (const seg of segments) {
@@ -448,8 +463,9 @@ async function resolveMessageSuffixes(rawText, pList, existingSuffixes = null) {
     if (current && pool.includes(String(current).toLowerCase())) {
       suffixes[key] = String(current).toLowerCase();
     } else if (pool.length > 0) {
-      // LLM suffix missing/invalid -> choose random suffix within persona inventory.
-      suffixes[key] = pool[Math.floor(Math.random() * pool.length)];
+      // LLM suffix missing/invalid -> choose stable suffix (no render-time randomness).
+      const seed = `${stableSeed}|${p.pid}|${seg.emotion}|${rawText}`;
+      suffixes[key] = pickStableSuffix(pool, seed);
     } else if (slot.hasBase) {
       // Non-neutral emotion never stores empty suffix; keep null to trigger neutral fallback.
       suffixes[key] = (String(seg.emotion || '').toLowerCase() === 'neutral') ? '' : null;
