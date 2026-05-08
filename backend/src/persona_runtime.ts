@@ -29,7 +29,7 @@ export type PersonaRuntimeConfig = {
 };
 
 export type PersonaVaultActionResult =
-  | { ok: true; message: string; evidenceId: string; path: string; action: VaultActionKind }
+  | { ok: true; message: string; evidenceId: string; path: string; action: VaultActionKind; content?: string; truncated?: boolean }
   | { ok: false; error: string };
 
 type VaultActionKind = "create_file" | "create_folder" | "delete_path" | "read_file" | "update_file";
@@ -285,6 +285,7 @@ function inferDeletePath(raw: string): string | null {
 function inferReadPath(raw: string): string | null {
   const wantsRead = /(읽어|열어|확인|보여|내용|read|open|show|view|check)/i.test(raw);
   if (!wantsRead) return null;
+  if (/(카드\s*(?:번호\s*)?매핑|카드\s*목록|card\s*mapping|mapped\s*card)/i.test(raw)) return "finance/card_mapping.csv";
   const explicit =
     raw.match(/["'`]([a-zA-Z0-9_./-]+\.(?:csv|md|txt|json|jsonl))["'`]/i)?.[1]
     || raw.match(/([a-zA-Z0-9_./-]+\.(?:csv|md|txt|json|jsonl))/i)?.[1];
@@ -393,10 +394,18 @@ export async function runPersonaVaultActionFromText(
     const path = buildPersonaVaultPath(cfg.pid, readRel);
     const content = await dropboxReadText(token, path);
     if (content == null) return { ok: false, error: `file not found: ${path}` };
-    const rec = await recordVaultMutation(token, cfg, "read_file", path, raw);
-    if (!rec.ok) return { ok: false, error: `read file but failed to write evidence: ${path}` };
-    const preview = String(content || "").slice(0, 2000);
-    return { ok: true, message: `read file: ${path}; evidence_id: ${rec.evidenceId}; content_preview: ${preview}`, evidenceId: rec.evidenceId, path, action: "read_file" };
+    const rec = await recordVaultMutation(token, cfg, "read_file", path, raw).catch(() => ({ ok: false, evidenceId: "" }));
+    const full = String(content || "");
+    const preview = full.slice(0, 12000);
+    return {
+      ok: true,
+      message: `read file: ${path}; evidence_id: ${rec.evidenceId || ""}; content_preview: ${preview}`,
+      evidenceId: rec.evidenceId || "",
+      path,
+      action: "read_file",
+      content: preview,
+      truncated: full.length > preview.length,
+    };
   }
 
   const deleteRel = inferDeletePath(raw);

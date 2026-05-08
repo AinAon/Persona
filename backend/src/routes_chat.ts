@@ -243,6 +243,27 @@ function routeVaultRequestMode(text: string, persona: "riley" | "avery" | null):
   return "dialog";
 }
 
+function renderVaultReadFileReply(action: any): string {
+  if (!action || action.action !== "read_file") return "";
+  const path = String(action.path || "").trim();
+  const content = String(action.content ?? "");
+  const truncated = !!action.truncated;
+  const fence = path.toLowerCase().endsWith(".csv") ? "csv"
+    : (path.toLowerCase().endsWith(".json") ? "json" : "");
+  return [
+    `파일을 직접 읽은 결과입니다: \`${path}\``,
+    "",
+    `\`\`\`${fence}`,
+    content,
+    "```",
+    truncated ? "\n내용이 길어서 앞부분만 표시했습니다." : "",
+  ].filter((x) => x !== "").join("\n");
+}
+
+function isVaultReadFollowup(text: string): boolean {
+  return /(다시|raw|원문|실시간|스냅샷\s*말고|캐시\s*말고|그\s*파일|그거|제대로|정확히)/i.test(String(text || ""));
+}
+
 function extractFixedRoleFromDirective(directiveText: string, fallbackRole: string): string {
   const txt = String(directiveText || "");
   const m = txt.match(/^(?:role|역할)\s*:\s*([a-zA-Z0-9_-]{2,80})\s*$/im);
@@ -747,6 +768,9 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
 
     if (!isImageReq && inRileyChat) {
       let vaultAction = await runRileyVaultActionFromText(env, latestUserText);
+      if (!vaultAction && isVaultReadFollowup(latestUserText)) {
+        vaultAction = await runRileyVaultActionFromText(env, `${recentContext}\nlatest_user: ${latestUserText}`);
+      }
       if (!vaultAction && /\bcsv\b/i.test(latestUserText)) {
         vaultAction = await runRileyVaultActionFromText(env, `create csv file\n${latestUserText}`);
       }
@@ -760,7 +784,9 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
           }
         } else {
           const evidence = await writeVaultEvidence(env, "riley", "direct", true, vaultAction.message, latestUserText);
-          const natural = await renderVaultResultMessage(vaultAction.message, model, apiKeys, latestUserText);
+          const natural = vaultAction.action === "read_file"
+            ? renderVaultReadFileReply(vaultAction)
+            : await renderVaultResultMessage(vaultAction.message, model, apiKeys, latestUserText);
           return Response.json({ result: "success", reply: natural, evidence_id: evidence.id, vault_evidence_id: vaultAction.evidenceId }, { headers: cors });
         }
       }
@@ -777,7 +803,9 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
           }
         } else {
           const evidence = await writeVaultEvidence(env, "avery", "direct", true, vaultAction.message, latestUserText);
-          const natural = await renderVaultResultMessage(vaultAction.message, model, apiKeys, latestUserText);
+          const natural = vaultAction.action === "read_file"
+            ? renderVaultReadFileReply(vaultAction)
+            : await renderVaultResultMessage(vaultAction.message, model, apiKeys, latestUserText);
           return Response.json({ result: "success", reply: natural, evidence_id: evidence.id, vault_evidence_id: vaultAction.evidenceId }, { headers: cors });
         }
       }
