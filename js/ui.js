@@ -1598,33 +1598,6 @@ async function getPersonaCircleThumb(pid, emotion = 'neutral', letter = '', disp
   return await getNeutralImageThumb(pid, displayPx);
 }
 
-async function getLatestHeaderThumbMapFromHistory(session, pList, displayPx = 42) {
-  const out = new Map();
-  const history = Array.isArray(session?.history) ? session.history : [];
-  if (!history.length) return out;
-  const targetPids = new Set((pList || []).map((p) => p?.pid).filter(Boolean));
-  for (let i = history.length - 1; i >= 0; i--) {
-    const msg = history[i];
-    if (!msg || msg.role !== 'assistant' || typeof msg.content !== 'string') continue;
-    const renderPersonas = msg.personaSnapshot
-      ? msg.personaSnapshot.map((snap) => getPersona(snap.pid) || { pid: snap.pid, name: snap.name, image: null, hue: 0, _ghost: true })
-      : pList;
-    msg._suffixes = await resolveMessageSuffixes(msg.content, renderPersonas, msg._suffixes || {});
-    const segments = parseResponse(msg.content, renderPersonas);
-    for (const seg of segments) {
-      const persona = renderPersonas[seg.idx];
-      const pid = persona?.pid;
-      if (!pid || !targetPids.has(pid) || out.has(pid)) continue;
-      if (!seg.content?.trim?.()) continue;
-      const suffix = msg._suffixes?.[`${pid}:${seg.emotion}`] || '';
-      const thumb = await getPersonaCircleThumb(pid, seg.emotion, suffix, displayPx).catch(() => '');
-      if (thumb) out.set(pid, thumb);
-      if (out.size >= targetPids.size) return out;
-    }
-  }
-  return out;
-}
-
 // ══════════════════════════════
 //  TAB SWITCHING & SETTINGS
 // ══════════════════════════════
@@ -3494,10 +3467,7 @@ async function openChat(id) {
   if (empty) empty.style.display = 'flex';
 
   const avatarsEl = document.getElementById('chatHeaderAvatars');
-  const latestThumbMap = await getLatestHeaderThumbMapFromHistory(s, pList, 42);
-  const headerThumbs = await Promise.all(
-    pList.map(async (p) => latestThumbMap.get(p.pid) || await getPersonaCircleThumb(p.pid, 'neutral', '', 42).catch(() => null))
-  );
+  const headerThumbs = await Promise.all(pList.map(p => getNeutralImageThumb(p.pid, 42).catch(() => null)));
   if (openToken !== _chatOpenToken || activeChatId !== id) return;
   avatarsEl.innerHTML = pList.map((p, i) => {
     const headSrc = headerThumbs[i] || p.neutral_thumb || '';
@@ -3518,7 +3488,7 @@ async function openChat(id) {
 
   pList.forEach(async (p, i) => {
     if (openToken !== _chatOpenToken || activeChatId !== id) return;
-    const img = latestThumbMap.get(p.pid) || await getPersonaCircleThumb(p.pid, 'neutral', '', 42).catch(() => null);
+    const img = await getNeutralImageThumb(p.pid, 42);
     if (openToken !== _chatOpenToken || activeChatId !== id) return;
     if (img) {
       const avEl = avatarsEl.children[i];
