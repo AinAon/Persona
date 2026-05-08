@@ -85,6 +85,7 @@ const RILEY_SHEETS_CAPABILITY_GUARD = [
   "- Riley has delegated server-side capability to read, write, and create tabs in the configured Google Spreadsheet.",
   "- Do not claim Riley only has stale snapshots, read-only access, missing API permission, or that the user must resync.",
   "- For explicit sheet reads/writes/creates, the server executes the operation before Riley replies and returns the API result.",
+  "- For sheet tool results, answer from the returned API values only. If the returned range is insufficient, say exactly which range must be read next instead of guessing.",
   "- Riley may say a sheet write failed only when the server returns a concrete write or read-back verification error.",
 ].join("\n");
 
@@ -468,6 +469,82 @@ function compactOperationPayload(value: unknown, depth = 0): unknown {
   return out;
 }
 
+function sheetResultForRileyFinal(value: unknown, depth = 0): unknown {
+  if (value === null || value === undefined) return value;
+  if (typeof value === "string") return value.length > 2000 ? `${value.slice(0, 2000)}...` : value;
+  if (typeof value !== "object") return value;
+  if (Array.isArray(value)) {
+    return value.slice(0, 260).map((item) => Array.isArray(item)
+      ? item.slice(0, 30).map((cell) => String(cell ?? "").slice(0, 500))
+      : sheetResultForRileyFinal(item, depth + 1));
+  }
+  const src = value as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(src)) {
+    if (key === "logs") out[key] = compactOperationPayload({ logs: val });
+    else if (depth >= 5) out[key] = "[compact]";
+    else out[key] = sheetResultForRileyFinal(val, depth + 1);
+  }
+  return out;
+}
+
+function recentConversationText(messagesIn: any[], limit = 10): string {
+  return (messagesIn || []).slice(-limit).map((m: any) => {
+    const role = String(m?.role || "user");
+    const text = extractText(m?.content).replace(/\s+/g, " ").trim();
+    return text ? `${role}: ${text}` : "";
+  }).filter(Boolean).join("\n").slice(0, 6000);
+}
+
+async function renderRileySheetResultMessage(messagesIn: any[], sheetResult: unknown, model: string, apiKeys: TextApiKeys): Promise<string> {
+  const simple = renderSimpleSheetReadResult(sheetResult);
+  if (simple) return simple;
+  const system = [
+    "You are Riley. Reply naturally in Riley's persona, not as a mechanical tool wrapper.",
+    "You already received the Google Sheets tool result below. Use it as evidence.",
+    "Answer only the user's latest request using the conversation context and the returned raw values.",
+    "Do not answer older broader requests unless the latest request asks for them and tool_result contains enough data.",
+    "Do not say you will check later. There is no second autonomous reply.",
+    "Do not apologize repeatedly. If the range is insufficient, state the exact missing range/action briefly.",
+    "Never invent cell values, row contents, totals, or matches that are not present in tool_result.",
+    "If previous assistant messages conflict with tool_result, ignore the previous assistant messages.",
+    "For calculations, compute from tool_result values directly and show the final number plus short evidence.",
+  ].join("\n");
+  const recent = (messagesIn || []).slice(-12).map((m: any) => ({
+    role: String(m?.role || "user") === "assistant" ? "assistant" : "user",
+    content: extractText(m?.content).slice(0, 2000),
+  })).filter((m) => m.content);
+  const toolMessage = {
+    role: "user",
+    content: `tool_result_json:\n${JSON.stringify(sheetResultForRileyFinal(sheetResult))}`,
+  };
+  const modelMessages = [{ role: "system", content: system }, ...recent, toolMessage];
+  if (model.startsWith("gemini") && apiKeys.gemini) return generateGeminiText({ model, messages: modelMessages, apiKey: apiKeys.gemini });
+  if (apiKeys.gemini) return generateGeminiText({ model: "gemini-2.5-flash", messages: modelMessages, apiKey: apiKeys.gemini });
+  return "";
+}
+
+function renderSimpleSheetReadResult(sheetResult: any): string {
+  if (!sheetResult || sheetResult.ok !== true || sheetResult.action !== "read_range") return "";
+  const range = String(sheetResult?.data?.range || "");
+  const values = Array.isArray(sheetResult?.data?.values) ? sheetResult.data.values : [];
+  const rows = values.map((row: any) => Array.isArray(row) ? row.map((cell) => String(cell ?? "")) : []);
+  const cellMatch = range.match(/!([A-Z]+[0-9]+)$/i);
+  if (cellMatch) {
+    const cell = cellMatch[1].toUpperCase();
+    const value = rows[0]?.[0] ?? "";
+    return value
+      ? `${cell}에는 "${value}"라고 적혀 있어.`
+      : `${cell}는 비어 있어.`;
+  }
+  const nonEmpty = rows.flat().filter((cell) => String(cell || "").trim());
+  if (rows.length <= 5 && nonEmpty.length <= 20) {
+    if (!nonEmpty.length) return `${range} 범위는 비어 있어.`;
+    return `${range} 범위 값은 ${nonEmpty.map((v) => `"${v}"`).join(", ")}야.`;
+  }
+  return "";
+}
+
 async function renderVaultResultMessage(raw: string, model: string, apiKeys: TextApiKeys, contextText = ""): Promise<string> {
   const msg = String(raw || "").trim();
   if (!msg) return "";
@@ -608,22 +685,18 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     }
 
     if (!isImageReq && inRileyChat) {
-      const sheetResult = await runRileySheetRequestWithGemini(env, latestUserText, apiKeys.gemini, model);
+      const sheetResult = await runRileySheetRequestWithGemini(env, latestUserText, apiKeys.gemini, model, recentConversationText(messages));
       if (sheetResult) {
         const evidence = await writeVaultEvidence(env, "riley", "sheets_write", sheetResult.ok, sheetResult.ok ? sheetResult.message : sheetResult.error, latestUserText);
-        const natural = await renderVaultResultMessage([
-          "Riley received a Google Sheets tool result.",
-          "Riley must inspect it and decide the final user-facing reply.",
-          "If ok=false, Riley should explain the concrete problem and the next fix without pretending it succeeded.",
-          `tool_result=${JSON.stringify(compactOperationPayload(sheetResult))}`,
-          `run_id=${sheetResult.runId || ""}`,
-          `evidence_id=${evidence.id}`,
-        ].join("\n"), model, apiKeys, latestUserText);
+        const natural = await renderRileySheetResultMessage(messages, {
+          ...sheetResult,
+          evidence_id: evidence.id,
+        }, model, apiKeys);
         return Response.json({
           result: "success",
           reply: natural || (sheetResult.ok ? sheetResult.message : sheetResult.error),
           evidence_id: evidence.id,
-          sheet_action: sheetResult,
+          sheet_action: compactOperationPayload(sheetResult),
         }, { headers: cors });
       }
     }

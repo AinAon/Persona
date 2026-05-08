@@ -356,7 +356,7 @@ function compactSheetContext(ctx: RileySheetContext): string {
   }).slice(0, 14000);
 }
 
-async function planRileySheetActionWithGemini(env: Env, text: string, apiKey: string, model: string): Promise<RileySheetAiAction | null> {
+async function planRileySheetActionWithGemini(env: Env, text: string, apiKey: string, model: string, conversationContext = ""): Promise<RileySheetAiAction | null> {
   if (!apiKey) return null;
   if (!String(model || "").startsWith("gemini")) {
     throw new Error(`riley_sheet_planner_requires_gemini_model:${model || "missing"}`);
@@ -371,6 +371,8 @@ async function planRileySheetActionWithGemini(env: Env, text: string, apiKey: st
         "Return JSON only. No markdown. No prose.",
         "Do not ask for approval. Do not output proposals.",
         "Use current spreadsheet context. Sheet names can be any language and may change.",
+        "For analytical questions about totals, filtering, matching keywords, card numbers, or row/column investigation, choose read_range for the full needed area so Riley can reason over the returned raw values.",
+        "If a tab has about 206 rows and the user asks about D141, D193, totals, vendors, card numbers, or transport entries, read a range that includes those rows and relevant amount/vendor/card columns, not only the preview rows.",
         "Allowed schema:",
         "{\"action\":\"none\",\"reason\":\"...\"}",
         "{\"action\":\"get_run_logs\",\"limit\":10}",
@@ -393,6 +395,7 @@ async function planRileySheetActionWithGemini(env: Env, text: string, apiKey: st
       role: "user",
       content: JSON.stringify({
         user_request: String(text || ""),
+        recent_conversation_context: String(conversationContext || "").slice(0, 6000),
         spreadsheet_context: JSON.parse(compactSheetContext(ctx)),
       }),
     },
@@ -773,14 +776,14 @@ async function executeRileySheetAiAction(env: Env, action: RileySheetAiAction): 
   }
 }
 
-export async function runRileySheetRequestWithGemini(env: Env, text: string, apiKey: string, model: string): Promise<RileySheetAiResult | null> {
+export async function runRileySheetRequestWithGemini(env: Env, text: string, apiKey: string, model: string, conversationContext = ""): Promise<RileySheetAiResult | null> {
   const spreadsheetId = String(env.RILEY_SHEETS_SPREADSHEET_ID || "").trim();
   const plannerModel = String(model || "");
   const log = createRunLog(text, spreadsheetId, plannerModel);
   try {
     addRunStep(log, "request_received", true, { text: String(text || ""), plannerModel });
     addRunStep(log, "riley_gemini_plan_start", true, { model: plannerModel });
-    const action = await planRileySheetActionWithGemini(env, text, apiKey, plannerModel);
+    const action = await planRileySheetActionWithGemini(env, text, apiKey, plannerModel, conversationContext);
     addRunStep(log, "riley_gemini_plan_result", !!action, { model: plannerModel, action });
     if (!action || action.action === "none") {
       log.final = { ok: true, action: "none", spreadsheetId, message: action?.reason || "no_sheet_action", runId: log.runId };
