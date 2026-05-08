@@ -1625,34 +1625,6 @@ async function getLatestHeaderThumbMapFromHistory(session, pList, displayPx = 42
   return out;
 }
 
-function syncChatHeaderAvatarsFromRenderedMessages(session) {
-  try {
-    if (!session || activeChatId !== session.id) return;
-    const area = document.getElementById('chatArea');
-    const avatarsEl = document.getElementById('chatHeaderAvatars');
-    if (!area || !avatarsEl) return;
-    const pList = getSessionPersonas(session);
-    const latestByPid = new Map();
-    const aiMsgs = area.querySelectorAll('.ai-msg[data-pid]');
-    for (let i = aiMsgs.length - 1; i >= 0; i--) {
-      const node = aiMsgs[i];
-      const pid = String(node?.dataset?.pid || '').trim();
-      if (!pid || latestByPid.has(pid)) continue;
-      const src = node.querySelector('.msg-av img')?.getAttribute('src') || '';
-      if (src) latestByPid.set(pid, src);
-    }
-    pList.forEach((p, i) => {
-      const src = latestByPid.get(p.pid);
-      if (!src) return;
-      const avEl = avatarsEl.children[i];
-      if (!avEl) return;
-      const cur = avEl.querySelector('img')?.getAttribute('src') || '';
-      if (cur === src) return;
-      avEl.innerHTML = `<img src="${src}" width="42" height="42" decoding="async" style="width:100%;height:100%;object-fit:cover;object-position:top;">`;
-    });
-  } catch {}
-}
-
 // ══════════════════════════════
 //  TAB SWITCHING & SETTINGS
 // ══════════════════════════════
@@ -3571,21 +3543,19 @@ async function openChat(id) {
   }
 
   await renderChatArea({ forceBottom: true, preserveScroll: false });
-  syncChatHeaderAvatarsFromRenderedMessages(s);
   runActiveChatWarmup(id).catch(() => {});
   if (s._demo) return;
   if (!s._loaded) {
     await loadSession(id);
     if (openToken !== _chatOpenToken || activeChatId !== id) return;
     await renderChatArea({ forceBottom: true, preserveScroll: false });
-    syncChatHeaderAvatarsFromRenderedMessages(s);
     runActiveChatWarmup(id).catch(() => {});
   }
   if (typeof refreshCurrentChatIfStale === 'function') {
     refreshCurrentChatIfStale(id).then((changed) => {
       if (!changed) return;
       if (openToken !== _chatOpenToken || activeChatId !== id) return;
-      renderChatArea().then(() => syncChatHeaderAvatarsFromRenderedMessages(s));
+      renderChatArea();
       runActiveChatWarmup(id).catch(() => {});
     }).catch(() => {});
   }
@@ -3679,7 +3649,6 @@ async function renderChatArea(options = {}) {
     }
   });
   if (_pendingArchiveFocus) setTimeout(() => focusPendingArchiveMessage(), 40);
-  syncChatHeaderAvatarsFromRenderedMessages(session);
   if (shouldSavePatchedSuffix && !session._demo) {
     session.updatedAt = Date.now();
     saveSession(session.id);
