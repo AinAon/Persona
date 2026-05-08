@@ -5295,9 +5295,9 @@ async function sendMessage() {
 
     const pList = pListAll;
     const personaSnapshot = pList.map(p=>({pid:p.pid, name:p.name}));
+    const assistantCreatedAt = Date.now();
     const suffixes = await resolveMessageSuffixes(reply, pList, null, `${currentSession.id}|${assistantCreatedAt}`);
 
-    const assistantCreatedAt = Date.now();
     const lastHist = currentSession.history?.[currentSession.history.length - 1];
     const normalizeDupText = (v) => String(v || '')
       .replace(/\[[a-zA-Z0-9_:-]+\]/g, '')
