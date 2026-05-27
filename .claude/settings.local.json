@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l D:/Dropbox/AI/_Github/Persona/js/app.js D:/Dropbox/AI/_Github/Persona/js/data.js D:/Dropbox/AI/_Github/Persona/js/storage.js D:/Dropbox/AI/_Github/Persona/index.html D:/Dropbox/AI/_Github/Persona/backend/src/*.ts)"
+    ]
+  }
+}

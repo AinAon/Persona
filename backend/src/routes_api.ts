@@ -61,6 +61,25 @@ const DISABLED_LEGACY_MUTATION_ROUTES = new Set([
   "/debug/session/migrate-r2-to-dropbox",
 ]);
 
+type AppScope = {
+  mode: "admin" | "user";
+  userId: string;
+  basePath: string;
+};
+
+function normalizeScopeUserId(raw: unknown): string {
+  const cleaned = String(raw || "").trim().replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120);
+  return cleaned || "guest_user";
+}
+
+function getAppScope(request: Request): AppScope {
+  const modeRaw = String(request.headers.get("X-App-Mode") || "admin").trim().toLowerCase();
+  const mode: "admin" | "user" = modeRaw === "user" ? "user" : "admin";
+  const userId = normalizeScopeUserId(request.headers.get("X-App-User-Id") || "");
+  const basePath = mode === "admin" ? "" : `/users/${userId}`;
+  return { mode, userId, basePath };
+}
+
 function normalizePid(raw: unknown): string {
   const s = String(raw || "").trim().toLowerCase();
   if (!s) return "";
@@ -186,18 +205,30 @@ function parseSessionLike(raw: string | null): SessionMeta | null {
   }
 }
 
-function sessionDropboxPath(id: string): string {
-  return `/session/data/${id}.json`;
+function sessionDropboxPath(id: string, scope: AppScope = { mode: "admin", userId: "admin_owner", basePath: "" }): string {
+  return `${scope.basePath}/session/data/${id}.json`;
 }
 
-function deletedSessionDropboxPath(id: string): string {
-  return `/session/deleted/${id}.json`;
+function deletedSessionDropboxPath(id: string, scope: AppScope = { mode: "admin", userId: "admin_owner", basePath: "" }): string {
+  return `${scope.basePath}/session/deleted/${id}.json`;
 }
 
-const SESSION_INDEX_DROPBOX_PATH = "/session/index.json";
-const DELETED_SESSION_INDEX_DROPBOX_PATH = "/session/deleted_index.json";
-const PERSONAS_DROPBOX_PATH = "/personas/personas.json";
-const USER_PROFILE_DROPBOX_PATH = "/profile/user_profile.json";
+function sessionIndexDropboxPath(scope: AppScope = { mode: "admin", userId: "admin_owner", basePath: "" }): string {
+  return `${scope.basePath}/session/index.json`;
+}
+function deletedSessionIndexDropboxPath(scope: AppScope = { mode: "admin", userId: "admin_owner", basePath: "" }): string {
+  return `${scope.basePath}/session/deleted_index.json`;
+}
+function personasDropboxPath(scope: AppScope = { mode: "admin", userId: "admin_owner", basePath: "" }): string {
+  return `${scope.basePath}/personas/personas.json`;
+}
+function userProfileDropboxPath(scope: AppScope = { mode: "admin", userId: "admin_owner", basePath: "" }): string {
+  return `${scope.basePath}/profile/user_profile.json`;
+}
+const SESSION_INDEX_DROPBOX_PATH = sessionIndexDropboxPath();
+const DELETED_SESSION_INDEX_DROPBOX_PATH = deletedSessionIndexDropboxPath();
+const PERSONAS_DROPBOX_PATH = personasDropboxPath();
+const USER_PROFILE_DROPBOX_PATH = userProfileDropboxPath();
 
 async function sha256Hex(input: string): Promise<string> {
   const data = new TextEncoder().encode(input);
@@ -366,10 +397,10 @@ function mergeSessionHistory(existingHistory: unknown, incomingHistory: unknown)
   return out;
 }
 
-async function getSessionIndex(env: Env): Promise<SessionMeta[]> {
+async function getSessionIndex(env: Env, scope: AppScope = { mode: "admin", userId: "admin_owner", basePath: "" }): Promise<SessionMeta[]> {
   const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
   if (!sharedToken) return [];
-  const fromDropbox = await dropboxReadText(sharedToken, SESSION_INDEX_DROPBOX_PATH);
+  const fromDropbox = await dropboxReadText(sharedToken, sessionIndexDropboxPath(scope));
   if (!fromDropbox) return [];
   try {
     const parsed = JSON.parse(fromDropbox);
@@ -383,14 +414,14 @@ function stringifyJsonPretty(value: unknown): string {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
 
-async function putSessionIndex(env: Env, sessions: SessionMeta[]): Promise<void> {
+async function putSessionIndex(env: Env, sessions: SessionMeta[], scope: AppScope = { mode: "admin", userId: "admin_owner", basePath: "" }): Promise<void> {
   const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
   if (sharedToken) {
-    await dropboxWriteText(sharedToken, SESSION_INDEX_DROPBOX_PATH, stringifyJsonPretty(sessions));
+    await dropboxWriteText(sharedToken, sessionIndexDropboxPath(scope), stringifyJsonPretty(sessions));
   }
 }
 
-async function ensureSessionIndexLastMessageTimes(env: Env, sessions: SessionMeta[]): Promise<SessionMeta[]> {
+async function ensureSessionIndexLastMessageTimes(env: Env, sessions: SessionMeta[], scope: AppScope = { mode: "admin", userId: "admin_owner", basePath: "" }): Promise<SessionMeta[]> {
   const needsBackfill = (sessions || []).some((s) => s?.id && Number(s.lastMessageAt || 0) <= 0);
   if (!needsBackfill) {
     return [...sessions].sort((a, b) => Number(b.lastMessageAt || 0) - Number(a.lastMessageAt || 0));
@@ -404,7 +435,7 @@ async function ensureSessionIndexLastMessageTimes(env: Env, sessions: SessionMet
       .map((s) => [String(s.id), s]),
   );
   let changed = false;
-  const entries = await dropboxListFolder(sharedToken, "/session/data");
+  const entries = await dropboxListFolder(sharedToken, `${scope.basePath}/session/data`);
   for (const entry of entries) {
     const path = String(entry.path_display || entry.path_lower || "").trim();
     const m = path.match(/\/session\/data\/([^/]+)\.json$/i);
@@ -419,7 +450,7 @@ async function ensureSessionIndexLastMessageTimes(env: Env, sessions: SessionMet
     changed = true;
   }
   const next = [...byId.values()].sort((a, b) => Number(b.lastMessageAt || 0) - Number(a.lastMessageAt || 0));
-  if (changed) await putSessionIndex(env, next);
+  if (changed) await putSessionIndex(env, next, scope);
   return next;
 }
 
@@ -439,10 +470,10 @@ async function bumpSessionChangeSeq(env: Env): Promise<number> {
   return seq;
 }
 
-async function getDeletedSessionIndex(env: Env): Promise<DeletedSessionMeta[]> {
+async function getDeletedSessionIndex(env: Env, scope: AppScope = { mode: "admin", userId: "admin_owner", basePath: "" }): Promise<DeletedSessionMeta[]> {
   const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
   if (!sharedToken) return [];
-  const fromDropbox = await dropboxReadText(sharedToken, DELETED_SESSION_INDEX_DROPBOX_PATH);
+  const fromDropbox = await dropboxReadText(sharedToken, deletedSessionIndexDropboxPath(scope));
   if (!fromDropbox) return [];
   try {
     const parsed = JSON.parse(fromDropbox);
@@ -452,17 +483,17 @@ async function getDeletedSessionIndex(env: Env): Promise<DeletedSessionMeta[]> {
   }
 }
 
-async function putDeletedSessionIndex(env: Env, sessions: DeletedSessionMeta[]): Promise<void> {
+async function putDeletedSessionIndex(env: Env, sessions: DeletedSessionMeta[], scope: AppScope = { mode: "admin", userId: "admin_owner", basePath: "" }): Promise<void> {
   const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
   if (sharedToken) {
-    await dropboxWriteText(sharedToken, DELETED_SESSION_INDEX_DROPBOX_PATH, stringifyJsonPretty(sessions));
+    await dropboxWriteText(sharedToken, deletedSessionIndexDropboxPath(scope), stringifyJsonPretty(sessions));
   }
 }
 
-async function getPersonasPayload(env: Env): Promise<unknown[]> {
+async function getPersonasPayload(env: Env, scope: AppScope = { mode: "admin", userId: "admin_owner", basePath: "" }): Promise<unknown[]> {
   const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
   if (!sharedToken) return [];
-  const fromDropbox = await dropboxReadText(sharedToken, PERSONAS_DROPBOX_PATH);
+  const fromDropbox = await dropboxReadText(sharedToken, personasDropboxPath(scope));
   if (!fromDropbox) return [];
   try {
     const parsed = JSON.parse(fromDropbox);
@@ -472,28 +503,28 @@ async function getPersonasPayload(env: Env): Promise<unknown[]> {
   }
 }
 
-async function getSessionPayloadText(env: Env, id: string): Promise<string | null> {
+async function getSessionPayloadText(env: Env, id: string, scope: AppScope = { mode: "admin", userId: "admin_owner", basePath: "" }): Promise<string | null> {
   const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
   if (!sharedToken) return null;
-  return await dropboxReadText(sharedToken, sessionDropboxPath(id));
+  return await dropboxReadText(sharedToken, sessionDropboxPath(id, scope));
 }
 
-async function getUserProfilePayload(env: Env): Promise<string> {
+async function getUserProfilePayload(env: Env, scope: AppScope = { mode: "admin", userId: "admin_owner", basePath: "" }): Promise<string> {
   const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
   if (!sharedToken) return "";
-  return (await dropboxReadText(sharedToken, USER_PROFILE_DROPBOX_PATH)) || "";
+  return (await dropboxReadText(sharedToken, userProfileDropboxPath(scope))) || "";
 }
 
-async function putUserProfilePayload(env: Env, profile: string): Promise<void> {
+async function putUserProfilePayload(env: Env, profile: string, scope: AppScope = { mode: "admin", userId: "admin_owner", basePath: "" }): Promise<void> {
   const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
   if (!sharedToken) throw new Error("shared dropbox token missing");
-  await dropboxWriteText(sharedToken, USER_PROFILE_DROPBOX_PATH, profile);
+  await dropboxWriteText(sharedToken, userProfileDropboxPath(scope), profile);
 }
 
-async function getDeletedSessionPayloadText(env: Env, id: string): Promise<string | null> {
+async function getDeletedSessionPayloadText(env: Env, id: string, scope: AppScope = { mode: "admin", userId: "admin_owner", basePath: "" }): Promise<string | null> {
   const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
   if (!sharedToken) return null;
-  return await dropboxReadText(sharedToken, deletedSessionDropboxPath(id));
+  return await dropboxReadText(sharedToken, deletedSessionDropboxPath(id, scope));
 }
 
 async function listKvByPrefix(env: Env, prefix: string, max = 500): Promise<string[]> {
@@ -926,8 +957,8 @@ async function listMemoriesForBackup(
   return { items: out, truncated: false };
 }
 
-async function getRecoverableSessions(env: Env): Promise<RecoverableSessionMeta[]> {
-  const deletedIndex = await getDeletedSessionIndex(env);
+async function getRecoverableSessions(env: Env, scope: AppScope = { mode: "admin", userId: "admin_owner", basePath: "" }): Promise<RecoverableSessionMeta[]> {
+  const deletedIndex = await getDeletedSessionIndex(env, scope);
   const map = new Map<string, RecoverableSessionMeta>();
 
   for (const d of deletedIndex) {
@@ -938,12 +969,12 @@ async function getRecoverableSessions(env: Env): Promise<RecoverableSessionMeta[
   return [...map.values()].sort((a, b) => (b.deletedAt || b.updatedAt || 0) - (a.deletedAt || a.updatedAt || 0));
 }
 
-async function restoreSessionById(env: Env, sessionId: string): Promise<{ ok: boolean; error?: string; session?: SessionMeta }> {
+async function restoreSessionById(env: Env, sessionId: string, scope: AppScope = { mode: "admin", userId: "admin_owner", basePath: "" }): Promise<{ ok: boolean; error?: string; session?: SessionMeta }> {
   const id = String(sessionId || "").trim();
   if (!id) return { ok: false, error: "id required" };
 
-  const deletedRaw = await getDeletedSessionPayloadText(env, id);
-  const activeRaw = await getSessionPayloadText(env, id);
+  const deletedRaw = await getDeletedSessionPayloadText(env, id, scope);
+  const activeRaw = await getSessionPayloadText(env, id, scope);
   const raw = deletedRaw || activeRaw;
   if (!raw) return { ok: false, error: "session not found" };
 
@@ -959,20 +990,20 @@ async function restoreSessionById(env: Env, sessionId: string): Promise<{ ok: bo
 
   const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
   if (sharedToken) {
-    await dropboxWriteText(sharedToken, sessionDropboxPath(id), sanitizedPretty);
+    await dropboxWriteText(sharedToken, sessionDropboxPath(id, scope), sanitizedPretty);
   }
 
-  const index = await getSessionIndex(env);
+  const index = await getSessionIndex(env, scope);
   const existingIndex = index.findIndex((s) => s.id === id);
   if (existingIndex >= 0) index[existingIndex] = meta;
   else index.unshift(meta);
-  await putSessionIndex(env, index);
+  await putSessionIndex(env, index, scope);
 
-  const deletedIndex = await getDeletedSessionIndex(env);
-  await putDeletedSessionIndex(env, deletedIndex.filter((s) => s.id !== id));
+  const deletedIndex = await getDeletedSessionIndex(env, scope);
+  await putDeletedSessionIndex(env, deletedIndex.filter((s) => s.id !== id), scope);
   await env.KV.delete(`deleted:session:${id}`);
   if (sharedToken) {
-    await dropboxDeletePath(sharedToken, deletedSessionDropboxPath(id));
+    await dropboxDeletePath(sharedToken, deletedSessionDropboxPath(id, scope));
   }
   for (const base of SESSION_AUDIO_R2_PREFIXES) {
     await deleteR2ByPrefix(env, `${base}${id}/`);
@@ -987,6 +1018,7 @@ export async function handleApiRoute(
   url: URL,
   cors: CorsHeaders,
 ): Promise<Response | null> {
+  const appScope = getAppScope(request);
   const noStoreHeaders = { ...cors, "Cache-Control": "no-store" };
 
   if (request.method !== "GET" && DISABLED_LEGACY_MUTATION_ROUTES.has(url.pathname)) {
@@ -2141,7 +2173,7 @@ export async function handleApiRoute(
 
   if (url.pathname === "/personas") {
     if (request.method === "GET") {
-      const payload = await getPersonasPayload(env);
+      const payload = await getPersonasPayload(env, appScope);
       return Response.json({ personas: payload }, { headers: cors });
     }
     if (request.method === "PUT") {
@@ -2149,7 +2181,7 @@ export async function handleApiRoute(
       const payload = Array.isArray(personas) ? personas : [];
       const sharedTokenForPersonas = await getPersonaDropboxAccessToken(env, "shared");
       if (sharedTokenForPersonas) {
-        await dropboxWriteText(sharedTokenForPersonas, PERSONAS_DROPBOX_PATH, stringifyJsonPretty(payload));
+        await dropboxWriteText(sharedTokenForPersonas, personasDropboxPath(appScope), stringifyJsonPretty(payload));
       }
       const uniquePids = [...new Set(payload.map(extractPid).filter(Boolean))];
       const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
@@ -2214,12 +2246,12 @@ export async function handleApiRoute(
 
   if (url.pathname === "/profile") {
     if (request.method === "GET") {
-      const data = await getUserProfilePayload(env);
+      const data = await getUserProfilePayload(env, appScope);
       return Response.json({ profile: data || "" }, { headers: cors });
     }
     if (request.method === "PUT") {
       const { profile } = (await request.json()) as { profile: string };
-      await putUserProfilePayload(env, profile);
+      await putUserProfilePayload(env, profile, appScope);
       return Response.json({ ok: true }, { headers: cors });
     }
     return null;
@@ -2273,12 +2305,12 @@ export async function handleApiRoute(
 
   if (url.pathname === "/sessions") {
     if (request.method === "GET") {
-      const sessions = await ensureSessionIndexLastMessageTimes(env, await getSessionIndex(env));
+      const sessions = await ensureSessionIndexLastMessageTimes(env, await getSessionIndex(env, appScope), appScope);
       return Response.json({ sessions }, { headers: noStoreHeaders });
     }
     if (request.method === "PUT") {
       const { sessions } = (await request.json()) as { sessions: unknown[] };
-      await putSessionIndex(env, (Array.isArray(sessions) ? sessions : []) as SessionMeta[]);
+      await putSessionIndex(env, (Array.isArray(sessions) ? sessions : []) as SessionMeta[], appScope);
       await bumpSessionChangeSeq(env);
       return Response.json({ ok: true }, { headers: cors });
     }
@@ -2286,18 +2318,18 @@ export async function handleApiRoute(
   }
 
   if (url.pathname === "/sessions/deleted" && request.method === "GET") {
-    const sessions = await getDeletedSessionIndex(env);
+    const sessions = await getDeletedSessionIndex(env, appScope);
     return Response.json({ sessions }, { headers: cors });
   }
 
   if (url.pathname === "/sessions/recoverable" && request.method === "GET") {
-    const sessions = await getRecoverableSessions(env);
+    const sessions = await getRecoverableSessions(env, appScope);
     return Response.json({ sessions }, { headers: cors });
   }
 
   if (url.pathname === "/session/restore" && request.method === "POST") {
     const { id } = (await request.json()) as { id?: string };
-    const restored = await restoreSessionById(env, String(id || ""));
+    const restored = await restoreSessionById(env, String(id || ""), appScope);
     if (!restored.ok) {
       const status = restored.error === "id required" ? 400 : 404;
       return Response.json({ ok: false, error: restored.error }, { status, headers: cors });
@@ -2308,7 +2340,7 @@ export async function handleApiRoute(
 
   if (url.pathname === "/session/recover" && request.method === "POST") {
     const { id } = (await request.json()) as { id?: string };
-    const recovered = await restoreSessionById(env, String(id || ""));
+    const recovered = await restoreSessionById(env, String(id || ""), appScope);
     if (!recovered.ok) {
       const status = recovered.error === "id required" ? 400 : 404;
       return Response.json({ ok: false, error: recovered.error }, { status, headers: cors });
@@ -2328,18 +2360,18 @@ export async function handleApiRoute(
       await deleteR2ByPrefix(env, `${base}${sessionId}/`);
     }
 
-    const index = await getSessionIndex(env);
-    await putSessionIndex(env, index.filter((s) => s.id !== sessionId));
+    const index = await getSessionIndex(env, appScope);
+    await putSessionIndex(env, index.filter((s) => s.id !== sessionId), appScope);
 
-    const deletedIndex = await getDeletedSessionIndex(env);
-    await putDeletedSessionIndex(env, deletedIndex.filter((s) => s.id !== sessionId));
+    const deletedIndex = await getDeletedSessionIndex(env, appScope);
+    await putDeletedSessionIndex(env, deletedIndex.filter((s) => s.id !== sessionId), appScope);
 
     await bumpSessionChangeSeq(env);
     return Response.json({ ok: true }, { headers: cors });
   }
 
   if (url.pathname.startsWith("/session/")) {
-    return await handleSessionRoute(request, env, url.pathname.slice(9), cors);
+    return await handleSessionRoute(request, env, url.pathname.slice(9), cors, appScope);
   }
 
   if (url.pathname.startsWith("/image-list/") && request.method === "GET") {
@@ -2468,10 +2500,11 @@ async function handleSessionRoute(
   env: Env,
   id: string,
   cors: CorsHeaders,
+  appScope: AppScope,
 ): Promise<Response | null> {
   const noStoreHeaders = { ...cors, "Cache-Control": "no-store" };
   if (request.method === "GET") {
-    const data = await getSessionPayloadText(env, id);
+    const data = await getSessionPayloadText(env, id, appScope);
     return Response.json({ session: data ? JSON.parse(data) : null }, { headers: noStoreHeaders });
   }
 
@@ -2479,7 +2512,7 @@ async function handleSessionRoute(
     const { session } = (await request.json()) as { session: Record<string, unknown> };
     const incomingUpdatedAt = Number((session as any)?.updatedAt || 0);
     const incomingHistoryHydrated = await sanitizeAndHydrateSessionHistory(env, session?.history);
-    const existingRaw = await getSessionPayloadText(env, id);
+    const existingRaw = await getSessionPayloadText(env, id, appScope);
     let mergedSession: Record<string, unknown> = { ...(session || {}) };
     if (existingRaw) {
       try {
@@ -2502,50 +2535,50 @@ async function handleSessionRoute(
     const payloadPretty = stringifyJsonPretty(mergedSession);
     const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
     if (sharedToken) {
-      await dropboxWriteText(sharedToken, sessionDropboxPath(id), payloadPretty);
+      await dropboxWriteText(sharedToken, sessionDropboxPath(id, appScope), payloadPretty);
     }
 
-    const index = await getSessionIndex(env);
+    const index = await getSessionIndex(env, appScope);
     const meta: SessionMeta = buildSessionMeta(mergedSession);
 
     const existingIndex = index.findIndex((s) => s.id === id);
     if (existingIndex >= 0) index[existingIndex] = meta;
     else index.unshift(meta);
 
-    await putSessionIndex(env, index);
+    await putSessionIndex(env, index, appScope);
     await bumpSessionChangeSeq(env);
     return Response.json({ ok: true }, { headers: cors });
   }
 
   if (request.method === "DELETE") {
     const sharedToken = await getPersonaDropboxAccessToken(env, "shared");
-    const existingRaw = await getSessionPayloadText(env, id);
+    const existingRaw = await getSessionPayloadText(env, id, appScope);
     if (existingRaw) {
       try {
         const session = JSON.parse(existingRaw) as Record<string, unknown>;
         const meta = buildSessionMeta(session);
         const deletedMeta: DeletedSessionMeta = { ...meta, deletedAt: Date.now() };
         if (sharedToken) {
-          await dropboxWriteText(sharedToken, deletedSessionDropboxPath(id), existingRaw);
+          await dropboxWriteText(sharedToken, deletedSessionDropboxPath(id, appScope), existingRaw);
         }
-        const deletedIndex = await getDeletedSessionIndex(env);
+        const deletedIndex = await getDeletedSessionIndex(env, appScope);
         const nextDeleted = [deletedMeta, ...deletedIndex.filter((s) => s.id !== id)].slice(0, 200);
-        await putDeletedSessionIndex(env, nextDeleted);
+        await putDeletedSessionIndex(env, nextDeleted, appScope);
       } catch {
         // ignore archival parse failure and continue hard-delete path
       }
     }
 
     if (sharedToken) {
-      await dropboxDeletePath(sharedToken, sessionDropboxPath(id));
+      await dropboxDeletePath(sharedToken, sessionDropboxPath(id, appScope));
     }
     await env.KV.delete(`session:${id}`);
     for (const base of SESSION_AUDIO_R2_PREFIXES) {
       await deleteR2ByPrefix(env, `${base}${id}/`);
     }
-    let index = await getSessionIndex(env);
+    let index = await getSessionIndex(env, appScope);
     index = index.filter((s) => s.id !== id);
-    await putSessionIndex(env, index);
+    await putSessionIndex(env, index, appScope);
     await bumpSessionChangeSeq(env);
     return Response.json({ ok: true }, { headers: cors });
   }

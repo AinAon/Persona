@@ -1630,11 +1630,9 @@ function renderSettingsPane() {
   if (delBtn) delBtn.style.display = userProfile.image ? 'block' : 'none';
   const nameEl = document.getElementById('settingsUserName');
   const bioEl = document.getElementById('settingsUserBio');
-  const memoryBioEl = document.getElementById('settingsMemoryBio');
   const hpEl = document.getElementById('settingsHallucinationPolicy');
   if (nameEl) nameEl.value = userProfile.name || '';
   if (bioEl) bioEl.value = userProfile.bio || '';
-  if (memoryBioEl) memoryBioEl.value = userProfile.memoryBio || '';
   if (hpEl) hpEl.value = userProfile.hallucinationPolicy || '';
   
   // 시작 화면 설정
@@ -1658,25 +1656,6 @@ function renderSettingsPane() {
   const typingEl = document.getElementById('settingsTypingSpeed');
   if (typingEl) typingEl.value = getBubbleTypingSpeedPreset();
   setSettingsSegmentValue('settingsTypingSpeed', getBubbleTypingSpeedPreset(), 'settingsTypingSpeedSeg');
-  // Public/private memory UI disabled by policy.
-  renderVaultV2Status(false);
-}
-
-async function renderVaultV2Status(force = false) {
-  const el = document.getElementById('vaultV2StatusBody');
-  if (!el) return;
-  if (force) el.textContent = '불러오는 중';
-  const personas = ['avery', 'riley'];
-  const rows = [];
-  for (const persona of personas) {
-    const data = await getVaultV2StatusApi(persona, 1);
-    if (!data?.ok) {
-      rows.push(`<div><b>${persona}</b>: unavailable</div>`);
-      continue;
-    }
-    rows.push(`<div><b>${persona}</b>: active ${Number(data.activeFiles?.length || 0)} · inactive ${Number(data.inactiveCount || 0)}</div>`);
-  }
-  el.innerHTML = rows.join('');
 }
 
 function previewFontSize(val) {
@@ -1708,7 +1687,6 @@ function getBubbleTypingDelay(ch = '') {
 function saveSettingsUserProfile() {
   userProfile.name = document.getElementById('settingsUserName')?.value.trim() || '';
   userProfile.bio = document.getElementById('settingsUserBio')?.value.trim() || '';
-  userProfile.memoryBio = document.getElementById('settingsMemoryBio')?.value.trim() || '';
   userProfile.hallucinationPolicy = document.getElementById('settingsHallucinationPolicy')?.value.trim() || '';
   userProfile.defaultTab = document.getElementById('settingsDefaultTab')?.value || 'persona';
   userProfile.chatAvatarStyle = document.getElementById('settingsAvatarStyle')?.value || 'square';
@@ -1720,7 +1698,6 @@ function saveSettingsUserProfile() {
   applyFontSize(userProfile.fontSize);
   saveUserProfile();
   saveUserProfileKV();
-  savePersonaMemoryBioKV(userProfile.memoryBio || '').catch(() => {});
   updateChatListAvatarVisibilityButton();
   renderChatList();
   showToast('설정 저장됨 ✓');

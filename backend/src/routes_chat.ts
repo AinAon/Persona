@@ -4,35 +4,11 @@ import { generateOpenAIImage, generateOpenAIText, streamOpenAIText } from "./mod
 import { generateGrokImage, generateGrokText, streamGrokText } from "./model_grok";
 import { buildPersonaVaultPath, dropboxReadText, dropboxWriteText, getPersonaDropboxAccessToken } from "./dropbox_vault";
 import {
-  appendAveryWorklogEvent,
-  buildAverySystemPrompt,
-  getAveryWorklogSnapshot,
-  isAveryParticipant,
-  loadAveryDirective,
-  recordAveryVaultMutation,
-  runAveryVaultActionFromText,
-  shouldPersistAveryWorklogText,
-} from "./avery_worklog";
-import {
   extractLatestUserText,
-  isRileyParticipant,
-  loadRileyDirective,
   recordRileyVaultMutation,
-  runRileyVaultActionFromText,
 } from "./riley_wealth";
-import {
-  applyPendingPolicyIfApproved,
-  buildPersonaPolicySystemPrompt,
-  resolvePolicyTargetPid,
-  savePendingPolicyPatchFromReply,
-} from "./persona_policy";
-import {
-  approveLatestPendingCandidate,
-  buildPromotionSystemPrompt,
-  saveCandidateFromReply,
-} from "./persona_promotion";
-import { buildPersonaVaultV2SystemPrompt } from "./persona_vault_v2";
-import { buildRileySheetsContextPrompt, executeRileySheetProposalActions, loadRileySheetsContext, runRileySheetRequestWithGemini, type RileySheetProposalAction } from "./google_sheets";
+import { recordAveryVaultMutation } from "./avery_worklog";
+import { executeRileySheetProposalActions, type RileySheetProposalAction } from "./google_sheets";
 import {
   inferAttitudeBFromUserText,
   loadPersonaUserProfile,
@@ -74,91 +50,6 @@ const ANTI_HALLUCINATION_GUARD = [
   "- Do not promise to check something later, report back later, or continue after this reply unless a real scheduled automation/tool has been created.",
   "- There is no second autonomous chat reply in the current request. If more data is needed, say what is missing now.",
 ].join(" ");
-
-const RILEY_NUMERIC_PRIORITY_GUARD = [
-  "Riley wealth policy:",
-  "- For finance numbers, always prioritize Riley wealth state snapshot over memory text.",
-  "- Use private/public memory only as qualitative context, not numeric source of truth.",
-  "- If memory numbers conflict with state numbers, explicitly follow state numbers.",
-].join(" ");
-
-const RILEY_SHEETS_CAPABILITY_GUARD = [
-  "Riley Google Sheets capability policy:",
-  "- Riley has delegated server-side capability to read, write, and create tabs in the configured Google Spreadsheet.",
-  "- Do not claim Riley only has stale snapshots, read-only access, missing API permission, or that the user must resync.",
-  "- For explicit sheet reads/writes/creates, the server executes the operation before Riley replies and returns the API result.",
-  "- For sheet tool results, answer from the returned API values only. If the returned range is insufficient, say exactly which range must be read next instead of guessing.",
-  "- Riley may say a sheet write failed only when the server returns a concrete write or read-back verification error.",
-].join("\n");
-
-const AVERY_WORKLOG_GUARD = [
-  "Avery worklog policy:",
-  "- Treat Avery worklog snapshot as persistent source for tasks/errors/solutions/reminders.",
-  "- Only persist work or mixed conversation; skip purely personal chat.",
-  "- When user asks to record/update/remove/complete work items, respond consistently with snapshot.",
-  "- Do not require user to log every task; allow partial logs.",
-  "- If worklog has stale/open items or timeline gaps, occasionally ask one brief status question.",
-  "- Keep follow-up probing light: max one short question and only when useful.",
-  "- If uncertain, ask one short clarification before destructive removal.",
-].join(" ");
-
-const VAULT_AUTONOMY_GUARD = [
-  "Vault autonomy policy (execute-first):",
-  "- If user request is clear enough, execute immediately via vault action.",
-  "- If target path/name is ambiguous, ask one concise follow-up question first.",
-  "- When the user directly requests an action, do not ask for approval first.",
-  "- Use proposal blocks only for optional structure ideas, low-confidence plans, or ambiguous changes.",
-  "- If you output a clear proposal block for a direct user request, the server may execute it immediately before the reply is shown.",
-  "- Use this exact block when proposing:",
-  "[VAULT_PROPOSAL]",
-  "{\"persona\":\"riley|avery\",\"actions\":[{\"type\":\"create_folder\",\"path\":\"...\"},{\"type\":\"create_file\",\"path\":\"...\",\"content\":\"...\"}]}",
-  "[/VAULT_PROPOSAL]",
-  "- For Riley sheet proposals, allowed action types are rename_sheet {old_title,new_title} and update_cell {sheet,cell,value}.",
-  "- Proposal approval is optional only for ambiguous plans. If action is safe and clear, auto-apply.",
-  "- Do not claim false platform limits (e.g., 'cannot access file system') when vault action is available.",
-  "- When you propose, keep it short and practical.",
-].join("\n");
-
-function formatKstNow(): string {
-  const now = new Date();
-  const parts = new Intl.DateTimeFormat("ko-KR", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    weekday: "long",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).formatToParts(now).reduce<Record<string, string>>((acc, part) => {
-    if (part.type !== "literal") acc[part.type] = part.value;
-    return acc;
-  }, {});
-  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second} KST (${parts.weekday})`;
-}
-
-function isTimeQuestion(text: string): boolean {
-  const raw = String(text || "");
-  return /(현재\s*시간|지금\s*몇\s*시|오늘\s*날짜|오늘\s*몇\s*일|current\s*time|what\s*time|today'?s?\s*date)/i.test(raw);
-}
-
-function isSimpleRileySummon(text: string): boolean {
-  return /^(라일리|riley)[?.!。…\s]*$/i.test(String(text || "").trim());
-}
-
-function isRileySheetTurnIntent(text: string, conversationContext = ""): boolean {
-  const raw = String(text || "").trim();
-  if (!raw) return false;
-  if (/^(라일리|riley|야|저기|음|응|네|ㅇㅇ|어|휴|미치겠네)[?.!。…\s]*$/i.test(raw)) return false;
-  if (/(시트|스프레드시트|구글\s*시트|sheet|spreadsheet|탭|셀|범위|행|열|청구\s*내역|카드\s*내역|결제\s*업체|청구액|교통비|카드번호|모바일티머니|지하철|버스)/i.test(raw)) return true;
-  if (/\b[A-Z]{1,3}\s*\d{1,5}\b/i.test(raw)) return true;
-  if (/[A-Z]\s*열|\d+\s*행|첫\s*행|맨\s*위|맨\s*아래|세\s*번째|두\s*번째|첫\s*번째/i.test(raw)) return true;
-  if (/^(그래|좋아|진행해|해봐|다시|계속|찾아봐|계산해|합산해|더해줘|읽어봐|확인해봐)[?.!。\s]*$/i.test(raw)) {
-    return /(시트|스프레드시트|sheet|셀|범위|행|열|청구\s*내역|카드\s*내역|교통비|결제\s*업체)/i.test(String(conversationContext || ""));
-  }
-  return false;
-}
 
 const SESSION_INDEX_DROPBOX_PATH = "/session/index.json";
 
@@ -710,133 +601,11 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
   const isImageReq = IMAGE_MODELS.includes(model) || !!prompt;
   const userIdNorm = normalizeUserId(user_id || userId || "");
   const sessionIdNorm = normalizeSessionId(session_id || sessionId || "");
-  const inRileyChat = isRileyParticipant(participant_pids || []);
-  const inAveryChat = isAveryParticipant(participant_pids || []);
   const latestUserText = extractLatestUserText(messages);
-  const recentContext = recentConversationText(messages);
-  const rileySheetTurnIntent = !isImageReq && inRileyChat && isRileySheetTurnIntent(latestUserText, recentContext);
-  const shouldWriteAveryEvent = inAveryChat && shouldPersistAveryWorklogText(latestUserText);
-  const policyTargetPid = resolvePolicyTargetPid(participant_pids || []);
   const profilePersonaPid = resolvePrimaryPersonaPid(participant_pids || []);
-  const proposalPersona: "riley" | "avery" | null = inRileyChat ? "riley" : (inAveryChat ? "avery" : null);
-  const vaultRouteMode = !isImageReq && proposalPersona ? routeVaultRequestMode(latestUserText, proposalPersona) : "none";
 
   try {
-    if (!isImageReq && inRileyChat && isTimeQuestion(latestUserText)) {
-      return Response.json({
-        result: "success",
-        reply: `현재 시간은 ${formatKstNow()}입니다.`,
-        time_source: "server_runtime_intl_asia_seoul",
-      }, { headers: cors });
-    }
-
-    if (!isImageReq && inRileyChat && isSimpleRileySummon(latestUserText)) {
-      return Response.json({
-        result: "success",
-        reply: "[p_riley][emotion:neutral]응, 불렀어?[/p_riley]",
-      }, { headers: cors });
-    }
-
-    if (rileySheetTurnIntent) {
-      const sheetResult = await runRileySheetRequestWithGemini(env, latestUserText, apiKeys.gemini, model, recentContext);
-      if (sheetResult) {
-        const evidence = await writeVaultEvidence(env, "riley", "sheets_write", sheetResult.ok, sheetResult.ok ? sheetResult.message : sheetResult.error, latestUserText);
-        const natural = await renderRileySheetResultMessage(messages, {
-          ...sheetResult,
-          evidence_id: evidence.id,
-        }, model, apiKeys);
-        return Response.json({
-          result: "success",
-          reply: natural || (sheetResult.ok ? sheetResult.message : sheetResult.error),
-          evidence_id: evidence.id,
-          sheet_action: compactOperationPayload(sheetResult),
-        }, { headers: cors });
-      }
-    }
-
-    if (!isImageReq && proposalPersona && isApprovalText(latestUserText)) {
-      const pending = await loadPendingVaultProposal(env, proposalPersona)
-        || parseLatestVaultProposalFromMessages(messages);
-      if (pending) {
-        const exec = await executeVaultProposal(env, pending);
-        if (exec.ok) await clearPendingVaultProposal(env, proposalPersona);
-        const evidence = await writeVaultEvidence(env, proposalPersona, "proposal_apply", exec.ok, exec.message, latestUserText);
-        const natural = await renderVaultResultMessage(exec.message, model, apiKeys, latestUserText);
-        return Response.json({ result: exec.ok ? "success" : "error", reply: natural, evidence_id: evidence.id }, { status: exec.ok ? 200 : 400, headers: cors });
-      }
-    }
-
-    if (!isImageReq && inRileyChat) {
-      let vaultAction = await runRileyVaultActionFromText(env, latestUserText);
-      if (!vaultAction && isVaultReadFollowup(latestUserText)) {
-        vaultAction = await runRileyVaultActionFromText(env, `${recentContext}\nlatest_user: ${latestUserText}`);
-      }
-      if (vaultAction) {
-        if (!vaultAction.ok) {
-          if (/^path_missing:/i.test(String(vaultAction.error || ""))) {
-            // Ambiguous create request should stay conversational instead of hard failing.
-          } else {
-            const evidence = await writeVaultEvidence(env, "riley", "direct", false, String(vaultAction.error || "unknown"), latestUserText);
-            return Response.json({ result: "error", error: vaultAction.error, evidence_id: evidence.id }, { status: 400, headers: cors });
-          }
-        } else {
-          const evidence = await writeVaultEvidence(env, "riley", "direct", true, vaultAction.message, latestUserText);
-          const natural = vaultAction.action === "read_file"
-            ? renderVaultReadFileReply(vaultAction)
-            : await renderVaultResultMessage(vaultAction.message, model, apiKeys, latestUserText);
-          return Response.json({ result: "success", reply: natural, evidence_id: evidence.id, vault_evidence_id: vaultAction.evidenceId }, { headers: cors });
-        }
-      }
-    }
-    if (!isImageReq && inAveryChat && vaultRouteMode === "command") {
-      const vaultAction = await runAveryVaultActionFromText(env, latestUserText);
-      if (vaultAction) {
-        if (!vaultAction.ok) {
-          if (/^path_missing:/i.test(String(vaultAction.error || ""))) {
-            // Ambiguous create request should stay conversational instead of hard failing.
-          } else {
-            const evidence = await writeVaultEvidence(env, "avery", "direct", false, String(vaultAction.error || "unknown"), latestUserText);
-            return Response.json({ result: "error", error: vaultAction.error, evidence_id: evidence.id }, { status: 400, headers: cors });
-          }
-        } else {
-          const evidence = await writeVaultEvidence(env, "avery", "direct", true, vaultAction.message, latestUserText);
-          const natural = vaultAction.action === "read_file"
-            ? renderVaultReadFileReply(vaultAction)
-            : await renderVaultResultMessage(vaultAction.message, model, apiKeys, latestUserText);
-          return Response.json({ result: "success", reply: natural, evidence_id: evidence.id, vault_evidence_id: vaultAction.evidenceId }, { headers: cors });
-        }
-      }
-    }
-
-    const vaultRoutingPrompt = (!isImageReq && (inRileyChat || inAveryChat) && vaultRouteMode === "dialog")
-      ? "User intent suggests creating a file/folder but target path/name is ambiguous. Do not execute now. Ask one concise follow-up question in persona voice to confirm filename/path or offer 2-3 concrete options."
-      : "";
-
-    let averyWriteResult: { ok: boolean; error?: string; eventId?: string } | null = null;
-    let promotionApplyMessage = "";
-    if (!isImageReq && policyTargetPid) {
-      const promoted = await bestEffort(() => approveLatestPendingCandidate(env, policyTargetPid, latestUserText), { applied: false, message: "" } as any);
-      if (promoted.applied && promoted.message) promotionApplyMessage = promoted.message;
-    }
-    let policyApplyMessage = "";
-    if (!isImageReq && policyTargetPid) {
-      const applied = await bestEffort(() => applyPendingPolicyIfApproved(env, policyTargetPid, latestUserText), { applied: false, message: "" } as any);
-      if (applied.applied && applied.message) policyApplyMessage = applied.message;
-    }
-    if (shouldWriteAveryEvent) {
-      const wr = await bestEffort(() => appendAveryWorklogEvent(env, latestUserText), { ok: false, error: "worklog_storage_failed" });
-      averyWriteResult = wr.ok ? { ok: true, eventId: wr.eventId } : { ok: false, error: wr.error };
-    }
-    const averySnapshot = (!isImageReq && inAveryChat)
-      ? await getAveryWorklogSnapshot(env, 20)
-      : null;
-    const rileyDirective = (!isImageReq && inRileyChat) ? await loadRileyDirective(env) : "";
-    const averyDirective = (!isImageReq && inAveryChat) ? await loadAveryDirective(env) : "";
-    const fixedRole = profilePersonaPid === "p_riley"
-      ? extractFixedRoleFromDirective(rileyDirective, "wealth_manager")
-      : (profilePersonaPid === "p_avery"
-        ? extractFixedRoleFromDirective(averyDirective, "worklog_manager")
-        : "general_assistant");
+    const fixedRole = "general_assistant";
     let attitudeAUpdateStatus = "";
     if (!isImageReq && profilePersonaPid) {
       const res = await bestEffort(() => processAttitudeACandidateUpdate(env, profilePersonaPid, userIdNorm, latestUserText), { observed: false, applied: false, reason: "" } as any);
@@ -846,9 +615,6 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
           : `Attitude A candidate observed (${res.reason}).`;
       }
     }
-    const rileyVaultV2Prompt = (!isImageReq && inRileyChat) ? await buildPersonaVaultV2SystemPrompt(env, "riley") : "";
-    const averyVaultV2Prompt = (!isImageReq && inAveryChat) ? await buildPersonaVaultV2SystemPrompt(env, "avery") : "";
-    const rileySheetsPrompt = rileySheetTurnIntent ? buildRileySheetsContextPrompt(await loadRileySheetsContext(env)) : "";
     const personaProfile = (!isImageReq && profilePersonaPid)
       ? await loadPersonaUserProfile(env, profilePersonaPid, userIdNorm)
       : null;
@@ -879,43 +645,20 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
     const memPrompt = isImageReq
       ? ""
       : [
-          "Memory policy:",
-          "- Public/private memory feature is disabled.",
-          "- Do not create, update, or reference generic memory store entries.",
-          "- Persona vault context comes from Vault v2 index/state/evidence, not legacy _memory markdown files.",
+          "Conversation policy:",
+          "- Reply as a persona in a simple chat app.",
+          "- Do not claim background execution, spreadsheet access, vault actions, worklog storage, or hidden agent tools.",
+          "- If the user asks beyond visible chat context, answer plainly and state limits instead of pretending execution.",
           ...(crossSessionContext ? [crossSessionContext] : []),
         ].join("\n");
-    const personaPolicyPrompt = (!isImageReq && policyTargetPid)
-      ? await buildPersonaPolicySystemPrompt(env, policyTargetPid)
-      : "";
-    const promotionPrompt = (!isImageReq && policyTargetPid)
-      ? buildPromotionSystemPrompt(policyTargetPid)
-      : "";
     const effectiveMessages = !isImageReq
       ? buildPersonaContext(messages, {
           globalRules: [ANTI_HALLUCINATION_GUARD],
-          personaBaseRules: [
-            ...(rileyDirective ? [`Priority 1 Directive (Riley):\n${rileyDirective}`] : []),
-            ...(averyDirective ? [`Priority 1 Directive (Avery):\n${averyDirective}`] : []),
-            ...(inRileyChat ? [RILEY_NUMERIC_PRIORITY_GUARD] : []),
-            ...(inRileyChat ? [RILEY_SHEETS_CAPABILITY_GUARD] : []),
-            ...(inAveryChat ? [AVERY_WORKLOG_GUARD] : []),
-            ...((inRileyChat || inAveryChat) ? [VAULT_AUTONOMY_GUARD] : []),
-          ],
+          personaBaseRules: [],
           sections: profileSections,
           extraSystemBlocks: [
             RESPONSE_VARIANCE_PROMPT,
-            ...(averySnapshot ? [buildAverySystemPrompt(averySnapshot.state)] : []),
-            ...(rileyVaultV2Prompt ? [rileyVaultV2Prompt] : []),
-            ...(averyVaultV2Prompt ? [averyVaultV2Prompt] : []),
-            ...(rileySheetsPrompt ? [rileySheetsPrompt] : []),
-            ...(personaPolicyPrompt ? [personaPolicyPrompt] : []),
-            ...(promotionPrompt ? [promotionPrompt] : []),
-            ...(vaultRoutingPrompt ? [vaultRoutingPrompt] : []),
             ...(memPrompt ? [memPrompt] : []),
-            ...(averyWriteResult ? [`Avery mutation status: already_applied=${averyWriteResult.ok}; event_id=${averyWriteResult.eventId || ""}; error=${averyWriteResult.error || ""}. Do not output VAULT_PROPOSAL for this already-applied mutation.`] : []),
-            ...(policyApplyMessage ? [`Policy apply status: ${policyApplyMessage}`] : []),
-            ...(promotionApplyMessage ? [`Promotion apply status: ${promotionApplyMessage}`] : []),
             ...(attitudeAUpdateStatus ? [attitudeAUpdateStatus] : []),
           ],
         })
@@ -1002,28 +745,8 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
                 onDelta: (delta) => send({ type: "delta", text: delta }),
               });
             }
-            if (shouldWriteAveryEvent) {
-              await bestEffort(() => appendAveryWorklogEvent(env, latestUserText), { ok: false });
-            }
-            if (policyTargetPid) {
-              await bestEffort(() => savePendingPolicyPatchFromReply(env, policyTargetPid, reply), undefined);
-              await bestEffort(() => saveCandidateFromReply(env, policyTargetPid, reply), undefined);
-            }
-            let proposalExecuted = false;
-            if (proposalPersona) {
-              const proposal = parseVaultProposalFromReply(reply);
-              if (proposal && proposal.persona === proposalPersona) {
-                const exec = await executeVaultProposal(env, proposal);
-                await writeVaultEvidence(env, proposalPersona, "proposal_apply", exec.ok, exec.message, latestUserText);
-                const natural = await renderVaultResultMessage(exec.message, model, apiKeys, latestUserText);
-                reply = stripVaultProposalBlock(reply).trim();
-                if (natural) {
-                  reply = [reply, natural].filter(Boolean).join("\n\n");
-                }
-                proposalExecuted = exec.ok;
-              }
-            }
-            reply = guardPersonaReply(reply, proposalExecuted, !!proposalPersona);
+            reply = stripVaultProposalBlock(reply).trim() || reply;
+            reply = guardPersonaReply(reply, false, false);
             send({ type: "done", reply });
           } catch (err: any) {
             send({ type: "error", error: err?.message || "stream error" });
@@ -1066,33 +789,13 @@ export async function handleChat(reqBody: ChatBody, env: Env, cors: CorsHeaders)
       });
     }
 
-    if (policyTargetPid) {
-      await bestEffort(() => savePendingPolicyPatchFromReply(env, policyTargetPid, reply), undefined);
-      await bestEffort(() => saveCandidateFromReply(env, policyTargetPid, reply), undefined);
-    }
-    let proposalExecuted = false;
-    let proposalEvidenceId = "";
-    if (proposalPersona) {
-      const proposal = parseVaultProposalFromReply(reply);
-      if (proposal && proposal.persona === proposalPersona) {
-        const exec = await executeVaultProposal(env, proposal);
-        const evidence = await writeVaultEvidence(env, proposalPersona, "proposal_apply", exec.ok, exec.message, latestUserText);
-        proposalEvidenceId = exec.evidenceIds?.join(",") || evidence.id;
-        const natural = await renderVaultResultMessage(exec.message, model, apiKeys, latestUserText);
-        reply = stripVaultProposalBlock(reply).trim();
-        if (natural) {
-          reply = [reply, natural].filter(Boolean).join("\n\n");
-        }
-        proposalExecuted = exec.ok;
-      }
-    }
     reply = stripVaultProposalBlock(reply).trim() || reply;
-    reply = guardPersonaReply(reply, proposalExecuted, !!proposalPersona);
+    reply = guardPersonaReply(reply, false, false);
 
     if (imageUrlOut) {
-      return Response.json({ result: "success", reply, image_url: imageUrlOut, evidence_id: proposalEvidenceId || undefined, avery_write: averyWriteResult }, { headers: cors });
+      return Response.json({ result: "success", reply, image_url: imageUrlOut }, { headers: cors });
     }
-    return Response.json({ result: "success", reply, evidence_id: proposalEvidenceId || undefined, avery_write: averyWriteResult }, { headers: cors });
+    return Response.json({ result: "success", reply }, { headers: cors });
   } catch (e: any) {
     return Response.json({ result: "error", error: e?.message || "unknown error" }, { status: 500, headers: cors });
   }

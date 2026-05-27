@@ -2,6 +2,27 @@
 //  CONSTANTS & DATA
 // ══════════════════════════════
 const WORKER_URL = 'https://persona-worker.persona-worker.workers.dev';
+const APP_MODE = (() => {
+  try {
+    const fromQuery = new URLSearchParams(window.location.search).get('mode');
+    const fromStorage = localStorage.getItem('pc4_app_mode');
+    const raw = String(fromQuery || fromStorage || 'admin').trim().toLowerCase();
+    return raw === 'user' ? 'user' : 'admin';
+  } catch {
+    return 'admin';
+  }
+})();
+const APP_USER_ID = (() => {
+  try {
+    const fromQuery = new URLSearchParams(window.location.search).get('uid');
+    const fromStorage = localStorage.getItem('pc4_google_user_id');
+    const raw = String(fromQuery || fromStorage || '').trim();
+    if (!raw) return APP_MODE === 'user' ? 'guest_user' : 'admin_owner';
+    return raw.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120) || (APP_MODE === 'user' ? 'guest_user' : 'admin_owner');
+  } catch {
+    return APP_MODE === 'user' ? 'guest_user' : 'admin_owner';
+  }
+})();
 const HUE_PRESETS = [
   0, 20, 35, 50, 70, 90,
   130, 158, 175, 195, 210, 230,
