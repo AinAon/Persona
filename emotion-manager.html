@@ -1432,7 +1432,8 @@ function buildEmotionPrompt(pid, eid, slot, extraLines = []){
     'Natural, expressive body language is encouraged.',
   ]);
   const layoutLines = promptLines(EMOTION_COMMON_PROMPT.layout, [
-    "Output의 얼굴 위치는 '이미지1'의 얼굴 위치(가운데상단)를 최대한 유지한다.",
+    "Output의 얼굴 위치는 '이미지1'의 얼굴 위치를 사실상 고정한다. 얼굴 중심점의 x/y 위치와 얼굴 크기(점유 비율)는 동일하게 유지한다.",
+    "카메라가 위에서 내려다보거나 아래에서 올려다보는 시점 변화는 허용되지만, 사진 프레임 안에서 얼굴이 놓인 자리와 크기는 바꾸지 않는다.",
     'Do not zoom in or out significantly. Maintain 2:3 portrait framing.',
     'No text of any kind: no captions, subtitles, labels, logos, watermarks, speech bubbles, or UI overlays.',
   ]);
@@ -1619,6 +1620,8 @@ async function generateEmotionQuadBatch(pid, eid){
     'Create one single image arranged as a 2x2 grid with four panel variants for this same emotion.',
     'Each of the four panels must satisfy the same emotion task.',
     'All four panels must use different body pose and gesture. No repeated pose across panels.',
+    'Across all four panels, lock the face placement and face scale to the same on-image position as the reference. Treat the face anchor as fixed.',
+    'Perspective may change, including slight top-down or bottom-up view, but the face must stay in the same frame location and at the same size in every panel.',
     'No text, no labels, no borders, no separators, no gutters.',
     ...(isGrokModel(getEmotionModel(eid)) ? buildConsistencyLockBlock() : []),
   ]);
@@ -1724,7 +1727,8 @@ async function generateFourEmotionSet(pid, defs, opts = {}) {
       'Preserve identity, hairstyle, face structure, outfit style, lighting, and background concept.',
       'Each panel must use a different body pose and gesture from the others.',
       'No text, no labels, no borders, no collage frames, no gutters.',
-      'Keep face size and framing consistent across all four quadrants.',
+      'Lock the face placement and face scale across all four quadrants to the same on-image position as the reference.',
+      'Perspective may change, including slight top-down or bottom-up view, but the face must stay in the same frame location and at the same size in every quadrant.',
       '',
       '[Quality]',
       'Photorealistic, clean eyes, detailed skin and hair, no blur, no artifacts.',

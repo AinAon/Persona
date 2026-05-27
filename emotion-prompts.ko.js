@@ -57,7 +57,8 @@ globalThis.EMOTION_COMMON_PROMPT_KO = {
     "'이미지1'의 포즈와 다른 창의적인 포즈를 취한다.",
   ],
   layout: [
-    "Output의 얼굴 위치는 '이미지1'의 얼굴 위치(가운데상단)를 최대한 유지한다.",
+    "Output의 얼굴 위치는 '이미지1'의 얼굴 위치를 사실상 고정한다. 얼굴 중심점의 x/y 위치와 얼굴 크기(점유 비율)는 동일하게 유지한다.",
+    "카메라가 위에서 내려다보거나 아래에서 올려다보는 시점 변화는 허용되지만, 사진 프레임 안에서 얼굴이 놓인 자리와 크기는 바꾸지 않는다.",
     'No text of any kind: no captions, subtitles, labels, logos, watermarks, speech bubbles, or UI overlays.',
   ],
   variation: [
