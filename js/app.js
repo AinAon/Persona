@@ -9,22 +9,6 @@ function setLoading(isLoading, text) {
   overlay.classList.toggle('hidden', !isLoading);
 }
 
-function installScopedWorkerFetchHeaders() {
-  if (window.__pc4ScopedFetchInstalled) return;
-  window.__pc4ScopedFetchInstalled = true;
-  const origFetch = window.fetch.bind(window);
-  const workerBase = String(typeof WORKER_URL !== 'undefined' ? WORKER_URL : '').replace(/\/+$/, '');
-  window.fetch = async function(input, init = {}) {
-    const reqUrl = typeof input === 'string' ? input : String(input?.url || '');
-    const isWorkerCall = !!workerBase && reqUrl.startsWith(workerBase);
-    if (!isWorkerCall) return origFetch(input, init);
-    const headers = new Headers(init?.headers || (typeof input !== 'string' ? input?.headers : undefined) || {});
-    headers.set('X-App-Mode', String(typeof APP_MODE !== 'undefined' ? APP_MODE : 'admin'));
-    headers.set('X-App-User-Id', String(typeof APP_USER_ID !== 'undefined' ? APP_USER_ID : 'admin_owner'));
-    return origFetch(input, { ...init, headers });
-  };
-}
-
 function startDemoChat() {
   const session = {
     id: 'demo_' + uid(),
@@ -183,31 +167,6 @@ function sessionIndexSignature(list) {
   } catch (e) {
     return '';
   }
-}
-
-async function ensureUserFirstPersonaOnce() {
-  if (String(typeof APP_MODE !== 'undefined' ? APP_MODE : 'admin') !== 'user') return;
-  const scopeNs = `${(typeof APP_MODE !== 'undefined' ? APP_MODE : 'admin')}__${(typeof APP_USER_ID !== 'undefined' ? APP_USER_ID : 'guest_user')}`;
-  const alreadyDone = getLocalItem(`${scopeNs}::pc4_first_persona_done`);
-  if (alreadyDone === '1' && Array.isArray(personas) && personas.length > 0) return;
-  if (Array.isArray(personas) && personas.length > 0) {
-    setLocalItem(`${scopeNs}::pc4_first_persona_done`, '1');
-    return;
-  }
-  const pid = nextPid();
-  const seed = {
-    pid,
-    name: 'My Persona',
-    description: 'First-time default persona',
-    tags: ['default'],
-    image: '',
-    hidden: false,
-    updatedAt: Date.now()
-  };
-  personas = [seed];
-  setLocalPersonas(personas);
-  setLocalItem(`${scopeNs}::pc4_first_persona_done`, '1');
-  try { await savePersonas(); } catch {}
 }
 
 function getLocalArchiveManifestSignature() {
@@ -521,7 +480,6 @@ function bindLoadingLogoHoldToRecover() {
 }
 
 async function init() {
-  installScopedWorkerFetchHeaders();
   bindLoadingLogoHoldToRecover();
   let loadingEscapeTimer = null;
   const cachedPersonas = getLocalPersonas();
@@ -546,7 +504,6 @@ async function init() {
   // 캐시에서 즉시 로드 (로딩 중 표시)
   const hasLocalPersonas = loadPersonasFromCache();
   if (!hasLocalPersonas) personas = DEFAULT_PERSONAS.map(p=>({...p, tags:[...p.tags]}));
-  await ensureUserFirstPersonaOnce();
   loadSessionsFromCache();
 
   // KV에서 프로필 동기화 (name/bio/image — 기기별 설정은 로컬 유지)

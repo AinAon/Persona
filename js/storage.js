@@ -1,6 +1,5 @@
 // Storage layer: IndexedDB + LocalStorage helpers
-const _scopeNs = `${(typeof APP_MODE !== 'undefined' ? APP_MODE : 'admin')}__${(typeof APP_USER_ID !== 'undefined' ? APP_USER_ID : 'admin_owner')}`;
-const IDB_NAME = `personachat_v4_${_scopeNs}`;
+const IDB_NAME = 'personachat_v4';
 const IDB_STORE = 'images';
 const IDB_VER = 3;
 let _idb = null;
@@ -107,15 +106,14 @@ function setLocalJSON(key, value) {
   return setLocalItem(key, JSON.stringify(value));
 }
 
-function scopedKey(key) { return `${_scopeNs}::${String(key || '')}`; }
-function getLocalPersonas() { return getLocalJSON(scopedKey(CACHE_PERSONAS_KEY), null); }
-function setLocalPersonas(data) { return setLocalJSON(scopedKey(CACHE_PERSONAS_KEY), data); }
-function getLocalSessionIndex() { return getLocalJSON(scopedKey(CACHE_INDEX_KEY), null); }
-function setLocalSessionIndex(data) { return setLocalJSON(scopedKey(CACHE_INDEX_KEY), data); }
-function getLocalSession(id) { return getLocalJSON(scopedKey(CACHE_SESSION_PREFIX + id), null); }
-function setLocalSession(id, data) { return setLocalJSON(scopedKey(CACHE_SESSION_PREFIX + id), data); }
-function removeLocalSession(id) { return removeLocalItem(scopedKey(CACHE_SESSION_PREFIX + id)); }
-function getLocalUserProfile() { return getLocalJSON(scopedKey(CACHE_USER_KEY), null); }
-function setLocalUserProfile(data) { return setLocalJSON(scopedKey(CACHE_USER_KEY), data); }
+function getLocalPersonas() { return getLocalJSON(CACHE_PERSONAS_KEY, null); }
+function setLocalPersonas(data) { return setLocalJSON(CACHE_PERSONAS_KEY, data); }
+function getLocalSessionIndex() { return getLocalJSON(CACHE_INDEX_KEY, null); }
+function setLocalSessionIndex(data) { return setLocalJSON(CACHE_INDEX_KEY, data); }
+function getLocalSession(id) { return getLocalJSON(CACHE_SESSION_PREFIX + id, null); }
+function setLocalSession(id, data) { return setLocalJSON(CACHE_SESSION_PREFIX + id, data); }
+function removeLocalSession(id) { return removeLocalItem(CACHE_SESSION_PREFIX + id); }
+function getLocalUserProfile() { return getLocalJSON(CACHE_USER_KEY, null); }
+function setLocalUserProfile(data) { return setLocalJSON(CACHE_USER_KEY, data); }
 function getImageCacheBustToken() { return getLocalItem('img_cache_bust'); }
 function setImageCacheBustToken(token) { return setLocalItem('img_cache_bust', String(token)); }

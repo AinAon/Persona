@@ -1558,6 +1558,7 @@ list-style-position: inside;
           <div style="flex:1;display:flex;flex-direction:column;gap:8px">
             <input class="edit-input" id="settingsUserName" placeholder="이름" style="font-size:14px;padding:9px 12px">
             <textarea class="edit-input" id="settingsUserBio" placeholder="간단한 소개 또는 기본 상황 설명&#10;예: 30대 직장인, IT 스타트업 근무" style="font-size:13px;padding:9px 12px;resize:none;height:80px;border-radius:10px;line-height:1.6"></textarea>
+            <textarea class="edit-input" id="settingsMemoryBio" placeholder="메모리용 사용자 Bio (장기).&#10;각 페르소나의 profile/user_default.json > bioSummary 에 반영됨" style="font-size:13px;padding:9px 12px;resize:none;height:72px;border-radius:10px;line-height:1.6"></textarea>
           </div>
         </div>
       </div>
@@ -1616,6 +1617,13 @@ list-style-position: inside;
 
       <div style="padding-top:20px; border-top:1px solid var(--border);">
         <div class="field-label" style="margin-bottom:12px">앱 데이터 관리</div>
+        <div id="vaultV2StatusBox" style="border:1px solid var(--border2);border-radius:8px;background:var(--card);padding:12px;margin-bottom:8px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px">
+            <div style="font-size:13px;font-weight:700;color:var(--text)">Vault v2</div>
+            <button type="button" onclick="renderVaultV2Status(true)" style="height:30px;padding:0 10px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text);font-size:12px;cursor:pointer">새로고침</button>
+          </div>
+          <div id="vaultV2StatusBody" style="font-size:12px;line-height:1.55;color:var(--muted)">불러오는 중</div>
+        </div>
         <button onclick="clearImageCache()" style="width:100%;padding:12px;border-radius:11px;background:var(--card);color:var(--text);border:1px solid var(--border2);font-family:'Pretendard',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:border-color .15s;margin-bottom:8px" onmouseover="this.style.borderColor='var(--muted)'" onmouseout="this.style.borderColor='var(--border2)'">🖼 이미지 캐시 초기화</button>
         <button onclick="clearTtsAudioCache()" style="width:100%;padding:12px;border-radius:11px;background:var(--card);color:var(--text);border:1px solid var(--border2);font-family:'Pretendard',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:border-color .15s;margin-bottom:8px" onmouseover="this.style.borderColor='var(--muted)'" onmouseout="this.style.borderColor='var(--border2)'">보이스 캐시 전체 삭제</button>
       </div>
